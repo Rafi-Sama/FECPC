@@ -1,0 +1,33 @@
+// One XP engine for the whole platform: every action a member takes is worth something.
+// Pure and shared: the browser uses it for display, the server for anything XP buys.
+export const XP = { solve: 12, resource: 15, lesson: 25, quiz: 40, attend: 20, checkin: 5, kudos: 2, register: 5, pay: 30, vote: 5, read: 3, post: 10, quest: 50 } as const;
+export const LEVEL = 1500;
+export const titles = ["Rookie", "Solver", "Grinder", "Tactician", "Adept", "Strategist", "Veteran", "Elite", "Legend"];
+
+/** `base` is what the member had before joining the platform; it never earns platform XP. */
+export type Earn = {
+  base: { solved: number; done: number }; solved: string[]; done: string[]; lessons: string[]; quiz: Record<string, number>; present: string[]; checkin: boolean;
+  kudos: string[]; reg: string[]; pay: Record<string, { status: string }>; votes: Record<string, unknown>; read: string[]; posts: number; spent: number;
+};
+const given = (s: Earn) => s.kudos.filter((k) => !k.startsWith("shop:")).length; // shop receipts are not kudos
+
+export function quests(s: Earn) {
+  return [
+    { id: "q1", text: "Solve one problem", done: s.solved.length > s.base.solved },
+    { id: "q2", text: "Finish a lesson or resource", done: s.lessons.length + s.done.length > s.base.done },
+    { id: "q3", text: "Help or cheer someone", done: given(s) > 0 },
+  ];
+}
+
+/** XP earned on the platform, on top of the member's base XP. Only verified payments count. */
+export function earned(s: Earn) {
+  const q = quests(s).filter((x) => x.done).length;
+  return Math.max(0, s.solved.length - s.base.solved) * XP.solve + Math.max(0, s.done.length - s.base.done) * XP.resource + s.lessons.length * XP.lesson
+    + Object.values(s.quiz).filter((v) => v >= 2).length * XP.quiz + s.present.length * XP.attend + (s.checkin ? XP.checkin : 0)
+    + Math.min(20, given(s)) * XP.kudos + s.reg.length * XP.register
+    + Object.values(s.pay).filter((p) => p.status === "verified").length * XP.pay + Object.keys(s.votes).length * XP.vote + s.read.length * XP.read + s.posts * XP.post + (q === 3 ? XP.quest : 0);
+}
+export function level(total: number) {
+  const lv = Math.floor(Math.max(0, total) / LEVEL) + 1;
+  return { lv, into: Math.max(0, total) % LEVEL, title: titles[Math.min(titles.length - 1, lv - 1)] };
+}

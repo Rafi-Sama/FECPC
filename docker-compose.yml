@@ -1,0 +1,14 @@
+# Local development database only. Production reads DATABASE_URL from the host's secrets.
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: fecpc_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: fecpc
+      POSTGRES_PASSWORD: fecpc_dev
+      POSTGRES_DB: fecpc
+    ports: ["127.0.0.1:5433:5432"]
+    volumes: ["fecpc_pg:/var/lib/postgresql/data"]
+volumes:
+  fecpc_pg:

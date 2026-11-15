@@ -1,0 +1,95 @@
+-- FECPC schema. Idempotent: `npm run db:setup` can run it any number of times.
+create table if not exists users (
+  id          text primary key check (id ~ '^[a-z0-9_]{2,40}$'),
+  email       text not null unique check (email = lower(email)),
+  pass_hash   text,
+  google_sub  text unique,
+  invite_hash text,
+  role        text not null default 'member' check (role in ('member','mentor','cp_head','treasurer','secretary','president','super_admin')),
+  suspended   boolean not null default false,
+  name        text not null check (length(name) between 1 and 80),
+  handle      text not null default '',
+  batch       int  not null check (batch between 0 and 99),
+  dept        text not null,
+  squad       text not null default 'Heap' check (squad in ('Heap','Trie','Graph','Stack')),
+  title       text,
+  rating int not null default 0, peak int not null default 0, solved int not null default 0, streak int not null default 0, helper int not null default 0,
+  skills      text[] not null default '{}',
+  progress    jsonb not null default '{}', -- the member's own lists and preferences; always written under a row lock
+  created_at  timestamptz not null default now()
+);
+create table if not exists sessions (
+  token_hash text primary key, -- sha256 of the cookie value; the raw token is never stored
+  user_id    text not null references users on delete cascade,
+  expires_at timestamptz not null
+);
+create index if not exists sessions_user on sessions (user_id);
+create table if not exists registrations (user_id text not null references users on delete cascade, event_id text not null, primary key (user_id, event_id));
+create index if not exists registrations_event on registrations (event_id);
+create table if not exists attendance (user_id text not null references users on delete cascade, key text not null, primary key (user_id, key));
+create index if not exists attendance_key on attendance (key);
+create table if not exists votes (user_id text not null references users on delete cascade, poll_id text not null, option text not null, primary key (user_id, poll_id));
+create index if not exists votes_poll on votes (poll_id);
+create table if not exists reactions (user_id text not null references users on delete cascade, target text not null, primary key (user_id, target));
+create index if not exists reactions_target on reactions (target);
+create table if not exists payments (
+  id         int generated always as identity primary key,
+  user_id    text not null references users on delete cascade,
+  invoice_id text not null,
+  label      text not null,
+  amount     int  not null check (amount > 0),
+  via        text not null check (via in ('bKash','Nagad','Rocket')),
+  trx        text not null, -- one wallet transaction pays for one thing: see the partial unique index payments_trx_live
+  sender     text not null,
+  status     text not null default 'pending' check (status in ('pending','verified','rejected')),
+  decided_by text references users,
+  created_at timestamptz not null default now()
+);
+create unique index if not exists payments_one_live on payments (user_id, invoice_id) where status <> 'rejected';
+create index if not exists payments_status on payments (status);
+create table if not exists decisions (kind text not null, id text not null, status text not null, by text not null references users, at timestamptz not null default now(), primary key (kind, id));
+create table if not exists applications (
+  id int generated always as identity primary key,
+  name text not null, sid text not null, dept text not null, batch int not null, email text not null, cf text not null default '', track text not null, why text not null,
+  quiz int not null default 0, src text not null default 'Website',
+  status text not null default 'pending' check (status in ('pending','accepted','declined')),
+  created_at timestamptz not null default now()
+);
+create unique index if not exists applications_one_pending on applications (email) where status = 'pending';
+create table if not exists club (key text primary key, value jsonb not null, by text references users, at timestamptz not null default now());
+create table if not exists announcements (id int generated always as identity primary key, user_id text not null references users, title text not null, created_at timestamptz not null default now());
+create table if not exists audit (id bigint generated always as identity primary key, at timestamptz not null default now(), who text not null, what text not null);
+create index if not exists audit_at on audit (at desc);
+
+-- Added after the role-by-role audit. `add column if not exists` keeps this file safe to re-run on an existing database.
+alter table users add column if not exists mentor_id text references users on delete set null;
+alter table users add column if not exists system boolean not null default false; -- an operator account, not a person: never listed or ranked
+alter table users add column if not exists member_no int generated by default as identity;
+alter table announcements add column if not exists audience text not null default 'all'; -- 'all' or 'mentees:<mentor id>'
+create table if not exists messages (
+  id int generated always as identity primary key,
+  kind text not null check (kind in ('checkin','suggest','feedback')),
+  user_id text references users on delete set null, -- null for anonymous suggestions: the sender is never stored
+  to_user text references users on delete cascade,
+  body text not null check (length(body) between 1 and 1000),
+  created_at timestamptz not null default now()
+);
+create index if not exists messages_to on messages (to_user, kind);
+create table if not exists pings (
+  from_user text not null references users on delete cascade, to_user text not null references users on delete cascade,
+  kind text not null check (kind in ('invite','duel','nudge','team')), ref text not null default '', at timestamptz not null default now(),
+  primary key (from_user, to_user, kind, ref)
+);
+create index if not exists pings_to on pings (to_user);
+create table if not exists expenses (
+  id int generated always as identity primary key,
+  by text not null references users, what text not null, amount int not null check (amount > 0), event text not null default '',
+  status text not null default 'pending' check (status in ('pending','sent to President','approved','rejected')),
+  decided_by text references users, created_at timestamptz not null default now()
+);
+create index if not exists expenses_by on expenses (by);
+-- A rejected payment frees its transaction ID, so a wrongly rejected one can be submitted again.
+alter table payments drop constraint if exists payments_trx_key;
+create unique index if not exists payments_trx_live on payments (trx) where status <> 'rejected';
+alter table payments add column if not exists note text; -- the reason given when a payment is rejected
+alter table users add column if not exists invite_expires timestamptz;

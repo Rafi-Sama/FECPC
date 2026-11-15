@@ -1,0 +1,27 @@
+{
+  "name": "fecpc-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev-ready.ts && next dev",
+    "build": "next build",
+    "start": "next start",
+    "pretest": "node scripts/dev-ready.ts",
+    "test": "node --env-file=.env.local --test --test-concurrency=1 lib server",
+    "db:setup": "node --env-file=.env.local scripts/db-setup.ts"
+  },
+  "dependencies": {
+    "@types/pg": "^8.23.1",
+    "next": "^16.4.6",
+    "pg": "^8.23.1",
+    "qrcode-generator": "^2.0.4",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "typescript": "^7.0.2"
+  }
+}
