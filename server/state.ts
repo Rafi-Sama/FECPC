@@ -89,6 +89,10 @@ select u.email, u.progress, u.mentor_id, (select name from users where id = u.me
   (select coalesce(json_object_agg(target, n), '{}') from (select target, count(*)::int n from reactions group by 1) x) as c_kudos,
   (select coalesce(json_object_agg(pid, n), '{}') from (select pid, count(*)::int n from users, jsonb_array_elements_text(coalesce(progress -> 'solved', '[]')) pid where not system and not suspended group by 1) x) as c_solved,
   (select coalesce(json_object_agg(announcement_id, n), '{}') from (select announcement_id, count(*)::int n from announcement_reads group by 1) x) as c_ann_reads,
+  (select count(*)::int from users where role = 'alumni' and not system and not suspended) as c_alumni,
+  (select count(*)::int from alumni_jobs where (source = 'manual' or fetched_at > now() - interval '30 days') and (deadline is null or deadline >= current_date)) as c_jobs,
+  (select count(*)::int from interview_topics) as c_prep_topics,
+  (select count(*)::int from blog_posts where status = 'published') as c_blogs,
   (select coalesce(json_agg(json_build_object(
       'id', 'an:' || a.id, 'user_id', a.user_id, 'title', a.title, 'body_md', coalesce(a.body_md, ''), 'by', w.name,
       'by_role', w.title, 'by_solved', greatest(w.problems_solved, w.solved), 'by_avatar', w.avatar_url,
@@ -118,8 +122,119 @@ select
 
 type Raw = Roster & { system: boolean; mentorId: string | null; roleKey: Role; suspended: boolean; pending: boolean };
 
+let schemaPromise: Promise<void> | null = null;
+function ensureSchemaOnce(db: Db): Promise<void> {
+  return (schemaPromise ??= (async () => {
+    try {
+      await db.query(`
+        alter table if exists users add column if not exists available_for_questions boolean not null default true;
+        alter table if exists users add column if not exists location text;
+
+        create table if not exists alumni_saves (
+          user_id    text not null references users(id) on delete cascade,
+          alumni_id  text not null references users(id) on delete cascade,
+          created_at timestamptz not null default now(),
+          primary key (user_id, alumni_id)
+        );
+
+        create table if not exists alumni_jobs (
+          id               serial primary key,
+          alumni_id        text references users(id) on delete set null,
+          company          text not null,
+          role             text not null,
+          title            text,
+          location         text,
+          url              text not null,
+          vacancies        integer not null default 1,
+          job_type         text,
+          experience       text,
+          salary           text,
+          description      text,
+          responsibilities jsonb not null default '[]'::jsonb,
+          requirements     jsonb not null default '[]'::jsonb,
+          deadline         date,
+          company_logo_url text,
+          posted_at        timestamptz not null default now(),
+          source           text not null check (source in ('fetched','manual')),
+          fetched_at       timestamptz,
+          created_at       timestamptz not null default now()
+        );
+
+        alter table if exists alumni_jobs add column if not exists title text;
+        alter table if exists alumni_jobs add column if not exists vacancies integer not null default 1;
+        alter table if exists alumni_jobs add column if not exists job_type text;
+        alter table if exists alumni_jobs add column if not exists experience text;
+        alter table if exists alumni_jobs add column if not exists salary text;
+        alter table if exists alumni_jobs add column if not exists description text;
+        alter table if exists alumni_jobs add column if not exists responsibilities jsonb not null default '[]'::jsonb;
+        alter table if exists alumni_jobs add column if not exists requirements jsonb not null default '[]'::jsonb;
+        alter table if exists alumni_jobs add column if not exists deadline date;
+        alter table if exists alumni_jobs add column if not exists company_logo_url text;
+        alter table if exists alumni_jobs add column if not exists posted_at timestamptz not null default now();
+
+        create table if not exists interview_topics (
+          id           serial primary key,
+          name         text not null unique,
+          description  text,
+          created_by   text references users(id) on delete set null,
+          order_index  integer not null default 0,
+          created_at   timestamptz not null default now()
+        );
+
+        create table if not exists interview_problems (
+          id           serial primary key,
+          topic_id     integer not null references interview_topics(id) on delete cascade,
+          title        text not null,
+          url          text not null,
+          difficulty   text not null check (difficulty in ('easy','medium','hard')),
+          meta         jsonb not null default '{}'::jsonb,
+          created_by   text references users(id) on delete set null,
+          created_at   timestamptz not null default now()
+        );
+
+        create table if not exists interview_user_progress (
+          user_id      text not null references users(id) on delete cascade,
+          problem_id   integer not null references interview_problems(id) on delete cascade,
+          completed_at timestamptz not null default now(),
+          primary key (user_id, problem_id)
+        );
+
+        create table if not exists interview_tips (
+          id           serial primary key,
+          author_id    text not null references users(id) on delete cascade,
+          topic_id     integer references interview_topics(id) on delete cascade,
+          title        text not null,
+          body_md      text not null,
+          created_at   timestamptz not null default now(),
+          updated_at   timestamptz not null default now()
+        );
+
+        create table if not exists blog_posts (
+          id           serial primary key,
+          author_id    text not null references users(id) on delete cascade,
+          slug         text not null unique,
+          title        text not null,
+          subtitle     text,
+          excerpt      text,
+          body_md      text not null,
+          cover_url    text,
+          tags         jsonb not null default '[]'::jsonb,
+          status       text not null default 'draft' check (status in ('draft','published')),
+          published_at timestamptz,
+          views        integer not null default 0,
+          created_at   timestamptz not null default now(),
+          updated_at   timestamptz not null default now()
+        );
+      `);
+    } catch {
+      // Fallback
+    }
+  })());
+}
+
 /** Everything `userId` may see, or null when the account is gone or suspended. */
 export async function loadState(db: Db, userId: string): Promise<AppState | null> {
+  await ensureSchemaOnce(db);
   const row = (await db.query(MINE, [userId])).rows[0];
   if (!row) return null;
   const raw = row.me as Raw, role = raw.roleKey, p = progress(row.progress), committee = isCommittee(role), admin = isAdmin(role);
@@ -208,6 +323,10 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
       annReads: row.c_ann_reads,
       kudosToday: row.kudos_today ?? 0,
       recentMilestones: (row.recent_milestones ?? []) as MilestoneDTO[],
+      alumniCount: Number(row.c_alumni ?? 0),
+      jobsCount: Number(row.c_jobs ?? 0),
+      prepTopicsCount: Number(row.c_prep_topics ?? 0),
+      blogsCount: Number(row.c_blogs ?? 0),
     },
     news: row.news, inbox, myExpenses: row.my_exp, fundTotal: data.accounts.reduce((a, x) => a + x[1], 0), office,
   };

@@ -1,120 +1,190 @@
 "use client";
-import { useState } from "react";
-import { Page, Tabs } from "@/components/app/Shell";
-import { useStore } from "@/components/app/Store";
-import { Bars } from "@/components/app/Charts";
-import { APPROVAL_THRESHOLD, myInvoices, owes } from "@/lib/appdata";
-import { fmtDate } from "@/lib/data";
-import { can, canFully } from "@/lib/permissions";
-import { Receipt, Waivers } from "@/components/app/Extras";
 
-const tk = (n: number) => "৳" + Math.abs(n).toLocaleString("en");
+import { useEffect, useMemo, useState } from "react";
+import { Page } from "@/components/app/Shell";
+import QR from "@/components/app/QR";
+import { Receipt } from "@/components/app/Extras";
+import { useStore } from "@/components/app/Store";
+import { myInvoices, owes } from "@/lib/appdata";
+import { fmtDate } from "@/lib/data";
+
+const tk = (n: number) => "৳" + Math.round(Math.abs(n)).toLocaleString("en-US");
+const wallets = {
+  bkash: { label: "bKash", number: "01700000000", account: "Personal · Club Treasurer", color: "#e2136e" },
+  nagad: { label: "Nagad", number: "01800000000", account: "Personal · Club Treasurer", color: "#f6921e" },
+} as const;
+type Wallet = keyof typeof wallets;
+
+const dateLabel = (value: string, year = false) =>
+  new Date(`${value}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", ...(year ? { year: "numeric" } : {}) });
+const daysUntil = (value: string) => Math.round((new Date(`${value}T00:00:00`).getTime() - new Date(new Date().toDateString()).getTime()) / 86_400_000);
+
+function StatusTag({ status, due }: { status: string; due?: string }) {
+  if (status === "verified") return <span className="finance-tag ok"><i />Paid</span>;
+  if (status === "pending") return <span className="finance-tag pending"><i />Awaiting verification</span>;
+  if (status === "rejected") return <span className="finance-tag rejected"><i />Rejected</span>;
+  const days = due ? daysUntil(due) : 0;
+  return days < 0
+    ? <span className="finance-tag rejected"><i />Overdue · {-days}d</span>
+    : <span className="finance-tag due"><i />Due</span>;
+}
+
+function PaymentModal({ invoice, onClose, onSubmitted }: { invoice: { id: string; label: string; amount: number; due: string }; onClose: () => void; onSubmitted: () => void }) {
+  const { act } = useStore();
+  const [step, setStep] = useState(1);
+  const [method, setMethod] = useState<Wallet | null>(null);
+  const [sender, setSender] = useState("");
+  const [trx, setTrx] = useState("");
+  const [amount, setAmount] = useState(String(invoice.amount));
+  const [error, setError] = useState("");
+  const wallet = method ? wallets[method] : null;
+
+  useEffect(() => {
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (event: KeyboardEvent) => event.key === "Escape" && onClose();
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = previous;
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+
+  const submit = async () => {
+    const cleanSender = sender.replace(/[\s-]/g, "").replace(/^\+?88/, "");
+    const cleanTrx = trx.trim().toUpperCase();
+    const numericAmount = Number(amount.replace(/\D/g, ""));
+    if (!/^01\d{9}$/.test(cleanSender)) return setError("Enter the 11-digit number the money was sent from.");
+    if (!/^[A-Z0-9]{8,12}$/.test(cleanTrx)) return setError("Transaction ID must be 8 to 12 letters and digits.");
+    if (!Number.isInteger(numericAmount) || numericAmount < 1) return setError("Enter the amount you sent.");
+    if (!wallet) return;
+    setError("");
+    const ok = await act("pay", { invoice: invoice.id, via: wallet.label, trx: cleanTrx, sender: cleanSender });
+    if (ok) setStep(3);
+  };
+
+  return (
+    <div className="finance-overlay" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <div className="finance-modal" role="dialog" aria-modal="true" aria-labelledby="payment-title">
+        <button className="finance-close" type="button" onClick={onClose} aria-label="Close">×</button>
+        <header className="finance-modal-head">
+          <h2 id="payment-title">Pay <em>{tk(invoice.amount)}.</em></h2>
+          <span className="finance-mono">{invoice.id} · {invoice.label}</span>
+        </header>
+        {step < 3 && <div className="finance-steps">{["Send money", "Confirm"].map((label, index) => <div key={label} className={step === index + 1 ? "active" : step > index + 1 ? "done" : ""}><b>{step > index + 1 ? "✓" : index + 1}</b>{label}</div>)}</div>}
+        <div className="finance-modal-cols">
+        <div className="finance-modal-body">
+          {step === 1 && <>
+            <p className="finance-kicker">1 · Choose how you’ll pay</p>
+            <div className="finance-wallet-options" role="radiogroup" aria-label="Payment method">
+              {(Object.keys(wallets) as Wallet[]).map((key) => <label key={key} className={method === key ? "selected" : ""}>
+                <input type="radio" name="wallet" checked={method === key} onChange={() => setMethod(key)} />
+                <span className="finance-wallet-check" />
+                <strong>{wallets[key].label}</strong>
+                <small>Send money</small>
+              </label>)}
+            </div>
+            <p className="finance-kicker finance-send-heading">2 · Send the money</p>
+            <div className="finance-send" aria-live="polite">
+            {wallet ? <div className="finance-qr"><QR text={wallet.number} size={196} /><small>Scan in {wallet.label}</small></div> : <div className="finance-qr finance-qr-lock"><QR text="locked-preview" size={196} /><b>Locked</b><small>Pick bKash or Nagad<br />to reveal the QR</small></div>}
+            <div className="finance-send-info">
+              {wallet ? <>
+                <div className="finance-copy-row"><span><small>{wallet.label} number · {wallet.account}</small><strong>{wallet.number.replace(/^(\d{5})(\d{6})$/, "$1-$2")}</strong></span><button type="button" className="btn sm" onClick={() => navigator.clipboard.writeText(wallet.number)}>Copy</button></div>
+                <div className="finance-copy-row"><span><small>Amount to send</small><strong>{tk(invoice.amount)}</strong></span><button type="button" className="btn sm" onClick={() => navigator.clipboard.writeText(String(invoice.amount))}>Copy</button></div>
+                <ol><li>Open the <b>{wallet.label}</b> app and tap <b>Scan QR</b> or <b>Send Money</b>.</li><li>Check the number, enter <b>{tk(invoice.amount)}</b> and confirm with your PIN.</li><li>Note the <b>Transaction ID</b> from the SMS, then continue.</li></ol>
+              </> : <>
+                <div className="finance-copy-row finance-copy-lock"><span><small>Wallet number</small><strong>••••• ••••••</strong></span><button type="button" className="btn sm" disabled>Copy</button></div>
+                <div className="finance-copy-row finance-copy-lock"><span><small>Amount to send</small><strong>{tk(invoice.amount)}</strong></span><button type="button" className="btn sm" disabled>Copy</button></div>
+                <p className="finance-copy">Choose a method above and the club’s wallet number and QR code unlock here.</p>
+              </>}
+            </div>
+            </div>
+            {wallet && <div className="finance-note-box"><strong>Use “Send Money”.</strong> Payments with a different amount or from another number may need manual checking.</div>}
+          </>}
+          {step === 2 && wallet && <div>
+            <label className="finance-field"><span>Your {wallet.label} number (sent from)</span><input className="input mono" value={sender} onChange={(event) => setSender(event.target.value)} inputMode="numeric" placeholder="01XXXXXXXXX" /></label>
+            <label className="finance-field"><span>Transaction ID</span><input className="input mono" value={trx} onChange={(event) => setTrx(event.target.value.toUpperCase())} autoCapitalize="characters" placeholder="BK3L9T5RP2" /></label>
+            <label className="finance-field"><span>Amount you sent</span><div className="finance-amount"><span>৳</span><input className="input mono" value={amount} onChange={(event) => setAmount(event.target.value.replace(/\D/g, ""))} inputMode="numeric" /></div></label>
+            {error && <p className="finance-error" role="alert">{error}</p>}
+          </div>}
+          {step === 3 && wallet && <div className="finance-done"><div>✓</div><h3>Payment submitted</h3><p>The Treasurer will check it against the {wallet.label} statement within 24 hours. Your receipt will appear in Payment history once verified.</p></div>}
+        </div>
+        {step < 3 && <aside className="finance-modal-side"><small>Paying for</small><dl><div><dt>Invoice</dt><dd>{invoice.id}</dd></div><div><dt>Description</dt><dd>{invoice.label}</dd></div><div><dt>Due</dt><dd>{dateLabel(invoice.due, true)}</dd></div>{wallet && <div><dt>Method</dt><dd>{wallet.label}</dd></div>}</dl><div className="finance-modal-total"><small>Total</small><strong>{tk(invoice.amount)}</strong></div></aside>}
+        </div>
+        <footer className="finance-modal-foot">
+          <button type="button" className="btn sm line" onClick={step === 1 || step === 3 ? onClose : () => setStep(step - 1)}>{step === 1 || step === 3 ? "Cancel" : "← Back"}</button>
+          {step === 1 && <button type="button" className="btn sm" disabled={!method} onClick={() => setStep(2)}>I’ve sent it →</button>}
+          {step === 2 && <button type="button" className="btn sm" onClick={() => void submit()}>Submit payment</button>}
+          {step === 3 && <button type="button" className="btn sm" onClick={onClose}>Done</button>}
+        </footer>
+      </div>
+    </div>
+  );
+}
 
 export default function Finance() {
-  const { s, me, act, office, fundTotal, myExpenses } = useStore();
-  const invoices = me.system ? [] : myInvoices(s.reg), committee = s.role !== "member" && s.role !== "mentor";
-  const { accounts = [], budgets = [], cashflow = [], ledger = [] } = office.fund ?? {}, queue = office.queue ?? [], expenses = office.expenses ?? [];
-  const verify = can(s.role, "payments.verify"), approve = can(s.role, "expense.approve"), payTab = verify === true ? "Verify payments" : "Payments";
-  const tabs = ["My dues", ...(committee ? ["My requests"] : []), ...(verify ? [payTab] : []), ...(approve ? ["Expenses"] : []), ...(can(s.role, "dues.waive") ? ["Waivers"] : []), ...(verify || approve ? ["Club fund"] : []), "Transparency"];
-  const [tab, setTab] = useState("My dues");
-  const reject = (id: string) => { const reason = prompt("Why is this payment rejected? The member is shown this."); if (reason) act("decide", { kind: "payment", id, to: "rejected", reason }); };
-  const [open, setOpen] = useState("");
-  const owed = invoices.filter((i) => owes(s.pay, i.id)), waiting = invoices.filter((i) => s.pay[i.id]?.status === "pending"), paid = Object.values(s.pay).filter((p) => p.status === "verified");
-  const sum = (list: { amount: number }[]) => tk(list.reduce((a, i) => a + i.amount, 0));
-  const pay = (e: React.FormEvent<HTMLFormElement>, invoice: string) => {
-    e.preventDefault();
-    const d = new FormData(e.currentTarget);
-    act("pay", { invoice, via: d.get("via"), trx: d.get("trx"), sender: d.get("sender") }).then((ok) => ok && setOpen(""));
+  const { s, me, office, fundTotal } = useStore();
+  const [tab, setTab] = useState<"dues" | "transparency">("dues");
+  const [paymentInvoice, setPaymentInvoice] = useState<{ id: string; label: string; amount: number; due: string } | null>(null);
+  const [receipt, setReceipt] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  useEffect(() => {
+    const syncTab = () => setTab(location.hash === "#transparency" ? "transparency" : "dues");
+    syncTab();
+    window.addEventListener("hashchange", syncTab);
+    return () => window.removeEventListener("hashchange", syncTab);
+  }, []);
+  const changeTab = (next: "dues" | "transparency") => {
+    setTab(next);
+    history.replaceState(null, "", next === "transparency" ? "#transparency" : "#dues");
   };
-  return (
-    <Page title={tab === "Club fund" || tab === "Transparency" ? <>{tab === "Transparency" ? "Where the money goes" : "Club fund"}<span className="acc">.</span></> : tab !== "My dues" && tabs.includes(tab) ? <>{tab}<span className="acc">.</span></> : owed.length ? <>You owe <span className="acc">{sum(owed)}.</span></> : waiting.length ? <>{sum(waiting)} <span className="acc">awaiting verification.</span></> : <>You are <span className="acc">all paid up.</span></>}>
-      <Tabs tabs={tabs} value={tabs.includes(tab) ? tab : "My dues"} onChange={setTab} />
-      {(tab === "My dues" || !tabs.includes(tab)) && (
-        <div className="bento">
-          <section className="panel" style={{ gridColumn: "1 / -1" }}><p className="label">Invoices</p>
-            <div className="list">{invoices.map((i) => { const p = s.pay[i.id]; return (
-              <div key={i.id} style={{ flexWrap: "wrap" }}>
-                <span className="grow"><strong>{i.label}</strong><br /><span className="label">{i.id} · due {fmtDate(i.due, { day: "numeric", month: "short" })}</span></span>
-                <span className="mono" style={{ fontSize: 20 }}>{tk(i.amount)}</span>
-                {p && <span className={`pill ${p.status === "verified" ? "ok" : p.status === "rejected" ? "bad" : "warn"}`}>{p.status === "verified" ? "paid" : p.status === "rejected" ? "rejected" : "awaiting verification"} · {p.via} {p.trx}</span>}
-                {!owes(s.pay, i.id) ? null : <button className="btn sm" onClick={() => setOpen(open === i.id ? "" : i.id)}>{open === i.id ? "Close" : p ? "Submit again" : `Pay ${tk(i.amount)}`}</button>}
-                {open === i.id && owes(s.pay, i.id) && (
-                  <form className="grid" style={{ "--min": "160px", "--g": "12px", flexBasis: "100%", alignItems: "end" } as React.CSSProperties} onSubmit={(e) => pay(e, i.id)}>
-                    <label className="field"><span className="label">Wallet</span><select name="via" className="input"><option>bKash</option><option>Nagad</option><option>Rocket</option></select></label>
-                    <label className="field"><span className="label">Transaction ID</span><input name="trx" className="input mono" required minLength={8} maxLength={12} pattern="[A-Za-z0-9]+" placeholder="BK9X2M4Q7A" /></label>
-                    <label className="field"><span className="label">Sender number</span><input name="sender" className="input mono" required inputMode="numeric" pattern="01[0-9]{9}" placeholder="01XXXXXXXXX" /></label>
-                    <button className="btn sm">Submit for verification</button>
-                  </form>
-                )}
-              </div>
-            ); })}</div>
-            {invoices.some((i) => s.pay[i.id]?.status === "rejected") && <p className="body bad" role="status">A rejected payment usually means the transaction ID did not match the wallet statement. Check the SMS and submit again.</p>}
-            <p className="body">Send the amount to the club wallet, then enter the transaction ID from the SMS. The Treasurer verifies it against the wallet statement.</p>
-          </section>
-                    <section className="panel" style={{ gridColumn: "1 / -1" }}><p className="label">Payment history</p>
-            <div className="scroll-x"><table className="tbl"><thead><tr><th>No.</th><th>For</th><th>Date</th><th>Via</th><th className="r">Amount</th><th className="r no-print">Receipt</th></tr></thead>
-              <tbody>{paid.map((h) => <tr key={h.id}><td className="mono">RCP-{h.id}</td><td>{h.label}</td><td>{new Date(h.at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</td><td>{h.via}</td><td className="r mono">{tk(h.amount)}</td><td className="r no-print"><button className="btn xs line" onClick={() => setOpen(open === "r" + h.id ? "" : "r" + h.id)}>{open === "r" + h.id ? "Hide" : "View"}</button></td></tr>)}</tbody></table></div>
-            {paid.length === 0 && <p className="body">No verified payments yet. A receipt appears here as soon as the Treasurer verifies one.</p>}
-            {paid.filter((h) => "r" + h.id === open).map((h) => <Receipt key={h.id} id={"RCP-" + h.id} label={h.label} amount={h.amount} date={h.at.slice(0, 10)} via={h.via} />)}
-          </section>
+  const invoices = me.system ? [] : myInvoices(s.reg);
+  const payments = Object.values(s.pay).sort((a, b) => b.at.localeCompare(a.at));
+  const owed = invoices.filter((invoice) => owes(s.pay, invoice.id));
+  const pending = payments.filter((payment) => payment.status === "pending");
+  const verified = payments.filter((payment) => payment.status === "verified");
+  const next = invoices.filter((invoice) => owes(s.pay, invoice.id)).sort((a, b) => a.due.localeCompare(b.due))[0];
+  const ledger = office.fund?.ledger ?? [];
+  const categories = useMemo(() => {
+    const values = new Map<string, number>();
+    for (const item of ledger) values.set(item.cat, (values.get(item.cat) ?? 0) + Math.abs(item.amt));
+    const total = [...values.values()].reduce((sum, value) => sum + value, 0) || 1;
+    return [...values.entries()].map(([name, value]) => ({ name, value, percent: Math.round(value / total * 100) })).sort((a, b) => b.value - a.value);
+  }, [ledger]);
+  const filteredLedger = ledger.filter((item) => `${item.what} ${item.cat} ${item.date}`.toLowerCase().includes(query.toLowerCase()));
+  const hero = tab === "transparency" ? <>Where the money goes<span className="accent">.</span></> : owed.length ? <>You owe <span className="accent">{tk(owed.reduce((sum, invoice) => sum + invoice.amount, 0))}.</span></> : pending.length ? <>Payment sent<span className="accent">.</span> <small>Awaiting verification.</small></> : <>You’re all paid up<span className="accent">.</span></>;
+  const receiptPayment = receipt ? payments.find((payment) => String(payment.id) === receipt) : null;
+
+  return <Page title={hero}>
+    <div className="finance-page">
+      <div className="finance-tabs" role="tablist" aria-label="Finance sections">
+        <button type="button" role="tab" aria-selected={tab === "dues"} className={tab === "dues" ? "active" : ""} onClick={() => changeTab("dues")}>My dues</button>
+        <button type="button" role="tab" aria-selected={tab === "transparency"} className={tab === "transparency" ? "active" : ""} onClick={() => changeTab("transparency")}>Transparency</button>
+      </div>
+      {tab === "dues" ? <div className="finance-content">
+        <div className="finance-stats">
+          <div><small>Outstanding</small><b className={owed.length ? "blue" : "green"}>{tk(owed.reduce((sum, invoice) => sum + invoice.amount, 0))}</b><small>{pending.length ? `${pending.length} payment awaiting verification` : owed.length ? `${owed.length} invoice open` : "Nothing due"}</small></div>
+          <div><small>Paid so far</small><b>{tk(verified.reduce((sum, payment) => sum + payment.amount, 0))}</b><small>{verified.length} verified payments</small></div>
+          <div><small>Next deadline</small><b>{next ? dateLabel(next.due) : "—"}</b><small className={next && daysUntil(next.due) < 0 ? "red" : ""}>{next ? (daysUntil(next.due) < 0 ? `Overdue by ${-daysUntil(next.due)} days` : `${daysUntil(next.due)} days left`) : "All clear"}</small></div>
         </div>
-      )}
-      {tab === payTab && verify && (
-        <div className="stack">
-          {queue.length === 0 && <p className="body">No payments have been submitted yet.</p>}
-          <div className="scroll-x"><table className="tbl cards"><thead><tr><th>Payment</th><th>Member</th><th>Submitted</th><th>Via · Trx ID · Sender</th><th className="r">Amount</th><th className="r">Decision</th></tr></thead>
-            <tbody>{queue.map((q) => { const st = s.queue[q.id] === "pending" ? "" : s.queue[q.id]; return (
-              <tr key={q.id}><td className="mono">{q.id}</td><td><strong>{q.name}</strong><br /><span className="label">{q.label}</span></td><td className="label">{new Date(q.at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</td>
-                <td className="mono">{q.via} · {q.trx} · {q.sender}</td><td className="r mono">{tk(q.amount)}</td>
-                <td className="r">{st ? <span className={`pill ${st === "verified" ? "ok" : "bad"}`}>{st}</span> : q.mine ? <span className="pill">yours · needs another verifier</span> : canFully(s.role, "payments.verify") ? <span className="row" style={{ "--g": "6px", justifyContent: "flex-end", flexWrap: "nowrap" } as React.CSSProperties}>
-                  <button className="btn xs" onClick={() => confirm(`Verify ${q.id}: ${tk(q.amount)} from ${q.name}? Check it against the wallet statement first.`) && act("decide", { kind: "payment", id: q.id, to: "verified" })}>Verify</button>
-                  <button className="btn xs line" onClick={() => reject(q.id)}>Reject</button></span> : <span className="pill">pending</span>}</td></tr>
-            ); })}</tbody></table></div>
-        </div>
-      )}
-      {tab === "My requests" && committee && (
-        <div className="stack">
-          <form className="panel grid" style={{ "--min": "200px", "--g": "12px", alignItems: "end" } as React.CSSProperties} onSubmit={(e) => { e.preventDefault(); const f = e.currentTarget, d = new FormData(f); act("expense", { what: d.get("what"), amount: Number(d.get("amount")), event: d.get("event") }).then((ok) => ok && f.reset()); }}>
-            <label className="field" style={{ gridColumn: "span 2" }}><span className="label">What is it for</span><input name="what" className="input" required minLength={3} maxLength={140} placeholder="Printed problem sets, 60 copies" /></label>
-            <label className="field"><span className="label">Amount (৳)</span><input name="amount" className="input mono" type="number" required min={1} max={1000000} step={1} /></label>
-            <label className="field"><span className="label">Event (optional)</span><input name="event" className="input" maxLength={80} /></label>
-            <button className="btn sm">Request expense</button>
-          </form>
-          {myExpenses.length === 0 ? <p className="body">You have not filed any expense requests.</p> : <div className="list">{myExpenses.map((x) => (
-            <div key={x.id}><span className="grow"><strong>{x.what}</strong><br /><span className="label">{x.id}{x.event ? ` · ${x.event}` : ""}</span></span><span className="mono" style={{ fontSize: 20 }}>{tk(x.amount)}</span><span className={`pill ${x.status === "approved" ? "ok" : x.status === "rejected" ? "bad" : "warn"}`}>{x.status}</span></div>
-          ))}</div>}
-        </div>
-      )}
-      {tab === "Expenses" && approve && (
-        <div className="stack">
-          <p className="body" style={{ maxWidth: "70ch" }}>Up to {tk(APPROVAL_THRESHOLD)} one officer decides. Above it, one officer passes the request up and a second, with full authority, decides. Nobody decides their own request.</p>
-          {expenses.length === 0 && <p className="body">No expense requests.</p>}
-          <div className="list">{expenses.map((x) => { const big = x.amount > APPROVAL_THRESHOLD, st = x.status === "pending" ? "" : x.status === "sent to President" && approve === true ? "" : x.status, mine = !big || x.status === "sent to President"; return (
-            <div key={x.id} style={{ flexWrap: "wrap" }}><span className="grow"><strong>{x.what}</strong><br /><span className="label">{x.id} · requested by {x.name} · {x.event}{big ? " · above threshold" : ""}</span></span><span className="mono" style={{ fontSize: 20 }}>{tk(x.amount)}</span>
-              {st ? <span className={`pill ${st === "rejected" ? "bad" : st === "approved" ? "ok" : "warn"}`}>{st}</span> : x.by === me.id ? <span className="pill">your request</span> : mine ? <>
-                <button className="btn xs" onClick={() => confirm(`Approve ${x.id}: ${tk(x.amount)} for "${x.what}"?`) && act("decide", { kind: "expense", id: x.id, to: "approved" })}>Approve</button>
-                <button className="btn xs line" onClick={() => confirm(`Reject ${x.id}? This cannot be undone.`) && act("decide", { kind: "expense", id: x.id, to: "rejected" })}>Reject</button></>
-                : <button className="btn xs line" onClick={() => act("decide", { kind: "expense", id: x.id, to: "sent to President" })}>Pass up for a second decision</button>}</div>
-          ); })}</div>
-        </div>
-      )}
-      {tab === "Club fund" && (
-        <div className="bento">
-          <p className="body" style={{ gridColumn: "1 / -1" }} role="note"><strong>Sample figures.</strong> The balance, ledger, budgets and cash flow below are placeholders until the ledger is connected; verifying a payment or approving an expense does not change them yet.</p>
-          <section className="panel c4"><p className="label">Balance</p><p className="big">{tk(fundTotal)}</p><ul className="list">{accounts.map(([n, v]) => <li key={n}><span>{n}</span><span className="mono">{tk(v)}</span></li>)}</ul></section>
-          <section className="panel c8"><p className="label">Cash flow, 12 months (thousand ৳)</p><Bars data={cashflow} unit="k" /><div className="bars-x"><span>Dec 2025</span><span>Nov 2026 · ৳55k</span></div></section>
-          <section className="panel c6"><p className="label">Event budgets</p>{budgets.map(([n, plan, act]) => <div key={n} className="stack" style={{ "--g": "6px" } as React.CSSProperties}><div className="row between"><span>{n}</span><span className={`mono ${act / plan >= 0.8 ? "bad" : ""}`}>{tk(act)} / {tk(plan)}{act / plan >= 0.8 ? " · 80% alert" : ""}</span></div><div className="meter" style={{ "--v": `${(act / plan) * 100}%` } as React.CSSProperties}><i style={act / plan >= 0.8 ? { background: "var(--bad)" } : undefined} /></div></div>)}</section>
-          <section className="panel c6"><p className="label">Ledger</p><div className="scroll-x"><table className="tbl"><tbody>{ledger.map((l) => <tr key={l.what}><td className="label">{fmtDate(l.date)}</td><td>{l.what}</td><td className="r mono"><span className={l.amt < 0 ? "bad" : "ok"}>{l.amt < 0 ? "−" : "+"}{tk(l.amt)}</span></td></tr>)}</tbody></table></div></section>
-        </div>
-      )}
-      {tab === "Transparency" && (
-        <div className="bento">
-          <p className="body" style={{ gridColumn: "1 / -1" }} role="note"><strong>Sample figures</strong> until the ledger is connected.</p>
-          <section className="panel c4"><p className="label">Club fund balance</p><p className="big">{tk(fundTotal)}</p></section>
-          <section className="panel c8"><p className="label">Spending this term, by category</p>{[["Prizes", 34], ["Food at events", 26], ["Printing", 14], ["Merchandise", 12], ["Hosting", 8], ["Reserve", 6]].map(([k, v]) => <div key={k} className="row" style={{ "--g": "12px", flexWrap: "nowrap" } as React.CSSProperties}><span style={{ width: 130 }}>{k}</span><div className="meter grow" style={{ "--v": `${+v * 2.6}%` } as React.CSSProperties}><i /></div><span className="mono">{v}%</span></div>)}</section>
-        </div>
-      )}
-      {tab === "Waivers" && can(s.role, "dues.waive") && <Waivers />}
-    </Page>
-  );
+        <section className="finance-panel"><header><span>Invoices</span><small>{invoices.length} invoice{invoices.length === 1 ? "" : "s"}</small></header>
+          {invoices.length ? invoices.map((invoice) => { const payment = s.pay[invoice.id]; const canPay = owes(s.pay, invoice.id); const invoiceState = payment?.status === "verified" ? "paid" : payment?.status === "pending" ? "pending" : daysUntil(invoice.due) < 0 ? "over" : ""; return <article className={`finance-invoice ${invoiceState}`} key={invoice.id}>
+            <div><h3>{invoice.label}</h3><p><StatusTag status={payment?.status ?? "due"} due={invoice.due} /> <span className="finance-mono">{invoice.id} · Due {dateLabel(invoice.due)}</span></p></div>
+            <div className="finance-invoice-action"><strong>{tk(invoice.amount)}</strong>{canPay ? <button className="btn sm finance-pay-btn" onClick={() => setPaymentInvoice(invoice)}><span>Pay {tk(invoice.amount)}</span><b aria-hidden="true">→</b></button> : <small>Settled</small>}</div>
+          </article>; }) : <p className="finance-empty">No invoices right now.</p>}
+        </section>
+        <section className="finance-panel"><header><span>Payment history</span><small>{payments.length} payment{payments.length === 1 ? "" : "s"}</small></header>
+          {payments.length ? <div className="finance-table-wrap"><table className="finance-table"><thead><tr><th>No.</th><th>For</th><th>Date</th><th>Via</th><th>Trx ID</th><th className="right">Amount</th><th className="right">Status</th></tr></thead><tbody>{payments.map((payment) => <tr key={payment.id}><td className="finance-mono">RCP-{payment.id}</td><td>{payment.label}</td><td>{new Date(payment.at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</td><td>{payment.via}</td><td className="finance-mono">{payment.trx}</td><td className="right finance-mono">{tk(payment.amount)}</td><td className="right">{payment.status === "verified" ? <button className="finance-link" onClick={() => setReceipt(String(payment.id))}>Receipt ↗</button> : <StatusTag status={payment.status} />}</td></tr>)}</tbody></table></div> : <p className="finance-empty">No payments yet. Your receipts will appear here once the Treasurer verifies a payment.</p>}
+          {receiptPayment && <Receipt id={`RCP-${receiptPayment.id}`} label={receiptPayment.label} amount={receiptPayment.amount} date={receiptPayment.at.slice(0, 10)} via={receiptPayment.via} />}
+        </section>
+      </div> : <div className="finance-content">
+        <div className="finance-sample"><span className="tag">Sample figures</span><span>Shown until the ledger is connected</span></div>
+        <div className="finance-transparency-grid"><section className="finance-balance"><small>Club fund balance</small><strong>{tk(fundTotal)}</strong><div><span>Incoming this term</span><b className="green">+{tk(75_000)}</b></div><div><span>Spent this term</span><b className="red">−{tk(43_500)}</b></div><i aria-hidden>৳</i></section>
+          <section className="finance-panel"><header><span>Money in vs. money out</span><small>This term</small></header><div className="finance-chart">{(office.fund?.cashflow ?? []).slice(-6).map((value, index) => <div className="finance-chart-col" key={`${value}-${index}`}><div><i style={{ height: `${Math.min(100, Math.max(8, value * 2))}%` }} /><i className="out" style={{ height: `${Math.min(100, Math.max(8, value * 1.4))}%` }} /></div><small>{["Jun", "Jul", "Aug", "Sep", "Oct", "Nov"][index]}</small></div>)}</div><div className="finance-legend"><span><i />Money in</span><span><i />Money out</span></div></section></div>
+        <section className="finance-panel"><header><span>Spending this term, by category</span><small>{tk(categories.reduce((sum, item) => sum + item.value, 0))}</small></header><div className="finance-categories">{categories.length ? categories.map((item) => <button type="button" className={query === item.name ? "selected" : ""} key={item.name} onClick={() => setQuery(query === item.name ? "" : item.name)}><span>{item.name}</span><i><b style={{ width: `${item.percent}%` }} /></i><small>{item.value ? tk(item.value) : ""}</small><small>{item.percent}%</small></button>) : <p className="finance-empty">No published spending data yet.</p>}</div><p className="finance-note">Select a category to filter the ledger below.</p></section>
+        <section className="finance-panel"><header><span>All expenses</span><small>{filteredLedger.length} shown</small></header><div className="finance-tools"><input value={query} onChange={(event) => setQuery(event.target.value)} type="search" placeholder="Search expenses" aria-label="Search expenses" /><button type="button" className={!query ? "active" : ""} onClick={() => setQuery("")}>All categories</button></div><div className="finance-table-wrap"><table className="finance-table"><thead><tr><th>Date</th><th>Description</th><th>Category</th><th>Approved by</th><th className="right">Amount</th></tr></thead><tbody>{filteredLedger.map((item) => <tr key={`${item.date}-${item.what}`}><td className="finance-mono">{fmtDate(item.date)}</td><td><b>{item.what}</b></td><td>{item.cat}</td><td>{item.amt < 0 ? "Treasurer" : "President"}</td><td className="right finance-mono">{tk(Math.abs(item.amt))}</td></tr>)}</tbody></table></div></section>
+      </div>}
+    </div>
+    {paymentInvoice && <PaymentModal invoice={paymentInvoice} onClose={() => setPaymentInvoice(null)} onSubmitted={() => setPaymentInvoice(null)} />}
+  </Page>;
 }

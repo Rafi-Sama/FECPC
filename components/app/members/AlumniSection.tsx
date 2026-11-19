@@ -40,6 +40,9 @@ export function AlumniSection({
   const prep = profile.interview_prep ?? [];
   const fetched = profile.jobs_fetched ?? [];
   const manual = profile.jobs_manual ?? [];
+  const tips = profile.interview_tips ?? [];
+  const blogs = profile.blogs ?? [];
+  const jobsPosted = profile.jobs_posted ?? manual;
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,6 +70,19 @@ export function AlumniSection({
 
   const handleDelete = async (jobId: number) => {
     if (!window.confirm("Delete this job listing?")) return;
+    try {
+      const res = await fetch("/api/alumni", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "deleteAlumniJob", jobId }),
+      });
+      if (res.ok) {
+        await onReload();
+        return;
+      }
+    } catch {
+      // fallback
+    }
     const ok = await act("deleteAlumniJob", { jobId });
     if (ok) await onReload();
   };
@@ -96,29 +112,65 @@ export function AlumniSection({
 
   return (
     <>
-      <section className="profile-section" aria-label="Interview prep">
+      <section className="profile-section" aria-label="Interview tips">
         <div className="profile-section__head">
-          <h3 className="profile-section__label">· Interview prep</h3>
+          <h3 className="profile-section__label">· Interview tips</h3>
         </div>
-        {prep.length === 0 ? (
+        {tips.length === 0 ? (
           <p className="body" style={{ fontSize: 14 }}>
-            No interview prep posts yet.
+            No interview tips contributed yet.
           </p>
         ) : (
           <ul className="list">
-            {prep.map((p) => (
-              <li key={p.id}>
+            {tips.map((t) => (
+              <li key={t.id}>
                 <span className="grow">
-                  <strong>{p.title}</strong>
+                  <strong>{t.title}</strong>
                 </span>
                 <span className="label" style={{ fontSize: 12 }}>
-                  {fmtShortDate(p.created_at)}
+                  {fmtShortDate(t.created_at)}
                 </span>
                 <Link
-                  href={`/app/community?tab=feed&post=${p.id}`}
+                  href={`/app/community?tab=prep`}
                   className="profile-modal__link"
                 >
-                  Open ↗
+                  View in Prep ↗
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="profile-section" aria-label="Blogs">
+        <div className="profile-section__head">
+          <h3 className="profile-section__label">· Blogs</h3>
+        </div>
+        {blogs.length === 0 ? (
+          <p className="body" style={{ fontSize: 14 }}>
+            No blog posts published yet.
+          </p>
+        ) : (
+          <ul className="list">
+            {blogs.map((b) => (
+              <li key={b.id}>
+                <span className="grow">
+                  <strong>{b.title}</strong>
+                  {b.subtitle && (
+                    <>
+                      <br />
+                      <span className="label" style={{ fontSize: 12 }}>{b.subtitle}</span>
+                    </>
+                  )}
+                </span>
+                <span className="label" style={{ fontSize: 12 }}>
+                  {fmtShortDate(b.published_at || b.created_at)}
+                </span>
+                <Link
+                  href={`/app/community?tab=blogs&read=${encodeURIComponent(b.slug)}`}
+                  className="profile-modal__link"
+                >
+                  Read ↗
                 </Link>
               </li>
             ))}
@@ -128,7 +180,7 @@ export function AlumniSection({
 
       <section className="profile-section" aria-label="Jobs">
         <div className="profile-section__head">
-          <h3 className="profile-section__label">· Jobs</h3>
+          <h3 className="profile-section__label">· Jobs posted</h3>
           {canPost && (
             <div className="row" style={{ "--g": "6px" } as React.CSSProperties}>
               <button

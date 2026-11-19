@@ -1,5 +1,5 @@
 "use client";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Page, Tabs } from "@/components/app/Shell";
 import { useStore } from "@/components/app/Store";
@@ -14,12 +14,14 @@ import { ideaTypeLabel, NewIdeaModal } from "@/components/app/ideas/NewIdeaModal
 import { ProfileModal } from "@/components/app/members/ProfileModal";
 import { excerptFromMarkdown, MarkdownEditor, relTime } from "@/components/app/shared/MarkdownEditor";
 import { TierAvatar, TierName } from "@/components/app/shared/TierBadge";
+import { AlumniPage } from "@/components/app/alumni/AlumniPage";
+import { HighlightMatch } from "@/components/app/alumni/HighlightMatch";
 import { announcements, polls } from "@/lib/appdata";
 import { groupsData } from "@/lib/appdata2";
 import { can, isCommittee } from "@/lib/permissions";
 import type { FeedCategory, FeedPostSummary, IdeaStatus, IdeaSummary, IdeaType } from "@/lib/state";
 
-const tabs = ["Feed", "Announcements", "Ideas", "Polls", "Groups", "Suggest"] as const;
+const tabs = ["Feed", "Announcements", "Ideas", "Alumni", "Polls", "Groups", "Suggest"] as const;
 type Tab = (typeof tabs)[number];
 
 const FEED_FILTERS = [
@@ -46,15 +48,29 @@ const IDEA_STATUS_FILTERS: { key: "all" | Exclude<IdeaStatus, "closed">; label: 
 function parseTab(param: string | null): Tab {
   if (!param) return "Feed";
   const lower = param.toLowerCase();
+  if (lower === "alumni" || lower === "jobs" || lower === "prep" || lower === "blogs") return "Alumni";
   return tabs.find((t) => t.toLowerCase() === lower) ?? "Feed";
 }
 
-function CommunityInner() {
+function CommunityContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const { s, me, act, counts, news, members, who } = useStore();
   const [tab, setTab] = useState<Tab>(() => parseTab(searchParams.get("tab")));
   const [activeProfileId, setActiveProfileId] = useState<string | null>(() => searchParams.get("profile"));
   const lastProfileTriggerRef = useRef<HTMLElement | null>(null);
+
+  const handleTabChange = useCallback(
+    (nextTab: Tab) => {
+      if (nextTab === "Alumni") {
+        router.push("/app/community?tab=alumni");
+        return;
+      }
+      setTab(nextTab);
+      router.replace(`/app/community?tab=${nextTab.toLowerCase()}`, { scroll: false });
+    },
+    [router]
+  );
 
   useEffect(() => {
     const p = searchParams.get("tab");
@@ -401,7 +417,7 @@ function CommunityInner() {
         </>
       }
     >
-      <Tabs tabs={tabs} value={tab} onChange={setTab} />
+      <Tabs tabs={tabs} value={tab} onChange={handleTabChange} />
 
       {/* ────────── TAB 1: FEED ────────── */}
       {tab === "Feed" && (
@@ -457,9 +473,11 @@ function CommunityInner() {
                             setActivePostId(p.id);
                           }}
                         >
-                          {p.title}
+                          <HighlightMatch text={p.title} query={feedQ} />
                         </button>
-                        <p className="cm-excerpt">{excerptFromMarkdown(p.body_md)}</p>
+                        <p className="cm-excerpt">
+                          <HighlightMatch text={excerptFromMarkdown(p.body_md)} query={feedQ} />
+                        </p>
                         <div className="cm-meta">
                           <TierName name={p.author_name} solved={p.author_solved} />
                           <span>· {relTime(p.created_at)}</span>
@@ -768,9 +786,11 @@ function CommunityInner() {
                             setActiveIdeaId(it.id);
                           }}
                         >
-                          {it.title}
+                          <HighlightMatch text={it.title} query={ideaQ} />
                         </button>
-                        <p className="cm-excerpt">{excerptFromMarkdown(it.body_md)}</p>
+                        <p className="cm-excerpt">
+                          <HighlightMatch text={excerptFromMarkdown(it.body_md)} query={ideaQ} />
+                        </p>
                         <div className="cm-meta">
                           <TierName name={it.author_name} solved={it.author_solved} />
                           <span>· {relTime(it.created_at)}</span>
@@ -911,6 +931,16 @@ function CommunityInner() {
       )}
     </Page>
   );
+}
+
+function CommunityInner() {
+  const searchParams = useSearchParams();
+  const tabParam = (searchParams.get("tab") || "").toLowerCase();
+  const isAlumni = ["alumni", "jobs", "prep", "blogs"].includes(tabParam);
+  if (isAlumni) {
+    return <AlumniPage />;
+  }
+  return <CommunityContent />;
 }
 
 export default function Community() {

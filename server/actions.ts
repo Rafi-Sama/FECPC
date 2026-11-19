@@ -5,7 +5,7 @@ import { cols, courses, volunteerShifts, wiki } from "../lib/appdata2.ts";
 import { events } from "../lib/data.ts";
 import { can, canFully, roleName, roles, type Role } from "../lib/permissions.ts";
 import { RANKS, UNRATED_RANK } from "../lib/rank.ts";
-import type { AlumniJob, CommunityComment, FeedCategory, FeedPostDetail, FeedPostSummary, IdeaDetail, IdeaInterestRow, IdeaStatus, IdeaSummary, IdeaType, MemberActivityItem, MemberContestRow, MemberExperience, MemberProfile, MemberSummary, MilestoneDTO } from "../lib/state.ts";
+import type { AlumniJob, AlumniSummary, BlogPost, CommunityComment, FeedCategory, FeedPostDetail, FeedPostSummary, IdeaDetail, IdeaInterestRow, IdeaStatus, IdeaSummary, IdeaType, InterviewProblem, InterviewTip, InterviewTopic, MemberActivityItem, MemberContestRow, MemberExperience, MemberProfile, MemberSummary, MilestoneDTO } from "../lib/state.ts";
 import { earned } from "../lib/xp.ts";
 import { hashPassword, newToken, sha } from "./auth.ts";
 import * as data from "./data.ts";
@@ -34,6 +34,17 @@ const posInt = (v: unknown, what: string) => {
   if (!Number.isInteger(n) || n < 1 || n > 2_000_000_000) throw new Fail(400, `Invalid ${what}.`);
   return n;
 };
+export function excerptFromMarkdown(md: string, maxLen = 140): string {
+  const flat = md
+    .replace(/```[\s\S]*?```/g, "[code]")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/^>\s?/gm, "")
+    .replace(/[*_`~]/g, "")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+  return flat.length > maxLen ? flat.slice(0, maxLen - 1).trimEnd() + "…" : flat;
+}
 const optionalUrl = (v: unknown, what: string): string | null => {
   if (v === undefined || v === null) return null;
   const t = typeof v === "string" ? v.replace(/[\u0000-\u001f\u007f]/g, "").trim() : "";
@@ -593,19 +604,55 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
       throw new Fail(429, "DAILY LIMIT REACHED. TRY AGAIN TOMORROW.");
     }
   },
+  async saveAlumni(c, a, _p, i) {
+    const alumniId = key(i.alumniId);
+    const has = (await c.query(`select 1 from alumni_saves where user_id = $1 and alumni_id = $2`, [a.id, alumniId])).rowCount! > 0;
+    if (has) {
+      await c.query(`delete from alumni_saves where user_id = $1 and alumni_id = $2`, [a.id, alumniId]);
+      return "UNSAVED";
+    } else {
+      await c.query(`insert into alumni_saves (user_id, alumni_id) values ($1, $2) on conflict do nothing`, [a.id, alumniId]);
+      return "SAVED";
+    }
+  },
+  async setAvailableForQuestions(c, a, _p, i) {
+    const targetId = typeof i.alumniId === "string" && KEY.test(i.alumniId) ? i.alumniId : a.id;
+    need(targetId === a.id || isAdmin(a.role), "Only the account owner or an admin can change mentoring availability.");
+    const val = Boolean(i.value);
+    await c.query(`update users set available_for_questions = $1 where id = $2 and not system`, [val, targetId]);
+    await audit(c, a, `set mentoring availability for ${targetId} to ${val}`);
+  },
   async createAlumniJob(c, a, _p, i) {
     need(canFully(a.role, "alumni.job.post"), "Only alumni or admins can post alumni jobs.");
-    const company = text(i.company, 2, 100, "Company");
-    const roleTitle = text(i.role, 2, 120, "Role");
+    const company = text(i.company, 1, 100, "Company");
+    const roleTitle = text(i.title ?? i.role, 1, 120, "Role");
     const url = optionalUrl(i.url, "Job URL");
     if (!url) throw new Fail(400, "Job URL is required.");
     const location = i.location ? text(i.location, 1, 100, "Location") : null;
     const alumniId = isAdmin(a.role) && typeof i.alumniId === "string" && KEY.test(i.alumniId) ? i.alumniId : a.id;
     const owner = (await c.query(`select id from users where id = $1 and not system`, [alumniId])).rows[0];
     if (!owner) throw new Fail(404, "Target member does not exist.");
+    const vacancies = Math.max(1, Math.min(999, posInt(i.vacancies ?? 1, "vacancies")));
+    const jobType = i.job_type ? String(i.job_type) : "Full-time";
+    const experience = i.experience ? text(i.experience, 1, 100, "Experience") : null;
+    const salary = i.salary ? text(i.salary, 1, 100, "Salary") : null;
+    const description = i.description ? String(i.description).trim() : null;
+    const responsibilities = Array.isArray(i.responsibilities) ? i.responsibilities.map(String).map((s) => s.trim()).filter(Boolean) : [];
+    const requirements = Array.isArray(i.requirements) ? i.requirements.map(String).map((s) => s.trim()).filter(Boolean) : [];
+    const deadline = i.deadline ? String(i.deadline).slice(0, 10) : null;
+    const companyLogoUrl = typeof i.company_logo_url === "string" && i.company_logo_url.trim() ? i.company_logo_url.trim() : null;
+
     await c.query(
-      `insert into alumni_jobs (alumni_id, company, role, location, url, source) values ($1, $2, $3, $4, $5, 'manual')`,
-      [alumniId, company, roleTitle, location, url]
+      `insert into alumni_jobs (
+         alumni_id, company, role, title, location, url, source,
+         vacancies, job_type, experience, salary, description, responsibilities, requirements, deadline, company_logo_url, posted_at
+       ) values ($1, $2, $3, $3, $4, $5, 'manual', $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, $13, $14, now())`,
+      [
+        alumniId, company, roleTitle, location, url,
+        vacancies, jobType, experience, salary, description,
+        JSON.stringify(responsibilities), JSON.stringify(requirements),
+        deadline, companyLogoUrl
+      ]
     );
     await audit(c, a, `posted alumni job: ${company} — ${roleTitle}`);
   },
@@ -616,6 +663,148 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     need(row.alumni_id === a.id || isAdmin(a.role), "Only the author or an admin can delete this job.");
     await c.query(`delete from alumni_jobs where id = $1`, [jobId]);
     await audit(c, a, `deleted alumni job #${jobId} (${row.company} — ${row.role})`);
+  },
+  async toggleInterviewProblem(c, a, _p, i) {
+    person(a);
+    const problemId = posInt(i.problemId, "problem");
+    const has = (await c.query(`select 1 from interview_user_progress where user_id = $1 and problem_id = $2`, [a.id, problemId])).rowCount! > 0;
+    if (has) {
+      await c.query(`delete from interview_user_progress where user_id = $1 and problem_id = $2`, [a.id, problemId]);
+    } else {
+      await c.query(`insert into interview_user_progress (user_id, problem_id) values ($1, $2) on conflict do nothing`, [a.id, problemId]);
+    }
+  },
+  async createInterviewTopic(c, a, _p, i) {
+    need(canFully(a.role, "interview.topic.create"), "Only alumni or admins can create interview topics.");
+    const name = text(i.name, 2, 80, "Topic name");
+    const desc = i.description ? text(i.description, 1, 300, "Description") : null;
+    const maxOrder = (await c.query(`select coalesce(max(order_index), 0) as max_ord from interview_topics`)).rows[0]?.max_ord ?? 0;
+    await c.query(
+      `insert into interview_topics (name, description, created_by, order_index) values ($1, $2, $3, $4)`,
+      [name, desc, a.id, maxOrder + 1]
+    );
+    await audit(c, a, `created interview topic: ${name}`);
+  },
+  async createInterviewProblem(c, a, _p, i) {
+    need(canFully(a.role, "interview.problem.create"), "Only alumni or admins can add interview problems.");
+    const topicId = posInt(i.topicId, "topic");
+    const title = text(i.title, 2, 120, "Title");
+    const url = optionalUrl(i.url, "Problem URL");
+    if (!url) throw new Fail(400, "Problem URL is required.");
+    const diff = pick(i.difficulty, ["easy", "medium", "hard"] as const, "difficulty");
+    const topic = (await c.query(`select id from interview_topics where id = $1`, [topicId])).rows[0];
+    if (!topic) throw new Fail(404, "That topic does not exist.");
+    await c.query(
+      `insert into interview_problems (topic_id, title, url, difficulty, created_by) values ($1, $2, $3, $4, $5)`,
+      [topicId, title, url, diff, a.id]
+    );
+    await audit(c, a, `added problem to topic #${topicId}: ${title}`);
+  },
+  async deleteInterviewProblem(c, a, _p, i) {
+    const problemId = posInt(i.problemId, "problem");
+    const p = (await c.query(`select id, created_by, title from interview_problems where id = $1`, [problemId])).rows[0];
+    if (!p) throw new Fail(404, "That problem does not exist.");
+    need(p.created_by === a.id || isAdmin(a.role), "Only the creator or an admin can delete this problem.");
+    await c.query(`delete from interview_problems where id = $1`, [problemId]);
+    await audit(c, a, `deleted interview problem #${problemId}: ${p.title}`);
+  },
+  async createInterviewTip(c, a, _p, i) {
+    need(canFully(a.role, "interview.tip.create"), "Only alumni or admins can create interview tips.");
+    const topicId = i.topicId ? posInt(i.topicId, "topic") : null;
+    if (topicId) {
+      const topic = (await c.query(`select id from interview_topics where id = $1`, [topicId])).rows[0];
+      if (!topic) throw new Fail(404, "That topic does not exist.");
+    }
+    const title = text(i.title, 2, 140, "Title");
+    const bodyMd = mdText(i.body_md ?? i.body, 1, 20_000, "Body");
+    await c.query(
+      `insert into interview_tips (author_id, topic_id, title, body_md) values ($1, $2, $3, $4)`,
+      [a.id, topicId, title, bodyMd]
+    );
+    await audit(c, a, `posted interview tip: ${title}`);
+  },
+  async deleteInterviewTip(c, a, _p, i) {
+    const tipId = posInt(i.tipId, "tip");
+    const tip = (await c.query(`select id, author_id, title from interview_tips where id = $1`, [tipId])).rows[0];
+    if (!tip) throw new Fail(404, "That tip does not exist.");
+    need(tip.author_id === a.id || isAdmin(a.role), "Only the author or an admin can delete this tip.");
+    await c.query(`delete from interview_tips where id = $1`, [tipId]);
+    await audit(c, a, `deleted interview tip #${tipId}: ${tip.title}`);
+  },
+  async createBlogPost(c, a, _p, i) {
+    need(canFully(a.role, "blog.post.create"), "Only alumni or admins can write blog posts.");
+    const title = text(i.title, 2, 120, "Title");
+    const subtitle = i.subtitle ? text(i.subtitle, 1, 200, "Subtitle") : null;
+    const bodyMd = mdText(i.body_md ?? i.body, 1, 50_000, "Story");
+    const excerpt = i.excerpt ? text(i.excerpt, 1, 280, "Excerpt") : excerptFromMarkdown(bodyMd, 140);
+    const coverUrl = typeof i.cover_url === "string" && i.cover_url.trim() ? i.cover_url.trim() : null;
+    const tags = Array.isArray(i.tags) ? i.tags.map((t) => String(t).trim().toLowerCase()).filter(Boolean) : [];
+    const status = pick(i.status ?? "draft", ["draft", "published"] as const, "status");
+    let slug = i.slug ? text(i.slug, 2, 100, "Slug").toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "") : "";
+    if (!slug) {
+      slug = title.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80);
+    }
+    const exists = (await c.query(`select 1 from blog_posts where slug = $1`, [slug])).rowCount! > 0;
+    if (exists) {
+      slug = `${slug}-${Date.now().toString(36)}`;
+    }
+    const publishedAt = status === "published" ? new Date() : null;
+    await c.query(
+      `insert into blog_posts (author_id, slug, title, subtitle, excerpt, body_md, cover_url, tags, status, published_at)
+       values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10)`,
+      [a.id, slug, title, subtitle, excerpt, bodyMd, coverUrl, JSON.stringify(tags), status, publishedAt]
+    );
+    await audit(c, a, `created blog post: ${title} (${status})`);
+  },
+  async updateBlogPost(c, a, _p, i) {
+    const id = posInt(i.id, "post");
+    const post = (await c.query(`select id, author_id, title, status, published_at from blog_posts where id = $1`, [id])).rows[0];
+    if (!post) throw new Fail(404, "That post does not exist.");
+    need(post.author_id === a.id || isAdmin(a.role), "Only the author or an admin can edit this post.");
+    const title = i.title ? text(i.title, 2, 120, "Title") : post.title;
+    const subtitle = i.subtitle !== undefined ? (i.subtitle ? text(i.subtitle, 1, 200, "Subtitle") : null) : null;
+    const bodyMd = i.body_md ? mdText(i.body_md, 1, 50_000, "Story") : null;
+    const excerpt = i.excerpt !== undefined ? (i.excerpt ? text(i.excerpt, 1, 280, "Excerpt") : null) : (bodyMd ? excerptFromMarkdown(bodyMd, 140) : null);
+    const coverUrl = i.cover_url !== undefined ? (typeof i.cover_url === "string" && i.cover_url.trim() ? i.cover_url.trim() : null) : undefined;
+    const tags = Array.isArray(i.tags) ? i.tags.map((t) => String(t).trim().toLowerCase()).filter(Boolean) : undefined;
+    const status = i.status ? pick(i.status, ["draft", "published"] as const, "status") : undefined;
+    let publishedAt = post.published_at;
+    if (status === "published" && !publishedAt) {
+      publishedAt = new Date();
+    }
+    await c.query(
+      `update blog_posts set
+         title = coalesce($2, title),
+         subtitle = case when $3::int is null then subtitle else $4 end,
+         excerpt = case when $5::int is null then excerpt else $6 end,
+         body_md = coalesce($7, body_md),
+         cover_url = case when $8::int is null then cover_url else $9 end,
+         tags = case when $10::int is null then tags else $11::jsonb end,
+         status = coalesce($12, status),
+         published_at = coalesce($13, published_at),
+         updated_at = now()
+       where id = $1`,
+      [
+        id,
+        i.title ? title : null,
+        i.subtitle !== undefined ? 1 : null, subtitle,
+        i.excerpt !== undefined || bodyMd ? 1 : null, excerpt,
+        bodyMd,
+        i.cover_url !== undefined ? 1 : null, coverUrl,
+        tags ? 1 : null, tags ? JSON.stringify(tags) : null,
+        status ?? null,
+        publishedAt
+      ]
+    );
+    await audit(c, a, `updated blog post #${id}: ${title}`);
+  },
+  async deleteBlogPost(c, a, _p, i) {
+    const id = posInt(i.id, "post");
+    const post = (await c.query(`select id, author_id, title from blog_posts where id = $1`, [id])).rows[0];
+    if (!post) throw new Fail(404, "That post does not exist.");
+    need(post.author_id === a.id || isAdmin(a.role), "Only the author or an admin can delete this post.");
+    await c.query(`delete from blog_posts where id = $1`, [id]);
+    await audit(c, a, `deleted blog post #${id}: ${post.title}`);
   },
   async promoteMember(c, a, _p, i) {
     need(canFully(a.role, "member.promote"), "Only the President or Super Admin can promote members.");
@@ -1050,14 +1239,16 @@ export async function getMemberProfile(db: Db, viewerId: string, input: { userId
        u.github_url,
        u.linkedin_url,
        u.experience,
-       u.contest_history
+       u.contest_history,
+       u.available_for_questions,
+       u.location
      from users u
      where u.id = $1 and not u.system and not u.suspended`,
     [userId]
   )).rows[0];
   if (!row) throw new Fail(404, "That member does not exist.");
 
-  const [activityRes, prepRes, jobsRes] = await Promise.all([
+  const [activityRes, prepRes, jobsRes, tipsRes, blogsRes, jobsPostedRes] = await Promise.all([
     db.query(
       `select * from (
          select 'feed'::text as kind, id, title, created_at from feed_posts where user_id = $1
@@ -1076,9 +1267,36 @@ export async function getMemberProfile(db: Db, viewerId: string, input: { userId
       : Promise.resolve({ rows: [] }),
     row.is_alumni
       ? db.query(
-          `select id, alumni_id, company, role, location, url, source, fetched_at, created_at
+          `select id, alumni_id, company, role, coalesce(title, role) as title, vacancies, location, url, source, fetched_at, created_at
            from alumni_jobs
            where alumni_id = $1
+           order by created_at desc`,
+          [userId]
+        )
+      : Promise.resolve({ rows: [] }),
+    row.is_alumni
+      ? db.query(
+          `select id, author_id, topic_id, title, body_md, created_at, updated_at
+           from interview_tips
+           where author_id = $1
+           order by created_at desc`,
+          [userId]
+        )
+      : Promise.resolve({ rows: [] }),
+    row.is_alumni
+      ? db.query(
+          `select id, author_id, slug, title, subtitle, excerpt, body_md, cover_url, tags, status, published_at, views, created_at, updated_at
+           from blog_posts
+           where author_id = $1 and status = 'published'
+           order by published_at desc`,
+          [userId]
+        )
+      : Promise.resolve({ rows: [] }),
+    row.is_alumni
+      ? db.query(
+          `select id, alumni_id, company, role, coalesce(title, role) as title, vacancies, location, job_type, experience, salary, description, responsibilities, requirements, to_char(deadline, 'YYYY-MM-DD') as deadline, company_logo_url, url, source, fetched_at, created_at
+           from alumni_jobs
+           where alumni_id = $1 and source = 'manual'
            order by created_at desc`,
           [userId]
         )
@@ -1120,7 +1338,19 @@ export async function getMemberProfile(db: Db, viewerId: string, input: { userId
   }
 
   if (profile.is_alumni) {
+    profile.available_for_questions = Boolean(row.available_for_questions ?? true);
+    profile.location = row.location ?? null;
     profile.interview_prep = prepRes.rows as { id: number; title: string; created_at: string }[];
+    profile.interview_tips = tipsRes.rows as InterviewTip[];
+    profile.blogs = blogsRes.rows.map((b: any) => ({
+      ...b,
+      tags: Array.isArray(b.tags) ? b.tags : [],
+    })) as BlogPost[];
+    profile.jobs_posted = jobsPostedRes.rows.map((j: any) => ({
+      ...j,
+      responsibilities: Array.isArray(j.responsibilities) ? j.responsibilities : [],
+      requirements: Array.isArray(j.requirements) ? j.requirements : [],
+    })) as AlumniJob[];
     const allJobs = jobsRes.rows as AlumniJob[];
     profile.jobs_fetched = allJobs.filter((j) => j.source === "fetched");
     profile.jobs_manual = allJobs.filter((j) => j.source === "manual");
@@ -1368,5 +1598,965 @@ export async function kudosMilestone(
     const actor: Actor = { id: u.id, role: u.role, name: u.name, system: u.system };
     person(actor);
     return giveMilestoneKudosTx(c, actor, milestoneId);
+  });
+}
+
+/* ========================================================================== */
+/*                           ALUMNI DIRECTORY                                 */
+/* ========================================================================== */
+
+export async function listAlumni(
+  db: Db,
+  viewerId: string,
+  input: {
+    q?: string;
+    batch?: string | number;
+    location?: string;
+    mentoringOnly?: boolean;
+    page?: number;
+    pageSize?: number;
+  } = {}
+): Promise<{ alumni: AlumniSummary[]; total: number; hasMore: boolean; batchOptions: number[]; locationOptions: string[] }> {
+  const page = Math.max(0, Math.floor(Number(input.page) || 0));
+  const pageSize = Math.max(1, Math.min(100, Math.floor(Number(input.pageSize) || 16)));
+  const offset = page * pageSize;
+
+  const conditions: string[] = ["u.role = 'alumni'", "not u.system", "not u.suspended"];
+  const params: unknown[] = [];
+  let pIdx = 1;
+
+  if (input.q && typeof input.q === "string" && input.q.trim()) {
+    const term = `%${input.q.trim()}%`;
+    conditions.push(`(
+      u.name ilike $${pIdx} or
+      u.handle ilike $${pIdx} or
+      coalesce(u.cf_handle, '') ilike $${pIdx} or
+      coalesce(u.location, '') ilike $${pIdx} or
+      coalesce(u.title, '') ilike $${pIdx} or
+      exists (select 1 from alumni_jobs j where j.alumni_id = u.id and (j.company ilike $${pIdx} or j.role ilike $${pIdx} or coalesce(j.title, '') ilike $${pIdx}))
+    )`);
+    params.push(term);
+    pIdx++;
+  }
+
+  if (input.batch !== undefined && input.batch !== "" && input.batch !== null && input.batch !== "all") {
+    const b = Number(input.batch);
+    if (!Number.isNaN(b)) {
+      conditions.push(`u.batch = $${pIdx}`);
+      params.push(b);
+      pIdx++;
+    }
+  }
+
+  if (input.location && typeof input.location === "string" && input.location.trim() && input.location !== "all") {
+    conditions.push(`u.location ilike $${pIdx}`);
+    params.push(input.location.trim());
+    pIdx++;
+  }
+
+  if (input.mentoringOnly) {
+    conditions.push(`u.available_for_questions = true`);
+  }
+
+  const whereSql = conditions.join(" and ");
+
+  const countRow = (
+    await db.query(`select count(*)::int as total from users u where ${whereSql}`, params)
+  ).rows[0];
+  const total = Number(countRow?.total ?? 0);
+
+  const viewerParamIdx = pIdx++;
+  const limitParamIdx = pIdx++;
+  const offsetParamIdx = pIdx++;
+  const queryParams = [...params, viewerId, pageSize, offset];
+
+  const rowsRes = await db.query(
+    `select u.id, u.member_no as no, u.name,
+       coalesce(nullif(u.cf_handle, ''), u.handle) as handle,
+       nullif(coalesce(nullif(u.cf_handle, ''), u.handle), '') as cf_handle,
+       u.title as role,
+       u.title,
+       u.batch, u.dept,
+       coalesce(u.cf_rating, u.rating) as rating,
+       coalesce(u.cf_rating, nullif(u.rating, 0)) as cf_rating,
+       greatest(u.problems_solved, u.solved) as problems_solved,
+       u.skills,
+       u.avatar_url,
+       u.location,
+       u.available_for_questions,
+       exists (select 1 from alumni_saves s where s.user_id = $${viewerParamIdx} and s.alumni_id = u.id) as "isSaved"
+     from users u
+     where ${whereSql}
+     order by (u.id = $${viewerParamIdx}) desc, u.available_for_questions desc, u.rating desc, u.id asc
+     limit $${limitParamIdx} offset $${offsetParamIdx}`,
+    queryParams
+  );
+
+  const [batchRes, locRes] = await Promise.all([
+    db.query(`select distinct batch from users where role = 'alumni' and not system and not suspended order by batch desc`),
+    db.query(`select distinct location from users where role = 'alumni' and not system and not suspended and location is not null and location <> '' order by location asc`),
+  ]);
+
+  const batchOptions = batchRes.rows.map((r) => Number(r.batch)).filter(Number.isInteger);
+  const locationOptions = locRes.rows.map((r) => String(r.location).trim()).filter(Boolean);
+
+  const alumni = rowsRes.rows.map((r) => ({
+    ...r,
+    skills: Array.isArray(r.skills) ? r.skills : [],
+    isSaved: Boolean(r.isSaved),
+    saved: Boolean(r.isSaved),
+    available_for_questions: Boolean(r.available_for_questions ?? true),
+  })) as AlumniSummary[];
+
+  return {
+    alumni,
+    total,
+    hasMore: offset + alumni.length < total,
+    batchOptions,
+    locationOptions,
+  };
+}
+
+export async function saveAlumni(
+  a: Db | string,
+  b: string | { alumniId: string },
+  c?: { alumniId: string }
+): Promise<{ saved: boolean }> {
+  const { actorId: userId, input } = parseActorAndInput(a, b, c);
+  const alumniId = key(input.alumniId);
+  return tx(async (conn) => {
+    const has = (await conn.query(`select 1 from alumni_saves where user_id = $1 and alumni_id = $2`, [userId, alumniId])).rowCount! > 0;
+    if (has) {
+      await conn.query(`delete from alumni_saves where user_id = $1 and alumni_id = $2`, [userId, alumniId]);
+      return { saved: false };
+    } else {
+      await conn.query(`insert into alumni_saves (user_id, alumni_id) values ($1, $2) on conflict do nothing`, [userId, alumniId]);
+      return { saved: true };
+    }
+  });
+}
+
+export async function setAvailableForQuestions(
+  a: Db | string,
+  b: string | { value?: boolean; available?: boolean; alumniId?: string; userId?: string },
+  c?: { value?: boolean; available?: boolean; alumniId?: string; userId?: string }
+): Promise<{ success: boolean; value: boolean; available: boolean }> {
+  const { actorId: userId, input } = parseActorAndInput(a, b, c);
+  return tx(async (conn) => {
+    const u = (await conn.query(`select id, role from users where id = $1 and not suspended`, [userId])).rows[0];
+    if (!u) throw new Fail(401, "Sign in again.");
+    const rawTarget = input.userId ?? input.alumniId;
+    const targetId = typeof rawTarget === "string" && KEY.test(rawTarget) ? rawTarget : userId;
+    need(targetId === userId || isAdmin(u.role), "Only the account owner or an admin can change mentoring availability.");
+    const val = input.available !== undefined ? Boolean(input.available) : Boolean(input.value);
+    await conn.query(`update users set available_for_questions = $1 where id = $2 and not system`, [val, targetId]);
+    return { success: true, value: val, available: val };
+  });
+}
+
+/* ========================================================================== */
+/*                                   JOBS                                     */
+/* ========================================================================== */
+
+export async function listAlumniJobs(
+  db: Db,
+  viewerId: string,
+  input: {
+    q?: string;
+    type?: string;
+    sort?: string;
+    src?: string;
+    source?: string;
+  } = {}
+): Promise<{ jobs: AlumniJob[]; total: number }> {
+  const conditions: string[] = [
+    `(j.source = 'manual' or j.fetched_at > now() - interval '30 days')`
+  ];
+  const params: unknown[] = [viewerId];
+  let pIdx = 2;
+
+  const src = input.src || input.source;
+  if (src === "manual" || src === "fetched") {
+    conditions.push(`j.source = $${pIdx}`);
+    params.push(src);
+    pIdx++;
+  }
+
+  if (input.type && typeof input.type === "string" && input.type.trim() && input.type !== "All job types") {
+    conditions.push(`j.job_type ilike $${pIdx}`);
+    params.push(input.type.trim());
+    pIdx++;
+  }
+
+  if (input.q && typeof input.q === "string" && input.q.trim()) {
+    const term = `%${input.q.trim()}%`;
+    conditions.push(`(
+      j.company ilike $${pIdx} or
+      j.role ilike $${pIdx} or
+      coalesce(j.title, '') ilike $${pIdx} or
+      coalesce(j.location, '') ilike $${pIdx} or
+      coalesce(j.job_type, '') ilike $${pIdx}
+    )`);
+    params.push(term);
+    pIdx++;
+  }
+
+  const whereSql = conditions.join(" and ");
+
+  let orderSql = `case when j.deadline is not null and j.deadline < current_date then 1 else 0 end asc, `;
+  if (input.sort === "vac") {
+    orderSql += `j.vacancies desc, coalesce(j.posted_at, j.created_at) desc`;
+  } else if (input.sort === "new") {
+    orderSql += `coalesce(j.posted_at, j.created_at) desc, j.id desc`;
+  } else {
+    // Default = "soon"
+    orderSql += `case when j.deadline is not null then j.deadline else '9999-12-31'::date end asc, j.id desc`;
+  }
+
+  const rows = (
+    await db.query(
+      `select j.id, j.alumni_id, j.company, j.role, coalesce(j.title, j.role) as title,
+         j.vacancies, j.location, j.job_type, j.experience, j.salary, j.description,
+         j.responsibilities, j.requirements,
+         to_char(j.deadline, 'YYYY-MM-DD') as deadline,
+         j.company_logo_url, j.url, j.source, j.fetched_at,
+         coalesce(j.posted_at, j.created_at) as posted_at,
+         j.created_at,
+         (j.alumni_id = $1) as mine
+       from alumni_jobs j
+       where ${whereSql}
+       order by ${orderSql}`,
+      params
+    )
+  ).rows;
+
+  const jobs = rows.map((r) => ({
+    ...r,
+    responsibilities: Array.isArray(r.responsibilities) ? r.responsibilities : [],
+    requirements: Array.isArray(r.requirements) ? r.requirements : [],
+    vacancies: Number(r.vacancies || 1),
+    mine: Boolean(r.mine),
+  })) as AlumniJob[];
+
+  return {
+    jobs,
+    total: jobs.length,
+  };
+}
+
+export async function createAlumniJob(
+  a: Db | string,
+  b: string | {
+    company: string;
+    company_logo_url?: string | null;
+    title?: string;
+    role?: string;
+    vacancies?: number;
+    location?: string | null;
+    job_type?: string | null;
+    experience?: string | null;
+    salary?: string | null;
+    description?: string | null;
+    responsibilities?: string[];
+    requirements?: string[];
+    deadline?: string | null;
+    url: string;
+  },
+  c?: {
+    company: string;
+    company_logo_url?: string | null;
+    title?: string;
+    role?: string;
+    vacancies?: number;
+    location?: string | null;
+    job_type?: string | null;
+    experience?: string | null;
+    salary?: string | null;
+    description?: string | null;
+    responsibilities?: string[];
+    requirements?: string[];
+    deadline?: string | null;
+    url: string;
+  }
+): Promise<{ success: boolean; jobId: number; id: number; company: string; role: string; title: string; vacancies: number; mine: boolean }> {
+  const { actorId: userId, input } = parseActorAndInput(a, b, c);
+  return tx(async (conn) => {
+    const u = (await conn.query(`select id, role, name, system from users where id = $1 and not suspended`, [userId])).rows[0];
+    if (!u) throw new Fail(401, "Sign in again.");
+    const actor: Actor = { id: u.id, role: u.role, name: u.name, system: u.system };
+    person(actor);
+    need(canFully(actor.role, "alumni.job.post"), "Only alumni or admins can post alumni jobs.");
+
+    const company = text(input.company, 1, 100, "Company");
+    const roleTitle = text(input.title ?? input.role, 1, 120, "Role");
+    const url = optionalUrl(input.url, "Job URL");
+    if (!url) throw new Fail(400, "Job URL is required.");
+    const location = input.location ? text(input.location, 1, 100, "Location") : null;
+    const vacancies = Math.max(1, Math.min(999, posInt(input.vacancies ?? 1, "vacancies")));
+    const jobType = input.job_type ? String(input.job_type) : "Full-time";
+    const experience = input.experience ? text(input.experience, 1, 100, "Experience") : null;
+    const salary = input.salary ? text(input.salary, 1, 100, "Salary") : null;
+    const description = input.description ? String(input.description).trim() : null;
+    const responsibilities = Array.isArray(input.responsibilities) ? input.responsibilities.map(String).map((s) => s.trim()).filter(Boolean) : [];
+    const requirements = Array.isArray(input.requirements) ? input.requirements.map(String).map((s) => s.trim()).filter(Boolean) : [];
+    const deadline = input.deadline ? String(input.deadline).slice(0, 10) : null;
+    const companyLogoUrl = typeof input.company_logo_url === "string" && input.company_logo_url.trim() ? input.company_logo_url.trim() : null;
+
+    const ins = await conn.query(
+      `insert into alumni_jobs (
+         alumni_id, company, role, title, location, url, source,
+         vacancies, job_type, experience, salary, description, responsibilities, requirements, deadline, company_logo_url, posted_at
+       ) values ($1, $2, $3, $3, $4, $5, 'manual', $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, coalesce($13::date, current_date + interval '30 days'), $14, now())
+       returning id`,
+      [
+        userId, company, roleTitle, location, url,
+        vacancies, jobType, experience, salary, description,
+        JSON.stringify(responsibilities), JSON.stringify(requirements),
+        deadline, companyLogoUrl
+      ]
+    );
+    await audit(conn, actor, `posted alumni job: ${company} — ${roleTitle}`);
+    const jobId = Number(ins.rows[0].id);
+    return { success: true, jobId, id: jobId, company, role: roleTitle, title: roleTitle, vacancies, mine: true };
+  });
+}
+
+export async function deleteAlumniJob(
+  a: Db | string,
+  b: string | { jobId: number | string },
+  c?: { jobId: number | string }
+): Promise<{ success: boolean; deleted: boolean }> {
+  const { actorId: userId, input } = parseActorAndInput(a, b, c);
+  return tx(async (conn) => {
+    const u = (await conn.query(`select id, role, name, system from users where id = $1 and not suspended`, [userId])).rows[0];
+    if (!u) throw new Fail(401, "Sign in again.");
+    const actor: Actor = { id: u.id, role: u.role, name: u.name, system: u.system };
+    person(actor);
+    const jobId = posInt(input.jobId, "job");
+    const row = (await conn.query(`select id, alumni_id, company, role from alumni_jobs where id = $1`, [jobId])).rows[0];
+    if (!row) throw new Fail(404, "That job listing does not exist.");
+    need(row.alumni_id === userId || isAdmin(actor.role), "Only the author or an admin can delete this job.");
+    await conn.query(`delete from alumni_jobs where id = $1`, [jobId]);
+    await audit(conn, actor, `deleted alumni job #${jobId} (${row.company} — ${row.role})`);
+    return { success: true, deleted: true };
+  });
+}
+
+/* ========================================================================== */
+/*                             INTERVIEW PREP                                 */
+/* ========================================================================== */
+
+export async function listInterviewTopics(
+  db: Db,
+  viewerId: string
+): Promise<{ topics: InterviewTopic[] }> {
+  const rows = (
+    await db.query(
+      `select t.id, t.name, t.description, t.created_by, t.order_index, t.created_at,
+         (select count(*)::int from interview_problems p where p.topic_id = t.id) as "totalCount",
+         (select count(*)::int from interview_user_progress up
+          join interview_problems p on p.id = up.problem_id
+          where p.topic_id = t.id and up.user_id = $1) as "solvedCount",
+         coalesce((select array_agg(p.title order by p.id)
+           from interview_problems p where p.topic_id = t.id), '{}') as "problemTitles"
+       from interview_topics t
+       order by t.order_index asc, t.name asc`,
+      [viewerId]
+    )
+  ).rows;
+
+  const topics = rows.map((r) => ({
+    ...r,
+    totalCount: Number(r.totalCount || 0),
+    solvedCount: Number(r.solvedCount || 0),
+    problemTitles: Array.isArray(r.problemTitles) ? r.problemTitles : [],
+  })) as InterviewTopic[];
+
+  return { topics };
+}
+
+export async function getInterviewTopicDetail(
+  db: Db,
+  viewerId: string,
+  input: { topicId: number | string }
+): Promise<{ topic: InterviewTopic; problems: InterviewProblem[]; tips: InterviewTip[] }> {
+  const topicId = posInt(input.topicId, "topic");
+  const topicRow = (
+    await db.query(
+      `select t.id, t.name, t.description, t.created_by, t.order_index, t.created_at,
+         (select count(*)::int from interview_problems p where p.topic_id = t.id) as "totalCount",
+         (select count(*)::int from interview_user_progress up
+          join interview_problems p on p.id = up.problem_id
+          where p.topic_id = t.id and up.user_id = $1) as "solvedCount"
+       from interview_topics t
+       where t.id = $2`,
+      [viewerId, topicId]
+    )
+  ).rows[0];
+  if (!topicRow) throw new Fail(404, "That topic does not exist.");
+
+  const [problemsRes, tipsRes] = await Promise.all([
+    db.query(
+      `select p.id, p.topic_id, p.title, p.url, p.difficulty, p.meta, p.created_by, p.created_at,
+         exists (select 1 from interview_user_progress up where up.problem_id = p.id and up.user_id = $1) as solved
+       from interview_problems p
+       where p.topic_id = $2
+       order by p.id asc`,
+      [viewerId, topicId]
+    ),
+    db.query(
+      `select tip.id, tip.author_id, tip.topic_id, tip.title, tip.body_md, tip.created_at, tip.updated_at,
+         u.name as author_name,
+         coalesce(nullif(u.cf_handle, ''), u.handle) as author_handle,
+         u.avatar_url as author_avatar,
+         coalesce(u.cf_rating, u.rating) as author_rating
+       from interview_tips tip
+       join users u on u.id = tip.author_id
+       where tip.topic_id = $1
+       order by tip.created_at desc`,
+      [topicId]
+    ),
+  ]);
+
+  const topic: InterviewTopic = {
+    ...topicRow,
+    totalCount: Number(topicRow.totalCount || 0),
+    solvedCount: Number(topicRow.solvedCount || 0),
+  };
+
+  const problems = problemsRes.rows.map((p) => ({
+    ...p,
+    solved: Boolean(p.solved),
+  })) as InterviewProblem[];
+
+  const tips = tipsRes.rows as InterviewTip[];
+
+  return { topic, problems, tips };
+}
+
+function parseActorAndInput<T>(a: Db | string, b: string | T, c?: T): { actorId: string; input: T } {
+  if (typeof a === "string") {
+    return { actorId: a, input: b as T };
+  }
+  return { actorId: b as string, input: c as T };
+}
+
+export async function toggleInterviewProblem(
+  a: Db | string,
+  b: string | { problemId: number | string },
+  c?: { problemId: number | string }
+): Promise<{ problemId: number; solved: boolean }> {
+  const { actorId: userId, input } = parseActorAndInput(a, b, c);
+  const problemId = posInt(input.problemId, "problem");
+  return tx(async (conn) => {
+    const u = (await conn.query(`select id, system from users where id = $1 and not suspended`, [userId])).rows[0];
+    if (!u) throw new Fail(401, "Sign in again.");
+    need(!u.system, "Operator accounts cannot track progress.");
+    const has = (await conn.query(`select 1 from interview_user_progress where user_id = $1 and problem_id = $2`, [userId, problemId])).rowCount! > 0;
+    if (has) {
+      await conn.query(`delete from interview_user_progress where user_id = $1 and problem_id = $2`, [userId, problemId]);
+      return { problemId, solved: false };
+    } else {
+      await conn.query(`insert into interview_user_progress (user_id, problem_id) values ($1, $2) on conflict do nothing`, [userId, problemId]);
+      return { problemId, solved: true };
+    }
+  });
+}
+
+export async function createInterviewTopic(
+  a: Db | string,
+  b: string | { name: string; description?: string },
+  c?: { name: string; description?: string }
+): Promise<{ success: boolean; topicId: number }> {
+  const { actorId: userId, input } = parseActorAndInput(a, b, c);
+  return tx(async (conn) => {
+    const u = (await conn.query(`select id, role, name, system from users where id = $1 and not suspended`, [userId])).rows[0];
+    if (!u) throw new Fail(401, "Sign in again.");
+    const actor: Actor = { id: u.id, role: u.role, name: u.name, system: u.system };
+    person(actor);
+    need(canFully(actor.role, "interview.topic.create"), "Only alumni or admins can create interview topics.");
+
+    const name = text(input.name, 2, 80, "Topic name");
+    const desc = input.description ? text(input.description, 1, 300, "Description") : null;
+    const maxOrder = (await conn.query(`select coalesce(max(order_index), 0) as max_ord from interview_topics`)).rows[0]?.max_ord ?? 0;
+    const ins = await conn.query(
+      `insert into interview_topics (name, description, created_by, order_index) values ($1, $2, $3, $4) returning id`,
+      [name, desc, userId, maxOrder + 1]
+    );
+    await audit(conn, actor, `created interview topic: ${name}`);
+    return { success: true, topicId: Number(ins.rows[0].id) };
+  });
+}
+
+export async function createInterviewProblem(
+  a: Db | string,
+  b: string | { topicId?: number | string; topic_id?: number | string; title: string; url: string; difficulty: string },
+  c?: { topicId?: number | string; topic_id?: number | string; title: string; url: string; difficulty: string }
+): Promise<{ success: boolean; problemId: number }> {
+  const { actorId: userId, input } = parseActorAndInput(a, b, c);
+  return tx(async (conn) => {
+    const u = (await conn.query(`select id, role, name, system from users where id = $1 and not suspended`, [userId])).rows[0];
+    if (!u) throw new Fail(401, "Sign in again.");
+    const actor: Actor = { id: u.id, role: u.role, name: u.name, system: u.system };
+    person(actor);
+    need(canFully(actor.role, "interview.problem.create"), "Only alumni or admins can add interview problems.");
+
+    const rawTopicId = input.topicId ?? input.topic_id;
+    const topicId = posInt(rawTopicId, "topic");
+    const title = text(input.title, 2, 120, "Title");
+    const url = optionalUrl(input.url, "Problem URL");
+    if (!url) throw new Fail(400, "Problem URL is required.");
+    const diff = pick(input.difficulty, ["easy", "medium", "hard"] as const, "difficulty");
+    const topic = (await conn.query(`select id from interview_topics where id = $1`, [topicId])).rows[0];
+    if (!topic) throw new Fail(404, "That topic does not exist.");
+
+    const ins = await conn.query(
+      `insert into interview_problems (topic_id, title, url, difficulty, created_by) values ($1, $2, $3, $4, $5) returning id`,
+      [topicId, title, url, diff, userId]
+    );
+    await audit(conn, actor, `added problem to topic #${topicId}: ${title}`);
+    return { success: true, problemId: Number(ins.rows[0].id) };
+  });
+}
+
+export async function deleteInterviewProblem(
+  a: Db | string,
+  b: string | { problemId: number | string },
+  c?: { problemId: number | string }
+): Promise<{ success: boolean; deleted: boolean }> {
+  const { actorId: userId, input } = parseActorAndInput(a, b, c);
+  return tx(async (conn) => {
+    const u = (await conn.query(`select id, role, name, system from users where id = $1 and not suspended`, [userId])).rows[0];
+    if (!u) throw new Fail(401, "Sign in again.");
+    const actor: Actor = { id: u.id, role: u.role, name: u.name, system: u.system };
+    person(actor);
+    const problemId = posInt(input.problemId, "problem");
+    const p = (await conn.query(`select id, created_by, title from interview_problems where id = $1`, [problemId])).rows[0];
+    if (!p) throw new Fail(404, "That problem does not exist.");
+    need(p.created_by === userId || isAdmin(actor.role), "Only the creator or an admin can delete this problem.");
+    await conn.query(`delete from interview_problems where id = $1`, [problemId]);
+    await audit(conn, actor, `deleted interview problem #${problemId}: ${p.title}`);
+    return { success: true, deleted: true };
+  });
+}
+
+export async function createInterviewTip(
+  a: Db | string,
+  b: string | { topicId?: number | string | null; topic_id?: number | string | null; title: string; body_md: string },
+  c?: { topicId?: number | string | null; topic_id?: number | string | null; title: string; body_md: string }
+): Promise<{ success: boolean; tipId: number; id: number; author_id: string; author_name: string; title: string; body_md: string }> {
+  const { actorId: userId, input } = parseActorAndInput(a, b, c);
+  return tx(async (conn) => {
+    const u = (await conn.query(`select id, role, name, system from users where id = $1 and not suspended`, [userId])).rows[0];
+    if (!u) throw new Fail(401, "Sign in again.");
+    const actor: Actor = { id: u.id, role: u.role, name: u.name, system: u.system };
+    person(actor);
+    need(canFully(actor.role, "interview.tip.create"), "Only alumni or admins can create interview tips.");
+
+    const rawTopicId = input.topicId ?? input.topic_id;
+    const topicId = rawTopicId ? posInt(rawTopicId, "topic") : null;
+    if (topicId) {
+      const topic = (await conn.query(`select id from interview_topics where id = $1`, [topicId])).rows[0];
+      if (!topic) throw new Fail(404, "That topic does not exist.");
+    }
+    const title = text(input.title, 2, 140, "Title");
+    const bodyMd = mdText(input.body_md, 1, 20_000, "Body");
+
+    const ins = await conn.query(
+      `insert into interview_tips (author_id, topic_id, title, body_md) values ($1, $2, $3, $4) returning id`,
+      [userId, topicId, title, bodyMd]
+    );
+    await audit(conn, actor, `posted interview tip: ${title}`);
+    const tipId = Number(ins.rows[0].id);
+    return { success: true, tipId, id: tipId, author_id: userId, author_name: u.name, title, body_md: bodyMd };
+  });
+}
+
+export async function deleteInterviewTip(
+  a: Db | string,
+  b: string | { tipId: number | string },
+  c?: { tipId: number | string }
+): Promise<{ success: boolean; deleted: boolean }> {
+  const { actorId: userId, input } = parseActorAndInput(a, b, c);
+  return tx(async (conn) => {
+    const u = (await conn.query(`select id, role, name, system from users where id = $1 and not suspended`, [userId])).rows[0];
+    if (!u) throw new Fail(401, "Sign in again.");
+    const actor: Actor = { id: u.id, role: u.role, name: u.name, system: u.system };
+    person(actor);
+    const tipId = posInt(input.tipId, "tip");
+    const tip = (await conn.query(`select id, author_id, title from interview_tips where id = $1`, [tipId])).rows[0];
+    if (!tip) throw new Fail(404, "That tip does not exist.");
+    need(tip.author_id === userId || isAdmin(actor.role), "Only the author or an admin can delete this tip.");
+    await conn.query(`delete from interview_tips where id = $1`, [tipId]);
+    await audit(conn, actor, `deleted interview tip #${tipId}: ${tip.title}`);
+    return { success: true, deleted: true };
+  });
+}
+
+export async function listInterviewExperiences(
+  db: Db
+): Promise<{ experiences: InterviewTip[] }> {
+  const rows = (
+    await db.query(
+      `select tip.id, tip.author_id, tip.topic_id, tip.title, tip.body_md, tip.created_at, tip.updated_at,
+         u.name as author_name,
+         coalesce(nullif(u.cf_handle, ''), u.handle) as author_handle,
+         u.avatar_url as author_avatar,
+         coalesce(u.cf_rating, u.rating) as author_rating
+       from interview_tips tip
+       join users u on u.id = tip.author_id
+       where tip.topic_id is null
+       order by tip.created_at desc`
+    )
+  ).rows;
+  return { experiences: rows as InterviewTip[] };
+}
+
+/* ========================================================================== */
+/*                                   BLOGS                                    */
+/* ========================================================================== */
+
+export async function listBlogPosts(
+  db: Db,
+  viewerId: string = "",
+  input: {
+    q?: string;
+    tag?: string;
+    sort?: string;
+    page?: number;
+    pageSize?: number;
+  } = {}
+): Promise<{ posts: BlogPost[]; total: number; tags: string[] }> {
+  const page = Math.max(0, Math.floor(Number(input.page) || 0));
+  const pageSize = Math.max(1, Math.min(100, Math.floor(Number(input.pageSize) || 12)));
+  const offset = page * pageSize;
+
+  const viewerRow = viewerId ? (await db.query(`select role from users where id = $1`, [viewerId])).rows[0] : null;
+  const admin = viewerRow && isAdmin(viewerRow.role);
+
+  const conditions: string[] = [];
+  const params: unknown[] = [viewerId || null];
+  let pIdx = 2;
+
+  if (!admin) {
+    conditions.push(`(b.status = 'published' or (b.author_id = $1 and $1 is not null))`);
+  }
+
+  if (input.tag && typeof input.tag === "string" && input.tag.trim() && input.tag.toLowerCase() !== "all") {
+    conditions.push(`b.tags @> $${pIdx}::jsonb`);
+    params.push(JSON.stringify([input.tag.trim().toLowerCase()]));
+    pIdx++;
+  }
+
+  if (input.q && typeof input.q === "string" && input.q.trim()) {
+    const term = `%${input.q.trim()}%`;
+    conditions.push(`(
+      b.title ilike $${pIdx} or
+      coalesce(b.subtitle, '') ilike $${pIdx} or
+      coalesce(b.excerpt, '') ilike $${pIdx} or
+      b.body_md ilike $${pIdx} or
+      u.name ilike $${pIdx} or
+      b.tags::text ilike $${pIdx}
+    )`);
+    params.push(term);
+    pIdx++;
+  }
+
+  const whereSql = conditions.length ? conditions.join(" and ") : "1=1";
+  const sortSql = input.sort === "oldest"
+    ? `coalesce(b.published_at, b.created_at) asc, b.id asc`
+    : `coalesce(b.published_at, b.created_at) desc, b.id desc`;
+
+  const countRow = (
+    await db.query(`select count(*)::int as total from blog_posts b join users u on u.id = b.author_id where ${whereSql}`, params)
+  ).rows[0];
+  const total = Number(countRow?.total ?? 0);
+
+  const queryParams = [...params, pageSize, offset];
+  const rows = (
+    await db.query(
+      `select b.id, b.author_id, b.slug, b.title, b.subtitle, b.excerpt, b.body_md,
+         b.cover_url, b.tags, b.status, b.published_at, b.views, b.created_at, b.updated_at,
+         u.name as author_name,
+         coalesce(nullif(u.cf_handle, ''), u.handle) as author_handle,
+         u.avatar_url as author_avatar,
+         coalesce(u.cf_rating, u.rating) as author_rating,
+         u.title as author_role
+       from blog_posts b
+       join users u on u.id = b.author_id
+       where ${whereSql}
+       order by ${sortSql}
+       limit $${pIdx++} offset $${pIdx++}`,
+      queryParams
+    )
+  ).rows;
+
+  const tagRows = (
+    await db.query(
+      `select distinct jsonb_array_elements_text(tags) as tag
+       from blog_posts
+       where status = 'published'
+       order by 1 asc`
+    )
+  ).rows;
+  const tags = tagRows.map((r) => String(r.tag)).filter(Boolean);
+
+  const posts = rows.map((r) => {
+    const wordCount = (r.body_md || "").split(/\s+/).filter(Boolean).length;
+    const read_time_min = Math.max(1, Math.round(wordCount / 200));
+    return {
+      ...r,
+      tags: Array.isArray(r.tags) ? r.tags : [],
+      read_time_min,
+    };
+  }) as BlogPost[];
+
+  return { posts, total, tags };
+}
+
+export async function getBlogPost(
+  db: Db,
+  viewerIdOrInput: string | { slug?: string; id?: number | string },
+  maybeInput?: { slug?: string; id?: number | string } | string
+): Promise<BlogPost> {
+  let viewerId = "";
+  let slug: string | undefined;
+  let id: number | string | undefined;
+
+  if (typeof viewerIdOrInput === "object" && viewerIdOrInput !== null) {
+    slug = viewerIdOrInput.slug;
+    id = viewerIdOrInput.id;
+  } else if (typeof viewerIdOrInput === "string") {
+    if (typeof maybeInput === "string") {
+      viewerId = viewerIdOrInput;
+      slug = maybeInput;
+    } else if (typeof maybeInput === "object" && maybeInput !== null) {
+      viewerId = viewerIdOrInput;
+      slug = maybeInput.slug;
+      id = maybeInput.id;
+    } else {
+      slug = viewerIdOrInput;
+    }
+  }
+
+  let row;
+  if (slug) {
+    row = (
+      await db.query(
+        `select b.id, b.author_id, b.slug, b.title, b.subtitle, b.excerpt, b.body_md,
+           b.cover_url, b.tags, b.status, b.published_at, b.views, b.created_at, b.updated_at,
+           u.name as author_name,
+           coalesce(nullif(u.cf_handle, ''), u.handle) as author_handle,
+           u.avatar_url as author_avatar,
+           coalesce(u.cf_rating, u.rating) as author_rating,
+           u.title as author_role
+         from blog_posts b
+         join users u on u.id = b.author_id
+         where b.slug = $1`,
+        [slug]
+      )
+    ).rows[0];
+  } else if (id) {
+    const postId = posInt(id, "post");
+    row = (
+      await db.query(
+        `select b.id, b.author_id, b.slug, b.title, b.subtitle, b.excerpt, b.body_md,
+           b.cover_url, b.tags, b.status, b.published_at, b.views, b.created_at, b.updated_at,
+           u.name as author_name,
+           coalesce(nullif(u.cf_handle, ''), u.handle) as author_handle,
+           u.avatar_url as author_avatar,
+           coalesce(u.cf_rating, u.rating) as author_rating,
+           u.title as author_role
+         from blog_posts b
+         join users u on u.id = b.author_id
+         where b.id = $1`,
+        [postId]
+      )
+    ).rows[0];
+  }
+  if (!row) throw new Fail(404, "That blog post does not exist.");
+
+  if (viewerId) {
+    const viewerRow = (await db.query(`select role from users where id = $1`, [viewerId])).rows[0];
+    const admin = viewerRow && isAdmin(viewerRow.role);
+    if (row.status !== "published" && row.author_id !== viewerId && !admin) {
+      throw new Fail(403, "This draft post is private.");
+    }
+  } else if (row.status !== "published") {
+    throw new Fail(403, "This draft post is private.");
+  }
+
+  // Fire-and-forget view count increment
+  db.query(`update blog_posts set views = views + 1 where id = $1`, [row.id]).catch(() => {});
+
+  const wordCount = (row.body_md || "").split(/\s+/).filter(Boolean).length;
+  const read_time_min = Math.max(1, Math.round(wordCount / 200));
+
+  return {
+    ...row,
+    tags: Array.isArray(row.tags) ? row.tags : [],
+    read_time_min,
+  } as BlogPost;
+}
+
+export async function createBlogPost(
+  a: Db | string,
+  b: string | {
+    title: string;
+    subtitle?: string | null;
+    excerpt?: string | null;
+    body_md: string;
+    cover_url?: string | null;
+    tags?: string[];
+    slug?: string | null;
+    status?: "draft" | "published";
+  },
+  c?: {
+    title: string;
+    subtitle?: string | null;
+    excerpt?: string | null;
+    body_md: string;
+    cover_url?: string | null;
+    tags?: string[];
+    slug?: string | null;
+    status?: "draft" | "published";
+  }
+): Promise<{ success: boolean; id: number; slug: string; author_id: string }> {
+  const { actorId: userId, input } = parseActorAndInput(a, b, c);
+  return tx(async (conn) => {
+    const u = (await conn.query(`select id, role, name, system from users where id = $1 and not suspended`, [userId])).rows[0];
+    if (!u) throw new Fail(401, "Sign in again.");
+    const actor: Actor = { id: u.id, role: u.role, name: u.name, system: u.system };
+    person(actor);
+    need(canFully(actor.role, "blog.post.create"), "Only alumni or admins can write blog posts.");
+
+    const title = text(input.title, 2, 120, "Title");
+    const subtitle = input.subtitle ? text(input.subtitle, 1, 200, "Subtitle") : null;
+    const bodyMd = mdText(input.body_md, 1, 50_000, "Story");
+    const excerpt = input.excerpt ? text(input.excerpt, 1, 280, "Excerpt") : excerptFromMarkdown(bodyMd, 140);
+    const coverUrl = typeof input.cover_url === "string" && input.cover_url.trim() ? input.cover_url.trim() : null;
+    const tags = Array.isArray(input.tags) ? input.tags.map((t) => String(t).trim().toLowerCase()).filter(Boolean) : [];
+    const status = pick(input.status ?? "draft", ["draft", "published"] as const, "status");
+    let slug = input.slug ? text(input.slug, 2, 100, "Slug").toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "") : "";
+    if (!slug) {
+      slug = title.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80);
+    }
+    const exists = (await conn.query(`select 1 from blog_posts where slug = $1`, [slug])).rowCount! > 0;
+    if (exists) {
+      slug = `${slug}-${Date.now().toString(36)}`;
+    }
+    const publishedAt = status === "published" ? new Date() : null;
+
+    const ins = await conn.query(
+      `insert into blog_posts (author_id, slug, title, subtitle, excerpt, body_md, cover_url, tags, status, published_at)
+       values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10) returning id, slug`,
+      [userId, slug, title, subtitle, excerpt, bodyMd, coverUrl, JSON.stringify(tags), status, publishedAt]
+    );
+    await audit(conn, actor, `created blog post: ${title} (${status})`);
+    return { success: true, id: Number(ins.rows[0].id), slug: String(ins.rows[0].slug), author_id: userId };
+  });
+}
+
+export async function updateBlogPost(
+  a: Db | string,
+  b: string | {
+    id: number | string;
+    title?: string;
+    subtitle?: string | null;
+    excerpt?: string | null;
+    body_md?: string;
+    cover_url?: string | null;
+    tags?: string[];
+    slug?: string;
+    status?: "draft" | "published";
+  },
+  c?: {
+    id: number | string;
+    title?: string;
+    subtitle?: string | null;
+    excerpt?: string | null;
+    body_md?: string;
+    cover_url?: string | null;
+    tags?: string[];
+    slug?: string;
+    status?: "draft" | "published";
+  }
+): Promise<{ success: boolean; title?: string }> {
+  const { actorId: userId, input } = parseActorAndInput(a, b, c);
+  return tx(async (conn) => {
+    const u = (await conn.query(`select id, role, name, system from users where id = $1 and not suspended`, [userId])).rows[0];
+    if (!u) throw new Fail(401, "Sign in again.");
+    const actor: Actor = { id: u.id, role: u.role, name: u.name, system: u.system };
+    person(actor);
+    const id = posInt(input.id, "post");
+    const post = (await conn.query(`select id, author_id, title, status, published_at from blog_posts where id = $1`, [id])).rows[0];
+    if (!post) throw new Fail(404, "That post does not exist.");
+    need(post.author_id === userId || isAdmin(actor.role), "Only the author or an admin can edit this post.");
+
+    const title = input.title ? text(input.title, 2, 120, "Title") : post.title;
+    const subtitle = input.subtitle !== undefined ? (input.subtitle ? text(input.subtitle, 1, 200, "Subtitle") : null) : null;
+    const bodyMd = input.body_md ? mdText(input.body_md, 1, 50_000, "Story") : null;
+    const excerpt = input.excerpt !== undefined ? (input.excerpt ? text(input.excerpt, 1, 280, "Excerpt") : null) : (bodyMd ? excerptFromMarkdown(bodyMd, 140) : null);
+    const coverUrl = input.cover_url !== undefined ? (typeof input.cover_url === "string" && input.cover_url.trim() ? input.cover_url.trim() : null) : undefined;
+    const tags = Array.isArray(input.tags) ? input.tags.map((t) => String(t).trim().toLowerCase()).filter(Boolean) : undefined;
+    const status = input.status ? pick(input.status, ["draft", "published"] as const, "status") : undefined;
+    let publishedAt = post.published_at;
+    if (status === "published" && !publishedAt) {
+      publishedAt = new Date();
+    }
+
+    await conn.query(
+      `update blog_posts set
+         title = coalesce($2, title),
+         subtitle = case when $3::int is null then subtitle else $4 end,
+         excerpt = case when $5::int is null then excerpt else $6 end,
+         body_md = coalesce($7, body_md),
+         cover_url = case when $8::int is null then cover_url else $9 end,
+         tags = case when $10::int is null then tags else $11::jsonb end,
+         status = coalesce($12, status),
+         published_at = coalesce($13, published_at),
+         updated_at = now()
+       where id = $1`,
+      [
+        id,
+        input.title ? title : null,
+        input.subtitle !== undefined ? 1 : null,
+        subtitle,
+        input.excerpt !== undefined || bodyMd ? 1 : null,
+        excerpt,
+        bodyMd,
+        coverUrl !== undefined ? 1 : null,
+        coverUrl,
+        tags !== undefined ? 1 : null,
+        tags ? JSON.stringify(tags) : null,
+        status ?? null,
+        publishedAt ?? null,
+      ]
+    );
+
+    await audit(conn, actor, `updated blog post #${id}: ${title}`);
+    return { success: true, title };
+  });
+}
+
+export async function deleteBlogPost(
+  a: Db | string,
+  b: string | { id: number | string },
+  c?: { id: number | string }
+): Promise<{ success: boolean; deleted: boolean }> {
+  const { actorId: userId, input } = parseActorAndInput(a, b, c);
+  return tx(async (conn) => {
+    const u = (await conn.query(`select id, role, name, system from users where id = $1 and not suspended`, [userId])).rows[0];
+    if (!u) throw new Fail(401, "Sign in again.");
+    const actor: Actor = { id: u.id, role: u.role, name: u.name, system: u.system };
+    person(actor);
+    const id = posInt(input.id, "post");
+    const post = (await conn.query(`select id, author_id, title from blog_posts where id = $1`, [id])).rows[0];
+    if (!post) throw new Fail(404, "That post does not exist.");
+    need(post.author_id === userId || isAdmin(actor.role), "Only the author or an admin can delete this post.");
+
+    await conn.query(`delete from blog_posts where id = $1`, [id]);
+    await audit(conn, actor, `deleted blog post #${id}: ${post.title}`);
+    return { success: true, deleted: true };
   });
 }

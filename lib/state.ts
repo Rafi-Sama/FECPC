@@ -58,11 +58,106 @@ export type AlumniJob = {
   alumni_id: string | null;
   company: string;
   role: string;
+  title?: string;
+  vacancies: number;
   location: string | null;
+  job_type: "Full-time" | "Part-time" | "Contract" | "Internship" | string | null;
+  experience: string | null;
+  salary: string | null;
+  description: string | null;
+  responsibilities: string[];
+  requirements: string[];
+  deadline: string | null;
+  company_logo_url: string | null;
   url: string;
   source: "fetched" | "manual";
   fetched_at: string | null;
+  posted_at?: string;
   created_at: string;
+  mine?: boolean;
+};
+
+export type AlumniSummary = {
+  id: string;
+  no: number;
+  name: string;
+  handle: string;
+  cf_handle: string | null;
+  role: string | null;
+  title: string | null;
+  batch: number;
+  dept: string;
+  rating: number;
+  cf_rating: number | null;
+  problems_solved: number;
+  skills: string[];
+  avatar_url: string | null;
+  location: string | null;
+  available_for_questions: boolean;
+  isSaved?: boolean;
+  saved?: boolean;
+};
+
+export type InterviewTopic = {
+  id: number;
+  name: string;
+  description: string | null;
+  created_by: string | null;
+  order_index: number;
+  created_at: string;
+  solvedCount: number;
+  totalCount: number;
+  problemTitles?: string[];
+};
+
+export type InterviewProblem = {
+  id: number;
+  topic_id: number;
+  title: string;
+  url: string;
+  difficulty: "easy" | "medium" | "hard";
+  meta: Record<string, unknown>;
+  created_by: string | null;
+  created_at: string;
+  solved?: boolean;
+};
+
+export type InterviewTip = {
+  id: number;
+  author_id: string;
+  author_name?: string;
+  author_handle?: string;
+  author_avatar?: string | null;
+  author_rating?: number;
+  topic_id: number | null;
+  title: string;
+  body_md: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BlogPost = {
+  id: number;
+  author_id: string;
+  author_name?: string;
+  author_handle?: string;
+  author_avatar?: string | null;
+  author_rating?: number;
+  author_role?: string | null;
+  slug: string;
+  title: string;
+  subtitle: string | null;
+  excerpt: string | null;
+  body_md: string;
+  cover_url: string | null;
+  tags: string[];
+  status: "draft" | "published";
+  published_at: string | null;
+  views: number;
+  upvotes?: number;
+  read_time_min?: number;
+  created_at: string;
+  updated_at: string;
 };
 
 export type MemberSummary = {
@@ -95,7 +190,12 @@ export type MemberProfile = MemberSummary & {
   /** Only included when viewerId === userId */
   email?: string;
   /** Alumni-only payloads */
+  available_for_questions?: boolean;
+  location?: string | null;
   interview_prep?: { id: number; title: string; created_at: string }[];
+  interview_tips?: InterviewTip[];
+  blogs?: BlogPost[];
+  jobs_posted?: AlumniJob[];
   jobs_fetched?: AlumniJob[];
   jobs_manual?: AlumniJob[];
 };
@@ -247,6 +347,10 @@ export type AppState = {
     annReads: Record<string, number>;
     kudosToday: number;
     recentMilestones: MilestoneDTO[];
+    alumniCount?: number;
+    jobsCount?: number;
+    prepTopicsCount?: number;
+    blogsCount?: number;
   };
   news: AnnouncementItem[];
   /** What needs this member's attention, worked out on the server from real records. */

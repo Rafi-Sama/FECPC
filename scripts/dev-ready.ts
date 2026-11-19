@@ -1,5 +1,7 @@
-import { existsSync, copyFileSync } from "node:fs";
-import { execSync } from "node:child_process";
+import { copyFileSync, existsSync, mkdtempSync } from "node:fs";
+import { execFileSync, execSync } from "node:child_process";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import pg from "pg";
 
 // 1. Ensure .env.local exists
@@ -15,7 +17,7 @@ if (existsSync(".env.local")) {
   process.loadEnvFile(".env.local");
 }
 
-const dbUrl = process.env.DATABASE_URL || "postgres://fecpc:fecpc_dev@127.0.0.1:5433/fecpc";
+const dbUrl = process.env.DATABASE_URL || "postgres://light:light@127.0.0.1:5432/fecpc";
 process.env.DATABASE_URL = dbUrl;
 const pw = process.env.SEED_PASSWORD || "fecpc-dev-2026";
 
@@ -39,14 +41,30 @@ if (!ready) {
     console.log("PostgreSQL database is not reachable. Starting docker compose...");
     let started = false;
     try {
-      execSync("docker compose up -d", { stdio: "inherit" });
+      execFileSync("/usr/bin/docker", ["compose", "up", "-d"], { stdio: "inherit" });
       started = true;
     } catch {
       try {
-        execSync("docker-compose up -d", { stdio: "inherit" });
+        execFileSync("/usr/bin/docker-compose", ["up", "-d"], { stdio: "inherit" });
         started = true;
-      } catch (e) {
-        console.error("Failed to start docker compose. Ensure Docker is running.");
+      } catch {
+        // Fall back to local pg_ctl if available
+        try {
+          const pgData = mkdtempSync(join(tmpdir(), "fecpc_pg-"));
+          const parsed = new URL(dbUrl);
+          const port = parsed.port || "5432";
+          const user = parsed.username || "light";
+          if (!existsSync(pgData)) {
+            execSync(`initdb -D ${pgData} -U ${user} --auth=trust`, { stdio: "ignore" });
+          }
+          execSync(`rm -f ${pgData}/postmaster.pid /tmp/.s.PGSQL.${port}*`, { stdio: "ignore" });
+          execSync(`pg_ctl -D ${pgData} -l ${pgData}/pg.log -o "-k /tmp -p ${port} -h 127.0.0.1" start`, { stdio: "ignore" });
+          execSync(`createdb -h 127.0.0.1 -p ${port} -U ${user} fecpc 2>/dev/null || true`, { stdio: "ignore" });
+          execSync(`createdb -h 127.0.0.1 -p ${port} -U ${user} fecpc_test 2>/dev/null || true`, { stdio: "ignore" });
+          started = true;
+        } catch {
+          console.error("Failed to start docker compose or local postgres.");
+        }
       }
     }
 

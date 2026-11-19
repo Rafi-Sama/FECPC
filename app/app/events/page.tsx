@@ -8,6 +8,7 @@ import { EventsExtra } from "@/components/app/Extras";
 import { useStore } from "@/components/app/Store";
 import { events, fmtDate, pastContests } from "@/lib/data";
 import { eventTicketCode, getBannerTitle } from "@/lib/event-details";
+import { HighlightMatch } from "@/components/app/alumni/HighlightMatch";
 
 export default function EventsPage() {
   const router = useRouter();
@@ -39,6 +40,18 @@ export default function EventsPage() {
     }
     return list;
   }, [tab, activeTag, q, s.reg]);
+
+  const filteredPastContests = useMemo(() => {
+    if (activeTag !== "All tags" && activeTag !== "Contest") return [];
+    const search = q.trim().toLowerCase();
+    if (!search) return pastContests;
+
+    return pastContests.filter((contest) =>
+      `${contest.name} ${contest.winner} ${contest.topics.join(" ")}`
+        .toLowerCase()
+        .includes(search)
+    );
+  }, [activeTag, q]);
 
   return (
     <div style={{ maxWidth: 1180, margin: "0 auto", padding: "48px 40px", display: "flex", flexDirection: "column", gap: 24 }}>
@@ -101,10 +114,12 @@ export default function EventsPage() {
         </div>
       ) : tab === "Past" ? (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 24, alignItems: "start" }}>
-          {pastContests.map((pc) => (
+          {filteredPastContests.map((pc) => (
             <article key={pc.id} className="bx">
               <div className="ban" style={{ height: 130 }}>
-                <span>{pc.name.replace("Weekly Club ", "")}</span>
+                <span>
+                  <HighlightMatch text={pc.name.replace("Weekly Club ", "")} query={q} />
+                </span>
               </div>
               <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
                 <div className="row">
@@ -112,21 +127,29 @@ export default function EventsPage() {
                   <span className="tag">{fmtDate(pc.date, { day: "numeric", month: "short" })}</span>
                   <span className="tag k">Ended</span>
                 </div>
-                <h2 style={{ fontSize: 24, margin: 0 }}>{pc.name}</h2>
+                <h2 style={{ fontSize: 24, margin: 0 }}>
+                  <HighlightMatch text={pc.name} query={q} />
+                </h2>
                 <p style={{ lineHeight: 1.5, margin: 0 }}>
-                  Winner: @{pc.winner}. {pc.teams} contestants entered. {pc.solved} problems solved.
+                  Winner: @<HighlightMatch text={pc.winner} query={q} />. {pc.teams} contestants entered. {pc.solved} problems solved.
                 </p>
                 <p className="m" style={{ margin: 0 }}>Codeforces Group</p>
                 <div className="row">
                   {pc.topics.map((t) => (
                     <span key={t} className="chip">
-                      {t}
+                      <HighlightMatch text={t} query={q} />
                     </span>
                   ))}
                 </div>
               </div>
             </article>
           ))}
+          {filteredPastContests.length === 0 && (
+            <div className="bx" style={{ gridColumn: "1 / -1", padding: 40, textAlign: "center" }}>
+              <h2 style={{ fontSize: 22, margin: 0 }}>No past events found</h2>
+              <p className="m" style={{ marginTop: 10 }}>Try clearing your search or filters.</p>
+            </div>
+          )}
         </div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 24, alignItems: "start" }}>
@@ -145,7 +168,7 @@ export default function EventsPage() {
               <article key={e.id} className="bx">
                 {/* TODO: Banner section shall contain banner image not title */}
                 <div className="ban" style={{ height: 130 }}>
-                  <span>{bannerTitle}</span>
+                  <span><HighlightMatch text={bannerTitle} query={q} /></span>
                 </div>
                 <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
                   <div className="row">
@@ -155,10 +178,10 @@ export default function EventsPage() {
                     </span>
                     {isGoing && <span className="tag k">Going</span>}
                   </div>
-                  <h2 style={{ fontSize: 24, margin: 0 }}>{e.title}</h2>
-                  <p style={{ lineHeight: 1.5, margin: 0 }}>{e.blurb}</p>
+                  <h2 style={{ fontSize: 24, margin: 0 }}><HighlightMatch text={e.title} query={q} /></h2>
+                  <p style={{ lineHeight: 1.5, margin: 0 }}><HighlightMatch text={e.blurb} query={q} /></p>
                   <p className="m" style={{ margin: 0 }}>
-                    {e.place}
+                    <HighlightMatch text={e.place} query={q} />
                     {e.fee > 0 ? " · Paid event" : ""}
                   </p>
                   <div className="row">

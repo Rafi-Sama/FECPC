@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 import { AvatarRing, TierBadge } from "@/components/app/TierBadge";
 import { useStore } from "@/components/app/Store";
 import { rankFor } from "@/lib/rank";
+import { isAdmin } from "@/lib/permissions";
 import type { MemberProfile } from "@/lib/state";
 import { AdminMenu } from "./AdminMenu";
 import { AlumniSection } from "./AlumniSection";
@@ -247,6 +248,45 @@ export function ProfileModal({
                         </span>
                         {profile.is_alumni && <span className="alumni-tag">ALUMNI</span>}
                       </div>
+
+                      {profile.is_alumni && (
+                        <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                          {profile.available_for_questions ? (
+                            <span className="tag" style={{ background: "rgba(31, 59, 255, 0.1)", color: "#1F3BFF", border: "1px solid #1F3BFF", fontSize: 11 }}>
+                              AVAILABLE FOR QUESTIONS ✓
+                            </span>
+                          ) : (
+                            <span className="tag" style={{ color: "#6B6B6B", border: "1px solid #6B6B6B", fontSize: 11 }}>
+                              NOT MENTORING
+                            </span>
+                          )}
+                          {(isOwner || isAdmin(s.role)) && (
+                            <button
+                              type="button"
+                              className="btn xs line"
+                              style={{ fontSize: 11, padding: "2px 8px" }}
+                              onClick={async () => {
+                                const next = !profile.available_for_questions;
+                                const res = await fetch("/api/alumni", {
+                                  method: "POST",
+                                  headers: { "content-type": "application/json" },
+                                  body: JSON.stringify({
+                                    action: "setAvailableForQuestions",
+                                    userId: profile.id,
+                                    value: next,
+                                  }),
+                                });
+                                if (res.ok) {
+                                  setProfile((p) => (p ? { ...p, available_for_questions: next } : p));
+                                  await onMutated();
+                                }
+                              }}
+                            >
+                              {profile.available_for_questions ? "Turn off mentoring" : "Make available"}
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {!rank.unrated && (

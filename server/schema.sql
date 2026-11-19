@@ -203,15 +203,26 @@ update users set cf_handle = handle where (cf_handle is null or cf_handle = '') 
 
 -- Alumni jobs (fetched from Greenhouse/Lever boards + manually posted)
 create table if not exists alumni_jobs (
-  id         serial primary key,
-  alumni_id  text references users(id) on delete set null,
-  company    text not null,
-  role       text not null,
-  location   text,
-  url        text not null,
-  source     text not null check (source in ('fetched','manual')),
-  fetched_at timestamptz,
-  created_at timestamptz not null default now()
+  id               serial primary key,
+  alumni_id        text references users(id) on delete set null,
+  company          text not null,
+  role             text not null,
+  title            text,
+  location         text,
+  url              text not null,
+  vacancies        integer not null default 1,
+  job_type         text,
+  experience       text,
+  salary           text,
+  description      text,
+  responsibilities jsonb not null default '[]'::jsonb,
+  requirements     jsonb not null default '[]'::jsonb,
+  deadline         date,
+  company_logo_url text,
+  posted_at        timestamptz not null default now(),
+  source           text not null check (source in ('fetched','manual')),
+  fetched_at       timestamptz,
+  created_at       timestamptz not null default now()
 );
 create index if not exists alumni_jobs_alumni on alumni_jobs (alumni_id, created_at desc);
 
@@ -239,3 +250,91 @@ create table if not exists milestone_kudos (
 );
 create index if not exists milestone_kudos_user_day
   on milestone_kudos (user_id, created_at desc);
+
+-- Alumni section redesign: Directory saves, extended Jobs, Interview prep tree, and Blogs
+alter table users add column if not exists available_for_questions boolean not null default true;
+alter table users add column if not exists location                text;
+
+create table if not exists alumni_saves (
+  user_id    text not null references users(id) on delete cascade,
+  alumni_id  text not null references users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (user_id, alumni_id)
+);
+create index if not exists alumni_saves_user on alumni_saves (user_id);
+
+alter table alumni_jobs add column if not exists title            text;
+alter table alumni_jobs add column if not exists vacancies        integer not null default 1;
+alter table alumni_jobs add column if not exists job_type         text;   -- 'Full-time' | 'Part-time' | 'Contract' | 'Internship'
+alter table alumni_jobs add column if not exists experience       text;
+alter table alumni_jobs add column if not exists salary           text;
+alter table alumni_jobs add column if not exists description      text;
+alter table alumni_jobs add column if not exists responsibilities jsonb not null default '[]'::jsonb;
+alter table alumni_jobs add column if not exists requirements     jsonb not null default '[]'::jsonb;
+alter table alumni_jobs add column if not exists deadline         date;
+alter table alumni_jobs add column if not exists company_logo_url text;
+alter table alumni_jobs add column if not exists posted_at        timestamptz not null default now();
+
+update alumni_jobs set title = role where title is null;
+
+create unique index if not exists alumni_jobs_fetched_dedupe
+  on alumni_jobs (company, role, url) where source = 'fetched';
+
+create table if not exists interview_topics (
+  id           serial primary key,
+  name         text not null unique,
+  description  text,
+  created_by   text references users(id) on delete set null,
+  order_index  integer not null default 0,
+  created_at   timestamptz not null default now()
+);
+
+create table if not exists interview_problems (
+  id         serial primary key,
+  topic_id   integer not null references interview_topics(id) on delete cascade,
+  title      text not null,
+  url        text not null,
+  difficulty text not null check (difficulty in ('easy','medium','hard')),
+  meta       jsonb not null default '{}'::jsonb,
+  created_by text references users(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+create index if not exists interview_problems_topic on interview_problems (topic_id);
+
+create table if not exists interview_user_progress (
+  user_id    text not null references users(id) on delete cascade,
+  problem_id integer not null references interview_problems(id) on delete cascade,
+  solved_at  timestamptz not null default now(),
+  primary key (user_id, problem_id)
+);
+
+create table if not exists interview_tips (
+  id         serial primary key,
+  author_id  text not null references users(id) on delete cascade,
+  topic_id   integer references interview_topics(id) on delete cascade,   -- null = standalone experience
+  title      text not null,
+  body_md    text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists interview_tips_topic  on interview_tips (topic_id);
+create index if not exists interview_tips_author on interview_tips (author_id);
+
+create table if not exists blog_posts (
+  id           serial primary key,
+  author_id    text not null references users(id) on delete cascade,
+  slug         text not null unique,
+  title        text not null,
+  subtitle     text,
+  excerpt      text,
+  body_md      text not null,
+  cover_url    text,
+  tags         jsonb not null default '[]'::jsonb,
+  status       text not null default 'draft' check (status in ('draft','published')),
+  published_at timestamptz,
+  views        integer not null default 0,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now()
+);
+create index if not exists blog_posts_published on blog_posts (published_at desc) where status = 'published';
+create index if not exists blog_posts_author    on blog_posts (author_id, created_at desc);

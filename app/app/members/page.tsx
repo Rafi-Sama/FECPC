@@ -306,6 +306,7 @@ function MembersInner() {
                 member={member}
                 onOpen={handleOpenProfile}
                 onMutated={handleRefreshList}
+                highlightQuery={qInput}
               />
             ))}
           </ul>

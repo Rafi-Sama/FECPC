@@ -5,15 +5,18 @@ import { useStore } from "@/components/app/Store";
 import { rankFor } from "@/lib/rank";
 import type { MemberSummary } from "@/lib/state";
 import { AdminMenu } from "./AdminMenu";
+import { HighlightMatch } from "@/components/app/alumni/HighlightMatch";
 
 export function MemberCard({
   member,
   onOpen,
   onMutated,
+  highlightQuery,
 }: {
   member: MemberSummary;
   onOpen: (id: string, trigger?: HTMLElement | null) => void;
   onMutated?: () => void;
+  highlightQuery?: string;
 }) {
   const { s, me, act } = useStore();
   const [popKey, setPopKey] = useState(0);
@@ -65,10 +68,15 @@ export function MemberCard({
         />
 
         <div className="member-card__ident">
-          <strong className="member-card__name">{member.name}</strong>
+          <strong className="member-card__name">
+            <HighlightMatch text={member.name} query={highlightQuery} />
+          </strong>
           <div className="member-card__meta-row">
             <span className="member-card__meta">
-              {roleLabel} · {member.dept} · Batch {member.batch}
+              <HighlightMatch
+                text={`${roleLabel} · ${member.dept} · Batch ${member.batch}`}
+                query={highlightQuery}
+              />
             </span>
             {member.is_alumni && <span className="alumni-tag">ALUMNI</span>}
           </div>
@@ -128,7 +136,7 @@ export function MemberCard({
         <div className="member-card__tags">
           {member.skills.map((skill) => (
             <span key={skill} className="tag">
-              {skill}
+              <HighlightMatch text={skill} query={highlightQuery} />
             </span>
           ))}
         </div>
