@@ -1,10 +1,12 @@
 // Builds everything one member's screens need, in one query (two for officers).
 // This is the only place that decides what a role may SEE: a dataset the role has no capability for is never sent.
 import { myInvoices } from "../lib/appdata.ts";
+import { formatMilestoneTitle, milestoneKudosNotification } from "../lib/notifications.ts";
 import { can, canFully, isAdmin, isCommittee, type Role } from "../lib/permissions.ts";
-import type { AppState, Expense, Office, Roster, S } from "../lib/state.ts";
+import type { AppState, Expense, MilestoneDTO, MilestoneType, Office, Roster, S } from "../lib/state.ts";
 import * as data from "./data.ts";
 import type { Db } from "./db.ts";
+import { MILESTONE_FRESHNESS_DAYS } from "./milestones.ts";
 
 export const TZ = "Asia/Dhaka";
 export const today = (now = new Date()) => new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(now); // YYYY-MM-DD
@@ -19,8 +21,8 @@ export function progress(raw: Partial<Progress> | null): Progress {
   return { handle: p.handle ?? "", base: { solved: p.base?.solved ?? 0, done: p.base?.done ?? 0 }, solved: p.solved ?? [], done: p.done ?? [], lessons: p.lessons ?? [], read: p.read ?? [], shop: p.shop ?? [], quiz: p.quiz ?? {}, flags: p.flags ?? {}, kv: p.kv ?? {}, spent: p.spent ?? 0, checkin: p.checkin ?? "" };
 }
 
-const ROSTER = `json_build_object('id', id, 'no', member_no, 'name', name, 'handle', handle, 'batch', batch, 'dept', dept, 'squad', squad, 'role', title, 'rating', rating, 'peak', peak,
-  'solved', solved, 'streak', streak, 'helper', helper, 'skills', skills, 'xp', solved * 12 + streak * 30 + helper * 8, 'roleKey', role, 'suspended', suspended, 'system', system, 'mentorId', mentor_id, 'pending', pass_hash is null and google_sub is null)`;
+const ROSTER = `json_build_object('id', id, 'no', member_no, 'name', name, 'handle', coalesce(nullif(cf_handle, ''), handle), 'cf_handle', nullif(coalesce(nullif(cf_handle, ''), handle), ''), 'batch', batch, 'dept', dept, 'squad', squad, 'role', title, 'is_alumni', role = 'alumni', 'rating', coalesce(cf_rating, rating), 'cf_rating', coalesce(cf_rating, nullif(rating, 0)), 'peak', peak,
+  'solved', greatest(problems_solved, solved), 'problems_solved', greatest(problems_solved, solved), 'avatar_url', avatar_url, 'streak', greatest(current_streak, streak), 'current_streak', greatest(current_streak, streak), 'contests_participated', contests_participated, 'helper', helper, 'skills', skills, 'xp', solved * 12 + streak * 30 + helper * 8, 'roleKey', role, 'suspended', suspended, 'system', system, 'mentorId', mentor_id, 'pending', pass_hash is null and google_sub is null)`;
 const EXPENSE = `json_build_object('id', 'EXP-' || e.id, 'by', e.by, 'name', w.name, 'what', e.what, 'amount', e.amount, 'event', e.event, 'status', e.status)`;
 const MINE = `
 select u.email, u.progress, u.mentor_id, (select name from users where id = u.mentor_id) as mentor_name, (select ${ROSTER} from users m where m.id = u.id) as me,
@@ -32,18 +34,68 @@ select u.email, u.progress, u.mentor_id, (select name from users where id = u.me
       json_build_object('trx', trx, 'via', via, 'status', status, 'id', id, 'amount', amount, 'label', label, 'at', created_at, 'note', note) j
     from payments where user_id = $1 order by invoice_id, (status <> 'rejected') desc, id desc) x) as pay,
   (select count(*)::int from announcements where user_id = $1) as posts,
+  (select count(*)::int from feed_posts where user_id = $1) as feed_posts,
+  (select coalesce(sum(least(daily, 20)), 0)::int from (select date_trunc('day', v.created_at at time zone '${TZ}') d, count(*) daily from feed_votes v join feed_posts fp on fp.id = v.post_id where fp.user_id = $1 and v.user_id <> $1 and v.value = 1 group by 1) x) as feed_upvotes,
+  (select count(*)::int from ideas where user_id = $1) as ideas_count,
+  (select count(*)::int from idea_interests where user_id = $1 and status = 'accepted') as accepted_interests,
+  (select count(*)::int from milestone_kudos mk join milestones m on m.id = mk.milestone_id where m.user_id = $1 and mk.user_id <> $1) as milestone_kudos_received,
+  (select count(*)::int from milestone_kudos where user_id = $1 and created_at >= (date_trunc('day', now() at time zone 'UTC') at time zone 'UTC')) as kudos_today,
+  (select coalesce(json_agg(row_to_json(rm) order by rm.created_at desc, rm.id desc), '[]'::json)
+     from (
+       select m.id, m.user_id,
+         mu.name as member_name,
+         mu.avatar_url as member_avatar,
+         greatest(mu.problems_solved, mu.solved) as member_solved,
+         nullif(coalesce(nullif(mu.cf_handle, ''), mu.handle), '') as member_cf_handle,
+         coalesce(mu.cf_rating, mu.rating) as member_rating,
+         m.type, m.from_value, m.to_value, m.threshold, m.meta, m.created_at,
+         (select count(*)::int from milestone_kudos mk where mk.milestone_id = m.id) as kudos_count,
+         exists (select 1 from milestone_kudos mk where mk.milestone_id = m.id and mk.user_id = $1) as has_kudos,
+         case when m.user_id = $1 then (
+           select coalesce(json_agg(g.name order by mk.created_at desc), '[]'::json)
+           from (
+             select user_id, created_at from milestone_kudos where milestone_id = m.id and user_id <> $1 order by created_at desc limit 3
+           ) mk
+           join users g on g.id = mk.user_id
+         ) else '[]'::json end as recent_givers
+       from milestones m
+       join users mu on mu.id = m.user_id
+       where m.created_at > now() - interval '${MILESTONE_FRESHNESS_DAYS} days'
+         and not mu.system and not mu.suspended
+       order by m.created_at desc, m.id desc
+       limit 5
+     ) rm) as recent_milestones,
+  (select coalesce(json_agg(json_build_object(
+      'milestoneId', mk.milestone_id, 'userId', mk.user_id, 'from', g.name,
+      'type', m.type, 'toValue', m.to_value
+    ) order by mk.created_at desc), '[]'::json)
+     from milestone_kudos mk
+     join milestones m on m.id = mk.milestone_id
+     join users g on g.id = mk.user_id
+     where m.user_id = $1 and mk.user_id <> $1) as milestone_kudos_inbox,
   (select coalesce(json_agg(to_user || ':' || kind || ':' || ref), '[]') from pings where from_user = $1) as sent,
   exists (select 1 from messages where kind = 'checkin' and user_id = $1) as checked_in,
   (select coalesce(json_agg(json_build_object('id', p.from_user || ':' || p.kind || ':' || p.ref, 'kind', p.kind, 'from', f.name) order by p.at desc), '[]') from pings p join users f on f.id = p.from_user where p.to_user = $1) as pings,
+  (select coalesce(json_agg(json_build_object('ideaId', ii.idea_id, 'userId', ii.user_id, 'from', w.name, 'title', i.title) order by ii.created_at desc), '[]')
+     from idea_interests ii join ideas i on i.id = ii.idea_id join users w on w.id = ii.user_id where i.user_id = $1 and ii.status = 'pending') as incoming_interests,
+  (select coalesce(json_agg(json_build_object('ideaId', ii.idea_id, 'status', ii.status, 'title', i.title) order by ii.decided_at desc), '[]')
+     from idea_interests ii join ideas i on i.id = ii.idea_id where ii.user_id = $1 and ii.status <> 'pending') as decided_interests,
   (select coalesce(json_agg(json_build_object('id', m.id, 'from', m.user_id, 'name', w.name, 'body', m.body, 'at', m.created_at) order by m.id desc), '[]')
      from (select * from messages where kind = 'checkin' and to_user = $1 order by id desc limit 100) m join users w on w.id = m.user_id) as checkins,
   (select coalesce(json_agg(${EXPENSE} order by e.id desc), '[]') from expenses e join users w on w.id = e.by where e.by = $1) as my_exp,
   (select coalesce(json_object_agg(event_id, n), '{}') from (select event_id, count(*)::int n from registrations group by 1) x) as c_reg,
   (select coalesce(json_object_agg(key, n), '{}') from (select key, count(*)::int n from attendance where key like 'vol:%' group by 1) x) as c_vol,
-  (select coalesce(json_agg(json_build_array(poll_id, option, n)), '[]') from (select poll_id, option, count(*)::int n from votes where poll_id not in ('election') and poll_id not like 'fb:%' group by 1, 2) x) as c_votes,
+  (select coalesce(json_agg(json_build_array(poll_id, option, n)), '[]') from (select poll_id, option, count(*)::int n from votes where poll_id not like 'fb:%' group by 1, 2) x) as c_votes,
   (select coalesce(json_object_agg(target, n), '{}') from (select target, count(*)::int n from reactions group by 1) x) as c_kudos,
   (select coalesce(json_object_agg(pid, n), '{}') from (select pid, count(*)::int n from users, jsonb_array_elements_text(coalesce(progress -> 'solved', '[]')) pid where not system and not suspended group by 1) x) as c_solved,
-  (select coalesce(json_agg(json_build_object('id', 'an:' || a.id, 'title', a.title, 'by', w.name, 'at', a.created_at, 'mentees', a.audience <> 'all') order by a.id desc), '[]')
+  (select coalesce(json_object_agg(announcement_id, n), '{}') from (select announcement_id, count(*)::int n from announcement_reads group by 1) x) as c_ann_reads,
+  (select coalesce(json_agg(json_build_object(
+      'id', 'an:' || a.id, 'user_id', a.user_id, 'title', a.title, 'body_md', coalesce(a.body_md, ''), 'by', w.name,
+      'by_role', w.title, 'by_solved', greatest(w.problems_solved, w.solved), 'by_avatar', w.avatar_url,
+      'at', a.created_at, 'edited_at', a.edited_at, 'mentees', a.audience <> 'all', 'pinned', a.pinned,
+      'requires_ack', a.requires_ack,
+      'read_count', (select count(*)::int from announcement_reads ar where ar.announcement_id = 'an:' || a.id)
+    ) order by a.id desc), '[]')
      from (select * from announcements where audience = 'all' or user_id = $1 or audience = 'mentees:' || coalesce(u.mentor_id, '') order by id desc limit 50) a join users w on w.id = a.user_id) as news,
   (select coalesce(json_agg(${ROSTER} order by rating desc, id), '[]') from users) as members,
   (select coalesce(json_object_agg(key, value), '{}') from club) as club
@@ -83,7 +135,9 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
   const expenses: Expense[] = off.expenses ?? [], decided = (list: Expense[]) => Object.fromEntries(list.filter((e) => e.status !== "pending").map((e) => [e.id, e.status]));
   const s: S = {
     role, handle: p.handle, base: p.base, solved: p.solved, done: p.done, lessons: p.lessons, read: p.read, quiz: p.quiz, spent: p.spent, checkin: p.checkin === today(),
-    kudos: [...row.kudos, ...p.shop.map((x) => "shop:" + x)], reg: row.reg, present: row.present, votes: row.votes, pay: row.pay, posts: row.posts, sent: row.checked_in ? [...row.sent, "checkin"] : row.sent, flags, kv,
+    kudos: [...row.kudos, ...p.shop.map((x) => "shop:" + x)], reg: row.reg, present: row.present, votes: row.votes, pay: row.pay, posts: row.posts,
+    feedPosts: row.feed_posts ?? 0, feedUpvotes: row.feed_upvotes ?? 0, ideasCount: row.ideas_count ?? 0, acceptedInterests: row.accepted_interests ?? 0, milestoneKudosReceived: row.milestone_kudos_received ?? 0,
+    sent: row.checked_in ? [...row.sent, "checkin"] : row.sent, flags, kv,
     queue: Object.fromEntries((off.queue ?? []).map((q: { id: string; status: string }) => [q.id, q.status])),
     exp: { ...decided(expenses), ...(off.waived ?? {}) }, apps: Object.fromEntries((off.apps ?? []).map((a: { id: string; status: string }) => [a.id, a.status])), log: off.log ?? [],
   };
@@ -120,9 +174,19 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
     else if (pay.status === "rejected") inbox.push({ id: `n:rej:${pay.id}`, cat: "Finance", text: `Your payment for "${inv.label}" was rejected${pay.note ? `: ${pay.note}` : ""}. Submit it again.`, href: "/app/finance" });
     else if (pay.status === "verified") inbox.push({ id: `n:paid:${pay.id}`, cat: "Finance", text: `Your payment for "${inv.label}" was verified.`, href: "/app/finance" });
   }
-  for (const n of row.news as AppState["news"]) inbox.push({ id: n.id, cat: "Announcement", text: `${n.by}: ${n.title}`, href: "/app/community" });
+  for (const n of row.news as AppState["news"]) inbox.push({ id: n.id, cat: "Announcement", text: `${n.by}: ${n.title}`, href: "/app/community?tab=announcements" });
   const ping = { invite: "invited you to their ICPC team", duel: "challenged you to a duel", nudge: "nudged you: solve something today", team: "wants to team up with you" } as Record<string, string>;
-  for (const g of row.pings as { id: string; kind: string; from: string }[]) inbox.push({ id: `n:ping:${g.id}`, cat: "Social", text: `${g.from} ${ping[g.kind]}`, href: g.kind === "duel" ? "/app/arena" : g.kind === "nudge" ? "/app/sheets" : "/app/teams" });
+  for (const g of row.pings as { id: string; kind: string; from: string }[]) inbox.push({ id: `n:ping:${g.id}`, cat: "Social", text: `${g.from} ${ping[g.kind]}`, href: g.kind === "duel" ? "/app/arena" : g.kind === "nudge" ? "/app/sheets" : g.kind === "team" ? "/app/community?tab=ideas" : "/app/teams" });
+  for (const ii of row.incoming_interests as { ideaId: number; userId: string; from: string; title: string }[]) inbox.push({ id: `n:int:${ii.ideaId}:${ii.userId}`, cat: "Community", text: `${ii.from} is interested in "${ii.title}"`, href: "/app/community?tab=ideas" });
+  for (const di of row.decided_interests as { ideaId: number; status: string; title: string }[]) inbox.push({ id: `n:intd:${di.ideaId}:${di.status}`, cat: "Community", text: `Your interest in "${di.title}" was ${di.status}`, href: "/app/community?tab=ideas" });
+  for (const mk of (row.milestone_kudos_inbox ?? []) as { milestoneId: number; userId: string; from: string; type: MilestoneType; toValue: string }[]) {
+    inbox.push({
+      id: `n:mk:${mk.milestoneId}:${mk.userId}`,
+      cat: "Community",
+      text: milestoneKudosNotification({ giverName: mk.from, milestoneTitle: formatMilestoneTitle(mk.type, mk.toValue) }),
+      href: "/app/community?tab=feed",
+    });
+  }
   for (const c of row.checkins as { id: number; name: string }[]) inbox.push({ id: `n:msg:${c.id}`, cat: "Mentor", text: `${c.name} sent a weekly check-in`, href: "/app/learn" });
   const waiting = (off.queue ?? []).filter((q: { status: string }) => q.status === "pending");
   if (canFully(role, "payments.verify") && waiting.length) inbox.push({ id: `n:queue:${waiting[0].id}`, cat: "Finance", text: `${waiting.length} payment${waiting.length > 1 ? "s are" : " is"} waiting for verification`, href: "/app/finance" });
@@ -134,7 +198,17 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
   const votes: AppState["counts"]["votes"] = {};
   for (const [poll, opt, n] of row.c_votes as [string, string, number][]) (votes[poll] ??= {})[opt] = n;
   return {
-    me: { ...me, email: row.email, mentor: row.mentor_name }, s, members, counts: { reg: row.c_reg, vol: row.c_vol, kudos: row.c_kudos, votes, solved: row.c_solved },
+    me: { ...me, email: row.email, mentor: row.mentor_name }, s, members,
+    counts: {
+      reg: row.c_reg,
+      vol: row.c_vol,
+      kudos: row.c_kudos,
+      votes,
+      solved: row.c_solved,
+      annReads: row.c_ann_reads,
+      kudosToday: row.kudos_today ?? 0,
+      recentMilestones: (row.recent_milestones ?? []) as MilestoneDTO[],
+    },
     news: row.news, inbox, myExpenses: row.my_exp, fundTotal: data.accounts.reduce((a, x) => a + x[1], 0), office,
   };
 }

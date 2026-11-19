@@ -1,48 +1,216 @@
 "use client";
-import { useState } from "react";
-import { Page, Tabs } from "@/components/app/Shell";
-import { EventsExtra } from "@/components/app/Extras";
-import QR from "@/components/app/QR";
-import { useStore } from "@/components/app/Store";
-import { events, fmtDate } from "@/lib/data";
 
-export default function Events() {
-  const { s, act, counts, office } = useStore();
-  const [code, setCode] = useState("");
-  const tabs = ["Upcoming", "Calendar", "Volunteer", "Feedback", "Certificates"] as const;
-  const [tab, setTab] = useState<(typeof tabs)[number]>("Upcoming");
-  const checkIn = (e: React.FormEvent) => { e.preventDefault(); act("attend", { code }); };
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
+import QR from "@/components/app/QR";
+import { EventsExtra } from "@/components/app/Extras";
+import { useStore } from "@/components/app/Store";
+import { events, fmtDate, pastContests } from "@/lib/data";
+import { eventTicketCode, getBannerTitle } from "@/lib/event-details";
+
+export default function EventsPage() {
+  const router = useRouter();
+  const { s, act, counts } = useStore();
+  const [tab, setTab] = useState<"Upcoming" | "My events" | "Past" | "Calendar">("Upcoming");
+  const [activeTag, setActiveTag] = useState<"All tags" | "Class" | "Contest" | "Social">("All tags");
+  const [q, setQ] = useState("");
+
+  const filteredEvents = useMemo(() => {
+    let list = events;
+    if (tab === "My events") {
+      list = list.filter((e) => s.reg.includes(e.id));
+    }
+    if (activeTag !== "All tags") {
+      list = list.filter((e) => {
+        if (activeTag === "Social") return e.type === "Social" || e.type === "Hackathon";
+        return e.type === activeTag;
+      });
+    }
+    if (q.trim()) {
+      const search = q.toLowerCase().trim();
+      list = list.filter(
+        (e) =>
+          e.title.toLowerCase().includes(search) ||
+          e.blurb.toLowerCase().includes(search) ||
+          e.place.toLowerCase().includes(search) ||
+          e.type.toLowerCase().includes(search)
+      );
+    }
+    return list;
+  }, [tab, activeTag, q, s.reg]);
+
   return (
-    <Page title={<>{s.reg.length} ticket{s.reg.length === 1 ? "" : "s"}<span className="acc">.</span></>}>
-      <Tabs tabs={tabs} value={tab} onChange={setTab} />
-      <EventsExtra tab={tab} />
-      {tab === "Upcoming" && <div className="bento">
-        <form className="panel" style={{ gridColumn: "1 / -1" }} onSubmit={checkIn}>
-          <p className="label">Attendance · DP Bootcamp, Day 1</p>
-          {s.present.includes("dp-bootcamp") ? <p className="h3 ok">You are marked present.</p> : <>
-            <label className="field"><span className="label">Code on the projector</span><input className="input mono" value={code} onChange={(e) => setCode(e.target.value)} placeholder="6 characters" required maxLength={12} autoComplete="off" /></label>
-            <button className="btn sm" style={{ alignSelf: "flex-start" }}>Check in</button>
-</>}
-        </form>
-        {events.map((e) => { const on = s.reg.includes(e.id), full = e.taken + (counts.reg[e.id] ?? 0) >= e.seats; return (
-          <section key={e.id} className="panel c6">
-            <div className="row between"><span className="row" style={{ "--g": "8px" } as React.CSSProperties}><span className="tag on">{e.type}</span><span className="tag">{fmtDate(e.date, { weekday: "short", day: "numeric", month: "short" })} · {e.time}</span></span>{e.fee > 0 && <span className="label">৳{e.fee}</span>}</div>
-            <h2 className="h3">{e.title}</h2>
-            <p className="body">{e.blurb}</p>
-            <p className="label">{e.place} · {Math.max(0, e.seats - e.taken - (counts.reg[e.id] ?? 0))} of {e.seats} seats left</p>
-            {on ? <div className="ticket"><QR text={`FECPC ticket ${e.id}`} size={72} /><div className="grow"><p className="label">Your ticket</p><p className="mono">{e.id.replace(/-/g, "").slice(0, 3).toUpperCase()}-{(e.title.length * 7919) % 9000 + 1000}</p></div>
-              <button className="btn xs line" onClick={() => act("toggle", { list: "reg", id: e.id, on: false })}>Cancel</button></div>
-              : <button className={`btn sm ${e.id === events.find((x) => !s.reg.includes(x.id))?.id ? "" : "line"}`} style={{ alignSelf: "flex-start" }} onClick={() => act("toggle", { list: "reg", id: e.id, on: true })}>{full ? "Join waitlist" : e.fee ? `Register · ৳${e.fee} invoice` : "Register"}</button>}
-          </section>
-        ); })}
-        {office.events && <section className="panel" style={{ gridColumn: "1 / -1" }}><p className="label">Organiser view</p>
-          <div className="row" style={{ "--g": "32px", alignItems: "flex-start" } as React.CSSProperties}><div><p className="label">Room code · read it out or project it</p><p className="big mono">{office.events.code}</p></div><div><p className="label">Checked in with the code</p><p className="big">{office.events.arrived[office.events.event] ?? 0}</p></div></div>
-          <p className="label" style={{ marginTop: 12 }}>Registered through the platform</p>
-          <ul className="list">{events.map((e) => { const names = office.events!.registrants[e.id] ?? []; return <li key={e.id}><details className="grow"><summary>{e.title} · <span className="mono">{names.length}</span></summary><p className="body" style={{ marginTop: 6 }}>{names.length ? names.join(", ") : "Nobody yet."}</p></details></li>; })}</ul>
-          <p className="label" style={{ marginTop: 12 }}>Written feedback · Freshers' Cup · {(office.feedback ?? []).length}</p>
-          {(office.feedback ?? []).length === 0 ? <p className="body">None yet.</p> : <ul className="list">{office.feedback!.slice(0, 20).map((m, i) => <li key={i}><span className="grow">{m.body}</span></li>)}</ul>}
-        </section>}
-      </div>}
-    </Page>
+    <div style={{ maxWidth: 1180, margin: "0 auto", padding: "48px 40px", display: "flex", flexDirection: "column", gap: 24 }}>
+      {/* Design Header: events. with accent dot */}
+      <h1 style={{ fontSize: 72, letterSpacing: "-.04em", margin: 0, lineHeight: 1 }}>
+        events<span style={{ color: "var(--acc, #1a30ff)" }}>.</span>
+      </h1>
+
+      {/* Filter Row matching Main.dc.html design */}
+      <div className="row">
+        <button className={`tag ${tab === "Upcoming" ? "b" : ""}`} type="button" onClick={() => setTab("Upcoming")}>
+          Upcoming
+        </button>
+        <button className={`tag ${tab === "My events" ? "b" : ""}`} type="button" onClick={() => setTab("My events")}>
+          My events
+        </button>
+        <button className={`tag ${tab === "Past" ? "b" : ""}`} type="button" onClick={() => setTab("Past")}>
+          Past
+        </button>
+        <button className={`tag ${tab === "Calendar" ? "b" : ""}`} type="button" onClick={() => setTab("Calendar")}>
+          Calendar
+        </button>
+        <span style={{ flex: 1 }} />
+        <button className={`tag ${activeTag === "All tags" ? "b" : ""}`} type="button" onClick={() => setActiveTag("All tags")}>
+          All tags
+        </button>
+        <button className={`tag ${activeTag === "Class" ? "b" : ""}`} type="button" onClick={() => setActiveTag("Class")}>
+          Class
+        </button>
+        <button className={`tag ${activeTag === "Contest" ? "b" : ""}`} type="button" onClick={() => setActiveTag("Contest")}>
+          Contest
+        </button>
+        <button className={`tag ${activeTag === "Social" ? "b" : ""}`} type="button" onClick={() => setActiveTag("Social")}>
+          Social
+        </button>
+      </div>
+
+      {/* Search Bar Panel matching Main.dc.html */}
+      <div className="bx" style={{ padding: 16, display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+        <label className="m" htmlFor="c" style={{ position: "absolute", left: -9999 }}>
+          Search events
+        </label>
+        <input
+          id="c"
+          className="ev-field"
+          placeholder="Search events, tags or organisers"
+          style={{ flex: 1, minWidth: 280 }}
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
+        <button className="btn" type="button">
+          Search
+        </button>
+      </div>
+
+      {/* Main Grid View */}
+      {tab === "Calendar" ? (
+        <div className="bx" style={{ padding: 24 }}>
+          <EventsExtra tab="Calendar" />
+        </div>
+      ) : tab === "Past" ? (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 24, alignItems: "start" }}>
+          {pastContests.map((pc) => (
+            <article key={pc.id} className="bx">
+              <div className="ban" style={{ height: 130 }}>
+                <span>{pc.name.replace("Weekly Club ", "")}</span>
+              </div>
+              <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
+                <div className="row">
+                  <span className="tag b">Contest</span>
+                  <span className="tag">{fmtDate(pc.date, { day: "numeric", month: "short" })}</span>
+                  <span className="tag k">Ended</span>
+                </div>
+                <h2 style={{ fontSize: 24, margin: 0 }}>{pc.name}</h2>
+                <p style={{ lineHeight: 1.5, margin: 0 }}>
+                  Winner: @{pc.winner}. {pc.teams} contestants entered. {pc.solved} problems solved.
+                </p>
+                <p className="m" style={{ margin: 0 }}>Codeforces Group</p>
+                <div className="row">
+                  {pc.topics.map((t) => (
+                    <span key={t} className="chip">
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 24, alignItems: "start" }}>
+          {filteredEvents.map((e) => {
+            const isGoing = s.reg.includes(e.id);
+            const takenCount = e.taken + (counts.reg[e.id] ?? 0);
+            const seatsLeft = Math.max(0, e.seats - takenCount);
+            const isFull = takenCount >= e.seats;
+            const bannerTitle = getBannerTitle(e);
+            const ticketCode = eventTicketCode(e);
+
+            const seatsText = isFull ? "full · waitlist 4" : `${seatsLeft} left`;
+            const secChipText = e.type === "Contest" ? "Judge · 1 left" : e.type === "Class" ? "Volunteer · 3 left" : "Volunteer · 2 left";
+
+            return (
+              <article key={e.id} className="bx">
+                {/* TODO: Banner section shall contain banner image not title */}
+                <div className="ban" style={{ height: 130 }}>
+                  <span>{bannerTitle}</span>
+                </div>
+                <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
+                  <div className="row">
+                    <span className="tag b">{e.type === "Hackathon" ? "Social" : e.type}</span>
+                    <span className="tag">
+                      {fmtDate(e.date, { weekday: "short", day: "numeric", month: "short" })} · {e.time}
+                    </span>
+                    {isGoing && <span className="tag k">Going</span>}
+                  </div>
+                  <h2 style={{ fontSize: 24, margin: 0 }}>{e.title}</h2>
+                  <p style={{ lineHeight: 1.5, margin: 0 }}>{e.blurb}</p>
+                  <p className="m" style={{ margin: 0 }}>
+                    {e.place}
+                    {e.fee > 0 ? " · Paid event" : ""}
+                  </p>
+                  <div className="row">
+                    <button className="chip" type="button" onClick={() => router.push(`/app/events/${e.id}`)}>
+                      Participate · {seatsText}
+                    </button>
+                    <button className="chip" type="button" onClick={() => router.push(`/app/events/${e.id}`)}>
+                      {secChipText}
+                    </button>
+                  </div>
+
+                  {isGoing ? (
+                    <div className="dash">
+                      <div className="qr">
+                        <QR text={`FECPC ticket ${e.id}`} size={52} />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div className="m">Your ticket</div>
+                        <div style={{ font: "500 22px 'JetBrains Mono', monospace", color: "var(--acc, #1a30ff)" }}>
+                          {ticketCode}
+                        </div>
+                      </div>
+                      <button
+                        className="btn o"
+                        type="button"
+                        onClick={() => act("toggle", { list: "reg", id: e.id, on: false })}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <Link
+                      href={`/app/events/${e.id}`}
+                      className={`btn ${e.fee > 0 ? "o" : ""}`}
+                      style={{ textDecoration: "none", textAlign: "center" }}
+                    >
+                      View event
+                    </Link>
+                  )}
+                </div>
+              </article>
+            );
+          })}
+
+          {filteredEvents.length === 0 && (
+            <div className="bx" style={{ gridColumn: "1 / -1", padding: 40, textAlign: "center" }}>
+              <h2 style={{ fontSize: 22, margin: 0 }}>No events found</h2>
+              <p className="m" style={{ marginTop: 10 }}>Try clearing your search or filters.</p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

@@ -20,3 +20,11 @@ test("xp: a payment earns only once verified; a new member with no base starts a
   assert.equal(quests({ ...fresh, solved: ["4A"] })[0].done, true);
   assert.deepEqual(level(-50), { lv: 1, into: 0, title: "Rookie" }); // never negative after spending
 });
+test("xp: community redesign actions award XP and election votes award nothing", () => {
+  assert.equal(earned({ ...base, votes: { p1: "Saturday", election: "sadia" } }), XP.vote);
+  assert.equal(
+    earned({ ...base, feedPosts: 2, feedUpvotes: 3, ideasCount: 1, acceptedInterests: 2, milestoneKudosReceived: 4 }),
+    2 * XP.feedPost + 3 * XP.feedUpvote + 1 * XP.idea + 2 * XP.interestAccepted + 4 * XP.milestoneKudosReceived
+  );
+  assert.equal(XP.milestoneKudosReceived, 2);
+});

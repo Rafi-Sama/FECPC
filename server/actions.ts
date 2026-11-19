@@ -1,13 +1,16 @@
 // Every change a member or officer can make. One entry point, one transaction, one row lock on the acting user.
 // This is the only place that decides what a role may DO; the interface merely hides what would be refused here.
-import { APPROVAL_THRESHOLD, announcements, candidates, invoices, polls, resources, sheet, shop } from "../lib/appdata.ts";
+import { APPROVAL_THRESHOLD, announcements, invoices, polls, resources, sheet, shop } from "../lib/appdata.ts";
 import { cols, courses, volunteerShifts, wiki } from "../lib/appdata2.ts";
 import { events } from "../lib/data.ts";
 import { can, canFully, roleName, roles, type Role } from "../lib/permissions.ts";
+import { RANKS, UNRATED_RANK } from "../lib/rank.ts";
+import type { AlumniJob, CommunityComment, FeedCategory, FeedPostDetail, FeedPostSummary, IdeaDetail, IdeaInterestRow, IdeaStatus, IdeaSummary, IdeaType, MemberActivityItem, MemberContestRow, MemberExperience, MemberProfile, MemberSummary, MilestoneDTO } from "../lib/state.ts";
 import { earned } from "../lib/xp.ts";
 import { hashPassword, newToken, sha } from "./auth.ts";
 import * as data from "./data.ts";
 import { Fail, tx, type Db } from "./db.ts";
+import { DAILY_KUDOS_CAP, detectCrossovers, MILESTONE_FRESHNESS_DAYS } from "./milestones.ts";
 import { isAdmin, isCommittee, loadState, progress, today, type Progress } from "./state.ts";
 
 type Actor = { id: string; role: Role; name: string; system: boolean };
@@ -20,6 +23,43 @@ const text = (v: unknown, min: number, max: number, what: string) => {
   if (t.length < min || t.length > max) throw new Fail(400, `${what} must be ${min} to ${max} characters.`);
   return t;
 };
+const mdText = (v: unknown, min: number, max: number, what: string) => {
+  // Multiline Markdown text: preserve newlines/tabs, drop other control characters.
+  const t = typeof v === "string" ? v.replace(/\r\n?/g, "\n").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "").trim() : "";
+  if (t.length < min || t.length > max) throw new Fail(400, `${what} must be ${min} to ${max} characters.`);
+  return t;
+};
+const posInt = (v: unknown, what: string) => {
+  const n = Number(v);
+  if (!Number.isInteger(n) || n < 1 || n > 2_000_000_000) throw new Fail(400, `Invalid ${what}.`);
+  return n;
+};
+const optionalUrl = (v: unknown, what: string): string | null => {
+  if (v === undefined || v === null) return null;
+  const t = typeof v === "string" ? v.replace(/[\u0000-\u001f\u007f]/g, "").trim() : "";
+  if (!t) return null;
+  if (t.length > 400 || !/^https?:\/\/[^\s]+$/i.test(t)) throw new Fail(400, `${what} must be a valid http(s) URL.`);
+  return t;
+};
+const optionalAvatar = (v: unknown): string | null => {
+  if (v === undefined || v === null) return null;
+  const t = typeof v === "string" ? v.trim() : "";
+  if (!t) return null;
+  if (/^https?:\/\/[^\s]{4,480}$/i.test(t)) return t;
+  if (/^data:image\/(?:png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$/.test(t) && t.length <= 450_000) return t;
+  throw new Fail(400, "Avatar must be a PNG, JPEG, or WebP image under 300KB.");
+};
+const FEED_CATS = ["problem-solving", "upsolving", "topic"] as const;
+const FEED_CAT_ALIAS: Record<string, FeedCategory> = {
+  "problem-solving": "problem-solving",
+  wins: "problem-solving",
+  upsolving: "upsolving",
+  help: "upsolving",
+  topic: "topic",
+  contests: "topic",
+};
+const IDEA_TYPES = ["idea", "teammate", "study"] as const;
+const IDEA_STATUSES = ["open", "planned", "shipped", "closed"] as const;
 const key = (v: unknown) => { if (typeof v !== "string" || !KEY.test(v)) throw new Fail(400, "That is not a valid item."); return v; };
 const pick = <T extends string>(v: unknown, from: readonly T[], what: string): T => { if (!from.includes(v as T)) throw new Fail(400, `Unknown ${what}.`); return v as T; };
 const need = (ok: unknown, why = "Your role cannot do that.") => { if (!ok) throw new Fail(403, why); };
@@ -59,6 +99,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
       else await c.query(`delete from registrations where user_id = $1 and event_id = $2`, [a.id, id]);
     } else if (list === "kudos") {
       need(!id.startsWith("shop:"), "That is not something you can cheer.");
+      need(!id.startsWith("milestone:"), "Use kudosMilestone for milestone kudos.");
       const has = (await c.query(`select 1 from reactions where user_id = $1 and target = $2`, [a.id, id])).rowCount! > 0;
       if (now(has)) await c.query(`insert into reactions values ($1, $2) on conflict do nothing`, [a.id, id]);
       else await c.query(`delete from reactions where user_id = $1 and target = $2`, [a.id, id]);
@@ -121,13 +162,11 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
   async vote(c, a, _p, i) {
     person(a);
     const poll = key(i.poll), option = text(i.option, 1, 80, "Option");
-    const once = poll === "election" || poll === "fb:freshers"; // a ballot and a rating cannot be changed
-    if (poll === "election") need(candidates.some((x) => x.id === option), "That is not a candidate.");
-    else if (poll === "fb:freshers") pick(option, ["1", "2", "3", "4", "5"], "rating");
+    const once = poll === "fb:freshers"; // a feedback rating cannot be changed
+    if (poll === "fb:freshers") pick(option, ["1", "2", "3", "4", "5"], "rating");
     else need(polls.find((x) => x.id === poll)?.opts.some((o) => o[0] === option), "That is not an option in this poll.");
     const r = await c.query(`insert into votes values ($1, $2, $3) on conflict (user_id, poll_id) do ${once ? "nothing" : "update set option = excluded.option"}`, [a.id, poll, option]);
-    if (once && !r.rowCount) throw new Fail(409, "You have already voted. A ballot cannot be changed.");
-    if (poll === "election") await audit(c, a, "cast a ballot in the committee election"); // who voted is logged; for whom is not
+    if (once && !r.rowCount) throw new Fail(409, "You have already rated this event.");
   },
   async quiz(_c, _a, p, i) {
     const answers = data.quizAnswers[String(i.course)];
@@ -175,10 +214,157 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
   async announce(c, a, _p, i) {
     need(can(a.role, "announce.post"));
     const title = text(i.title, 3, 140, "The title");
+    const bodyMd = i.body_md !== undefined && String(i.body_md).trim() !== "" ? mdText(i.body_md, 1, 6000, "The message") : "";
+    const pinned = Boolean(i.pinned);
+    const requiresAck = Boolean(i.requires_ack);
     // A scoped grant (mentor) reaches that mentor's own mentees only; the audience is decided here, never by the caller.
-    const audience = can(a.role, "announce.post") === "scope" ? "mentees:" + a.id : "all";
-    await c.query(`insert into announcements (user_id, title, audience) values ($1, $2, $3)`, [a.id, title, audience]);
+    const audience = can(a.role, "announce.post") === "scope" || i.audience === "mentees" ? "mentees:" + a.id : "all";
+    await c.query(
+      `insert into announcements (user_id, title, body_md, audience, pinned, requires_ack) values ($1, $2, $3, $4, $5, $6)`,
+      [a.id, title, bodyMd, audience, pinned, requiresAck]
+    );
     await audit(c, a, `posted announcement "${title}"${audience === "all" ? "" : " to their mentees"}`);
+  },
+  async markAnnouncementRead(c, a, p, i) {
+    const raw = String(i.id ?? "").trim();
+    const id = /^\d{1,9}$/.test(raw) ? "an:" + raw : key(raw);
+    const isSeed = announcements.some((x) => x.id === id);
+    if (!isSeed) {
+      const m = /^an:(\d{1,9})$/.exec(id);
+      need(m, "That announcement does not exist.");
+      const exists = (await c.query(`select 1 from announcements where id = $1`, [+m![1]])).rowCount! > 0;
+      need(exists, "That announcement does not exist.");
+    }
+    await c.query(`insert into announcement_reads (announcement_id, user_id) values ($1, $2) on conflict do nothing`, [id, a.id]);
+    if (!p.read.includes(id)) p.read = [...p.read, id];
+  },
+  async createFeedPost(c, a, _p, i) {
+    person(a);
+    need(can(a.role, "feed.post"));
+    const title = text(i.title, 3, 160, "Title");
+    const bodyMd = mdText(i.body_md, 3, 10000, "Post body");
+    const category = pick(i.category, FEED_CATS, "category");
+    await c.query(`insert into feed_posts (user_id, title, body_md, category) values ($1, $2, $3, $4)`, [a.id, title, bodyMd, category]);
+  },
+  async voteFeed(c, a, _p, i) {
+    person(a);
+    const postId = posInt(i.postId, "post");
+    const rawVal = Number(i.value);
+    if (rawVal !== -1 && rawVal !== 0 && rawVal !== 1) throw new Fail(400, "Vote must be -1, 0, or 1.");
+    const post = (await c.query(`select id, score from feed_posts where id = $1 for update`, [postId])).rows[0];
+    if (!post) throw new Fail(404, "That post does not exist.");
+    const cur = (await c.query(`select value from feed_votes where user_id = $1 and post_id = $2`, [a.id, postId])).rows[0];
+    const prev: number = cur ? Number(cur.value) : 0;
+    const next = rawVal === prev ? 0 : rawVal;
+    if (next === 0) await c.query(`delete from feed_votes where user_id = $1 and post_id = $2`, [a.id, postId]);
+    else await c.query(`insert into feed_votes (user_id, post_id, value) values ($1, $2, $3) on conflict (user_id, post_id) do update set value = excluded.value, created_at = now()`, [a.id, postId, next]);
+    const delta = next - prev;
+    if (delta !== 0) await c.query(`update feed_posts set score = score + $2 where id = $1`, [postId, delta]);
+  },
+  async updateFeedPost(c, a, _p, i) {
+    person(a);
+    const postId = posInt(i.postId, "post");
+    const title = text(i.title, 3, 160, "Title");
+    const bodyMd = mdText(i.body_md, 3, 10000, "Post body");
+    const r = await c.query(`update feed_posts set title = $2, body_md = $3, updated_at = now() where id = $1 and user_id = $4 returning id`, [postId, title, bodyMd, a.id]);
+    if (!r.rows[0]) throw new Fail(403, "Only the author can edit this post.");
+  },
+  async deleteFeedPost(c, a, _p, i) {
+    person(a);
+    const postId = posInt(i.postId, "post");
+    const r = await c.query(`delete from feed_posts where id = $1 and user_id = $2 returning id`, [postId, a.id]);
+    if (!r.rows[0]) throw new Fail(403, "Only the author can delete this post.");
+  },
+  async reportFeedPost(c, a, _p, i) {
+    person(a);
+    const postId = posInt(i.postId, "post");
+    const post = (await c.query(`select user_id, title from feed_posts where id = $1`, [postId])).rows[0];
+    if (!post) throw new Fail(404, "That post does not exist.");
+    need(post.user_id !== a.id, "You cannot report your own post.");
+    const reason = i.reason ? text(i.reason, 1, 300, "Reason") : "Flagged by member";
+    await c.query(`insert into feed_reports (post_id, user_id, reason) values ($1, $2, $3) on conflict do nothing`, [postId, a.id, reason]);
+    await audit(c, a, `reported feed post #${postId} ("${post.title}")`);
+  },
+  async comment(c, a, _p, i) {
+    person(a);
+    const targetType = pick(i.targetType, ["idea"] as const, "target");
+    const targetId = posInt(i.targetId, "item");
+    const body = mdText(i.body, 1, 2000, "Comment");
+    const exists = (await c.query(`select 1 from ideas where id = $1`, [targetId])).rowCount! > 0;
+    if (!exists) throw new Fail(404, "That item does not exist.");
+    await c.query(`insert into community_comments (target_type, target_id, user_id, body) values ($1, $2, $3, $4)`, [targetType, targetId, a.id, body]);
+  },
+  async createIdea(c, a, _p, i) {
+    person(a);
+    need(can(a.role, "idea.create"));
+    const title = text(i.title, 3, 160, "Title");
+    const bodyMd = mdText(i.body_md, 3, 10000, "Description");
+    const rawType = i.ideaType ?? (i.type !== "createIdea" ? i.type : undefined);
+    const type = pick(rawType, IDEA_TYPES, "type");
+    const rawRoles = Array.isArray(i.roles) ? i.roles : [];
+    const rolesList = rawRoles.map((r) => (typeof r === "string" ? r.replace(/[\u0000-\u001f\u007f]/g, " ").trim() : "")).filter(Boolean).slice(0, 3);
+    for (const r of rolesList) if (r.length > 140) throw new Fail(400, "Each role prompt must be under 140 characters.");
+    await c.query(`insert into ideas (user_id, title, body_md, type, roles) values ($1, $2, $3, $4, $5::jsonb)`, [a.id, title, bodyMd, type, JSON.stringify(rolesList)]);
+  },
+  async updateIdea(c, a, _p, i) {
+    person(a);
+    const ideaId = posInt(i.ideaId, "idea");
+    const cur = (await c.query(`select user_id, status from ideas where id = $1`, [ideaId])).rows[0];
+    if (!cur) throw new Fail(404, "That idea does not exist.");
+    need(cur.user_id === a.id || canFully(a.role, "idea.manage"), "Only the poster or an admin can edit this idea.");
+    const title = text(i.title, 3, 160, "Title");
+    const bodyMd = mdText(i.body_md, 3, 10000, "Description");
+    const status = i.status !== undefined ? pick(i.status, IDEA_STATUSES, "status") : cur.status;
+    await c.query(`update ideas set title = $2, body_md = $3, status = $4, updated_at = now() where id = $1`, [ideaId, title, bodyMd, status]);
+  },
+  async closeIdea(c, a, _p, i) {
+    person(a);
+    const ideaId = posInt(i.ideaId, "idea");
+    const cur = (await c.query(`select user_id from ideas where id = $1`, [ideaId])).rows[0];
+    if (!cur) throw new Fail(404, "That idea does not exist.");
+    need(cur.user_id === a.id || canFully(a.role, "idea.manage"), "Only the poster or an admin can close this idea.");
+    await c.query(`update ideas set status = 'closed', updated_at = now() where id = $1`, [ideaId]);
+  },
+  async markIdeaViewed(c, a, _p, i) {
+    const ideaId = posInt(i.ideaId, "idea");
+    const exists = (await c.query(`select 1 from ideas where id = $1`, [ideaId])).rowCount! > 0;
+    if (!exists) throw new Fail(404, "That idea does not exist.");
+    await c.query(`insert into idea_views (idea_id, user_id) values ($1, $2) on conflict do nothing`, [ideaId, a.id]);
+  },
+  async expressInterest(c, a, _p, i) {
+    person(a);
+    const ideaId = posInt(i.ideaId, "idea");
+    const idea = (await c.query(`select user_id, status from ideas where id = $1`, [ideaId])).rows[0];
+    if (!idea) throw new Fail(404, "That idea does not exist.");
+    need(idea.user_id !== a.id, "You cannot express interest in your own post.");
+    if (idea.status === "closed") throw new Fail(409, "This post is closed.");
+    const cleanResp: Record<string, string> = {};
+    if (i.response && typeof i.response === "object" && !Array.isArray(i.response)) {
+      for (const [k, v] of Object.entries(i.response as Record<string, unknown>).slice(0, 5)) {
+        const ck = String(k).replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, 140);
+        const cv = String(v ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, 500);
+        if (ck && cv) cleanResp[ck] = cv;
+      }
+    }
+    await c.query(
+      `insert into idea_interests (idea_id, user_id, response, status) values ($1, $2, $3::jsonb, 'pending')
+       on conflict (idea_id, user_id) do update set response = excluded.response`,
+      [ideaId, a.id, JSON.stringify(cleanResp)]
+    );
+  },
+  async decideInterest(c, a, _p, i) {
+    person(a);
+    const ideaId = posInt(i.ideaId, "idea");
+    const applicant = key(i.userId);
+    const decision = pick(i.decision, ["accepted", "declined"] as const, "decision");
+    const idea = (await c.query(`select user_id from ideas where id = $1`, [ideaId])).rows[0];
+    if (!idea) throw new Fail(404, "That idea does not exist.");
+    need(idea.user_id === a.id, "Only the poster can decide on interested members.");
+    const r = await c.query(
+      `update idea_interests set status = $3, decided_at = now() where idea_id = $1 and user_id = $2 returning idea_id`,
+      [ideaId, applicant, decision]
+    );
+    if (!r.rows[0]) throw new Fail(404, "That interest request does not exist.");
   },
   async send(c, a, _p, i) {
     const kind = pick(i.kind, ["checkin", "suggest", "feedback"] as const, "message");
@@ -298,6 +484,173 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     await audit(c, a, `issued a ${t.joined ? "password reset" : "new invite"} link for ${t.name}`);
     return `${t.joined ? "Password reset" : "Invite"} link for ${t.name}. It works once and expires in 7 days: /login?invite=${token}`;
   },
+  async updateProfile(c, a, p, i) {
+    person(a);
+    need(can(a.role, "profile.editOwn"));
+    const sets: string[] = [];
+    const params: unknown[] = [a.id];
+    let idx = 2;
+
+    if ("bio" in i) {
+      const rawBio = i.bio === null || i.bio === undefined ? "" : String(i.bio);
+      const cleanBio = rawBio.trim() === "" ? null : mdText(rawBio, 1, 400, "Bio");
+      sets.push(`bio = $${idx++}`);
+      params.push(cleanBio);
+    }
+    if ("cf_handle" in i) {
+      const h = typeof i.cf_handle === "string" ? i.cf_handle.trim() : "";
+      if (h && !/^[\w.-]{3,24}$/.test(h)) throw new Fail(400, "That is not a valid Codeforces handle.");
+      sets.push(`cf_handle = $${idx++}`);
+      params.push(h || null);
+      sets.push(`handle = $${idx++}`);
+      params.push(h);
+      p.handle = h;
+    }
+    if ("cf_rating" in i && i.cf_rating !== undefined) {
+      if (i.cf_rating === null || i.cf_rating === "") {
+        sets.push(`cf_rating = null`);
+      } else {
+        const r = Number(i.cf_rating);
+        if (!Number.isInteger(r) || r < 0 || r > 4500) throw new Fail(400, "Invalid Codeforces rating.");
+        sets.push(`cf_rating = $${idx++}`);
+        params.push(r);
+        sets.push(`rating = $${idx++}`);
+        params.push(r);
+      }
+    }
+    if ("problems_solved" in i && i.problems_solved !== undefined) {
+      const s = Number(i.problems_solved);
+      if (!Number.isInteger(s) || s < 0 || s > 50000) throw new Fail(400, "Invalid solved count.");
+      sets.push(`problems_solved = $${idx++}`);
+      params.push(s);
+      sets.push(`solved = greatest(solved, $${idx - 1})`);
+    }
+    if ("github_url" in i) {
+      sets.push(`github_url = $${idx++}`);
+      params.push(optionalUrl(i.github_url, "GitHub URL"));
+    }
+    if ("linkedin_url" in i) {
+      sets.push(`linkedin_url = $${idx++}`);
+      params.push(optionalUrl(i.linkedin_url, "LinkedIn URL"));
+    }
+    if ("skills" in i) {
+      if (!Array.isArray(i.skills)) throw new Fail(400, "Skills must be a list.");
+      const cleanSkills = [...new Set(i.skills.map((x) => (typeof x === "string" ? x.replace(/[\u0000-\u001f\u007f]/g, " ").trim() : "")).filter(Boolean))].slice(0, 15);
+      for (const sk of cleanSkills) if (sk.length > 40) throw new Fail(400, "Each skill must be at most 40 characters.");
+      sets.push(`skills = $${idx++}::text[]`);
+      params.push(cleanSkills);
+    }
+    if ("avatar_url" in i) {
+      sets.push(`avatar_url = $${idx++}`);
+      params.push(optionalAvatar(i.avatar_url));
+    }
+
+    if (sets.length > 0) {
+      let prevStats: { cf_rating: number | null; rating: number; problems_solved: number; solved: number; current_streak: number; streak: number; cf_handle: string | null; handle: string } | null = null;
+      if ("cf_rating" in i || "problems_solved" in i) {
+        prevStats = (await c.query(
+          `select cf_rating, rating, problems_solved, solved, current_streak, streak, cf_handle, handle from users where id = $1`,
+          [a.id]
+        )).rows[0] ?? null;
+      }
+      await c.query(`update users set ${sets.join(", ")} where id = $1`, params);
+      if (prevStats) {
+        const after = (await c.query(
+          `select cf_rating, rating, problems_solved, solved, current_streak, streak, cf_handle, handle from users where id = $1`,
+          [a.id]
+        )).rows[0];
+        if (after) {
+          const detected = detectCrossovers(
+            {
+              cf_rating: prevStats.cf_rating !== null ? Number(prevStats.cf_rating) : prevStats.rating > 0 ? Number(prevStats.rating) : null,
+              problems_solved: Math.max(Number(prevStats.problems_solved || 0), Number(prevStats.solved || 0)),
+              current_streak: Math.max(Number(prevStats.current_streak || 0), Number(prevStats.streak || 0)),
+            },
+            {
+              cf_rating: after.cf_rating !== null ? Number(after.cf_rating) : after.rating > 0 ? Number(after.rating) : null,
+              problems_solved: Math.max(Number(after.problems_solved || 0), Number(after.solved || 0)),
+              current_streak: Math.max(Number(after.current_streak || 0), Number(after.streak || 0)),
+            },
+            { cf_handle: after.cf_handle || after.handle || null, source: "profile_update" }
+          );
+          for (const m of detected) {
+            await c.query(
+              `insert into milestones (user_id, type, from_value, to_value, threshold, meta)
+               values ($1, $2, $3, $4, $5, $6::jsonb)
+               on conflict (user_id, type, to_value) do nothing`,
+              [a.id, m.type, m.from_value, m.to_value, m.threshold, JSON.stringify(m.meta)]
+            );
+          }
+        }
+      }
+    }
+  },
+  async kudosMilestone(c, a, _p, i) {
+    person(a);
+    const milestoneId = posInt(i.milestoneId, "milestone");
+    const res = await giveMilestoneKudosTx(c, a, milestoneId);
+    if (!res.ok && res.reason === "DAILY_LIMIT") {
+      throw new Fail(429, "DAILY LIMIT REACHED. TRY AGAIN TOMORROW.");
+    }
+  },
+  async createAlumniJob(c, a, _p, i) {
+    need(canFully(a.role, "alumni.job.post"), "Only alumni or admins can post alumni jobs.");
+    const company = text(i.company, 2, 100, "Company");
+    const roleTitle = text(i.role, 2, 120, "Role");
+    const url = optionalUrl(i.url, "Job URL");
+    if (!url) throw new Fail(400, "Job URL is required.");
+    const location = i.location ? text(i.location, 1, 100, "Location") : null;
+    const alumniId = isAdmin(a.role) && typeof i.alumniId === "string" && KEY.test(i.alumniId) ? i.alumniId : a.id;
+    const owner = (await c.query(`select id from users where id = $1 and not system`, [alumniId])).rows[0];
+    if (!owner) throw new Fail(404, "Target member does not exist.");
+    await c.query(
+      `insert into alumni_jobs (alumni_id, company, role, location, url, source) values ($1, $2, $3, $4, $5, 'manual')`,
+      [alumniId, company, roleTitle, location, url]
+    );
+    await audit(c, a, `posted alumni job: ${company} — ${roleTitle}`);
+  },
+  async deleteAlumniJob(c, a, _p, i) {
+    const jobId = posInt(i.jobId, "job");
+    const row = (await c.query(`select id, alumni_id, company, role from alumni_jobs where id = $1`, [jobId])).rows[0];
+    if (!row) throw new Fail(404, "That job listing does not exist.");
+    need(row.alumni_id === a.id || isAdmin(a.role), "Only the author or an admin can delete this job.");
+    await c.query(`delete from alumni_jobs where id = $1`, [jobId]);
+    await audit(c, a, `deleted alumni job #${jobId} (${row.company} — ${row.role})`);
+  },
+  async promoteMember(c, a, _p, i) {
+    need(canFully(a.role, "member.promote"), "Only the President or Super Admin can promote members.");
+    const userId = key(i.userId);
+    need(userId !== a.id, "You cannot promote yourself.");
+    const r = await c.query(
+      `update users set role = 'mentor', title = 'Mentor' where id = $1 and not system and role <> 'super_admin' returning name`,
+      [userId]
+    );
+    if (!r.rows[0]) throw new Fail(404, "That member does not exist, or cannot be modified.");
+    await audit(c, a, `promoted ${r.rows[0].name} to Mentor`);
+  },
+  async makeAlumni(c, a, _p, i) {
+    need(canFully(a.role, "member.makeAlumni"), "Only the President or Super Admin can transition members to alumni.");
+    const userId = key(i.userId);
+    need(userId !== a.id, "You cannot transition your own account.");
+    const r = await c.query(
+      `update users set role = 'alumni', title = 'Alumni' where id = $1 and not system and role <> 'super_admin' returning name`,
+      [userId]
+    );
+    if (!r.rows[0]) throw new Fail(404, "That member does not exist, or cannot be modified.");
+    await audit(c, a, `transitioned ${r.rows[0].name} to Alumni`);
+  },
+  async deactivateMember(c, a, _p, i) {
+    need(canFully(a.role, "member.deactivate"), "Only the President or Super Admin can deactivate members.");
+    const userId = key(i.userId);
+    need(userId !== a.id, "You cannot deactivate yourself.");
+    const r = await c.query(
+      `update users set suspended = true where id = $1 and not system and (role <> 'super_admin' or $2) returning name`,
+      [userId, a.role === "super_admin"]
+    );
+    if (!r.rows[0]) throw new Fail(404, "That member does not exist, or is a Super Admin.");
+    await c.query(`delete from sessions where user_id = $1`, [userId]);
+    await audit(c, a, `deactivated ${r.rows[0].name}`);
+  },
 };
 export const actionTypes = Object.keys(handlers);
 
@@ -338,5 +691,682 @@ export async function exportMembers(userId: string) {
     // A leading = + - @ would run as a formula when the file is opened in a spreadsheet.
     const cell = (v: unknown) => { const t = String(v); return `"${(/^[=+\-@\t\r]/.test(t) ? "'" + t : t).replaceAll('"', '""')}"`; };
     return "name,handle,batch,dept,rating,solved,status\n" + rows.map((r) => [r.name, r.handle, r.batch, r.dept, r.rating, r.solved, r.status].map(cell).join(",")).join("\n") + "\n";
+  });
+}
+
+/** Cursor-paginated Feed posts for infinite scroll. */
+export async function listFeedPosts(
+  db: Db,
+  userId: string,
+  input: { q?: string; category?: string; sort?: string; cursor?: string | number | null; limit?: number } = {}
+): Promise<{ items: FeedPostSummary[]; nextCursor: string | null }> {
+  const limit = Math.min(50, Math.max(1, Number(input.limit) || 20));
+  const q = typeof input.q === "string" ? input.q.trim() : "";
+  const rawCat = typeof input.category === "string" ? input.category.trim().toLowerCase() : "";
+  const category = rawCat && rawCat !== "all" ? FEED_CAT_ALIAS[rawCat] ?? null : null;
+  const sort = input.sort === "top" ? "top" : "new";
+  const where: string[] = [];
+  const params: unknown[] = [userId];
+  let idx = 2;
+
+  if (q) {
+    where.push(`(fp.title ilike $${idx} or fp.body_md ilike $${idx})`);
+    params.push(`%${q}%`);
+    idx++;
+  }
+  if (category) {
+    where.push(`fp.category = $${idx}`);
+    params.push(category);
+    idx++;
+  }
+  if (input.cursor !== undefined && input.cursor !== null && String(input.cursor).trim() !== "") {
+    if (sort === "top") {
+      const m = /^(-?\d+):(\d+)$/.exec(String(input.cursor));
+      if (m) {
+        where.push(`(fp.score < $${idx} or (fp.score = $${idx} and fp.id < $${idx + 1}))`);
+        params.push(Number(m[1]), Number(m[2]));
+        idx += 2;
+      }
+    } else {
+      const cId = Number(input.cursor);
+      if (Number.isInteger(cId) && cId > 0) {
+        where.push(`fp.id < $${idx}`);
+        params.push(cId);
+        idx++;
+      }
+    }
+  }
+
+  params.push(limit + 1);
+  const orderBy = sort === "top" ? `fp.score desc, fp.id desc` : `fp.created_at desc, fp.id desc`;
+  const sql = `
+    select fp.id, fp.user_id, u.name as author_name, greatest(u.problems_solved, u.solved) as author_solved,
+      u.rating as author_rating, u.title as author_role, u.avatar_url as author_avatar,
+      fp.title, fp.body_md, fp.category, fp.score,
+      coalesce(v.value, 0)::int as my_vote,
+      fp.created_at, fp.updated_at
+    from feed_posts fp
+    join users u on u.id = fp.user_id
+    left join feed_votes v on v.post_id = fp.id and v.user_id = $1
+    ${where.length ? "where " + where.join(" and ") : ""}
+    order by ${orderBy}
+    limit $${idx}`;
+  const rows = (await db.query(sql, params)).rows as FeedPostSummary[];
+  const hasMore = rows.length > limit;
+  const items = hasMore ? rows.slice(0, limit) : rows;
+  const last = items[items.length - 1];
+  const nextCursor = hasMore && last ? (sort === "top" ? `${last.score}:${last.id}` : String(last.id)) : null;
+  return { items, nextCursor };
+}
+
+/** Full detail for a single Feed post modal (body, author contribution stats, author recent posts). */
+export async function getFeedPostDetail(db: Db, userId: string, input: { postId: number | string }): Promise<FeedPostDetail> {
+  const postId = posInt(input.postId, "post");
+  const row = (await db.query(
+    `select fp.id, fp.user_id, u.name as author_name, greatest(u.problems_solved, u.solved) as author_solved,
+        u.rating as author_rating, u.title as author_role, u.avatar_url as author_avatar, u.streak as author_streak,
+        fp.title, fp.body_md, fp.category, fp.score,
+        coalesce(v.value, 0)::int as my_vote,
+        (select count(*)::int from feed_posts x where x.user_id = fp.user_id) as author_posts_count,
+        exists (select 1 from feed_reports fr where fr.post_id = fp.id and fr.user_id = $1) as reported_by_me,
+        fp.created_at, fp.updated_at
+      from feed_posts fp
+      join users u on u.id = fp.user_id
+      left join feed_votes v on v.post_id = fp.id and v.user_id = $1
+      where fp.id = $2`,
+    [userId, postId]
+  )).rows[0];
+  if (!row) throw new Fail(404, "That post does not exist.");
+
+  const recent = (await db.query(
+    `select id, title, created_at from feed_posts where user_id = $1 and id <> $2 order by created_at desc limit 4`,
+    [row.user_id, postId]
+  )).rows as { id: number; title: string; created_at: string }[];
+
+  return { ...row, author_recent: recent };
+}
+
+/** Cursor-paginated Ideas list (merged with Teammates). Never returns interested[] member list. */
+export async function listIdeas(
+  db: Db,
+  userId: string,
+  input: { q?: string; type?: string; status?: string; sort?: string; cursor?: string | number | null; limit?: number } = {}
+): Promise<{ items: IdeaSummary[]; nextCursor: string | null }> {
+  const limit = Math.min(50, Math.max(1, Number(input.limit) || 20));
+  const q = typeof input.q === "string" ? input.q.trim() : "";
+  const type = typeof input.type === "string" && IDEA_TYPES.includes(input.type as IdeaType) ? (input.type as IdeaType) : null;
+  const status = typeof input.status === "string" && IDEA_STATUSES.includes(input.status as IdeaStatus) ? (input.status as IdeaStatus) : null;
+  const sort = input.sort === "new" ? "new" : "top";
+  const where: string[] = [];
+  const params: unknown[] = [userId];
+  let idx = 2;
+
+  if (q) {
+    where.push(`(i.title ilike $${idx} or i.body_md ilike $${idx})`);
+    params.push(`%${q}%`);
+    idx++;
+  }
+  if (type) {
+    where.push(`i.type = $${idx}`);
+    params.push(type);
+    idx++;
+  }
+  if (status) {
+    where.push(`i.status = $${idx}`);
+    params.push(status);
+    idx++;
+  }
+
+  let cursorClause = "";
+  if (input.cursor !== undefined && input.cursor !== null && String(input.cursor).trim() !== "") {
+    if (sort === "top") {
+      const m = /^(\d+):(\d+)$/.exec(String(input.cursor));
+      if (m) {
+        cursorClause = `where (upvotes < $${idx} or (upvotes = $${idx} and id < $${idx + 1}))`;
+        params.push(Number(m[1]), Number(m[2]));
+        idx += 2;
+      }
+    } else {
+      const cId = Number(input.cursor);
+      if (Number.isInteger(cId) && cId > 0) {
+        where.push(`i.id < $${idx}`);
+        params.push(cId);
+        idx++;
+      }
+    }
+  }
+
+  params.push(limit + 1);
+  const sql = `
+    with base as (
+      select i.id, i.user_id, u.name as author_name, greatest(u.problems_solved, u.solved) as author_solved,
+        u.rating as author_rating, u.avatar_url as author_avatar,
+        i.title, i.body_md, i.type, i.status, i.roles,
+        (select count(*)::int from reactions r where r.target = 'idea:' || i.id) as upvotes,
+        (select count(*)::int from community_comments cc where cc.target_type = 'idea' and cc.target_id = i.id) as comment_count,
+        (select count(*)::int from idea_interests ii where ii.idea_id = i.id) as interested_count,
+        (select count(*)::int from idea_interests ii where ii.idea_id = i.id and ii.status = 'accepted') as accepted_count,
+        (select ii.status from idea_interests ii where ii.idea_id = i.id and ii.user_id = $1) as my_interest,
+        i.created_at, i.updated_at
+      from ideas i
+      join users u on u.id = i.user_id
+      ${where.length ? "where " + where.join(" and ") : ""}
+    )
+    select * from base
+    ${cursorClause}
+    order by ${sort === "top" ? "upvotes desc, id desc" : "created_at desc, id desc"}
+    limit $${idx}`;
+  const rows = (await db.query(sql, params)).rows as IdeaSummary[];
+  const hasMore = rows.length > limit;
+  const items = hasMore ? rows.slice(0, limit) : rows;
+  const last = items[items.length - 1];
+  const nextCursor = hasMore && last ? (sort === "top" ? `${last.upvotes}:${last.id}` : String(last.id)) : null;
+  return { items, nextCursor };
+}
+
+/**
+ * Idea detail for modal. Marks idea as viewed server-side.
+ * STRICT PRIVACY: `interested` is queried and included ONLY when viewerId === idea.user_id.
+ */
+export async function getIdeaDetail(db: Db, viewerId: string, input: { ideaId: number | string }): Promise<IdeaDetail> {
+  const ideaId = posInt(input.ideaId, "idea");
+  const row = (await db.query(
+    `select i.id, i.user_id, u.name as author_name, greatest(u.problems_solved, u.solved) as author_solved,
+        u.rating as author_rating, u.avatar_url as author_avatar,
+        i.title, i.body_md, i.type, i.status, i.roles,
+        (select count(*)::int from reactions r where r.target = 'idea:' || i.id) as upvotes,
+        (select count(*)::int from community_comments cc where cc.target_type = 'idea' and cc.target_id = i.id) as comment_count,
+        (select count(*)::int from idea_interests ii where ii.idea_id = i.id) as interested_count,
+        (select count(*)::int from idea_interests ii where ii.idea_id = i.id and ii.status = 'accepted') as accepted_count,
+        (select ii.status from idea_interests ii where ii.idea_id = i.id and ii.user_id = $1) as my_interest,
+        i.created_at, i.updated_at
+      from ideas i
+      join users u on u.id = i.user_id
+      where i.id = $2`,
+    [viewerId, ideaId]
+  )).rows[0] as IdeaSummary | undefined;
+  if (!row) throw new Fail(404, "That idea does not exist.");
+
+  // Record view server-side on modal open.
+  await db.query(`insert into idea_views (idea_id, user_id) values ($1, $2) on conflict do nothing`, [ideaId, viewerId]);
+
+  const comments = (await db.query(
+    `select cc.id, cc.user_id, u.name as author_name, greatest(u.problems_solved, u.solved) as author_solved,
+        u.avatar_url as author_avatar, cc.body, cc.created_at
+      from community_comments cc
+      join users u on u.id = cc.user_id
+      where cc.target_type = 'idea' and cc.target_id = $1
+      order by cc.id asc`,
+    [ideaId]
+  )).rows as CommunityComment[];
+
+  const detail: IdeaDetail = { ...row, comments };
+  // Enforce server-side: interested[] returned ONLY if viewerId === idea.user_id.
+  if (viewerId === row.user_id) {
+    detail.interested = (await db.query(
+      `select ii.user_id, u.name, u.rating, greatest(u.problems_solved, u.solved) as problems_solved,
+          u.avatar_url, ii.response, ii.status, ii.created_at, ii.decided_at
+        from idea_interests ii
+        join users u on u.id = ii.user_id
+        where ii.idea_id = $1
+        order by case ii.status when 'pending' then 0 when 'accepted' then 1 else 2 end, ii.created_at desc`,
+      [ideaId]
+    )).rows as IdeaInterestRow[];
+  }
+  return detail;
+}
+
+/**
+ * Paginated, filtered member roster for `/app/members`.
+ * Composes all filters (q, rating tier title, skill, batch, type) with AND.
+ */
+export async function listMembers(
+  db: Db,
+  _viewerId: string,
+  input: { q?: string; rating?: string; skill?: string; batch?: number | string; type?: string; page?: number; pageSize?: number } = {}
+): Promise<{ members: MemberSummary[]; total: number; clubTotal: number; hasMore: boolean; skills: string[]; batches: number[] }> {
+  const pageSize = Math.min(48, Math.max(1, Number(input.pageSize) || 16));
+  const page = Math.max(0, Math.floor(Number(input.page) || 0));
+  const q = typeof input.q === "string" ? input.q.trim() : "";
+  const rating = typeof input.rating === "string" ? input.rating.trim() : "";
+  const skill = typeof input.skill === "string" ? input.skill.trim() : "";
+  const batchNum = input.batch !== undefined && input.batch !== "" && input.batch !== null ? Number(input.batch) : NaN;
+  const type = typeof input.type === "string" ? input.type.trim().toLowerCase() : "all";
+
+  const where: string[] = [`not u.system`, `not u.suspended`];
+  const params: unknown[] = [];
+  let idx = 1;
+
+  if (q) {
+    where.push(`(u.name ilike $${idx} or coalesce(nullif(u.cf_handle, ''), u.handle) ilike $${idx})`);
+    params.push(`%${q}%`);
+    idx++;
+  }
+
+  if (rating && rating.toLowerCase() !== "all ratings") {
+    if (rating.toLowerCase() === UNRATED_RANK.title.toLowerCase()) {
+      where.push(`(greatest(u.problems_solved, u.solved) = 0 and coalesce(nullif(u.cf_handle, ''), u.handle, '') = '')`);
+    } else {
+      const tier = RANKS.find((r) => r.title.toLowerCase() === rating.toLowerCase());
+      if (tier) {
+        if (tier.min === 0) {
+          where.push(`(greatest(u.problems_solved, u.solved) between 0 and $${idx} and not (greatest(u.problems_solved, u.solved) = 0 and coalesce(nullif(u.cf_handle, ''), u.handle, '') = ''))`);
+          params.push(tier.max);
+          idx++;
+        } else if (Number.isFinite(tier.max)) {
+          where.push(`greatest(u.problems_solved, u.solved) between $${idx} and $${idx + 1}`);
+          params.push(tier.min, tier.max);
+          idx += 2;
+        } else {
+          where.push(`greatest(u.problems_solved, u.solved) >= $${idx}`);
+          params.push(tier.min);
+          idx++;
+        }
+      }
+    }
+  }
+
+  if (skill && skill.toLowerCase() !== "any skill") {
+    where.push(`$${idx} = any(u.skills)`);
+    params.push(skill);
+    idx++;
+  }
+
+  if (Number.isInteger(batchNum) && batchNum > 0) {
+    where.push(`u.batch = $${idx}`);
+    params.push(batchNum);
+    idx++;
+  }
+
+  if (type === "alumni") {
+    where.push(`u.role = 'alumni'`);
+  } else if (type === "current") {
+    where.push(`u.role <> 'alumni'`);
+  }
+
+  const whereSql = where.join(" and ");
+  const [countRes, metaRes, rowsRes] = await Promise.all([
+    db.query(`select count(*)::int as total from users u where ${whereSql}`, params),
+    db.query(
+      `select
+         count(*)::int as club_total,
+         coalesce((select json_agg(s order by s) from (select distinct unnest(skills) as s from users where not system and not suspended) x), '[]'::json) as skills,
+         coalesce((select json_agg(b order by b desc) from (select distinct batch as b from users where not system and not suspended and batch > 0) y), '[]'::json) as batches
+       from users where not system and not suspended`
+    ),
+    db.query(
+      `select u.id, u.member_no as no, u.name,
+         coalesce(nullif(u.cf_handle, ''), u.handle) as handle,
+         nullif(coalesce(nullif(u.cf_handle, ''), u.handle), '') as cf_handle,
+         u.title as role,
+         (u.role = 'alumni') as is_alumni,
+         u.batch, u.dept, u.squad,
+         coalesce(u.cf_rating, u.rating) as rating,
+         coalesce(u.cf_rating, nullif(u.rating, 0)) as cf_rating,
+         greatest(u.problems_solved, u.solved) as problems_solved,
+         greatest(u.current_streak, u.streak) as current_streak,
+         u.contests_participated,
+         u.skills,
+         u.avatar_url
+       from users u
+       where ${whereSql}
+       order by coalesce(u.cf_rating, u.rating) desc, greatest(u.problems_solved, u.solved) desc, u.name asc
+       limit $${idx} offset $${idx + 1}`,
+      [...params, pageSize, page * pageSize]
+    ),
+  ]);
+
+  const total = Number(countRes.rows[0]?.total ?? 0);
+  const clubTotal = Number(metaRes.rows[0]?.club_total ?? 0);
+  const skills = (metaRes.rows[0]?.skills ?? []) as string[];
+  const batches = (metaRes.rows[0]?.batches ?? []) as number[];
+  const members = rowsRes.rows as MemberSummary[];
+  const hasMore = page * pageSize + members.length < total;
+
+  return { members, total, clubTotal, hasMore, skills, batches };
+}
+
+/**
+ * Full resume payload for a single member profile modal.
+ * Returns private fields (e.g. `email`) ONLY when `viewerId === userId`.
+ */
+export async function getMemberProfile(db: Db, viewerId: string, input: { userId: string }): Promise<MemberProfile> {
+  const userId = key(input.userId);
+  const row = (await db.query(
+    `select u.id, u.member_no as no, u.name, u.email,
+       coalesce(nullif(u.cf_handle, ''), u.handle) as handle,
+       nullif(coalesce(nullif(u.cf_handle, ''), u.handle), '') as cf_handle,
+       u.title as role,
+       (u.role = 'alumni') as is_alumni,
+       u.batch, u.dept, u.squad,
+       coalesce(u.cf_rating, u.rating) as rating,
+       coalesce(u.cf_rating, nullif(u.rating, 0)) as cf_rating,
+       greatest(u.problems_solved, u.solved) as problems_solved,
+       greatest(u.current_streak, u.streak) as current_streak,
+       u.contests_participated,
+       u.skills,
+       u.avatar_url,
+       u.bio,
+       u.github_url,
+       u.linkedin_url,
+       u.experience,
+       u.contest_history
+     from users u
+     where u.id = $1 and not u.system and not u.suspended`,
+    [userId]
+  )).rows[0];
+  if (!row) throw new Fail(404, "That member does not exist.");
+
+  const [activityRes, prepRes, jobsRes] = await Promise.all([
+    db.query(
+      `select * from (
+         select 'feed'::text as kind, id, title, created_at from feed_posts where user_id = $1
+         union all
+         select 'idea'::text as kind, id, title, created_at from ideas where user_id = $1
+       ) x
+       order by created_at desc
+       limit 5`,
+      [userId]
+    ),
+    row.is_alumni
+      ? db.query(
+          `select id, title, created_at from feed_posts where user_id = $1 order by created_at desc limit 10`,
+          [userId]
+        )
+      : Promise.resolve({ rows: [] }),
+    row.is_alumni
+      ? db.query(
+          `select id, alumni_id, company, role, location, url, source, fetched_at, created_at
+           from alumni_jobs
+           where alumni_id = $1
+           order by created_at desc`,
+          [userId]
+        )
+      : Promise.resolve({ rows: [] }),
+  ]);
+
+  const experience = Array.isArray(row.experience) ? (row.experience as MemberExperience[]) : [];
+  const contest_history = Array.isArray(row.contest_history) ? (row.contest_history as MemberContestRow[]) : [];
+  const recent_activity = activityRes.rows as MemberActivityItem[];
+
+  const profile: MemberProfile = {
+    id: row.id,
+    no: row.no,
+    name: row.name,
+    handle: row.handle,
+    cf_handle: row.cf_handle,
+    role: row.role,
+    is_alumni: Boolean(row.is_alumni),
+    batch: row.batch,
+    dept: row.dept,
+    squad: row.squad,
+    rating: row.rating,
+    cf_rating: row.cf_rating,
+    problems_solved: row.problems_solved,
+    current_streak: row.current_streak,
+    contests_participated: row.contests_participated,
+    skills: Array.isArray(row.skills) ? row.skills : [],
+    avatar_url: row.avatar_url ?? null,
+    bio: row.bio ?? null,
+    github_url: row.github_url ?? null,
+    linkedin_url: row.linkedin_url ?? null,
+    experience,
+    contest_history,
+    recent_activity,
+  };
+
+  if (viewerId === userId) {
+    profile.email = row.email;
+  }
+
+  if (profile.is_alumni) {
+    profile.interview_prep = prepRes.rows as { id: number; title: string; created_at: string }[];
+    const allJobs = jobsRes.rows as AlumniJob[];
+    profile.jobs_fetched = allJobs.filter((j) => j.source === "fetched");
+    profile.jobs_manual = allJobs.filter((j) => j.source === "manual");
+  }
+
+  return profile;
+}
+
+type BoardSpec = { provider: "greenhouse" | "lever"; slug: string; company: string };
+
+/**
+ * On-demand / cron fetch of public Greenhouse / Lever job boards for an alumni member.
+ * Inserts new listings into `alumni_jobs` with `source = 'fetched'`, deduplicated by URL.
+ */
+export async function fetchAlumniJobs(
+  db: Db,
+  actorId: string,
+  input: { userId: string; boards?: BoardSpec[] }
+): Promise<{ added: number; jobs: AlumniJob[] }> {
+  const userId = key(input.userId);
+  const actor = (await db.query(`select id, role, name from users where id = $1 and not suspended`, [actorId])).rows[0];
+  if (!actor) throw new Fail(401, "Sign in again.");
+  need(actor.id === userId || isAdmin(actor.role), "Only the alumni member or an admin can refresh fetched jobs.");
+
+  const target = (await db.query(`select id, role from users where id = $1 and not system`, [userId])).rows[0];
+  if (!target) throw new Fail(404, "That member does not exist.");
+  need(target.role === "alumni", "Job board syncing is only available for alumni.");
+
+  const boards: BoardSpec[] =
+    Array.isArray(input.boards) && input.boards.length > 0
+      ? input.boards.slice(0, 5)
+      : [
+          { provider: "greenhouse", slug: "stripe", company: "Stripe" },
+          { provider: "lever", slug: "figma", company: "Figma" },
+        ];
+
+  let added = 0;
+  for (const b of boards) {
+    if (!/^[a-z0-9_-]{1,60}$/i.test(b.slug)) continue;
+    try {
+      let parsed: { role: string; location: string | null; url: string }[] = [];
+      if (b.provider === "greenhouse") {
+        const res = await fetch(`https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(b.slug)}/jobs`, {
+          signal: AbortSignal.timeout(5000),
+        });
+        if (res.ok) {
+          const json = (await res.json()) as { jobs?: { title?: string; location?: { name?: string }; absolute_url?: string }[] };
+          parsed = (json.jobs ?? [])
+            .filter((j) => j.title && j.absolute_url)
+            .slice(0, 5)
+            .map((j) => ({
+              role: String(j.title).slice(0, 120),
+              location: j.location?.name ? String(j.location.name).slice(0, 100) : null,
+              url: String(j.absolute_url).slice(0, 400),
+            }));
+        }
+      } else if (b.provider === "lever") {
+        const res = await fetch(`https://api.lever.co/v0/postings/${encodeURIComponent(b.slug)}?mode=json`, {
+          signal: AbortSignal.timeout(5000),
+        });
+        if (res.ok) {
+          const json = (await res.json()) as { text?: string; categories?: { location?: string }; hostedUrl?: string }[];
+          if (Array.isArray(json)) {
+            parsed = json
+              .filter((j) => j.text && j.hostedUrl)
+              .slice(0, 5)
+              .map((j) => ({
+                role: String(j.text).slice(0, 120),
+                location: j.categories?.location ? String(j.categories.location).slice(0, 100) : null,
+                url: String(j.hostedUrl).slice(0, 400),
+              }));
+          }
+        }
+      }
+      for (const item of parsed) {
+        const exists = (
+          await db.query(`select 1 from alumni_jobs where alumni_id = $1 and url = $2`, [userId, item.url])
+        ).rowCount! > 0;
+        if (!exists) {
+          await db.query(
+            `insert into alumni_jobs (alumni_id, company, role, location, url, source, fetched_at) values ($1, $2, $3, $4, $5, 'fetched', now())`,
+            [userId, b.company.slice(0, 100), item.role, item.location, item.url]
+          );
+          added++;
+        }
+      }
+    } catch {
+      // Public job board unreachable or timed out; continue gracefully without failing.
+    }
+  }
+
+  const jobs = (
+    await db.query(
+      `select id, alumni_id, company, role, location, url, source, fetched_at, created_at
+       from alumni_jobs where alumni_id = $1 and source = 'fetched' order by created_at desc`,
+      [userId]
+    )
+  ).rows as AlumniJob[];
+
+  return { added, jobs };
+}
+
+export type KudosMilestoneResult =
+  | {
+      ok: true;
+      alreadyGiven: boolean;
+      milestoneId: number;
+      kudosCount: number;
+      hasKudos: true;
+      kudosToday: number;
+    }
+  | {
+      ok: false;
+      reason: "DAILY_LIMIT";
+      kudosToday: number;
+    };
+
+/**
+ * Returns the number of milestone kudos `userId` has given today (UTC day, resets at 00:00 UTC).
+ */
+export async function getKudosTodayCount(db: Db, userId: string): Promise<number> {
+  const row = (
+    await db.query(
+      `select count(*)::int as n
+       from milestone_kudos
+       where user_id = $1
+         and created_at >= (date_trunc('day', now() at time zone 'UTC') at time zone 'UTC')`,
+      [userId]
+    )
+  ).rows[0];
+  return Number(row?.n ?? 0);
+}
+
+/**
+ * Lists recent milestones from the last 14 days, newest first, capped at `limit` (default 5).
+ * Includes live kudos counts, whether the viewer has already given kudos, and (for the owner)
+ * up to 3 recent giver names.
+ */
+export async function listRecentMilestones(
+  db: Db,
+  userId: string,
+  input: { limit?: number } = {}
+): Promise<MilestoneDTO[]> {
+  const limit = Math.min(50, Math.max(1, Math.floor(Number(input.limit) || 5)));
+  const rows = (
+    await db.query(
+      `select m.id, m.user_id,
+         u.name as member_name,
+         u.avatar_url as member_avatar,
+         greatest(u.problems_solved, u.solved) as member_solved,
+         nullif(coalesce(nullif(u.cf_handle, ''), u.handle), '') as member_cf_handle,
+         coalesce(u.cf_rating, u.rating) as member_rating,
+         m.type, m.from_value, m.to_value, m.threshold, m.meta, m.created_at,
+         (select count(*)::int from milestone_kudos mk where mk.milestone_id = m.id) as kudos_count,
+         exists (select 1 from milestone_kudos mk where mk.milestone_id = m.id and mk.user_id = $1) as has_kudos,
+         case when m.user_id = $1 then (
+           select coalesce(json_agg(g.name order by mk.created_at desc), '[]'::json)
+           from (
+             select user_id, created_at from milestone_kudos where milestone_id = m.id and user_id <> $1 order by created_at desc limit 3
+           ) mk
+           join users g on g.id = mk.user_id
+         ) else '[]'::json end as recent_givers
+       from milestones m
+       join users u on u.id = m.user_id
+       where m.created_at > now() - ($2 || ' days')::interval
+         and not u.system and not u.suspended
+       order by m.created_at desc, m.id desc
+       limit $3`,
+      [userId, String(MILESTONE_FRESHNESS_DAYS), limit]
+    )
+  ).rows as MilestoneDTO[];
+  return rows;
+}
+
+/**
+ * Shared transactional implementation for giving a permanent, non-revocable kudos
+ * on a milestone. Caller must already hold `FOR UPDATE` lock on the acting user's row.
+ */
+async function giveMilestoneKudosTx(c: Db, a: Actor, milestoneId: number): Promise<KudosMilestoneResult> {
+  const milestone = (
+    await c.query(`select id, user_id, type, to_value from milestones where id = $1`, [milestoneId])
+  ).rows[0];
+  if (!milestone) throw new Fail(404, "That milestone does not exist.");
+  need(milestone.user_id !== a.id, "You cannot give kudos to your own milestone.");
+
+  // Deduplication check: replaying an already-given milestone returns idempotently without hitting the cap.
+  const existing = (
+    await c.query(`select 1 from milestone_kudos where milestone_id = $1 and user_id = $2`, [milestoneId, a.id])
+  ).rowCount! > 0;
+  if (existing) {
+    const [countRes, todayCount] = await Promise.all([
+      c.query(`select count(*)::int as n from milestone_kudos where milestone_id = $1`, [milestoneId]),
+      getKudosTodayCount(c, a.id),
+    ]);
+    return {
+      ok: true,
+      alreadyGiven: true,
+      milestoneId,
+      kudosCount: Number(countRes.rows[0]?.n ?? 0),
+      hasKudos: true,
+      kudosToday: todayCount,
+    };
+  }
+
+  // Server-side daily cap guard (20/day UTC, enforced under user row lock).
+  const todayCount = await getKudosTodayCount(c, a.id);
+  if (todayCount >= DAILY_KUDOS_CAP) {
+    return { ok: false, reason: "DAILY_LIMIT", kudosToday: todayCount };
+  }
+
+  const ins = await c.query(
+    `insert into milestone_kudos (milestone_id, user_id)
+     values ($1, $2)
+     on conflict (milestone_id, user_id) do nothing
+     returning milestone_id`,
+    [milestoneId, a.id]
+  );
+  const inserted = (ins.rowCount ?? 0) > 0;
+  const countRes = await c.query(`select count(*)::int as n from milestone_kudos where milestone_id = $1`, [milestoneId]);
+  return {
+    ok: true,
+    alreadyGiven: !inserted,
+    milestoneId,
+    kudosCount: Number(countRes.rows[0]?.n ?? 0),
+    hasKudos: true,
+    kudosToday: todayCount + (inserted ? 1 : 0),
+  };
+}
+
+/**
+ * Gives one permanent kudos on a specific milestone.
+ * Enforces server-side auth, non-system account, non-self check, deduplication (`ON CONFLICT DO NOTHING`),
+ * and the 20/day UTC cap. Awards +2 XP and an inbox notification to the milestone owner on first kudos only.
+ */
+export async function kudosMilestone(
+  userId: string,
+  input: { milestoneId: number | string }
+): Promise<KudosMilestoneResult> {
+  const milestoneId = posInt(input.milestoneId, "milestone");
+  return tx(async (c) => {
+    const u = (
+      await c.query(`select id, role, name, system from users where id = $1 and not suspended for update`, [userId])
+    ).rows[0];
+    if (!u) throw new Fail(401, "Sign in again.");
+    const actor: Actor = { id: u.id, role: u.role, name: u.name, system: u.system };
+    person(actor);
+    return giveMilestoneKudosTx(c, actor, milestoneId);
   });
 }

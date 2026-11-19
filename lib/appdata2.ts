@@ -89,5 +89,4 @@ export const prints = [{ id: "pr1", team: "FEC_Overflow", pages: 3, desk: "L1-11
 
 export const cols = ["To do", "Doing", "Done"];
 export const groupsData = [["Competitive Programming", "nadia", 96], ["Web Engineering", "sadia", 41], ["AI / ML", "anika", 33], ["Game Dev", "shuvo", 18], ["Security", "farhan", 22]] as const;
-export const teammatePosts = [{ id: "tp1", by: "priya", text: "Need a third for Winter Hack Night: someone who likes frontends", tags: ["Hackathon", "Web"] }, { id: "tp2", by: "zahid", text: "Looking for two for the intra-college contest, rating 900–1200", tags: ["Contest", "CP"] }, { id: "tp3", by: "shuvo", text: "Game jam team needs a pixel artist who can code a little", tags: ["Game dev"] }];
 export const volunteerShifts = [["Registration desk", "08:30–10:00", 4, 3], ["Balloon runner", "10:00–15:00", 12, 9], ["Print runner", "10:00–15:00", 4, 4], ["Ceremony and prizes", "15:00–17:00", 6, 2]] as const;

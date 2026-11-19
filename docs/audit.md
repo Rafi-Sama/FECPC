@@ -34,7 +34,7 @@ In critical user journeys, the user interface simulates interactions by writing 
 2. **Broken Member CSV Export API Contract ([MEM-002](#finding-mem-002)):** The admin interface issues a `POST` request to `/api/export/members`, but the route handler only defines a `GET` method. The member export functionality fails with HTTP 405 (Method Not Allowed).
 3. **Missing Event Capacity and Waitlist Enforcement ([EVT-001](#finding-evt-001)):** Backend event registration (`server/actions.ts`) lacks seat capacity checks. The frontend UI displays a "Join waitlist" button when seats are full, but clicking it unconditionally inserts an active registration into the database, bypassing all attendance limits.
 4. **Hardcoded Single-Event Attendance Room Code ([EVT-002](#finding-evt-002)):** Attendance validation in `server/actions.ts` is hardcoded to a single global constant (`ATTENDANCE = { event: "dp-bootcamp", code: "K74QX2" }`). Event organisers cannot generate codes for any other event without modifying server source code.
-5. **Ballot Privacy Breach in Committee Elections ([COM-001](#finding-com-001)):** The UI guarantees that "Nobody, officers included, is shown how you voted," but the backend persists votes in `votes (user_id, poll_id, option)` where `user_id` is the primary key. Individual voting choices are directly linked to voter identities in the database.
+5. ~~**Ballot Privacy Breach in Committee Elections ([COM-001](#finding-com-001)):**~~ **[OBSOLETE]** The Election tab, candidate cards, and `vote({ poll: "election" })` backend action were removed in the Community redesign.
 6. **Decoupled Financial Ledger & Incomplete Invoicing ([FIN-001](#finding-fin-001)):** The "Club fund", "Cash flow", "Budgets", and "Transparency" tabs display hardcoded figures from `server/data.ts`. Approving expenses or verifying payments has zero effect on account balances or ledger entries. Furthermore, events with non-zero registration fees (e.g., `intra-contest` ৳200) generate no payable invoices, preventing fee collection.
 
 ### 1.4 Overall Production Readiness
@@ -231,11 +231,11 @@ flowchart TD
 
 #### Detailed Findings
 
-##### Finding COM-001: De-Anonymized Committee Election Voting
+##### Finding COM-001: De-Anonymized Committee Election Voting — **OBSOLETE**
 - **Module:** Community / Election
-- **Implementation Status:** Partially Implemented / Security Risk
-- **User Relevance:** ESSENTIAL
-- **Priority:** P0
+- **Implementation Status:** **OBSOLETE** (Election feature removed entirely from UI, routes, `lib/appdata.ts`, `lib/xp.ts`, and `server/actions.ts` in the Community redesign)
+- **User Relevance:** N/A (Removed)
+- **Priority:** Closed / Obsolete
 - **Source Location:** [app/app/community/page.tsx#L50-L54](file:///home/light/Work/working-on/FECPC/app/app/community/page.tsx#L50-L54), [server/actions.ts#L121-L131](file:///home/light/Work/working-on/FECPC/server/actions.ts#L121-L131), [server/schema.sql#L31](file:///home/light/Work/working-on/FECPC/server/schema.sql#L31)
 - **Evidence & Explanation:**  
   The interface explicitly promises secrecy:
@@ -860,7 +860,7 @@ To support a production release, the following tables must be added to `schema.s
 - [ ] **Fix Member CSV export HTTP method contract ([MEM-002](#finding-mem-002))** — **BLOCKING**
 - [ ] **Enforce backend seat capacity checks on event registrations ([EVT-001](#finding-evt-001))** — **BLOCKING**
 - [ ] **Replace hardcoded single-event room code with dynamic session codes ([EVT-002](#finding-evt-002))** — **BLOCKING**
-- [ ] **Separate voter identity from election ballot storage in database ([COM-001](#finding-com-001))** — **BLOCKING**
+- [x] ~~**Separate voter identity from election ballot storage in database ([COM-001](#finding-com-001))**~~ — **OBSOLETE** (Election feature removed in Community redesign)
 - [ ] **Connect financial balance accounts & ledger to payment/expense decisions ([FIN-001](#finding-fin-001))** — **BLOCKING**
 - [ ] **Create relational tables for Events and Invoices ([EVT-003](#finding-evt-003), [FIN-002](#finding-fin-002))** — **BLOCKING**
 - [ ] Deprecate or remove irrelevant simulated modules (Alumni & Jobs, Wiki, Feed, Groups).

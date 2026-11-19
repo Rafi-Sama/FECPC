@@ -11,5 +11,10 @@ test("matrix matches the spec's risky cells", () => {
   assert.equal(can("mentor", "mentees.view"), "scope");
   assert.equal(can("secretary", "audit.view"), false);
   for (const r of roles) assert.equal(can(r, "profile.own"), true);
+  for (const r of roles) assert.equal(can(r, "profile.editOwn"), true);
   assert.deepEqual(roles.filter((r) => canFully(r, "roles.assign")), ["president", "super_admin"]);
+  assert.deepEqual(roles.filter((r) => canFully(r, "member.promote")), ["president", "super_admin"]);
+  assert.deepEqual(roles.filter((r) => canFully(r, "member.makeAlumni")), ["president", "super_admin"]);
+  assert.deepEqual(roles.filter((r) => canFully(r, "member.deactivate")), ["president", "super_admin"]);
+  assert.deepEqual(roles.filter((r) => canFully(r, "alumni.job.post")), ["alumni", "president", "super_admin"]);
 });

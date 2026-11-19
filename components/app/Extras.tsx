@@ -6,7 +6,7 @@ import { toggle, useStore } from "./Store";
 import QR from "./QR";
 import { Avatar, Trophy } from "@/components/pixel/Sprites";
 import { cfUrl, myInvoices, owes, sheet } from "@/lib/appdata";
-import { groupsData, teammatePosts, volunteerShifts } from "@/lib/appdata2";
+import { volunteerShifts } from "@/lib/appdata2";
 import { byId, certificates, events, fmtDate, hallOfFame } from "@/lib/data";
 import { can, canFully, roleName, roles, type Role } from "@/lib/permissions";
 import { quests, XP } from "@/lib/xp";
@@ -74,7 +74,7 @@ export function ArenaExtra({ tab }: { tab: string }) {
 }
 
 /* ── Community ── */
-function Suggest() {
+export function Suggest() {
   const { act } = useStore();
   const [sent, setSent] = useState(false);
   return (
@@ -85,19 +85,6 @@ function Suggest() {
       <button className="btn sm" style={{ alignSelf: "flex-start" }}>Send anonymously</button>
     </form>
   );
-}
-export function CommunityExtra({ tab }: { tab: string }) {
-  const { s, me, act } = useStore();
-  if (tab === "Groups") return <div className="bento">{groupsData.map(([n, lead, count]) => { const k = "group:" + n, on = s.flags[k] ?? n === "Competitive Programming"; return (
-    <section key={n} className="panel c4"><p className="label">{count + (on && n !== "Competitive Programming" ? 1 : 0)} members · lead {byId(lead).name.split(" ")[0]}</p><h2 className="h3">{n}</h2>
-      <button className={`btn sm ${on ? "line" : ""}`} aria-pressed={on} onClick={() => act("flag", { key: k, on: !on })}>{on ? "Joined ✓" : "Join group"}</button></section>
-  ); })}</div>;
-  if (tab === "Teammates") return <div className="list">{teammatePosts.map((p) => { const k = p.by + ":team:" + p.id, mine = p.by === me.id; return (
-    <div key={p.id}><Avatar name={byId(p.by).name} size={40} /><span className="grow"><strong>{p.text}</strong><br /><span className="label">{byId(p.by).name} · {byId(p.by).rating} · {p.tags.join(" · ")}</span></span>
-      {mine ? <span className="pill">your post</span> : <button className={`btn xs ${s.sent.includes(k) ? "line" : ""}`} disabled={s.sent.includes(k)} onClick={() => act("ping", { kind: "team", to: p.by, ref: p.id })}>{s.sent.includes(k) ? "Asked to join" : "I'm in"}</button>}</div>
-  ); })}</div>;
-  if (tab === "Suggest") return <Suggest />;
-  return null;
 }
 
 /* ── Events ── */
