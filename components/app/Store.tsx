@@ -1,6 +1,6 @@
 "use client";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import type { AppState, Roster } from "@/lib/state";
+import type { AppState, MilestoneDTO, Roster } from "@/lib/state";
 import { earned, level } from "@/lib/xp";
 
 // The member area's state lives on the server. This store holds the last copy the server sent,
@@ -8,6 +8,10 @@ import { earned, level } from "@/lib/xp";
 type Toast = { id: number; text: string; kind?: "big" | "bad" };
 type Store = AppState & {
   xp: number;
+  kudosToday: number;
+  recentMilestones: MilestoneDTO[];
+  /** Give one permanent kudos on a milestone, with optimistic update + rollback. */
+  giveKudos: (milestoneId: number) => Promise<void>;
   /** Ask the server to do something. Resolves true when it was done; a refusal is shown to the member. */
   act: (type: string, arg?: Record<string, unknown>) => Promise<boolean>;
   /** A member by id. People who have left still render, as their id. */
@@ -42,6 +46,77 @@ export function StoreProvider({ initial, children }: { initial: AppState; childr
     } catch { toast("You seem to be offline. Nothing was saved.", "bad"); return false; }
   }, [toast, take]);
 
+  const giveKudos = useCallback<Store["giveKudos"]>(async (milestoneId) => {
+    const before = cur.current;
+    const target = (before.counts.recentMilestones ?? []).find((m) => m.id === milestoneId);
+    if (!target || target.has_kudos || target.user_id === before.me.id || before.me.system) return;
+    if ((before.counts.kudosToday ?? 0) >= 20) {
+      toast("KUDOS FAILED. DAILY LIMIT REACHED.", "bad");
+      return;
+    }
+
+    const mine = ++seq.current;
+    // Optimistically flip row to Kudos ✓, increment milestone count, and increment kudosToday
+    setSt((prev) => ({
+      ...prev,
+      counts: {
+        ...prev.counts,
+        kudosToday: (prev.counts.kudosToday ?? 0) + 1,
+        recentMilestones: (prev.counts.recentMilestones ?? []).map((m) =>
+          m.id === milestoneId ? { ...m, has_kudos: true, kudos_count: m.kudos_count + 1 } : m
+        ),
+      },
+    }));
+
+    const rollback = (serverState?: AppState | null) => {
+      if (serverState) {
+        take(mine, serverState);
+        return;
+      }
+      setSt((prev) => ({
+        ...prev,
+        counts: {
+          ...prev.counts,
+          kudosToday: Math.max(0, (prev.counts.kudosToday ?? 1) - 1),
+          recentMilestones: (prev.counts.recentMilestones ?? []).map((m) =>
+            m.id === milestoneId ? { ...m, has_kudos: false, kudos_count: Math.max(0, m.kudos_count - 1) } : m
+          ),
+        },
+      }));
+    };
+
+    try {
+      const res = await fetch("/api/community", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "kudosMilestone", milestoneId }),
+      });
+      if (res.status === 401) {
+        location.href = "/login";
+        return;
+      }
+      const j = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        reason?: string;
+        state?: AppState;
+      };
+      if (!res.ok || j.ok === false) {
+        rollback(j.state);
+        toast(
+          j.reason === "DAILY_LIMIT" || res.status === 429
+            ? "KUDOS FAILED. DAILY LIMIT REACHED."
+            : "KUDOS FAILED. TRY AGAIN.",
+          "bad"
+        );
+        return;
+      }
+      if (j.state) take(mine, j.state);
+    } catch {
+      rollback();
+      toast("KUDOS FAILED. TRY AGAIN.", "bad");
+    }
+  }, [toast, take]);
+
   // Other people change things too (a payment gets verified, seats fill). Pick that up whenever the tab is looked at again.
   useEffect(() => {
     const sync = async () => {
@@ -55,8 +130,16 @@ export function StoreProvider({ initial, children }: { initial: AppState; childr
 
   const value = useMemo<Store>(() => {
     const byId = new Map(st.members.map((m) => [m.id, m]));
-    return { ...st, xp: total(st), act, who: (id) => byId.get(id) ?? { id, name: id, handle: id, rating: 0 } };
-  }, [st, act]);
+    return {
+      ...st,
+      xp: total(st),
+      kudosToday: st.counts.kudosToday ?? 0,
+      recentMilestones: st.counts.recentMilestones ?? [],
+      giveKudos,
+      act,
+      who: (id) => byId.get(id) ?? { id, name: id, handle: id, rating: 0 },
+    };
+  }, [st, act, giveKudos]);
   return (
     <Ctx.Provider value={value}>
       {children}

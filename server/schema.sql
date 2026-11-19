@@ -93,3 +93,248 @@ alter table payments drop constraint if exists payments_trx_key;
 create unique index if not exists payments_trx_live on payments (trx) where status <> 'rejected';
 alter table payments add column if not exists note text; -- the reason given when a payment is rejected
 alter table users add column if not exists invite_expires timestamptz;
+
+-- Community redesign: Feed, Ideas (merged with Teammates), extended Announcements, user tiers.
+create table if not exists feed_posts (
+  id         serial primary key,
+  user_id    text not null references users(id) on delete cascade,
+  title      text not null,
+  body_md    text not null,
+  category   text not null check (category in ('problem-solving','upsolving','topic')),
+  score      integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists feed_posts_cat_time on feed_posts (category, created_at desc);
+create index if not exists feed_posts_score    on feed_posts (score desc);
+
+create table if not exists feed_votes (
+  user_id    text not null references users(id) on delete cascade,
+  post_id    integer not null references feed_posts(id) on delete cascade,
+  value      smallint not null check (value in (-1, 1)),
+  created_at timestamptz not null default now(),
+  primary key (user_id, post_id)
+);
+create index if not exists feed_votes_post on feed_votes (post_id);
+
+create table if not exists feed_reports (
+  id         serial primary key,
+  post_id    integer not null references feed_posts(id) on delete cascade,
+  user_id    text not null references users(id) on delete cascade,
+  reason     text not null default '',
+  created_at timestamptz not null default now(),
+  unique (post_id, user_id)
+);
+
+create table if not exists ideas (
+  id         serial primary key,
+  user_id    text not null references users(id) on delete cascade,
+  title      text not null,
+  body_md    text not null,
+  type       text not null check (type in ('idea','teammate','study')),
+  status     text not null default 'open' check (status in ('open','planned','shipped','closed')),
+  roles      jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists ideas_type_status_time on ideas (type, status, created_at desc);
+
+create table if not exists idea_interests (
+  idea_id    integer not null references ideas(id) on delete cascade,
+  user_id    text not null references users(id) on delete cascade,
+  response   jsonb not null default '{}'::jsonb,
+  status     text not null default 'pending' check (status in ('pending','accepted','declined')),
+  created_at timestamptz not null default now(),
+  decided_at timestamptz,
+  primary key (idea_id, user_id)
+);
+create index if not exists idea_interests_user on idea_interests (user_id);
+
+create table if not exists idea_views (
+  idea_id    integer not null references ideas(id) on delete cascade,
+  user_id    text not null references users(id) on delete cascade,
+  viewed_at  timestamptz not null default now(),
+  primary key (idea_id, user_id)
+);
+
+create table if not exists community_comments (
+  id          serial primary key,
+  target_type text not null check (target_type in ('feed','idea')),
+  target_id   integer not null,
+  user_id     text not null references users(id) on delete cascade,
+  body        text not null check (length(body) between 1 and 2000),
+  created_at  timestamptz not null default now()
+);
+create index if not exists community_comments_target on community_comments (target_type, target_id, id asc);
+
+create table if not exists announcement_reads (
+  announcement_id text not null,
+  user_id         text not null references users(id) on delete cascade,
+  read_at         timestamptz not null default now(),
+  primary key (announcement_id, user_id)
+);
+create index if not exists announcement_reads_ann on announcement_reads (announcement_id);
+
+-- Announcements: extend
+alter table announcements add column if not exists body_md      text;
+alter table announcements add column if not exists pinned       boolean not null default false;
+alter table announcements add column if not exists requires_ack boolean not null default false;
+alter table announcements add column if not exists edited_at    timestamptz;
+
+-- Users: tier color + avatar + Members redesign profile fields
+alter table users drop constraint if exists users_role_check;
+alter table users add constraint users_role_check check (role in ('member','alumni','mentor','cp_head','treasurer','secretary','president','super_admin'));
+alter table users add column if not exists problems_solved       integer not null default 0;
+alter table users add column if not exists cf_rating             integer;
+alter table users add column if not exists current_streak        integer not null default 0;
+alter table users add column if not exists contests_participated integer not null default 0;
+alter table users add column if not exists bio                   text;
+alter table users add column if not exists cf_handle             text;
+alter table users add column if not exists github_url            text;
+alter table users add column if not exists linkedin_url          text;
+alter table users add column if not exists avatar_url            text;
+alter table users add column if not exists experience            jsonb not null default '[]'::jsonb;
+alter table users add column if not exists contest_history       jsonb not null default '[]'::jsonb;
+
+update users set problems_solved = solved where problems_solved = 0 and solved > 0;
+update users set cf_rating = rating where cf_rating is null and rating > 0;
+update users set current_streak = streak where current_streak = 0 and streak > 0;
+update users set cf_handle = handle where (cf_handle is null or cf_handle = '') and handle <> '';
+
+-- Alumni jobs (fetched from Greenhouse/Lever boards + manually posted)
+create table if not exists alumni_jobs (
+  id               serial primary key,
+  alumni_id        text references users(id) on delete set null,
+  company          text not null,
+  role             text not null,
+  title            text,
+  location         text,
+  url              text not null,
+  vacancies        integer not null default 1,
+  job_type         text,
+  experience       text,
+  salary           text,
+  description      text,
+  responsibilities jsonb not null default '[]'::jsonb,
+  requirements     jsonb not null default '[]'::jsonb,
+  deadline         date,
+  company_logo_url text,
+  posted_at        timestamptz not null default now(),
+  source           text not null check (source in ('fetched','manual')),
+  fetched_at       timestamptz,
+  created_at       timestamptz not null default now()
+);
+create index if not exists alumni_jobs_alumni on alumni_jobs (alumni_id, created_at desc);
+
+-- Milestones — one row per detected Codeforces achievement
+create table if not exists milestones (
+  id          serial primary key,
+  user_id     text not null references users(id) on delete cascade,
+  type        text not null check (type in ('rank_promotion','solved_milestone','contest_streak')),
+  from_value  text,      -- e.g. 'Newbie' or '400'
+  to_value    text not null,   -- e.g. 'Pupil' or '500'
+  threshold   integer,   -- e.g. 1200 (rating) or 500 (solved count) — nullable
+  meta        jsonb not null default '{}'::jsonb,   -- extra context: cf_handle, contest_id, etc.
+  created_at  timestamptz not null default now(),
+  unique (user_id, type, to_value)   -- prevent duplicate "reached Pupil" rows
+);
+create index if not exists milestones_recent on milestones (created_at desc);
+create index if not exists milestones_user   on milestones (user_id, created_at desc);
+
+-- Per-milestone kudos (permanent, non-revocable)
+create table if not exists milestone_kudos (
+  milestone_id integer not null references milestones(id) on delete cascade,
+  user_id      text not null references users(id) on delete cascade,
+  created_at   timestamptz not null default now(),
+  primary key (milestone_id, user_id)
+);
+create index if not exists milestone_kudos_user_day
+  on milestone_kudos (user_id, created_at desc);
+
+-- Alumni section redesign: Directory saves, extended Jobs, Interview prep tree, and Blogs
+alter table users add column if not exists available_for_questions boolean not null default true;
+alter table users add column if not exists location                text;
+
+create table if not exists alumni_saves (
+  user_id    text not null references users(id) on delete cascade,
+  alumni_id  text not null references users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (user_id, alumni_id)
+);
+create index if not exists alumni_saves_user on alumni_saves (user_id);
+
+alter table alumni_jobs add column if not exists title            text;
+alter table alumni_jobs add column if not exists vacancies        integer not null default 1;
+alter table alumni_jobs add column if not exists job_type         text;   -- 'Full-time' | 'Part-time' | 'Contract' | 'Internship'
+alter table alumni_jobs add column if not exists experience       text;
+alter table alumni_jobs add column if not exists salary           text;
+alter table alumni_jobs add column if not exists description      text;
+alter table alumni_jobs add column if not exists responsibilities jsonb not null default '[]'::jsonb;
+alter table alumni_jobs add column if not exists requirements     jsonb not null default '[]'::jsonb;
+alter table alumni_jobs add column if not exists deadline         date;
+alter table alumni_jobs add column if not exists company_logo_url text;
+alter table alumni_jobs add column if not exists posted_at        timestamptz not null default now();
+
+update alumni_jobs set title = role where title is null;
+
+create unique index if not exists alumni_jobs_fetched_dedupe
+  on alumni_jobs (company, role, url) where source = 'fetched';
+
+create table if not exists interview_topics (
+  id           serial primary key,
+  name         text not null unique,
+  description  text,
+  created_by   text references users(id) on delete set null,
+  order_index  integer not null default 0,
+  created_at   timestamptz not null default now()
+);
+
+create table if not exists interview_problems (
+  id         serial primary key,
+  topic_id   integer not null references interview_topics(id) on delete cascade,
+  title      text not null,
+  url        text not null,
+  difficulty text not null check (difficulty in ('easy','medium','hard')),
+  meta       jsonb not null default '{}'::jsonb,
+  created_by text references users(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+create index if not exists interview_problems_topic on interview_problems (topic_id);
+
+create table if not exists interview_user_progress (
+  user_id    text not null references users(id) on delete cascade,
+  problem_id integer not null references interview_problems(id) on delete cascade,
+  solved_at  timestamptz not null default now(),
+  primary key (user_id, problem_id)
+);
+
+create table if not exists interview_tips (
+  id         serial primary key,
+  author_id  text not null references users(id) on delete cascade,
+  topic_id   integer references interview_topics(id) on delete cascade,   -- null = standalone experience
+  title      text not null,
+  body_md    text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists interview_tips_topic  on interview_tips (topic_id);
+create index if not exists interview_tips_author on interview_tips (author_id);
+
+create table if not exists blog_posts (
+  id           serial primary key,
+  author_id    text not null references users(id) on delete cascade,
+  slug         text not null unique,
+  title        text not null,
+  subtitle     text,
+  excerpt      text,
+  body_md      text not null,
+  cover_url    text,
+  tags         jsonb not null default '[]'::jsonb,
+  status       text not null default 'draft' check (status in ('draft','published')),
+  published_at timestamptz,
+  views        integer not null default 0,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now()
+);
+create index if not exists blog_posts_published on blog_posts (published_at desc) where status = 'published';
+create index if not exists blog_posts_author    on blog_posts (author_id, created_at desc);

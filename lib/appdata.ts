@@ -44,29 +44,51 @@ export const doubts = [
   { id: "d4", by: "sabbir", q: "Is sqrt() safe for checking T-primes up to 1e12?", problem: "230B", answers: 0, solved: false, up: 4 },
 ];
 
-export const feed = [
-  { id: "f1", who: "nadia", text: "reached Candidate Master", kind: "rank", ago: "2h" },
-  { id: "f2", who: "rahim", text: "solved a 2100-rated problem", kind: "solve", ago: "3h" },
-  { id: "f3", who: "anika", text: "hit a 120-day streak", kind: "streak", ago: "5h" },
-  { id: "f4", who: "tasnim", text: "won Freshers' Cup 2026", kind: "win", ago: "1d" },
-  { id: "f5", who: "mehedi", text: "answered 3 doubts on the DP sheet", kind: "help", ago: "1d" },
-  { id: "f6", who: "shuvo", text: "shipped Balloon Runner v1.2", kind: "ship", ago: "2d" },
-];
 export const announcements = [
-  { id: "a1", from: "sadia", scope: "Everyone", title: "General meeting, Friday 4 pm, Seminar Room", body: "Agenda: contest day roles, budget vote, new mentor pairs. Attendance is recorded.", must: true },
-  { id: "a2", from: "anika", scope: "Everyone", title: "Semester subscription is due on 16 November", body: "Pay by bKash, Nagad, Rocket or cash at the desk. A late fine applies after the grace period.", must: false },
-  { id: "a3", from: "nadia", scope: "Batch 24", title: "Green sheet target: 5 DP problems this week", body: "Tracked automatically from your Codeforces submissions.", must: false },
+  {
+    id: "a1",
+    from: "sadia",
+    scope: "Everyone",
+    title: "General meeting, Friday 4 pm, Seminar Room",
+    body: "Agenda: contest day roles, budget vote, new mentor pairs. Attendance is recorded.",
+    body_md: "Hey @everyone! We are holding our monthly general meeting this Friday.\n\n**Agenda:**\n- Contest day volunteer roles & desk assignments\n- Autumn term budget & prize pool review\n- New Batch 25 mentor pairings with @mentors\n\n> Date: Friday, 20 November 2026\n> Time: 4:00 PM\n> Venue: Seminar Room, CSE Building\n\nAttendance is recorded. Please arrive five minutes early.",
+    must: true,
+    pinned: true,
+    requires_ack: true,
+    at: "2026-11-16T10:23:00Z",
+    edited_at: null as string | null,
+  },
+  {
+    id: "a2",
+    from: "anika",
+    scope: "Everyone",
+    title: "Semester subscription is due on 16 November",
+    body: "Pay by bKash, Nagad, Rocket or cash at the desk. A late fine applies after the grace period.",
+    body_md: "Reminder for @everyone: the Autumn 2026 semester subscription (**৳300**) is due on **16 November**.\n\nPay via `bKash`, `Nagad`, `Rocket`, or cash at the club desk and submit your transaction ID under **Club → Finance**.\n\n> Amount: ৳300\n> Deadline: 16 November 2026\n> Contact: @anika for waiver requests",
+    must: false,
+    pinned: false,
+    requires_ack: false,
+    at: "2026-11-14T08:00:00Z",
+    edited_at: null as string | null,
+  },
+  {
+    id: "a3",
+    from: "nadia",
+    scope: "Batch 24",
+    title: "Green sheet target: 5 DP problems this week",
+    body: "Tracked automatically from your Codeforces submissions.",
+    body_md: "Heads up @batch24 — this week's green sheet focus is **Dynamic Programming** (`189A`, `455A`, `698A`, `1195C` + one choice problem).\n\nLink your Codeforces handle in your profile so solves sync automatically. Ask in **Feed → Help** if you get stuck on a state transition.",
+    must: false,
+    pinned: false,
+    requires_ack: false,
+    at: "2026-11-13T14:30:00Z",
+    edited_at: null as string | null,
+  },
 ];
 export const polls = [
   { id: "p1", q: "Which day for the Linux workshop?", opts: [["Saturday", 31], ["Sunday", 18], ["Tuesday evening", 44]] as [string, number][] },
   { id: "p2", q: "Next bootcamp topic?", opts: [["Graphs", 52], ["Number theory", 23], ["Strings", 29]] as [string, number][] },
 ];
-export const candidates = [
-  { id: "sadia", post: "President", line: "A mentor for every first-year by week two." },
-  { id: "mehedi", post: "President", line: "Two ICPC teams at the regional, fully funded." },
-  { id: "nusrat", post: "President", line: "One hack night a month, open to every department." },
-];
-export const ideas = [["Rust for C++ people", 37], ["Competitive debugging session", 29], ["Women in CP meetup", 26], ["Resume review night", 21]] as const;
 
 export const duels = [{ a: "farhan", b: "nusrat", problem: "520B", state: "live", elo: [1512, 1488] }, { a: "priya", b: "shuvo", problem: "189A", state: "priya won in 11:42", elo: [1534, 1471] }];
 export const bounties = [{ id: "20C", name: "Dijkstra?", prize: 300, left: "3 days" }, { id: "1195C", name: "Basketball Exercise", prize: 120, left: "6 days" }];

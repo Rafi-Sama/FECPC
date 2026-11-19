@@ -81,7 +81,8 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const [more, setMore] = useState(false);
   useEffect(() => setMore(false), [path]);
   const { s, me, xp, act, inbox, office } = useStore();
-  const cur = [...all].reverse().find((i) => path === i.href || path.startsWith(i.href + "/")) ?? all[0];
+  const normPath = path === "/app/members" || path.startsWith("/app/members/") ? "/app/directory" : path;
+  const cur = [...all].reverse().find((i) => normPath === i.href || normPath.startsWith(i.href + "/")) ?? all[0];
   const top = Object.keys(subs).find((k) => subs[k].items.some((i) => i[0] === cur.href)) ?? cur.href;
   const fam = subs[top] && [[top, subs[top].self] as const, ...subs[top].items];
   const lv = level(xp), streak = me.streak + (s.checkin ? 1 : 0);

@@ -2,9 +2,10 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { XP, earned } from "../lib/xp.ts";
-import { act, apply, exportMembers } from "./actions.ts";
+import { act, apply, exportMembers, getFeedPostDetail, getIdeaDetail, getKudosTodayCount, getMemberProfile, kudosMilestone, listFeedPosts, listIdeas, listMembers, listRecentMilestones } from "./actions.ts";
 import { acceptInvite, changePassword, endSession, login, loginWithGoogle, sessionUser, throttle } from "./auth.ts";
 import { Fail, pool } from "./db.ts";
+import { backfillMilestones, DAILY_KUDOS_CAP, detectCrossovers, syncUserCodeforcesStats } from "./milestones.ts";
 import { setup } from "./seed.ts";
 import { loadState } from "./state.ts";
 
@@ -130,12 +131,9 @@ test("sync: registrations, kudos and poll votes are counted across members", asy
   assert.equal(seen.counts.kudos.f1, 1);
   assert.deepEqual(seen.counts.votes.p1, { Sunday: 1, Saturday: 1 });
 });
-test("election: one ballot, unchangeable, and never counted back to anyone", async () => {
-  await act("shuvo", { type: "vote", poll: "election", option: "sadia" });
-  await refused(409, act("shuvo", { type: "vote", poll: "election", option: "mehedi" }));
-  await refused(403, act("priya", { type: "vote", poll: "election", option: "tasnim" }));
-  assert.equal((await st("shuvo")).s.votes.election, "sadia");
-  assert.equal((await st("tanvir")).counts.votes.election, undefined, "not even the President gets running totals");
+test("election voting is removed", async () => {
+  await refused(403, act("shuvo", { type: "vote", poll: "election", option: "sadia" }));
+  assert.equal((await st("shuvo")).s.votes.election, undefined);
 });
 test("volunteer shifts: a full shift refuses, and the last place goes to exactly one of two simultaneous sign-ups", async () => {
   await refused(409, act("shuvo", { type: "toggle", list: "present", id: "vol:Print runner" })); // 4 of 4
@@ -437,4 +435,342 @@ test("the operator account is not a member: no ballot, no dues, no purchases", a
 test("sign-in limits are per account and ignore a caller-supplied address", async () => {
   for (let n = 0; n < 10; n++) await refused(401, login(db(), "shuvo@fecpc.example", "wrong-password-" + n, "10.0.0." + n)); // a new address each time changes nothing
   await refused(429, login(db(), "shuvo@fecpc.example", PW, "10.9.9.9"));
+});
+
+test("community feed: create, list, filter, vote (+XP), edit/delete author-only", async () => {
+  const xBefore = earned((await st("farhan")).s);
+  await refused(400, act("farhan", { type: "createFeedPost", title: "Hi", body_md: "Short", category: "problem-solving" }));
+  await refused(400, act("farhan", { type: "createFeedPost", title: "Valid title", body_md: "Valid body", category: "invalid" }));
+  await act("farhan", { type: "createFeedPost", title: "Bitmask DP trick for N<=20", body_md: "Use **SOS DP** when iterating over submasks.", category: "problem-solving" });
+  assert.equal(earned((await st("farhan")).s) - xBefore, XP.feedPost);
+
+  const page1 = await listFeedPosts(db(), "priya", { q: "Bitmask", category: "wins", limit: 20 });
+  assert.equal(page1.items.length, 1);
+  const post = page1.items[0];
+  assert.equal(post.category, "problem-solving");
+  assert.equal(post.score, 0);
+
+  // Another user upvotes -> author earns +2 XP
+  await act("priya", { type: "voteFeed", postId: post.id, value: 1 });
+  assert.equal(earned((await st("farhan")).s) - xBefore, XP.feedPost + XP.feedUpvote);
+  const detail = await getFeedPostDetail(db(), "priya", { postId: post.id });
+  assert.equal(detail.score, 1);
+  assert.equal(detail.my_vote, 1);
+  assert.equal("comments" in detail, false);
+  await refused(400, act("priya", { type: "comment", targetType: "feed", targetId: post.id, body: "Not allowed" }));
+
+  // Non-author cannot edit or delete
+  await refused(403, act("priya", { type: "updateFeedPost", postId: post.id, title: "Hacked", body_md: "Nope" }));
+  await refused(403, act("priya", { type: "deleteFeedPost", postId: post.id }));
+
+  // Author can edit and delete
+  await act("farhan", { type: "updateFeedPost", postId: post.id, title: "SOS DP trick for N<=20", body_md: "Updated **markdown** body." });
+  assert.equal((await getFeedPostDetail(db(), "farhan", { postId: post.id })).title, "SOS DP trick for N<=20");
+  await act("farhan", { type: "deleteFeedPost", postId: post.id });
+  await refused(404, getFeedPostDetail(db(), "farhan", { postId: post.id }));
+});
+
+test("community announcements: extended fields + idempotent markAnnouncementRead (+3 XP once)", async () => {
+  await act("sadia", {
+    type: "announce",
+    title: "Seminar with alumni speaker",
+    body_md: "Hey @everyone!\n\n> Date: 21 Nov 2026\n> Venue: CSE Seminar Room",
+    pinned: true,
+    requires_ack: true,
+  });
+  const latest = (await st("farhan")).news[0];
+  assert.equal(latest.title, "Seminar with alumni speaker");
+  assert.equal(latest.pinned, true);
+  assert.equal(latest.requires_ack, true);
+  assert.match(latest.body_md, /@everyone/);
+
+  const x0 = earned((await st("farhan")).s);
+  await act("farhan", { type: "markAnnouncementRead", id: latest.id });
+  const afterFirst = await st("farhan");
+  assert.equal(earned(afterFirst.s) - x0, XP.read);
+  assert.equal(afterFirst.counts.annReads[latest.id], 1);
+
+  // Opening modal again must be idempotent (no double XP, no duplicate read count)
+  await act("farhan", { type: "markAnnouncementRead", id: latest.id });
+  const afterSecond = await st("farhan");
+  assert.equal(earned(afterSecond.s) - x0, XP.read);
+  assert.equal(afterSecond.counts.annReads[latest.id], 1);
+});
+
+test("community ideas: poster-only interested payload, expressInterest, decideInterest (+5 XP), inbox ping link", async () => {
+  const xPoster0 = earned((await st("farhan")).s);
+  await refused(400, act("farhan", { type: "createIdea", title: "Missing type", body_md: "No ideaType passed.", roles: [] }));
+  await act("farhan", {
+    type: "createIdea",
+    title: "ICPC Dhaka regional practice trio",
+    body_md: "Need a teammate strong in **geometry and flows**.",
+    ideaType: "teammate",
+    roles: ["Rating?", "Favorite topic?"],
+  });
+  assert.equal(earned((await st("farhan")).s) - xPoster0, XP.idea);
+
+  const teamList = await listIdeas(db(), "priya", { q: "practice trio", type: "teammate" });
+  assert.equal(teamList.items.length, 1);
+  const ideaId = teamList.items[0].id;
+
+  // Non-poster expresses interest
+  const xApp0 = earned((await st("priya")).s);
+  await refused(403, act("farhan", { type: "expressInterest", ideaId, response: {} })); // poster cannot apply to own
+  await act("priya", { type: "expressInterest", ideaId, response: { "Rating?": "1400", "Favorite topic?": "Graphs" } });
+
+  // CRITICAL: Non-poster detail payload MUST NOT contain `interested` key at all
+  const viewerDetail = await getIdeaDetail(db(), "priya", { ideaId });
+  assert.equal("interested" in viewerDetail, false, "non-poster must never receive interested[] in payload");
+  assert.equal(viewerDetail.interested_count, 1);
+  assert.equal(viewerDetail.my_interest, "pending");
+
+  // Poster detail payload MUST contain `interested` with applicant's response
+  const posterDetail = await getIdeaDetail(db(), "farhan", { ideaId });
+  assert.ok(Array.isArray(posterDetail.interested) && posterDetail.interested.length === 1);
+  assert.equal(posterDetail.interested[0].user_id, "priya");
+  assert.equal(posterDetail.interested[0].response["Rating?"], "1400");
+
+  // Non-poster cannot decide; poster accepts -> applicant gets +5 XP and notification
+  await refused(403, act("priya", { type: "decideInterest", ideaId, userId: "priya", decision: "accepted" }));
+  await act("farhan", { type: "decideInterest", ideaId, userId: "priya", decision: "accepted" });
+  const priyaState = await st("priya");
+  assert.equal(earned(priyaState.s) - xApp0, XP.interestAccepted);
+  assert.ok(priyaState.inbox.some((n) => n.href === "/app/community?tab=ideas" && /accepted/.test(n.text)));
+
+  // Legacy team ping inbox link must point to /app/community?tab=ideas
+  await act("farhan", { type: "ping", kind: "team", to: "priya", ref: "check1" });
+  assert.ok((await st("priya")).inbox.some((n) => n.href === "/app/community?tab=ideas" && /team up/.test(n.text)));
+});
+
+test("members redesign: paginated listMembers, composed AND filters, and alumni filter", async () => {
+  const p0 = await listMembers(db(), "tasnim", { page: 0, pageSize: 16 });
+  assert.equal(p0.members.length, 16);
+  assert.equal(p0.hasMore, true);
+  assert.ok(p0.total > 16);
+
+  const p1 = await listMembers(db(), "tasnim", { page: 1, pageSize: 16 });
+  assert.equal(p1.members.length, p0.total - 16);
+  assert.equal(p1.hasMore, false);
+
+  // Type filter: alumni only
+  const alum = await listMembers(db(), "tasnim", { type: "alumni" });
+  assert.ok(alum.members.length >= 3);
+  assert.ok(alum.members.every((m) => m.is_alumni));
+
+  // Composed AND filters: rating tier (Master = 2000-2399 solved) + skill + type
+  const composed = await listMembers(db(), "tasnim", { rating: "Master", skill: "Systems", type: "alumni", q: "shahriar" });
+  assert.equal(composed.members.length, 1);
+  assert.equal(composed.members[0].id, "shahriar");
+
+  // Batch filter
+  const batch16 = await listMembers(db(), "tasnim", { batch: 16 });
+  assert.ok(batch16.members.some((m) => m.id === "shahriar"));
+  assert.ok(batch16.members.every((m) => m.batch === 16));
+});
+
+test("members redesign: getMemberProfile privacy, updateProfile, alumni jobs, and admin actions", async () => {
+  // Privacy: viewer != user omits email; viewer == user includes email
+  const pubProfile = await getMemberProfile(db(), "tasnim", { userId: "nadia" });
+  assert.equal("email" in pubProfile, false, "other members never see private email");
+  assert.ok(pubProfile.experience.length >= 1);
+  assert.ok(pubProfile.contest_history.length >= 1);
+
+  const ownProfile = await getMemberProfile(db(), "tasnim", { userId: "tasnim" });
+  assert.equal(ownProfile.email, "tasnim@fecpc.example");
+
+  // Owner updates own profile
+  await refused(400, act("tasnim", { type: "updateProfile", github_url: "javascript:alert(1)" }));
+  await refused(400, act("tasnim", { type: "updateProfile", bio: "x".repeat(401) }));
+  await act("tasnim", {
+    type: "updateProfile",
+    bio: "Batch 24 CSE, grinding DP and graphs.",
+    cf_handle: "tasnim_cf",
+    github_url: "https://github.com/tasnim-a",
+    linkedin_url: "https://linkedin.com/in/tasnim-a",
+    skills: ["CP", "DP", "Web"],
+    avatar_url: null,
+  });
+  const updated = await getMemberProfile(db(), "nadia", { userId: "tasnim" });
+  assert.equal(updated.bio, "Batch 24 CSE, grinding DP and graphs.");
+  assert.equal(updated.cf_handle, "tasnim_cf");
+  assert.equal(updated.github_url, "https://github.com/tasnim-a");
+  assert.deepEqual(updated.skills, ["CP", "DP", "Web"]);
+
+  // Kudos with member:<id>
+  await act("tasnim", { type: "toggle", list: "kudos", id: "member:nadia" });
+  assert.ok((await st("tasnim")).s.kudos.includes("member:nadia"));
+
+  // Alumni jobs: regular member refused; alumni posts & deletes
+  await refused(403, act("tasnim", { type: "createAlumniJob", company: "Acme", role: "SWE", url: "https://acme.example/jobs/1" }));
+  await act("shahriar", { type: "createAlumniJob", company: "Pathao", role: "Backend Engineer", location: "Dhaka", url: "https://pathao.example/careers/be" });
+  const shahriarProf = await getMemberProfile(db(), "tasnim", { userId: "shahriar" });
+  assert.equal(shahriarProf.is_alumni, true);
+  assert.ok((shahriarProf.interview_prep?.length ?? 0) >= 1);
+  assert.ok((shahriarProf.jobs_fetched?.length ?? 0) >= 1);
+  const posted = shahriarProf.jobs_manual?.find((j) => j.company === "Pathao");
+  assert.ok(posted);
+  await refused(403, act("tasnim", { type: "deleteAlumniJob", jobId: posted!.id }));
+  await act("shahriar", { type: "deleteAlumniJob", jobId: posted!.id });
+
+  // Admin actions: promoteMember, makeAlumni, deactivateMember
+  await refused(403, act("tasnim", { type: "promoteMember", userId: "mim" }));
+  await refused(403, act("sadia", { type: "makeAlumni", userId: "mim" }));
+  await refused(403, act("tanvir", { type: "deactivateMember", userId: "tanvir" }));
+
+  await act("tanvir", { type: "promoteMember", userId: "mim" });
+  assert.equal((await st("mim")).s.role, "mentor");
+
+  await act("tanvir", { type: "makeAlumni", userId: "mim" });
+  assert.equal((await st("mim")).s.role, "alumni");
+  assert.equal((await getMemberProfile(db(), "tasnim", { userId: "mim" })).is_alumni, true);
+
+  await act("tanvir", { type: "deactivateMember", userId: "mim" });
+  assert.equal(await loadState(db(), "mim"), null);
+  await refused(404, getMemberProfile(db(), "tasnim", { userId: "mim" }));
+  const afterDeact = await listMembers(db(), "tasnim", { q: "Mim" });
+  assert.equal(afterDeact.members.some((m) => m.id === "mim"), false);
+});
+
+test("milestones: backfill, CF sync crossover detection, freshness window, permanent kudos, XP, notifications, and daily cap", async () => {
+  // 1. First-deploy backfill populated real DB rows (idempotent on re-run)
+  const backfilled = await listRecentMilestones(db(), "tasnim", { limit: 5 });
+  assert.equal(backfilled.length, 5, "sidebar hydrates up to 5 recent backfilled milestones");
+  assert.equal(await backfillMilestones(db()), 0, "backfill is idempotent");
+
+  // Hydrated state includes recentMilestones & kudosToday
+  const initState = await st("tasnim");
+  assert.equal(initState.counts.kudosToday, 0);
+  assert.equal(initState.counts.recentMilestones.length, 5);
+
+  // 2. Pure crossover detection for all three types
+  const detected = detectCrossovers(
+    { cf_rating: 1150, problems_solved: 480, current_streak: 29 },
+    { cf_rating: 1215, problems_solved: 510, current_streak: 30 },
+    { cf_handle: "demo_cf" }
+  );
+  assert.deepEqual(
+    detected.map((d) => [d.type, d.from_value, d.to_value, d.threshold]),
+    [
+      ["rank_promotion", "Newbie", "Pupil", 1215],
+      ["solved_milestone", "480", "500", 500],
+      ["contest_streak", "29", "30", 30],
+    ]
+  );
+  // Rating drop or same tier does not emit promotion
+  assert.deepEqual(
+    detectCrossovers(
+      { cf_rating: 1620, problems_solved: 600, current_streak: 30 },
+      { cf_rating: 1580, problems_solved: 600, current_streak: 30 }
+    ),
+    []
+  );
+
+  // 3. DB CF sync crossover detection + idempotency
+  const sync1 = await syncUserCodeforcesStats(db(), "tasnim", {
+    cf_handle: "tasnim_cf",
+    cf_rating: 1220, // Newbie (1154) -> Pupil (1220)
+    problems_solved: 505, // crosses 500
+    current_streak: 60, // crosses 60 (was 41)
+  });
+  assert.equal(sync1.inserted, 3, "rank_promotion + solved_milestone(500) + contest_streak(60) inserted");
+  const sync2 = await syncUserCodeforcesStats(db(), "tasnim", {
+    cf_handle: "tasnim_cf",
+    cf_rating: 1230,
+    problems_solved: 510,
+    current_streak: 60,
+  });
+  assert.equal(sync2.inserted, 0, "re-syncing without crossing new thresholds inserts nothing");
+
+  const recentAfterSync = await listRecentMilestones(db(), "nadia", { limit: 10 });
+  const tasnimPromo = recentAfterSync.find((m) => m.user_id === "tasnim" && m.type === "rank_promotion" && m.to_value === "Pupil");
+  const tasnimSolved = recentAfterSync.find((m) => m.user_id === "tasnim" && m.type === "solved_milestone" && m.to_value === "500");
+  const tasnimStreak = recentAfterSync.find((m) => m.user_id === "tasnim" && m.type === "contest_streak" && m.to_value === "60");
+  assert.ok(tasnimPromo && tasnimPromo.from_value === "Newbie" && tasnimPromo.threshold === 1220);
+  assert.ok(tasnimSolved && tasnimSolved.threshold === 500);
+  assert.ok(tasnimStreak && tasnimStreak.threshold === 60);
+
+  // 4. Generic toggle refuses milestone: prefix while keeping member: kudos intact
+  await refused(403, act("nadia", { type: "toggle", list: "kudos", id: `milestone:${tasnimPromo!.id}` }));
+  await act("nadia", { type: "toggle", list: "kudos", id: "member:tasnim" });
+  assert.ok((await st("nadia")).s.kudos.includes("member:tasnim"));
+
+  // 5. Self-kudos is refused; giving kudos awards +2 XP to owner (NOT giver) + one notification
+  await refused(403, kudosMilestone("tasnim", { milestoneId: tasnimPromo!.id }));
+
+  const ownerXpBefore = earned((await st("tasnim")).s);
+  const giverXpBefore = earned((await st("nadia")).s);
+
+  const k1 = await kudosMilestone("nadia", { milestoneId: tasnimPromo!.id });
+  assert.equal(k1.ok, true);
+  if (k1.ok) {
+    assert.equal(k1.alreadyGiven, false);
+    assert.equal(k1.kudosCount, 1);
+    assert.equal(k1.hasKudos, true);
+    assert.equal(k1.kudosToday, 1);
+  }
+
+  // Replaying same milestone kudos is idempotent: no extra count, no extra XP, no duplicate notification
+  const k1Replay = await kudosMilestone("nadia", { milestoneId: tasnimPromo!.id });
+  assert.equal(k1Replay.ok, true);
+  if (k1Replay.ok) {
+    assert.equal(k1Replay.alreadyGiven, true);
+    assert.equal(k1Replay.kudosCount, 1);
+    assert.equal(k1Replay.kudosToday, 1);
+  }
+
+  const ownerAfter = await st("tasnim");
+  const giverAfter = await st("nadia");
+  assert.equal(earned(ownerAfter.s) - ownerXpBefore, XP.milestoneKudosReceived, "owner earns +2 XP on first kudos");
+  assert.equal(earned(giverAfter.s) - giverXpBefore, 0, "giver earns 0 XP");
+  assert.equal(giverAfter.counts.kudosToday, 1);
+
+  const ownerNotifs = ownerAfter.inbox.filter((n) => n.id === `n:mk:${tasnimPromo!.id}:nadia`);
+  assert.equal(ownerNotifs.length, 1, "exactly one notification per unique giver");
+  assert.equal(ownerNotifs[0].text, "Nadia Rahman congratulated you on reaching Pupil");
+
+  // Owner sees recent_givers; another viewer does not
+  const ownerList = await listRecentMilestones(db(), "tasnim", { limit: 10 });
+  const ownerRow = ownerList.find((m) => m.id === tasnimPromo!.id)!;
+  assert.deepEqual(ownerRow.recent_givers, ["Nadia Rahman"]);
+  const otherList = await listRecentMilestones(db(), "priya", { limit: 10 });
+  const otherRow = otherList.find((m) => m.id === tasnimPromo!.id)!;
+  assert.equal(otherRow.kudos_count, 1);
+  assert.equal(otherRow.has_kudos, false);
+  assert.deepEqual(otherRow.recent_givers, []);
+
+  // 6. Server-side daily cap enforcement (20/day UTC)
+  // Create 21 distinct milestones for another user so `priya` can hit 20/20 and be blocked on 21st
+  const capIds: number[] = [];
+  for (let i = 1; i <= DAILY_KUDOS_CAP + 1; i++) {
+    const r = await db().query(
+      `insert into milestones (user_id, type, from_value, to_value, threshold)
+       values ('farhan', 'contest_streak', $1, $2, $3)
+       on conflict (user_id, type, to_value) do update set created_at = now()
+       returning id`,
+      [String(i * 30 - 30), String(i * 30), i * 30]
+    );
+    capIds.push(Number(r.rows[0].id));
+  }
+  for (let i = 0; i < DAILY_KUDOS_CAP; i++) {
+    const res = await kudosMilestone("priya", { milestoneId: capIds[i] });
+    assert.equal(res.ok, true);
+  }
+  assert.equal(await getKudosTodayCount(db(), "priya"), DAILY_KUDOS_CAP);
+  assert.equal((await st("priya")).counts.kudosToday, DAILY_KUDOS_CAP);
+
+  // 21st new milestone today must be rejected server-side with DAILY_LIMIT
+  const overCap = await kudosMilestone("priya", { milestoneId: capIds[DAILY_KUDOS_CAP] });
+  assert.deepEqual(overCap, { ok: false, reason: "DAILY_LIMIT", kudosToday: DAILY_KUDOS_CAP });
+  await refused(429, act("priya", { type: "kudosMilestone", milestoneId: capIds[DAILY_KUDOS_CAP] }));
+
+  // Replaying an already-given milestone still returns ok: true, alreadyGiven: true
+  const replayAtCap = await kudosMilestone("priya", { milestoneId: capIds[0] });
+  assert.equal(replayAtCap.ok, true);
+  if (replayAtCap.ok) assert.equal(replayAtCap.alreadyGiven, true);
+
+  // 7. 14-day freshness window & empty state
+  await db().query(`update milestones set created_at = now() - interval '15 days'`);
+  const stale = await listRecentMilestones(db(), "tasnim", { limit: 5 });
+  assert.deepEqual(stale, [], "milestones older than 14 days are excluded from sidebar");
+  assert.deepEqual((await st("tasnim")).counts.recentMilestones, []);
 });
