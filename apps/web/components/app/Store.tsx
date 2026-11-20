@@ -22,6 +22,8 @@ type Store = AppState & {
   giveKudos: (milestoneId: number) => Promise<void>;
   /** Ask the server to do something. Resolves true when it was done; a refusal is shown to the member. */
   act: (type: string, arg?: Record<string, unknown>) => Promise<boolean>;
+  /** Has the server pull the member's Codeforces and VJudge stats, then reloads state so new XP shows. */
+  syncJudges: () => Promise<void>;
   /** A member by id. People who have left still render, as their id. */
   who: (id: string) => Roster | { id: string; name: string; handle: string; rating: number };
 };
@@ -179,6 +181,24 @@ export function StoreProvider({
     return () => document.removeEventListener('visibilitychange', sync);
   }, [take]);
 
+  const syncJudges = useCallback(async () => {
+    try {
+      const r = await fetch('/api/codeforces/sync', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      });
+      if (!r.ok || !(await r.json()).synced) return;
+      const mine = ++seq.current,
+        res = await fetch('/api/state');
+      if (res.ok) take(mine, (await res.json()).state);
+    } catch {}
+  }, [take]);
+  // Judge stats feed XP, so they are refreshed once per visit (the server allows one sync a minute).
+  useEffect(() => {
+    void syncJudges();
+  }, [syncJudges]);
+
   const value = useMemo<Store>(() => {
     const byId = new Map(st.members.map((m) => [m.id, m]));
     return {
@@ -188,9 +208,10 @@ export function StoreProvider({
       recentMilestones: st.counts.recentMilestones ?? [],
       giveKudos,
       act,
+      syncJudges,
       who: (id) => byId.get(id) ?? { id, name: id, handle: id, rating: 0 },
     };
-  }, [st, act, giveKudos]);
+  }, [st, act, giveKudos, syncJudges]);
   return (
     <Ctx.Provider value={value}>
       {children}

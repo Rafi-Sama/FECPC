@@ -23,6 +23,14 @@ test("matrix matches the spec's risky cells", () => {
 
   assert.equal(can('secretary', 'audit.view'), false);
 
+  // feed moderation and the contest-day scoreboard are officer powers, never a plain member's
+  for (const r of ['member', 'alumni', 'mentor'] as const) {
+    assert.equal(can(r, 'feed.moderate'), false);
+    assert.equal(can(r, 'contest.run'), false);
+  }
+  assert.equal(can('secretary', 'feed.moderate'), true);
+  assert.equal(can('cp_head', 'contest.run'), true);
+
   for (const r of roles) {
     assert.equal(can(r, 'profile.own'), true);
     assert.equal(can(r, 'profile.editOwn'), true);
@@ -64,4 +72,20 @@ test('roles classification and admin gates', () => {
   assert.equal(isAdmin('secretary'), true); // holds application.approve and data.export
   assert.equal(isAdmin('president'), true);
   assert.equal(isAdmin('super_admin'), true);
+});
+
+test('several roles take the strongest grant, and posts never grant rank', async () => {
+  const { postableRoles } = await import('../src/roles.ts');
+  assert.equal(can(['member', 'treasurer'], 'payments.verify'), true);
+  assert.equal(can(['president', 'treasurer'], 'payments.verify'), true);
+  assert.equal(can(['member', 'mentor'], 'mentees.view'), 'scope');
+  assert.equal(can([], 'profile.own'), false);
+  assert.equal(isCommittee(['member', 'secretary']), true);
+  assert.equal(isCommittee(['member', 'mentor']), false);
+  assert.equal(isAdmin(['member', 'secretary']), true);
+  assert.deepEqual(
+    roles.filter((r) => !postableRoles.includes(r as never)),
+    ['president', 'super_admin'],
+  );
+  for (const r of postableRoles) assert.equal(canFully(r, 'roles.assign'), false);
 });

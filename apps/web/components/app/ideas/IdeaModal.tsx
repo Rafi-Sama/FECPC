@@ -74,7 +74,7 @@ export function IdeaModal({
   if (!ideaId) return null;
 
   const isPoster = detail ? detail.user_id === me.id : false;
-  const canManage = detail ? isPoster || canFully(s.role, 'idea.manage') : false;
+  const canManage = detail ? isPoster || canFully(s.roles, 'idea.manage') : false;
   const upvoted = detail ? s.kudos.includes(`idea:${detail.id}`) : false;
 
   const handleUpvote = async () => {
@@ -304,6 +304,7 @@ export function IdeaModal({
                   type="button"
                   className={`btn xs ${upvoted ? '' : 'line'}`}
                   aria-pressed={upvoted}
+                  disabled={isPoster}
                   onClick={handleUpvote}
                 >
                   ▲ {detail.upvotes}

@@ -6,13 +6,13 @@ import QR from '@/components/app/QR';
 import { useStore } from '@/components/app/Store';
 import { APPROVAL_THRESHOLD } from '@fecpc/content/member-area';
 import { fmtDate } from '@fecpc/content/site';
-import { can, canFully, isCommittee, type Role } from '@fecpc/contracts';
+import { can, canFully, isCommittee, type Who } from '@fecpc/contracts';
 
 const tk = (n: number) => '৳' + Math.round(Math.abs(n)).toLocaleString('en-US');
 const css = (o: Record<string, string | number>) => o as React.CSSProperties;
 
 /** The officer tabs this role may open, in display order. */
-export function officerTabs(role: Role): string[] {
+export function officerTabs(role: Who): string[] {
   const verify = can(role, 'payments.verify'),
     approve = can(role, 'expense.approve');
   return [
@@ -22,6 +22,21 @@ export function officerTabs(role: Role): string[] {
     ...(can(role, 'dues.waive') ? ['Waivers'] : []),
     ...(verify || approve ? ['Club fund'] : []),
   ];
+}
+
+// For reconciling against wallet statements. A leading = + - @ would run as a formula in a spreadsheet.
+function download(name: string, rows: unknown[][]) {
+  const cell = (v: unknown) => {
+    const t = String(v ?? '');
+    return `"${(/^[=+\-@\t\r]/.test(t) ? "'" + t : t).replaceAll('"', '""')}"`;
+  };
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(
+    new Blob([rows.map((r) => r.map(cell).join(',')).join('\n') + '\n'], { type: 'text/csv' }),
+  );
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 export function OfficerPanel({ tab }: { tab: string }) {
@@ -42,7 +57,32 @@ function Payments() {
   };
   return (
     <div className="stack">
-      {queue.length === 0 && <p className="body">No payments have been submitted yet.</p>}
+      {queue.length === 0 ? (
+        <p className="body">No payments have been submitted yet.</p>
+      ) : (
+        <button
+          className="btn xs line"
+          style={{ alignSelf: 'flex-end' }}
+          onClick={() =>
+            download('payments.csv', [
+              ['id', 'member', 'for', 'amount', 'via', 'trx', 'sender', 'status', 'submitted'],
+              ...queue.map((q) => [
+                q.id,
+                q.name,
+                q.label,
+                q.amount,
+                q.via,
+                q.trx,
+                q.sender,
+                q.status,
+                q.at,
+              ]),
+            ])
+          }
+        >
+          Export CSV
+        </button>
+      )}
       <div className="scroll-x">
         <table className="tbl cards">
           <thead>
@@ -78,7 +118,7 @@ function Payments() {
                       <span className={`pill ${st === 'verified' ? 'ok' : 'bad'}`}>{st}</span>
                     ) : q.mine ? (
                       <span className="pill">yours · needs another verifier</span>
-                    ) : canFully(s.role, 'payments.verify') ? (
+                    ) : canFully(s.roles, 'payments.verify') ? (
                       <span
                         className="row"
                         style={css({
@@ -195,7 +235,7 @@ function MyRequests() {
 function Expenses() {
   const { s, me, act, office } = useStore();
   const expenses = office.expenses ?? [];
-  const approve = can(s.role, 'expense.approve');
+  const approve = can(s.roles, 'expense.approve');
   return (
     <div className="stack">
       <p className="body" style={{ maxWidth: '70ch' }}>
@@ -274,17 +314,19 @@ function Expenses() {
 }
 
 function Waivers() {
-  const { s, act, office, who } = useStore();
+  const { s, me, act, office, who } = useStore();
   const waivers = office.waivers ?? [];
-  const lvl = can(s.role, 'dues.waive');
+  const full = can(s.roles, 'dues.waive') === true;
+  const reject = (id: string) =>
+    confirm('Turn this waiver down? The member can ask again.') &&
+    act('decide', { kind: 'waiver', id, to: 'rejected' });
   return (
     <div className="stack">
-      <p className="label">
-        Two officers: one proposes, a second with full authority decides. Each step is logged.
-      </p>
+      <p className="label">One officer proposes, a second with full authority waives.</p>
+      {waivers.length === 0 && <p className="body">No waiver requests.</p>}
       <div className="list">
         {waivers.map((w) => {
-          const st = s.exp[w.id];
+          const own = w.who === me.id;
           return (
             <div key={w.id} style={{ flexWrap: 'wrap' }}>
               <span className="grow">
@@ -292,45 +334,46 @@ function Waivers() {
                   {who(w.who).name} · {w.what}
                 </strong>
                 <br />
-                <span className="label">{w.reason}</span>
+                <span className="label">
+                  {w.id} · {w.reason}
+                  {w.proposedBy ? ` · proposed by ${who(w.proposedBy).name}` : ''}
+                </span>
               </span>
               <span className="mono" style={{ fontSize: 20 }}>
-                ৳{w.amount}
+                {tk(w.amount)}
               </span>
-              {!st ? (
-                <button
-                  className="btn xs line"
-                  onClick={() => act('decide', { kind: 'waiver', id: w.id, to: 'proposed' })}
-                >
-                  Propose
-                </button>
-              ) : st === 'proposed' && lvl === true ? (
+              {!own && w.status === 'pending' ? (
                 <>
-                  <span className="pill warn">proposed</span>
+                  <button
+                    className="btn xs"
+                    onClick={() => act('decide', { kind: 'waiver', id: w.id, to: 'proposed' })}
+                  >
+                    Propose
+                  </button>
+                  <button className="btn xs line" onClick={() => reject(w.id)}>
+                    Turn down
+                  </button>
+                </>
+              ) : !own && w.status === 'proposed' && full && w.proposedBy !== me.id ? (
+                <>
                   <button
                     className="btn xs"
                     onClick={() =>
-                      confirm(`Waive ৳${w.amount} for ${who(w.who).name}?`) &&
+                      confirm(`Waive ${tk(w.amount)} for ${who(w.who).name}?`) &&
                       act('decide', { kind: 'waiver', id: w.id, to: 'waived' })
                     }
                   >
                     Waive
                   </button>
-                  <button
-                    className="btn xs line"
-                    onClick={() =>
-                      confirm('Reject this waiver? This cannot be undone.') &&
-                      act('decide', { kind: 'waiver', id: w.id, to: 'rejected' })
-                    }
-                  >
+                  <button className="btn xs line" onClick={() => reject(w.id)}>
                     Reject
                   </button>
                 </>
               ) : (
                 <span
-                  className={`pill ${st === 'rejected' ? 'bad' : st === 'waived' ? 'ok' : 'warn'}`}
+                  className={`pill ${w.status === 'rejected' ? 'bad' : w.status === 'waived' ? 'ok' : 'warn'}`}
                 >
-                  {st === 'proposed' ? 'proposed · awaiting a second officer' : st}
+                  {w.status === 'proposed' ? 'proposed · awaiting a second officer' : w.status}
                 </span>
               )}
             </div>
@@ -342,14 +385,14 @@ function Waivers() {
 }
 
 function ClubFund() {
-  const { office, fundTotal } = useStore();
+  const { s, act, office, fundTotal } = useStore();
+  const edit = canFully(s.roles, 'payments.verify');
   const { accounts = [], budgets = [], cashflow = [], ledger = [] } = office.fund ?? {};
   return (
     <div className="bento">
       <p className="body" style={{ gridColumn: '1 / -1' }} role="note">
-        <strong>Sample figures.</strong> The balance, ledger, budgets and cash flow below are
-        placeholders until the ledger is connected; verifying a payment or approving an expense does
-        not change them yet.
+        Verified payments and approved expenses update the balance, ledger and budgets. The opening
+        balance, accounts and cash flow are sample figures.
       </p>
       <section className="panel c4">
         <p className="label">Balance</p>
@@ -368,24 +411,81 @@ function ClubFund() {
         <Bars data={cashflow} unit="k" />
       </section>
       <section className="panel c6">
-        <p className="label">Event budgets</p>
-        {budgets.map(([n, plan, spent]) => {
-          const hot = spent / plan >= 0.8;
+        <p className="label">Event budgets · spent = approved expenses filed under the name</p>
+        {budgets.map((g) => {
+          const hot = g.spent / g.plan >= 0.8;
           return (
-            <div key={n} className="stack" style={css({ '--g': '6px' })}>
+            <div key={g.id} className="stack" style={css({ '--g': '6px' })}>
               <div className="row between">
-                <span>{n}</span>
+                <span>{g.name}</span>
                 <span className={`mono ${hot ? 'bad' : ''}`}>
-                  {tk(spent)} / {tk(plan)}
+                  {tk(g.spent)} / {tk(g.plan)}
                   {hot ? ' · 80% alert' : ''}
                 </span>
               </div>
-              <div className="meter" style={css({ '--v': `${(spent / plan) * 100}%` })}>
+              <div
+                className="meter"
+                style={css({ '--v': `${Math.min(100, (g.spent / g.plan) * 100)}%` })}
+              >
                 <i style={hot ? { background: 'var(--bad)' } : undefined} />
               </div>
+              {edit && (
+                <span className="row" style={css({ '--g': '6px' })}>
+                  <button
+                    className="btn xs line"
+                    onClick={() => {
+                      const plan = Number(prompt(`Plan for ${g.name}, in taka`, String(g.plan)));
+                      if (plan) act('saveBudget', { id: g.id, name: g.name, plan });
+                    }}
+                  >
+                    Edit plan
+                  </button>
+                  <button
+                    className="btn xs line danger"
+                    onClick={() =>
+                      confirm(`Delete the ${g.name} budget?`) && act('deleteBudget', { id: g.id })
+                    }
+                  >
+                    Delete
+                  </button>
+                </span>
+              )}
             </div>
           );
         })}
+        {edit && (
+          <form
+            className="row"
+            style={css({ '--g': '8px' })}
+            onSubmit={async (e) => {
+              e.preventDefault();
+              const f = e.currentTarget,
+                d = new FormData(f);
+              if (await act('saveBudget', { name: d.get('name'), plan: Number(d.get('plan')) }))
+                f.reset();
+            }}
+          >
+            <input
+              name="name"
+              className="input"
+              style={{ flex: '1 1 160px' }}
+              placeholder="Event name"
+              aria-label="Budget name"
+              required
+              minLength={3}
+            />
+            <input
+              name="plan"
+              type="number"
+              min={1}
+              className="input sm"
+              placeholder="Plan ৳"
+              aria-label="Plan in taka"
+              required
+            />
+            <button className="btn xs">Add budget</button>
+          </form>
+        )}
       </section>
       <section className="panel c6">
         <p className="label">Ledger</p>

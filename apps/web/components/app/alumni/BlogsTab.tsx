@@ -43,7 +43,7 @@ export function BlogsTab({
 }) {
   const router = useRouter();
   const { s } = useStore();
-  const canWrite = can(s.role, 'blog.post.create') || s.role === 'alumni';
+  const canWrite = can(s.roles, 'blog.post.create') || s.role === 'alumni';
 
   const [q, setQ] = useState(searchQuery ?? '');
   const [selectedTopic, setSelectedTopic] = useState('All');
@@ -359,22 +359,13 @@ export function BlogsTab({
 
             {/* Write post button CTA on top right */}
             {canWrite && (
-              <div style={{ marginLeft: 'auto' }}>
+              <div style={{ marginLeft: 'auto', flex: 'none' }}>
                 <button
                   type="button"
-                  className="btn k"
+                  className="btn sm"
                   onClick={() => {
                     setEditingPost(null);
                     setEditorOpen(true);
-                  }}
-                  style={{
-                    font: '600 13px Inter, Arial, sans-serif',
-                    border: '2px solid var(--line2, #0B0B0B)',
-                    padding: '0 18px',
-                    background: 'var(--ink, #0B0B0B)',
-                    color: 'var(--on, #FFFFFF)',
-                    minHeight: 44,
-                    cursor: 'pointer',
                   }}
                 >
                   + Write post
@@ -453,19 +444,10 @@ export function BlogsTab({
               {canWrite && (
                 <button
                   type="button"
-                  className="btn k"
+                  className="btn sm"
                   onClick={() => {
                     setEditingPost(null);
                     setEditorOpen(true);
-                  }}
-                  style={{
-                    font: '600 13px Inter, Arial, sans-serif',
-                    border: '2px solid var(--line2, #0B0B0B)',
-                    padding: '0 18px',
-                    background: 'var(--ink, #0B0B0B)',
-                    color: 'var(--on, #FFFFFF)',
-                    minHeight: 44,
-                    cursor: 'pointer',
                   }}
                 >
                   Write the first post

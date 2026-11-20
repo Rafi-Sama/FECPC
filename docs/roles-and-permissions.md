@@ -33,8 +33,10 @@ Generated from `packages/contracts/src/capabilities.ts`.
 | `expense.approve` | Approve expenses |  |  |  |  | propose |  | ✓ | ✓ |
 | `dues.waive` | Waive dues or fines |  |  |  |  | propose |  | ✓ | ✓ |
 | `event.publish` | Run events: code, registrants, scoreboard |  |  |  |  |  | ✓ | ✓ | ✓ |
+| `contest.run` | Choose the contests on the contest-day scoreboard |  |  |  | ✓ |  | ✓ | ✓ | ✓ |
 | `announce.post` | Post announcements |  |  | scope | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `feed.post` | Create community feed posts | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `feed.moderate` | Review reported feed posts |  |  |  |  |  | ✓ | ✓ | ✓ |
 | `idea.create` | Submit community ideas | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `idea.manage` | Manage community ideas | scope | scope | scope | scope | scope | scope | ✓ | ✓ |
 | `alumni.save` | Save alumni profile | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -55,6 +57,22 @@ Generated from `packages/contracts/src/capabilities.ts`.
 | `audit.view` | View audit log |  |  |  |  |  |  | ✓ | ✓ |
 | `data.export` | Export the member list |  |  |  |  | ✓ | ✓ | ✓ | ✓ |
 
+## Posts
+
+Club posts (Vice President, General Secretary, … Executive Member, Member; `posts` in
+`packages/contracts/src/roles.ts`) are aliases, not roles. Each post grants a set of the roles above, stored in
+`post_roles` and edited by the Super Admin in Admin → Permissions → Posts. A member's effective roles are their
+own role plus their post's roles, and `can`, `canFully`, `isAdmin` and `isCommittee` all accept that list and
+take the strongest grant. A post can never grant President or Super Admin (`postableRoles`).
+
+- The Super Admin appoints the President in Admin → Permissions, by member email (`appointPresident`). The
+  previous President becomes a Member. Members' emails reach the Super Admin only.
+- The President (full `roles.assign`) assigns posts (`post`) from a member's ⋯ menu, to anyone below President.
+- Admin → Members lists every account with what the viewer may do to it: post (full `roles.assign`), raw role
+  (Super Admin), suspend or reinstate, and a one-time invite or reset link (same rank rules as `invite`).
+- Ops → Mentors: whoever holds full `mentees.view` (CP Head, President, Super Admin) pairs members with mentors
+  (`assignMentor`). A mentor's dashboard lists exactly the members paired with them.
+
 ## Role groups and rank
 
 - `isCommittee(role)`: everyone except Member, Alumni and Mentor. Committee members see the ops workspace,
@@ -65,8 +83,8 @@ Generated from `packages/contracts/src/capabilities.ts`.
 Rank rules, on top of the matrix:
 
 - Nobody changes their own role, suspends themselves, or issues a reset link for themselves.
-- Only a Super Admin grants Super Admin, and only a Super Admin changes a President or a Super Admin (role,
-  suspension, deactivation, alumni transition).
+- Only a Super Admin changes raw roles, and only a Super Admin changes a President or a Super Admin (role,
+  post, suspension, deactivation, alumni transition).
 - `promoteMember` only turns a plain Member into a Mentor.
 - The operator account (`admin`, `system = true`) is never changed by these actions and never acts as a
   member: no votes, payments, purchases or posts.
@@ -77,7 +95,10 @@ Rank rules, on top of the matrix:
 - Nobody verifies their own payment, or decides their own expense or waiver.
 - Expenses above ৳5,000 (`APPROVAL_THRESHOLD` in `packages/content/src/member-area.ts`) need two officers:
   the Treasurer passes them up, a full `expense.approve` grant decides.
-- Waivers always need two officers: one proposes, a second with full `dues.waive` decides.
+- Waivers always need two officers: a member asks (`requestWaiver`), one officer proposes, a second with full
+  `dues.waive` waives. Any holder can turn a pending request down.
+- Event budgets are the Treasurer's (full `payments.verify`); the President sees them.
+- Ops tasks, meetings and equipment: the whole committee edits; the creator or an admin deletes.
 
 ## Changing permissions
 

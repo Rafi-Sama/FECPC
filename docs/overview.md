@@ -48,8 +48,8 @@ The full rules are in [Roles and permissions](roles-and-permissions.md).
 | Finance | `/app/finance` | Own dues and payments, receipts, transparency; officers: payment verification, expense requests and decisions, waivers, club fund |
 | Notifications | `/app/notifications` | Inbox built from real records (dues, decisions, pings, kudos, check-ins) |
 | Profile | `/app/profile` | Own details, Codeforces handle, password change |
-| Admin | `/app/admin` | Dashboard (counts, member export, suggestions), applications, members and roles, permissions matrix, audit log |
-| Ops | `/app/ops` | Committee workspace: task board, meetings, documents, inventory, sponsors (finance roles), reports |
+| Admin | `/app/admin` | Dashboard (counts, member export, suggestions), applications, members (role, post, suspend/reinstate, invite and reset links), permissions matrix, audit log |
+| Ops | `/app/ops` | Committee workspace: task board, meetings, mentor pairing (CP Head and above), documents, inventory, sponsors (finance roles), reports |
 
 `/app/members` and `/app/alumni` are old URLs that redirect to `/app/directory` and `/app/career`.
 

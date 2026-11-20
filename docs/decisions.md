@@ -89,7 +89,7 @@ waivers and the club fund had no interface even though the API supported them. T
 | --- | --- |
 | Password reset by email: `/v1/auth/password/forgot` sends nothing. Officers issue reset links instead (`invite` action). | add a mailer; store reset tokens like invite tokens |
 | No two-factor authentication. | `modules/auth` |
-| Invoices, the club fund, budgets, the ops board seed, mentee stats and some public-site figures are placeholder content, not tables. | `packages/content`, `member-area/office-data.ts` |
+| Invoices, the fund's opening balance and accounts, cash flow, mentee weekly stats and some public-site figures are placeholder content, not tables. Fund balance, ledger, term totals, budgets, waivers and the ops board are real. | `packages/content`, `member-area/office-data.ts` |
 | The public site (members, events, certificates, hall of fame) is static content. `/verify` checks certificates against that list. | `packages/content/src/site.ts` |
 | Contest-day contest IDs are saved in the admin's own browser (`localStorage`), not shared with members. | store them through a `club` key with the `kv` action |
 | VJudge falls back to simulated standings when it does not answer (`source: "simulated"`); the page does not label them yet. | `apps/web/app/app/contest-day/page.tsx` |

@@ -52,6 +52,13 @@ function StatusTag({ status, due }: { status: string; due?: string }) {
         Awaiting verification
       </span>
     );
+  if (status === 'waived')
+    return (
+      <span className="finance-tag ok">
+        <i />
+        Waived
+      </span>
+    );
   if (status === 'rejected')
     return (
       <span className="finance-tag rejected">
@@ -392,9 +399,9 @@ function PaymentModal({
 }
 
 export default function Finance() {
-  const { s, me, office, fundTotal } = useStore();
+  const { s, me, act, office, fundTotal, myWaivers, term } = useStore();
   // 'dues' and 'transparency' are for everyone; officer tabs depend on the role's capabilities.
-  const officer = officerTabs(s.role);
+  const officer = officerTabs(s.roles);
   const [tab, setTab] = useState('dues');
   const [paymentInvoice, setPaymentInvoice] = useState<{
     id: string;
@@ -419,7 +426,9 @@ export default function Finance() {
     history.replaceState(null, '', '#' + encodeURIComponent(next));
   };
   const invoices = me.system ? [] : myInvoices(s.reg);
-  const payments = Object.values(s.pay).sort((a, b) => b.at.localeCompare(a.at));
+  const payments = Object.values(s.pay)
+    .filter((p) => p.status !== 'waived')
+    .sort((a, b) => b.at.localeCompare(a.at));
   const owed = invoices.filter((invoice) => owes(s.pay, invoice.id));
   const pending = payments.filter((payment) => payment.status === 'pending');
   const verified = payments.filter((payment) => payment.status === 'verified');
@@ -544,9 +553,12 @@ export default function Finance() {
               {invoices.length ? (
                 invoices.map((invoice) => {
                   const payment = s.pay[invoice.id];
-                  const canPay = owes(s.pay, invoice.id);
+                  const canPay = owes(s.pay, invoice.id),
+                    waiver = myWaivers.find(
+                      (w) => w.invoice === invoice.id && w.status !== 'waived',
+                    );
                   const invoiceState =
-                    payment?.status === 'verified'
+                    payment?.status === 'verified' || payment?.status === 'waived'
                       ? 'paid'
                       : payment?.status === 'pending'
                         ? 'pending'
@@ -573,6 +585,23 @@ export default function Finance() {
                           >
                             <span>Pay {tk(invoice.amount)}</span>
                             <b aria-hidden="true">→</b>
+                          </button>
+                        ) : null}
+                        {canPay && waiver && waiver.status !== 'rejected' ? (
+                          <small>
+                            Waiver {waiver.status === 'proposed' ? 'proposed' : 'requested'}
+                          </small>
+                        ) : canPay ? (
+                          <button
+                            className="btn xs line"
+                            onClick={() => {
+                              const reason = prompt(
+                                `Why should ${invoice.id} be waived? Two officers will read this.`,
+                              );
+                              if (reason) act('requestWaiver', { invoice: invoice.id, reason });
+                            }}
+                          >
+                            {waiver ? 'Ask again to waive' : 'Ask to waive'}
                           </button>
                         ) : (
                           <small>Settled</small>
@@ -660,8 +689,10 @@ export default function Finance() {
         ) : (
           <div className="finance-content">
             <div className="finance-sample">
-              <span className="tag">Sample figures</span>
-              <span>Shown until the ledger is connected</span>
+              <span className="tag">Partly sample</span>
+              <span>
+                Balance and term totals are real; the opening balance and charts are sample data
+              </span>
             </div>
             <div className="finance-transparency-grid">
               <section className="finance-balance">
@@ -669,11 +700,11 @@ export default function Finance() {
                 <strong>{tk(fundTotal)}</strong>
                 <div>
                   <span>Incoming this term</span>
-                  <b className="green">+{tk(75_000)}</b>
+                  <b className="green">+{tk(term.incoming)}</b>
                 </div>
                 <div>
                   <span>Spent this term</span>
-                  <b className="red">−{tk(43_500)}</b>
+                  <b className="red">−{tk(term.spent)}</b>
                 </div>
                 <i aria-hidden>৳</i>
               </section>

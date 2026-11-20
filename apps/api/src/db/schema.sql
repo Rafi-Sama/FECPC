@@ -485,3 +485,167 @@ CREATE INDEX IF NOT EXISTS ix_feed_posts__cat_time ON feed_posts (category, crea
 
 
 
+
+-- 13. club posts (aliases over roles) and VJudge sync
+ALTER TABLE users ADD COLUMN IF NOT EXISTS post text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS vjudge_handle text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS vj_solved integer NOT NULL DEFAULT 0;
+-- Which existing roles a post grants. Never president or super_admin (enforced by the postRole action).
+CREATE TABLE IF NOT EXISTS post_roles (
+  post  text PRIMARY KEY,
+  roles text[] NOT NULL DEFAULT '{}'
+);
+INSERT INTO post_roles (post, roles) VALUES
+  ('vice_president', '{secretary,cp_head}'),
+  ('general_secretary', '{secretary}'),
+  ('joint_secretary', '{secretary}'),
+  ('organizing_secretary', '{secretary}'),
+  ('joint_organizing_secretary', '{secretary}'),
+  ('office_secretary', '{secretary}'),
+  ('joint_office_secretary', '{secretary}'),
+  ('treasurer', '{treasurer}'),
+  ('joint_treasurer', '{treasurer}'),
+  ('press_secretary', '{secretary}'),
+  ('joint_press_secretary', '{secretary}'),
+  ('contest_secretary', '{cp_head}'),
+  ('joint_contest_secretary', '{cp_head}'),
+  ('executive_member', '{}'),
+  ('member', '{}')
+ON CONFLICT (post) DO NOTHING;
+
+-- 14. waiver requests, the committee's ops board, meetings, inventory and event budgets (were seed constants)
+-- Named apart from the empty prototype tables waivers/ops_tasks that some dev databases still have.
+CREATE TABLE IF NOT EXISTS waiver_requests (
+  id          int GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id     text NOT NULL REFERENCES users ON DELETE CASCADE,
+  invoice_id  text NOT NULL,
+  what        text NOT NULL,
+  amount      int  NOT NULL CHECK (amount > 0),
+  reason      text NOT NULL,
+  status      text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','proposed','waived','rejected')),
+  proposed_by text REFERENCES users ON DELETE SET NULL,
+  decided_by  text REFERENCES users ON DELETE SET NULL,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+-- One live request per invoice; a rejected one can be asked again.
+CREATE UNIQUE INDEX IF NOT EXISTS waiver_requests_one_live ON waiver_requests (user_id, invoice_id) WHERE status <> 'rejected';
+CREATE INDEX IF NOT EXISTS waiver_requests_status ON waiver_requests (status);
+CREATE TABLE IF NOT EXISTS committee_tasks (
+  id         int GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  title      text NOT NULL,
+  who        text REFERENCES users ON DELETE SET NULL,
+  due        date,
+  col        text NOT NULL DEFAULT 'To do',
+  created_by text REFERENCES users ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS meetings (
+  id         int GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  day        date NOT NULL,
+  title      text NOT NULL,
+  agenda     text[] NOT NULL DEFAULT '{}',
+  created_by text REFERENCES users ON DELETE SET NULL
+);
+CREATE TABLE IF NOT EXISTS meeting_actions (
+  id         int GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  meeting_id int NOT NULL REFERENCES meetings ON DELETE CASCADE,
+  what       text NOT NULL,
+  who        text REFERENCES users ON DELETE SET NULL,
+  done       boolean NOT NULL DEFAULT false
+);
+CREATE INDEX IF NOT EXISTS meeting_actions_meeting ON meeting_actions (meeting_id);
+CREATE TABLE IF NOT EXISTS inventory (
+  id         int GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  name       text NOT NULL,
+  holder     text REFERENCES users ON DELETE SET NULL,
+  created_by text REFERENCES users ON DELETE SET NULL
+);
+-- Spent = spent_before (from before this ledger existed) + approved expenses whose event is the budget's name.
+CREATE TABLE IF NOT EXISTS budgets (
+  id           int GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  name         text NOT NULL UNIQUE,
+  plan         int  NOT NULL CHECK (plan > 0),
+  spent_before int  NOT NULL DEFAULT 0 CHECK (spent_before >= 0)
+);
+-- Demo rows, once, and only after the demo members exist (the seed applies this file again after creating them).
+INSERT INTO waiver_requests (user_id, invoice_id, what, amount, reason)
+  SELECT u, 'INV-2611', 'Semester subscription, Autumn 2026', 300, r
+  FROM (VALUES ('jannat', 'Financial hardship, advisor letter attached'), ('zahid', 'Wallet outage on the due date')) v (u, r)
+  WHERE EXISTS (SELECT 1 FROM users WHERE id = v.u) AND NOT EXISTS (SELECT 1 FROM waiver_requests);
+INSERT INTO committee_tasks (title, who, due, col)
+  SELECT t, (SELECT id FROM users WHERE id = w), d::date, c
+  FROM (VALUES
+    ('Book Central Lab for contest day', 'nusrat', '2026-11-20', 'Doing'),
+    ('Confirm title sponsor instalment 3', 'anika', '2026-11-25', 'To do'),
+    ('Set problems for Weekly #43', 'nadia', '2026-11-21', 'Doing'),
+    ('Print 180 participant certificates', 'farhan', '2026-12-15', 'To do'),
+    ('Publish election nominee list', 'sadia', '2026-11-14', 'Done'),
+    ('Order 400 balloons, 8 colours', 'farhan', '2026-12-10', 'To do')) v (t, w, d, c)
+  WHERE EXISTS (SELECT 1 FROM users WHERE id = 'nusrat') AND NOT EXISTS (SELECT 1 FROM committee_tasks);
+INSERT INTO meetings (day, title, agenda)
+  SELECT d::date, t, a::text[]
+  FROM (VALUES
+    ('2026-11-13', 'General meeting', '{"Contest day roles","Budget vote","New mentor pairs"}'),
+    ('2026-10-30', 'Executive sync', '{"Freshers'' Cup review","Sheet v2026.2"}')) v (d, t, a)
+  WHERE EXISTS (SELECT 1 FROM users WHERE id = 'nusrat') AND NOT EXISTS (SELECT 1 FROM meetings);
+INSERT INTO meeting_actions (meeting_id, what, who)
+  SELECT m.id, v.what, v.who
+  FROM (VALUES
+    ('General meeting', 'Assign 12 volunteers to balloons', 'nusrat'),
+    ('General meeting', 'Share budget sheet with members', 'anika'),
+    ('Executive sync', 'Publish Freshers'' Cup editorial', 'rahim')) v (title, what, who)
+  JOIN meetings m ON m.title = v.title
+  WHERE EXISTS (SELECT 1 FROM users WHERE id = v.who) AND NOT EXISTS (SELECT 1 FROM meeting_actions);
+INSERT INTO inventory (name, holder)
+  SELECT n, (SELECT id FROM users WHERE id = h)
+  FROM (VALUES ('Projector (Epson)', NULL), ('Laptop, contest spare #1', 'nusrat'), ('Laptop, contest spare #2', NULL),
+    ('Club banner, 8 ft', 'farhan'), ('Champion trophy 2026', NULL)) v (n, h)
+  WHERE EXISTS (SELECT 1 FROM users WHERE id = 'nusrat') AND NOT EXISTS (SELECT 1 FROM inventory);
+INSERT INTO budgets (name, plan, spent_before)
+  SELECT * FROM (VALUES ('Intra-College Contest', 60000, 49200), ('Winter Hack Night', 25000, 14400),
+    ('ICPC Mock series', 6000, 2700)) v
+  WHERE NOT EXISTS (SELECT 1 FROM budgets);
+
+-- ICPC teams: a member belongs to at most one team; each member keeps their own notebook page per topic.
+-- Prefixed `icpc_` because some older databases carry an unrelated, unused `teams` table.
+create table if not exists icpc_teams (
+  id int generated always as identity primary key,
+  name text not null unique,
+  coach text references users on delete set null,
+  created_at timestamptz not null default now()
+);
+create table if not exists icpc_members (
+  team_id int not null references icpc_teams on delete cascade,
+  user_id text not null references users on delete cascade primary key
+);
+create index if not exists icpc_members_team on icpc_members (team_id);
+create table if not exists icpc_notes (
+  team_id int not null references icpc_teams on delete cascade,
+  user_id text not null references users on delete cascade,
+  topic text not null,
+  code text not null default '',
+  updated_at timestamptz not null default now(),
+  primary key (team_id, user_id, topic)
+);
+create table if not exists icpc_log (
+  id bigint generated always as identity primary key,
+  team_id int not null references icpc_teams on delete cascade,
+  user_id text references users on delete set null,
+  what text not null,
+  at timestamptz not null default now()
+);
+create index if not exists icpc_log_team on icpc_log (team_id, id desc);
+INSERT INTO icpc_teams (name, coach)
+  SELECT 'FEC_NullPointers', 'tanvir'
+  WHERE EXISTS (SELECT 1 FROM users WHERE id = 'tanvir') AND NOT EXISTS (SELECT 1 FROM icpc_teams);
+INSERT INTO icpc_members (team_id, user_id)
+  SELECT t.id, u.id FROM icpc_teams t JOIN users u ON u.id IN ('nadia', 'mehedi', 'rahim')
+  WHERE t.name = 'FEC_NullPointers' AND NOT EXISTS (SELECT 1 FROM icpc_members)
+  ON CONFLICT DO NOTHING;
+
+-- Problems Codeforces accepted for a member ('282A'), written by syncCodeforces. Sheet ticks earn XP only when listed here.
+create table if not exists cf_solves (
+  user_id text not null references users on delete cascade,
+  problem text not null,
+  primary key (user_id, problem)
+);

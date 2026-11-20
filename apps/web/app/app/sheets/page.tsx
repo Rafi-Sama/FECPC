@@ -6,6 +6,7 @@ import { useJudge } from '@/components/app/Judge';
 import { cfUrl, sheet } from '@fecpc/content/member-area';
 import { can } from '@fecpc/contracts';
 import { SheetExtras } from '@/components/app/sheets/SheetExtras';
+import { Verified } from '@/components/app/sheets/Verified';
 
 const topics = [...new Set(sheet.map((p) => p.topic))];
 
@@ -82,7 +83,7 @@ export default function Sheets() {
           const ps = sheet.filter((p) => p.topic === t),
             d = ps.filter((p) => isDone(p.id)).length;
           return (
-            <section key={t} className="panel c6">
+            <section key={t} className="panel c6 topic" data-topic={t}>
               <div className="row between">
                 <h2 className="h3">{t.toLowerCase()}/</h2>
                 <span className="acc num">
@@ -109,6 +110,7 @@ export default function Sheets() {
                     <a href={cfUrl(p.id)} target="_blank" rel="noreferrer">
                       <span className="dim">{p.id}</span> {p.name}
                     </a>
+                    {s.solved.includes(p.id) && <Verified on={s.verified.includes(p.id)} />}
                     <span className={`label ${p.must ? '' : 'dim'}`}>
                       {auto.has(p.id) ? 'synced' : p.must ? 'must' : 'optional'}
                     </span>
@@ -120,7 +122,7 @@ export default function Sheets() {
           );
         })}
         <SheetExtras isDone={isDone} />
-        {can(s.role, 'sheet.edit') ? (
+        {can(s.roles, 'sheet.edit') ? (
           <section className="panel c8" style={{ gridColumn: '1 / -1' }}>
             <p className="label">where members get stuck · least-solved problems on the sheet</p>
             <div className="scroll-x">

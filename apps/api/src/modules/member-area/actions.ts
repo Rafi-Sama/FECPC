@@ -3,17 +3,21 @@
 import {
   APPROVAL_THRESHOLD,
   announcements,
+  doubts,
   invoices,
   polls,
   resources,
   sheet,
   shop,
 } from '@fecpc/content/member-area';
-import { cols, courses, volunteerShifts, wiki } from '@fecpc/content/training';
+import { cols, courses, posts as editorials, volunteerShifts, wiki } from '@fecpc/content/training';
 import { events } from '@fecpc/content/site';
 import {
   can,
   canFully,
+  postName,
+  postableRoles,
+  posts,
   roleName,
   roles,
   type Role,
@@ -47,10 +51,13 @@ import type {
 import { newToken, sha } from './tokens.ts';
 import * as data from './office-data.ts';
 import { Fail, tx, type Db } from './db.ts';
+import { teamHandlers } from './teams.ts';
 import { DAILY_KUDOS_CAP, detectCrossovers, MILESTONE_FRESHNESS_DAYS } from './milestones.ts';
 import { isAdmin, isCommittee, loadState, progress, today, type Progress } from './state.ts';
 
-type Actor = { id: string; role: Role; name: string; system: boolean };
+type Actor = { id: string; role: Role; roles: Role[]; name: string; system: boolean };
+// A member's effective roles: their own role plus what their post grants. For queries on an unaliased `users`.
+const ROLES = `array_prepend(role, coalesce((select pr.roles from post_roles pr where pr.post = users.post), '{}')) as roles`;
 const person = (a: Actor) =>
   need(!a.system, 'This is an operator account, not a member. It cannot do that.');
 type In = Record<string, unknown>;
@@ -108,6 +115,62 @@ const optionalAvatar = (v: unknown): string | null => {
     return t;
   throw new Fail(400, 'Avatar must be a PNG, JPEG, or WebP image under 300KB.');
 };
+// A posted job, from either entry point. Every field is bounded; the logo must be an http(s) URL like the link.
+const jobFields = (i: In) => {
+  const lines = (v: unknown, what: string) =>
+    (Array.isArray(v) ? v : [])
+      .map((x) => text(x, 0, 300, what))
+      .filter(Boolean)
+      .slice(0, 20);
+  const deadline = i.deadline ? String(i.deadline) : null;
+  if (deadline && !/^\d{4}-\d{2}-\d{2}$/.test(deadline))
+    throw new Fail(400, 'The deadline must be a date.');
+  const url = optionalUrl(i.url, 'Job URL');
+  if (!url) throw new Fail(400, 'Job URL is required.');
+  return {
+    company: text(i.company, 1, 100, 'Company'),
+    role: text(i.title || i.role, 1, 120, 'Role'),
+    url,
+    location: i.location ? text(i.location, 1, 100, 'Location') : null,
+    vacancies: Math.min(999, posInt(i.vacancies ?? 1, 'vacancies')),
+    jobType: i.job_type
+      ? pick(i.job_type, ['Full-time', 'Part-time', 'Contract', 'Internship'] as const, 'job type')
+      : 'Full-time',
+    experience: i.experience ? text(i.experience, 1, 100, 'Experience') : null,
+    salary: i.salary ? text(i.salary, 1, 100, 'Salary') : null,
+    description: i.description ? mdText(i.description, 0, 6000, 'The description') || null : null,
+    responsibilities: lines(i.responsibilities, 'A responsibility'),
+    requirements: lines(i.requirements, 'A requirement'),
+    deadline,
+    logo: optionalUrl(i.company_logo_url, 'Company logo URL'),
+  };
+};
+async function insertJob(c: Db, alumniId: string, j: ReturnType<typeof jobFields>) {
+  const r = await c.query(
+    `insert into alumni_jobs (
+       alumni_id, company, role, title, location, url, source,
+       vacancies, job_type, experience, salary, description, responsibilities, requirements, deadline, company_logo_url, posted_at
+     ) values ($1, $2, $3, $3, $4, $5, 'manual', $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, coalesce($13::date, current_date + interval '30 days'), $14, now())
+     returning id`,
+    [
+      alumniId,
+      j.company,
+      j.role,
+      j.location,
+      j.url,
+      j.vacancies,
+      j.jobType,
+      j.experience,
+      j.salary,
+      j.description,
+      JSON.stringify(j.responsibilities),
+      JSON.stringify(j.requirements),
+      j.deadline,
+      j.logo,
+    ],
+  );
+  return Number(r.rows[0].id);
+}
 const FEED_CATS = ['problem-solving', 'upsolving', 'topic'] as const;
 const FEED_CAT_ALIAS: Record<string, FeedCategory> = {
   'problem-solving': 'problem-solving',
@@ -144,14 +207,27 @@ const lists: Record<string, (id: string) => boolean> = {
   read: (id) => announcements.some((a) => a.id === id) || /^(an:\d{1,9}|n:[\w:.-]{1,70})$/.test(id),
 };
 // Shared switches: who may flip them. Everything not listed here is a personal preference.
-const clubFlag = (k: string, r: Role): boolean | null =>
-  k.startsWith('act:')
-    ? isCommittee(r) && data.meetings.some((m) => m.actions.some((x) => x[0] === k.slice(4)))
-    : k.startsWith('cd:')
-      ? isCommittee(r)
-      : k === 'unfrozen'
-        ? !!can(r, 'event.publish')
-        : null;
+const clubFlag = (k: string, r: Role[]): boolean | null =>
+  k.startsWith('cd:') ? isCommittee(r) : k === 'unfrozen' ? !!can(r, 'event.publish') : null;
+
+// Who a cheer lands on, or null when the target is not a real thing.
+async function kudosOwner(c: Db, id: string): Promise<string | null> {
+  const [kind, ref = ''] = id.split(/:(.*)/);
+  if (kind === 'idea' && /^\d{1,9}$/.test(ref))
+    return (
+      (await c.query(`select user_id from ideas where id = $1`, [+ref])).rows[0]?.user_id ?? null
+    );
+  if (kind === 'member')
+    return (
+      (await c.query(`select id from users where id = $1 and not system`, [ref])).rows[0]?.id ??
+      null
+    );
+  if (kind === 'post') return editorials.find((x) => x.id === ref)?.by ?? null;
+  return doubts.find((x) => x.id === id)?.by ?? null;
+}
+
+const inInbox = async (c: Db, userId: string, id: string) =>
+  (await loadState(c, userId))!.inbox.some((n) => n.id === id);
 
 async function setClub(c: Db, a: Actor, k: string, value: boolean | string) {
   await c.query(
@@ -160,20 +236,71 @@ async function setClub(c: Db, a: Actor, k: string, value: boolean | string) {
   );
 }
 
+/** One of the member's own invoices: event invoices only for members registered for the event. */
+async function myInvoice(c: Db, a: Actor, id: unknown) {
+  const inv = invoices.find((x) => x.id === id);
+  need(inv, 'That invoice does not exist.');
+  if (inv.event)
+    need(
+      (
+        await c.query(`select 1 from registrations where user_id = $1 and event_id = $2`, [
+          a.id,
+          inv.event,
+        ])
+      ).rowCount,
+      'That invoice is only for members registered for the event.',
+    );
+  return inv;
+}
+/** An active member id, or null when cleared. */
+async function memberOrNull(c: Db, v: unknown) {
+  if (v === null || v === undefined || v === '') return null;
+  const id = key(v);
+  need(
+    (await c.query(`select 1 from users where id = $1 and not system and not suspended`, [id]))
+      .rowCount,
+    'That member does not exist.',
+  );
+  return id;
+}
+const isoDay = (v: unknown, what: string) => {
+  if (v === null || v === undefined || v === '') return null;
+  if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v) || isNaN(Date.parse(v)))
+    throw new Fail(400, `${what} must be a date.`);
+  return v;
+};
+/** Committee records: anyone on the committee edits them; only whoever created one, or an admin, deletes it. */
+async function opsDelete(c: Db, a: Actor, table: string, id: unknown, what: string) {
+  need(isCommittee(a.roles), 'Only the committee manages the workspace.');
+  const n = posInt(id, what);
+  const row = (await c.query(`select created_by from ${table} where id = $1`, [n])).rows[0];
+  if (!row) throw new Fail(404, `That ${what} does not exist.`);
+  need(
+    row.created_by === a.id || isAdmin(a.roles),
+    `Only whoever added the ${what}, or an admin, deletes it.`,
+  );
+  await c.query(`delete from ${table} where id = $1`, [n]);
+  await audit(c, a, `deleted ${what} #${n}`);
+}
+
 const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<string | void>> = {
+  ...teamHandlers,
   async toggle(c, a, p, i) {
     const id = key(i.id),
       list = String(i.list),
       now = (has: boolean) => (typeof i.on === 'boolean' ? i.on : !has);
     if (lists[list]) {
       need(lists[list](id), 'That item does not exist.');
+      // Reading earns XP, so an inbox id or announcement must really be one this member was sent.
+      if (list === 'read' && now(p.read.includes(id)) && !announcements.some((x) => x.id === id))
+        need(await inInbox(c, a.id, id), 'That item does not exist.');
       const k = list as 'solved' | 'done' | 'lessons' | 'read';
       p[k] = flip(p[k], id, now(p[k].includes(id)));
     } else if (list === 'reg') {
-      need(
-        events.some((e) => e.id === id),
-        'That event does not exist.',
-      );
+      const ev = events.find((e) => e.id === id);
+      need(ev, 'That event does not exist.');
+      person(a);
+      await c.query(`select pg_advisory_xact_lock(hashtext($1))`, ['reg:' + id]); // the last seat goes to one person
       const has =
         (
           await c.query(`select 1 from registrations where user_id = $1 and event_id = $2`, [
@@ -181,19 +308,28 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
             id,
           ])
         ).rowCount! > 0;
-      if (now(has))
-        await c.query(`insert into registrations values ($1, $2) on conflict do nothing`, [
-          a.id,
-          id,
-        ]);
-      else
-        await c.query(`delete from registrations where user_id = $1 and event_id = $2`, [a.id, id]);
+      if (!now(has))
+        return void (await c.query(
+          `delete from registrations where user_id = $1 and event_id = $2`,
+          [a.id, id],
+        ));
+      if (has) return;
+      const n = (
+        await c.query(`select count(*)::int n from registrations where event_id = $1`, [id])
+      ).rows[0].n;
+      if (ev!.taken + n >= ev!.seats) throw new Fail(409, 'That event is full.');
+      await c.query(`insert into registrations values ($1, $2)`, [a.id, id]);
     } else if (list === 'kudos') {
       need(!id.startsWith('shop:'), 'That is not something you can cheer.');
       need(!id.startsWith('milestone:'), 'Use kudosMilestone for milestone kudos.');
       const has =
         (await c.query(`select 1 from reactions where user_id = $1 and target = $2`, [a.id, id]))
           .rowCount! > 0;
+      if (now(has) && !has) {
+        const owner = await kudosOwner(c, id);
+        need(owner, 'That is not something you can cheer.');
+        need(owner !== a.id, 'You cannot cheer your own work.');
+      }
       if (now(has))
         await c.query(`insert into reactions values ($1, $2) on conflict do nothing`, [a.id, id]);
       else await c.query(`delete from reactions where user_id = $1 and target = $2`, [a.id, id]);
@@ -228,7 +364,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     const k = key(i.key);
     if (typeof i.on !== 'boolean') throw new Fail(400, 'Expected on or off.');
     need(!/^(susp|post|role|mod|rule):|^(remind|risk)/.test(k), 'That switch does not exist.');
-    const shared = clubFlag(k, a.role);
+    const shared = clubFlag(k, a.roles);
     if (shared !== null) {
       need(shared);
       await setClub(c, a, 'flag:' + k, i.on);
@@ -240,7 +376,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
         );
       return;
     }
-    if (k.startsWith('nudge')) need(can(a.role, 'mentees.view'));
+    if (k.startsWith('nudge')) need(can(a.roles, 'mentees.view'));
     if (!(k in p.flags) && Object.keys(p.flags).length >= 300)
       throw new Fail(400, 'Too many saved preferences.');
     p.flags[k] = i.on;
@@ -248,31 +384,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
   async kv(c, a, p, i) {
     const k = key(i.key),
       v = text(i.value, 0, 200, 'Value');
-    if (k.startsWith('task:')) {
-      need(isCommittee(a.role));
-      need(
-        data.tasks.some((t) => t.id === k.slice(5)),
-        'That task does not exist.',
-      );
-      return setClub(c, a, 'kv:' + k, pick(v, cols, 'column'));
-    }
-    if (k.startsWith('inv:')) {
-      need(isCommittee(a.role));
-      const item = data.inventory.find((x) => x[1] === k.slice(4));
-      need(item, 'That item does not exist.');
-      const holder =
-        (await c.query(`select value from club where key = $1`, ['kv:' + k])).rows[0]?.value ||
-        item![2];
-      if (v ? holder : holder !== a.id && !isAdmin(a.role))
-        throw new Fail(
-          409,
-          v
-            ? 'That item is already checked out.'
-            : 'Only the person holding it, or an admin, can return it.',
-        );
-      await setClub(c, a, 'kv:' + k, v ? a.id : '');
-      return void (await audit(c, a, `${v ? 'checked out' : 'returned'} ${item![0]}`));
-    }
+    need(!/^(task|inv):/.test(k), 'Tasks and equipment have their own actions now.');
     need(!k.startsWith('role:'), 'Use the role action for that.');
     if (k.startsWith('conf:')) {
       need(
@@ -326,22 +438,35 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     if (h && !/^[\w.-]{3,24}$/.test(h))
       throw new Fail(400, 'That is not a valid Codeforces handle.');
     p.handle = h;
+    await c.query(`update users set cf_handle = $2, handle = $3 where id = $1`, [
+      a.id,
+      h || null,
+      h,
+    ]);
     if (h) await audit(c, a, `linked Codeforces handle ${h}`);
+  },
+  async vjudge(c, a, _p, i) {
+    const h = typeof i.value === 'string' ? i.value.trim() : '';
+    if (h && !/^[\w.-]{2,30}$/.test(h)) throw new Fail(400, 'That is not a valid VJudge username.');
+    // A new or removed handle starts from zero; syncVjudge fills the count from VJudge itself.
+    await c.query(
+      `update users set vj_solved = case when vjudge_handle is distinct from $2 then 0 else vj_solved end, vjudge_handle = $2 where id = $1`,
+      [a.id, h || null],
+    );
+    if (h) await audit(c, a, `linked VJudge handle ${h}`);
   },
   async pay(c, a, _p, i) {
     person(a);
-    const inv = invoices.find((x) => x.id === i.invoice);
-    need(inv, 'That invoice does not exist.');
-    if (inv!.event)
-      need(
-        (
-          await c.query(`select 1 from registrations where user_id = $1 and event_id = $2`, [
-            a.id,
-            inv!.event,
-          ])
-        ).rowCount,
-        'That invoice is only for members registered for the event.',
-      );
+    const inv = await myInvoice(c, a, i.invoice);
+    need(
+      !(
+        await c.query(
+          `select 1 from waiver_requests where user_id = $1 and invoice_id = $2 and status = 'waived'`,
+          [a.id, inv.id],
+        )
+      ).rowCount,
+      'That invoice was waived; there is nothing to pay.',
+    );
     const via = pick(i.via, ['bKash', 'Nagad', 'Rocket'] as const, 'wallet'),
       trx = String(i.trx ?? '')
         .trim()
@@ -357,13 +482,13 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     // The two unique indexes are the rule; checking first would let two simultaneous submissions both pass.
     const r = await c.query(
       `insert into payments (user_id, invoice_id, label, amount, via, trx, sender) values ($1, $2, $3, $4, $5, $6, $7) on conflict do nothing returning id`,
-      [a.id, inv!.id, inv!.label, inv!.amount, via, trx, sender],
+      [a.id, inv.id, inv.label, inv.amount, via, trx, sender],
     );
     if (!r.rows[0]) {
       const mine = (
         await c.query(
           `select 1 from payments where user_id = $1 and invoice_id = $2 and status <> 'rejected'`,
-          [a.id, inv!.id],
+          [a.id, inv.id],
         )
       ).rowCount;
       throw new Fail(
@@ -373,7 +498,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
           : 'That transaction ID has already been used. Check the SMS from your wallet and enter the ID exactly.',
       );
     }
-    await audit(c, a, `submitted payment PAY-${r.rows[0].id} for ${inv!.id} (${via})`);
+    await audit(c, a, `submitted payment PAY-${r.rows[0].id} for ${inv.id} (${via})`);
   },
   async attend(c, a, _p, i) {
     if (
@@ -400,7 +525,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     await audit(c, a, `redeemed "${item![0]}" for ${item![1]} XP`);
   },
   async announce(c, a, _p, i) {
-    need(can(a.role, 'announce.post'));
+    need(can(a.roles, 'announce.post'));
     const title = text(i.title, 3, 140, 'The title');
     const bodyMd =
       i.body_md !== undefined && String(i.body_md).trim() !== ''
@@ -410,7 +535,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     const requiresAck = Boolean(i.requires_ack);
     // A scoped grant (mentor) reaches that mentor's own mentees only; the audience is decided here, never by the caller.
     const audience =
-      can(a.role, 'announce.post') === 'scope' || i.audience === 'mentees'
+      can(a.roles, 'announce.post') === 'scope' || i.audience === 'mentees'
         ? 'mentees:' + a.id
         : 'all';
     await c.query(
@@ -427,13 +552,12 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     const raw = String(i.id ?? '').trim();
     const id = /^\d{1,9}$/.test(raw) ? 'an:' + raw : key(raw);
     const isSeed = announcements.some((x) => x.id === id);
-    if (!isSeed) {
-      const m = /^an:(\d{1,9})$/.exec(id);
-      need(m, 'That announcement does not exist.');
-      const exists =
-        (await c.query(`select 1 from announcements where id = $1`, [+m[1]!])).rowCount! > 0;
-      need(exists, 'That announcement does not exist.');
-    }
+    // Only one addressed to this member: a mentor's note to their mentees is not everyone's XP.
+    if (!isSeed)
+      need(
+        /^an:\d{1,9}$/.test(id) && (await inInbox(c, a.id, id)),
+        'That announcement does not exist.',
+      );
     await c.query(
       `insert into announcement_reads (announcement_id, user_id) values ($1, $2) on conflict do nothing`,
       [id, a.id],
@@ -442,7 +566,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
   },
   async createFeedPost(c, a, _p, i) {
     person(a);
-    need(can(a.role, 'feed.post'));
+    need(can(a.roles, 'feed.post'));
     const title = text(i.title, 3, 160, 'Title');
     const bodyMd = mdText(i.body_md, 3, 10000, 'Post body');
     const category = pick(i.category, FEED_CATS, 'category');
@@ -500,6 +624,48 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     ]);
     if (!r.rows[0]) throw new Fail(403, 'Only the author can delete this post.');
   },
+  async contestDay(c, a, _p, i) {
+    need(can(a.roles, 'contest.run'));
+    const list = Array.isArray(i.contests) ? i.contests.slice(0, 20) : [];
+    const clean = (list as Record<string, unknown>[]).map((x) => {
+      const id = String(x?.id ?? ''),
+        at = String(x?.addedAt ?? '');
+      if (!/^\d{1,9}$/.test(id)) throw new Fail(400, 'Contest IDs are VJudge numbers.');
+      return {
+        id,
+        name: text(x?.name, 1, 120, 'The contest name'),
+        type: pick(x?.type, ['running', 'previous'] as const, 'contest type'),
+        addedAt: /^\d{4}-\d{2}-\d{2}$/.test(at) ? at : today(),
+      };
+    });
+    need(new Set(clean.map((x) => x.id)).size === clean.length, 'That contest is already listed.');
+    await setClub(c, a, 'kv:contests', JSON.stringify(clean));
+    await audit(c, a, `set the contest-day scoreboard (${clean.map((x) => x.id).join(', ')})`);
+  },
+  async moderateFeedPost(c, a, _p, i) {
+    need(can(a.roles, 'feed.moderate'));
+    const postId = posInt(i.postId, 'post'),
+      decision = pick(i.decision, ['remove', 'dismiss'] as const, 'decision');
+    const post = (await c.query(`select title from feed_posts where id = $1`, [postId])).rows[0];
+    if (!post) throw new Fail(404, 'That post does not exist.');
+    if (decision === 'remove') await c.query(`delete from feed_posts where id = $1`, [postId]);
+    else await c.query(`delete from feed_reports where post_id = $1`, [postId]);
+    await audit(
+      c,
+      a,
+      `${decision === 'remove' ? 'removed' : 'cleared reports on'} feed post #${postId} ("${post.title}")`,
+    );
+  },
+  async deleteAnnouncement(c, a, _p, i) {
+    const id = posInt(String(i.id ?? '').replace(/^an:/, ''), 'announcement');
+    const r = await c.query(
+      `delete from announcements where id = $1 and (user_id = $2 or $3) returning title`,
+      [id, a.id, canFully(a.roles, 'announce.post')],
+    );
+    need(r.rows[0], 'Only the author or an officer can delete this announcement.');
+    await c.query(`delete from announcement_reads where announcement_id = $1`, ['an:' + id]);
+    await audit(c, a, `deleted announcement "${r.rows[0].title}"`);
+  },
   async reportFeedPost(c, a, _p, i) {
     person(a);
     const postId = posInt(i.postId, 'post');
@@ -528,7 +694,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
   },
   async createIdea(c, a, _p, i) {
     person(a);
-    need(can(a.role, 'idea.create'));
+    need(can(a.roles, 'idea.create'));
     const title = text(i.title, 3, 160, 'Title');
     const bodyMd = mdText(i.body_md, 3, 10000, 'Description');
     const rawType = i.ideaType ?? (i.type !== 'createIdea' ? i.type : undefined);
@@ -552,7 +718,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
       .rows[0];
     if (!cur) throw new Fail(404, 'That idea does not exist.');
     need(
-      cur.user_id === a.id || canFully(a.role, 'idea.manage'),
+      cur.user_id === a.id || canFully(a.roles, 'idea.manage'),
       'Only the poster or an admin can edit this idea.',
     );
     const title = text(i.title, 3, 160, 'Title');
@@ -569,7 +735,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     const cur = (await c.query(`select user_id from ideas where id = $1`, [ideaId])).rows[0];
     if (!cur) throw new Fail(404, 'That idea does not exist.');
     need(
-      cur.user_id === a.id || canFully(a.role, 'idea.manage'),
+      cur.user_id === a.id || canFully(a.roles, 'idea.manage'),
       'Only the poster or an admin can close this idea.',
     );
     await c.query(`update ideas set status = 'closed', updated_at = now() where id = $1`, [ideaId]);
@@ -656,7 +822,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     ).rows[0];
     need(t, 'That member does not exist.');
     if (kind === 'nudge') {
-      const lvl = can(a.role, 'mentees.view');
+      const lvl = can(a.roles, 'mentees.view');
       need(lvl);
       need(lvl === true || t.mentor_id === a.id, 'You can only nudge your own mentees.');
     }
@@ -666,7 +832,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     );
   },
   async expense(c, a, _p, i) {
-    need(isCommittee(a.role), 'Only committee members file expense requests.');
+    need(isCommittee(a.roles), 'Only committee members file expense requests.');
     const amount = Number(i.amount),
       what = text(i.what, 3, 140, 'The description'),
       event = text(i.event, 0, 80, 'The event');
@@ -697,7 +863,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
       id = key(i.id),
       to = String(i.to);
     if (kind === 'payment') {
-      need(canFully(a.role, 'payments.verify'), 'Only the Treasurer verifies payments.');
+      need(canFully(a.roles, 'payments.verify'), 'Only the Treasurer verifies payments.');
       pick(to, ['verified', 'rejected'], 'decision');
       const n = /^PAY-(\d{1,9})$/.exec(id);
       need(n, 'That payment does not exist.');
@@ -718,7 +884,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
       ));
     }
     if (kind === 'application') {
-      need(can(a.role, 'application.approve'));
+      need(can(a.roles, 'application.approve'));
       pick(to, ['accepted', 'declined'], 'decision');
       need(/^\d{1,9}$/.test(id), 'That application does not exist.');
       const app = (
@@ -748,7 +914,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     // Expenses and waivers: two-person rules. Nobody decides their own request.
     if (kind === 'expense') {
       const n = /^EXP-(\d{1,9})$/.exec(id),
-        lvl = can(a.role, 'expense.approve');
+        lvl = can(a.roles, 'expense.approve');
       need(lvl);
       need(n, 'That expense does not exist.');
       const x = (
@@ -788,71 +954,308 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
           : `${to} expense ${id} (${tk(x.amount)})`,
       ));
     }
-    await c.query(`select pg_advisory_xact_lock(hashtext($1))`, [kind + id]);
-    const cur: string | undefined = (
-      await c.query(`select status from decisions where kind = $1 and id = $2`, [kind, id])
-    ).rows[0]?.status;
-    const save = async (line: string) => {
-      await c.query(
-        `insert into decisions values ($1, $2, $3, $4) on conflict (kind, id) do update set status = excluded.status, by = excluded.by, at = now()`,
-        [kind, id, to, a.id],
-      );
-      await audit(c, a, line);
-    };
-    const w = data.waivers.find((e) => e.id === id),
-      lvl = can(a.role, 'dues.waive');
-    need(w, 'That waiver does not exist.');
+    // Waivers: two people. One officer proposes (or turns it down); a second, with the full grant, decides.
+    const n = /^W-(\d{1,9})$/.exec(id),
+      lvl = can(a.roles, 'dues.waive');
     need(lvl);
-    need(w!.who !== a.id, 'You cannot decide a waiver for yourself.');
-    // Two people: one proposes, a different one with full authority decides.
-    const row = (await c.query(`select by from decisions where kind = 'waiver' and id = $1`, [id]))
+    need(n, 'That waiver does not exist.');
+    const w = (await c.query(`select * from waiver_requests where id = $1 for update`, [+n[1]!]))
       .rows[0];
-    if (cur && !(cur === 'proposed' && lvl === true))
-      throw new Fail(409, 'That waiver has already been decided.');
-    pick(
-      to,
-      cur === 'proposed' ? ['waived', 'rejected'] : ['proposed'],
-      cur ? 'decision' : 'decision: a waiver is first proposed, then decided by a second officer',
+    need(w, 'That waiver does not exist.');
+    need(w.user_id !== a.id, 'You cannot decide a waiver for yourself.');
+    if (w.status === 'pending')
+      pick(
+        to,
+        ['proposed', 'rejected'],
+        'decision: a waiver is first proposed, then decided by a second officer',
+      );
+    else if (w.status === 'proposed') {
+      need(lvl === true, 'A second officer with full authority decides a proposed waiver.');
+      need(w.proposed_by !== a.id, 'A second officer has to decide a waiver you proposed.');
+      pick(to, ['waived', 'rejected'], 'decision');
+    } else throw new Fail(409, 'That waiver has already been decided.');
+    await c.query(
+      `update waiver_requests set status = $2, ${to === 'proposed' ? 'proposed_by' : 'decided_by'} = $3 where id = $1`,
+      [w.id, to, a.id],
     );
-    if (cur === 'proposed')
-      need(row.by !== a.id, 'A second officer has to decide a waiver you proposed.');
-    return save(
-      to === 'proposed'
-        ? `proposed waiver ${id} to the President`
-        : `${to} waiver ${id}: ${tk(w!.amount)}, ${w!.what} (reason: ${w!.reason})`,
-    );
+    return void (await audit(
+      c,
+      a,
+      `${to} waiver ${id}: ${tk(w.amount)}, ${w.what} for ${w.user_id} (reason: ${w.reason})`,
+    ));
   },
+  // A member asks to have one of their invoices waived. Officers decide it under `decide` (kind waiver).
+  async requestWaiver(c, a, _p, i) {
+    person(a);
+    const inv = await myInvoice(c, a, i.invoice),
+      reason = text(i.reason, 10, 400, 'The reason');
+    need(
+      !(
+        await c.query(
+          `select 1 from payments where user_id = $1 and invoice_id = $2 and status <> 'rejected'`,
+          [a.id, inv.id],
+        )
+      ).rowCount,
+      'That invoice already has a payment.',
+    );
+    const r = await c.query(
+      `insert into waiver_requests (user_id, invoice_id, what, amount, reason) values ($1, $2, $3, $4, $5) on conflict do nothing returning id`,
+      [a.id, inv.id, inv.label, inv.amount, reason],
+    );
+    if (!r.rows[0]) throw new Fail(409, 'You already asked to waive that invoice.');
+    await audit(c, a, `requested waiver W-${r.rows[0].id} for ${inv.id}`);
+  },
+  async saveTask(c, a, _p, i) {
+    need(isCommittee(a.roles), 'Only the committee manages the workspace.');
+    const v = [
+      text(i.title, 3, 140, 'The task'),
+      await memberOrNull(c, i.who),
+      isoDay(i.due, 'The due date'),
+      pick(i.col ?? 'To do', cols, 'column'),
+    ];
+    if (i.id === undefined || i.id === null) {
+      await c.query(
+        `insert into committee_tasks (title, who, due, col, created_by) values ($1, $2, $3, $4, $5)`,
+        [...v, a.id],
+      );
+      return void (await audit(c, a, `added task: ${v[0]}`));
+    }
+    const r = await c.query(
+      `update committee_tasks set title = $2, who = $3, due = $4, col = $5 where id = $1`,
+      [posInt(i.id, 'task'), ...v],
+    );
+    if (!r.rowCount) throw new Fail(404, 'That task does not exist.');
+  },
+  async deleteTask(c, a, _p, i) {
+    await opsDelete(c, a, 'committee_tasks', i.id, 'task');
+  },
+  async saveMeeting(c, a, _p, i) {
+    need(isCommittee(a.roles), 'Only the committee manages the workspace.');
+    const agenda = (Array.isArray(i.agenda) ? i.agenda : [])
+      .map((x) => text(x, 0, 140, 'An agenda item'))
+      .filter(Boolean);
+    need(agenda.length <= 15, 'At most 15 agenda items.');
+    const v = [isoDay(i.date, 'The date') ?? today(), text(i.title, 3, 120, 'The title'), agenda];
+    if (i.id === undefined || i.id === null) {
+      await c.query(
+        `insert into meetings (day, title, agenda, created_by) values ($1, $2, $3, $4)`,
+        [...v, a.id],
+      );
+      return void (await audit(c, a, `added meeting: ${v[1]}`));
+    }
+    const r = await c.query(`update meetings set day = $2, title = $3, agenda = $4 where id = $1`, [
+      posInt(i.id, 'meeting'),
+      ...v,
+    ]);
+    if (!r.rowCount) throw new Fail(404, 'That meeting does not exist.');
+  },
+  async deleteMeeting(c, a, _p, i) {
+    await opsDelete(c, a, 'meetings', i.id, 'meeting');
+  },
+  // An action item: added to a meeting, then edited, reassigned or ticked off by anyone on the committee.
+  async saveMeetingAction(c, a, _p, i) {
+    need(isCommittee(a.roles), 'Only the committee manages the workspace.');
+    const what = text(i.what, 3, 160, 'The action item'),
+      who = await memberOrNull(c, i.who),
+      done = Boolean(i.done);
+    if (i.id === undefined || i.id === null) {
+      const r = await c.query(
+        `insert into meeting_actions (meeting_id, what, who) select id, $2, $3 from meetings where id = $1 returning id`,
+        [posInt(i.meeting, 'meeting'), what, who],
+      );
+      if (!r.rowCount) throw new Fail(404, 'That meeting does not exist.');
+      return;
+    }
+    const r = await c.query(
+      `update meeting_actions set what = $2, who = $3, done = $4 where id = $1`,
+      [posInt(i.id, 'action item'), what, who, done],
+    );
+    if (!r.rowCount) throw new Fail(404, 'That action item does not exist.');
+  },
+  async deleteMeetingAction(c, a, _p, i) {
+    need(isCommittee(a.roles), 'Only the committee manages the workspace.');
+    const r = await c.query(`delete from meeting_actions where id = $1`, [
+      posInt(i.id, 'action item'),
+    ]);
+    if (!r.rowCount) throw new Fail(404, 'That action item does not exist.');
+  },
+  async saveItem(c, a, _p, i) {
+    need(isCommittee(a.roles), 'Only the committee manages the workspace.');
+    const name = text(i.name, 2, 80, 'The item');
+    if (i.id === undefined || i.id === null) {
+      await c.query(`insert into inventory (name, created_by) values ($1, $2)`, [name, a.id]);
+      return void (await audit(c, a, `added equipment: ${name}`));
+    }
+    const r = await c.query(`update inventory set name = $2 where id = $1`, [
+      posInt(i.id, 'item'),
+      name,
+    ]);
+    if (!r.rowCount) throw new Fail(404, 'That item does not exist.');
+  },
+  async deleteItem(c, a, _p, i) {
+    await opsDelete(c, a, 'inventory', i.id, 'item');
+  },
+  // Check out (to yourself), return (to nobody) or hand to someone (admins). A held item cannot be taken.
+  async holdItem(c, a, _p, i) {
+    need(isCommittee(a.roles), 'Only the committee manages the workspace.');
+    const item = (
+      await c.query(`select id, name, holder from inventory where id = $1 for update`, [
+        posInt(i.id, 'item'),
+      ])
+    ).rows[0];
+    if (!item) throw new Fail(404, 'That item does not exist.');
+    const to = await memberOrNull(c, i.to);
+    if (to === null)
+      need(
+        item.holder === a.id || isAdmin(a.roles),
+        'Only the person holding it, or an admin, can return it.',
+      );
+    else if (to === a.id) {
+      if (item.holder) throw new Fail(409, 'That item is already checked out.');
+    } else need(isAdmin(a.roles), 'Only an admin hands equipment to someone else.');
+    await c.query(`update inventory set holder = $2 where id = $1`, [item.id, to]);
+    await audit(c, a, `${to ? `gave ${item.name} to ${to}` : `returned ${item.name}`}`);
+  },
+  // Event budgets: the Treasurer plans them; what is spent comes from approved expenses filed under the name.
+  async saveBudget(c, a, _p, i) {
+    need(canFully(a.roles, 'payments.verify'), 'Only the Treasurer edits budgets.');
+    const name = text(i.name, 3, 80, 'The budget name'),
+      plan = Number(i.plan);
+    if (!Number.isInteger(plan) || plan < 1 || plan > 10_000_000)
+      throw new Fail(400, 'Enter the plan in whole taka, up to 10,000,000.');
+    const r =
+      i.id === undefined || i.id === null
+        ? await c.query(
+            `insert into budgets (name, plan) values ($1, $2) on conflict (name) do nothing`,
+            [name, plan],
+          )
+        : await c.query(
+            `update budgets set name = $2, plan = $3 where id = $1 and not exists (select 1 from budgets where name = $2 and id <> $1)`,
+            [posInt(i.id, 'budget'), name, plan],
+          );
+    if (!r.rowCount)
+      throw new Fail(409, 'That budget does not exist, or another one has that name.');
+    await audit(c, a, `set budget ${name}: ${tk(plan)}`);
+  },
+  async deleteBudget(c, a, _p, i) {
+    need(canFully(a.roles, 'payments.verify'), 'Only the Treasurer edits budgets.');
+    const r = await c.query(`delete from budgets where id = $1 returning name`, [
+      posInt(i.id, 'budget'),
+    ]);
+    if (!r.rows[0]) throw new Fail(404, 'That budget does not exist.');
+    await audit(c, a, `deleted budget ${r.rows[0].name}`);
+  },
+  // Raw roles are the Super Admin's: they make the President. Everyone else gets permissions through a post.
   async role(c, a, _p, i) {
-    need(canFully(a.role, 'roles.assign'));
+    need(a.role === 'super_admin', 'Only the Super Admin changes roles. Assign a post instead.');
     const role = pick(i.role, roles, 'role'),
       reason = text(i.reason, 3, 200, 'The reason'),
       user = key(i.user);
     need(user !== a.id, 'You cannot change your own role.');
-    need(
-      role !== 'super_admin' || a.role === 'super_admin',
-      'Only a Super Admin can grant Super Admin.',
-    );
-    // The public title follows the role, so a demoted officer does not keep the title and a promoted one gets it.
+    // The public title follows the role and the post is cleared, so a demoted officer keeps neither.
     const r = await c.query(
-      `update users set role = $2, title = $4 where id = $1 and not system and (role not in ('president', 'super_admin') or $3) returning name`,
-      [user, role, a.role === 'super_admin', role === 'member' ? null : roleName[role]],
+      `update users set role = $2, title = $3, post = null where id = $1 and not system returning name`,
+      [user, role, role === 'member' ? null : roleName[role]],
     );
-    if (!r.rows[0]) throw new Fail(404, 'That member does not exist, or outranks you.');
+    if (!r.rows[0]) throw new Fail(404, 'That member does not exist.');
     await audit(c, a, `assigned role ${roleName[role]} to ${r.rows[0].name} (reason: ${reason})`);
   },
+  async post(c, a, _p, i) {
+    need(canFully(a.roles, 'roles.assign'));
+    const post = i.post === null || i.post === '' ? null : pick(i.post, posts, 'post'),
+      user = key(i.user);
+    need(user !== a.id, 'You cannot change your own post.');
+    const r = await c.query(
+      `update users set post = $2, title = $3 where id = $1 and not system and role not in ('president', 'super_admin') returning name`,
+      [user, post, post && post !== 'member' ? postName[post] : null],
+    );
+    if (!r.rows[0]) throw new Fail(404, 'That member does not exist, or outranks you.');
+    await audit(c, a, `assigned post ${post ? postName[post] : 'none'} to ${r.rows[0].name}`);
+  },
+  // One President at a time. The email is checked again against the chosen account right before the swap.
+  async appointPresident(c, a, _p, i) {
+    need(a.role === 'super_admin', 'Only the Super Admin appoints the President.');
+    const user = key(i.user),
+      email = text(i.email, 5, 200, 'Email').toLowerCase();
+    need(user !== a.id, 'You cannot appoint yourself.');
+    const next = (
+      await c.query(
+        `select name from users where id = $1 and lower(email) = $2 and not system and not suspended and status = 'active' for update`,
+        [user, email],
+      )
+    ).rows[0];
+    if (!next) throw new Fail(404, 'No active member has that email.');
+    const old = await c.query(
+      `update users set role = 'member', title = null, post = null where role = 'president' and id <> $1 returning name`,
+      [user],
+    );
+    await c.query(
+      `update users set role = 'president', title = 'President', post = null where id = $1`,
+      [user],
+    );
+    await audit(
+      c,
+      a,
+      `appointed ${next.name} President${old.rows.length ? `, replacing ${old.rows.map((r) => r.name).join(', ')}` : ''}`,
+    );
+  },
+  // Which roles a post grants. Super Admin only, and never President or Super Admin.
+  async postRole(c, a, _p, i) {
+    need(a.role === 'super_admin', 'Only the Super Admin sets what a post grants.');
+    const post = pick(i.post, posts, 'post'),
+      role = pick(i.role, postableRoles, 'role');
+    if (typeof i.on !== 'boolean') throw new Fail(400, 'Expected on or off.');
+    await c.query(
+      `insert into post_roles (post, roles) values ($1, case when $3 then array[$2] else '{}' end)
+       on conflict (post) do update set roles = case when $3
+         then array(select distinct unnest(post_roles.roles || array[$2]))
+         else array_remove(post_roles.roles, $2) end`,
+      [post, role, i.on],
+    );
+    await audit(
+      c,
+      a,
+      `${i.on ? 'gave' : 'took'} ${roleName[role]} ${i.on ? 'to' : 'from'} post ${postName[post]}`,
+    );
+  },
   async suspend(c, a, _p, i) {
-    need(canFully(a.role, 'roles.assign'));
+    need(canFully(a.roles, 'roles.assign'));
     const user = key(i.user);
     if (typeof i.on !== 'boolean') throw new Fail(400, 'Expected on or off.');
     need(user !== a.id, 'You cannot suspend yourself.');
     const r = await c.query(
-      `update users set suspended = $2, status = case when $2 then 'suspended' else 'active' end
+      `update users set suspended = $2, status = case when $2 then 'suspended' when pass_hash is null and google_sub is null then 'invited' else 'active' end
        where id = $1 and not system and (role not in ('president', 'super_admin') or $3) returning name`,
       [user, i.on, a.role === 'super_admin'],
     );
     if (!r.rows[0]) throw new Fail(404, 'That member does not exist, or outranks you.');
     if (i.on) await c.query(`delete from sessions where user_id = $1`, [user]); // signed out everywhere, immediately
     await audit(c, a, `${i.on ? 'suspended' : 'reinstated'} ${r.rows[0].name}`);
+  },
+  // Pairs a member with a mentor (or clears it). The CP Head and above; the mentor must hold the mentoring grant.
+  async assignMentor(c, a, _p, i) {
+    need(canFully(a.roles, 'mentees.view'), 'Only the CP Head or the President assigns mentors.');
+    const user = key(i.user),
+      mentor = i.mentor === null || i.mentor === '' ? null : key(i.mentor);
+    need(user !== mentor, 'Nobody mentors themselves.');
+    if (mentor) {
+      const m = (
+        await c.query(`select ${ROLES} from users where id = $1 and not system and not suspended`, [
+          mentor,
+        ])
+      ).rows[0];
+      need(m && can(m.roles, 'mentees.view'), 'That member is not a mentor.');
+    }
+    const r = await c.query(
+      `update users set mentor_id = $2 where id = $1 and not system and role <> 'alumni' returning name`,
+      [user, mentor],
+    );
+    if (!r.rows[0]) throw new Fail(404, 'That member does not exist.');
+    await audit(
+      c,
+      a,
+      `${mentor ? `assigned mentor ${mentor} to` : 'cleared the mentor of'} ${r.rows[0].name}`,
+    );
   },
   // A fresh one-time link: the first password for someone who never signed in, or a reset for someone locked out.
   async invite(c, a, _p, i) {
@@ -861,18 +1264,18 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     need(user !== a.id, 'Change your own password from your profile.');
     const t = (
       await c.query(
-        `select role, name, pass_hash is not null as joined from users where id = $1 and not suspended for update`,
+        `select role, ${ROLES}, name, pass_hash is not null as joined from users where id = $1 and not suspended for update`,
         [user],
       )
     ).rows[0];
     need(t, 'That member does not exist.');
     // Whoever can take over an account must already outrank it: officers' accounts need the role-assigning authority, a Super Admin's needs a Super Admin.
     need(
-      t.role === 'member'
-        ? can(a.role, 'application.approve') || canFully(a.role, 'roles.assign')
+      (t.roles as Role[]).every((r) => r === 'member')
+        ? can(a.roles, 'application.approve') || canFully(a.roles, 'roles.assign')
         : t.role === 'super_admin'
           ? a.role === 'super_admin'
-          : canFully(a.role, 'roles.assign'),
+          : canFully(a.roles, 'roles.assign'),
     );
     await c.query(
       `update users set invite_hash = $2, invite_expires = now() + interval '7 days' where id = $1`,
@@ -883,7 +1286,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
   },
   async updateProfile(c, a, p, i) {
     person(a);
-    need(can(a.role, 'profile.editOwn'));
+    need(can(a.roles, 'profile.editOwn'));
     const sets: string[] = [];
     const params: unknown[] = [a.id];
     let idx = 2;
@@ -1044,8 +1447,8 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
   async setAvailableForQuestions(c, a, _p, i) {
     const targetId = typeof i.alumniId === 'string' && KEY.test(i.alumniId) ? i.alumniId : a.id;
     need(
-      targetId === a.id || isAdmin(a.role),
-      'Only the account owner or an admin can change mentoring availability.',
+      targetId === a.id || canFully(a.roles, 'alumni.toggleMentoring'),
+      'Only the account owner or the President can change mentoring availability.',
     );
     const val = Boolean(i.value);
     await c.query(`update users set available_for_questions = $1 where id = $2 and not system`, [
@@ -1055,60 +1458,17 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     await audit(c, a, `set mentoring availability for ${targetId} to ${val}`);
   },
   async createAlumniJob(c, a, _p, i) {
-    need(canFully(a.role, 'alumni.job.post'), 'Only alumni or admins can post alumni jobs.');
-    const company = text(i.company, 1, 100, 'Company');
-    const roleTitle = text(i.title ?? i.role, 1, 120, 'Role');
-    const url = optionalUrl(i.url, 'Job URL');
-    if (!url) throw new Fail(400, 'Job URL is required.');
-    const location = i.location ? text(i.location, 1, 100, 'Location') : null;
+    need(canFully(a.roles, 'alumni.job.post'), 'Only alumni or admins can post alumni jobs.');
+    const j = jobFields(i);
     const alumniId =
-      isAdmin(a.role) && typeof i.alumniId === 'string' && KEY.test(i.alumniId) ? i.alumniId : a.id;
+      isAdmin(a.roles) && typeof i.alumniId === 'string' && KEY.test(i.alumniId)
+        ? i.alumniId
+        : a.id;
     const owner = (await c.query(`select id from users where id = $1 and not system`, [alumniId]))
       .rows[0];
     if (!owner) throw new Fail(404, 'Target member does not exist.');
-    const vacancies = Math.max(1, Math.min(999, posInt(i.vacancies ?? 1, 'vacancies')));
-    const jobType = i.job_type ? String(i.job_type) : 'Full-time';
-    const experience = i.experience ? text(i.experience, 1, 100, 'Experience') : null;
-    const salary = i.salary ? text(i.salary, 1, 100, 'Salary') : null;
-    const description = i.description ? String(i.description).trim() : null;
-    const responsibilities = Array.isArray(i.responsibilities)
-      ? i.responsibilities
-          .map(String)
-          .map((s) => s.trim())
-          .filter(Boolean)
-      : [];
-    const requirements = Array.isArray(i.requirements)
-      ? i.requirements
-          .map(String)
-          .map((s) => s.trim())
-          .filter(Boolean)
-      : [];
-    const deadline = i.deadline ? String(i.deadline).slice(0, 10) : null;
-    const companyLogoUrl = optionalUrl(i.company_logo_url, 'Company logo URL');
-
-    await c.query(
-      `insert into alumni_jobs (
-         alumni_id, company, role, title, location, url, source,
-         vacancies, job_type, experience, salary, description, responsibilities, requirements, deadline, company_logo_url, posted_at
-       ) values ($1, $2, $3, $3, $4, $5, 'manual', $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, $13, $14, now())`,
-      [
-        alumniId,
-        company,
-        roleTitle,
-        location,
-        url,
-        vacancies,
-        jobType,
-        experience,
-        salary,
-        description,
-        JSON.stringify(responsibilities),
-        JSON.stringify(requirements),
-        deadline,
-        companyLogoUrl,
-      ],
-    );
-    await audit(c, a, `posted alumni job: ${company} — ${roleTitle}`);
+    await insertJob(c, alumniId, j);
+    await audit(c, a, `posted alumni job: ${j.company} — ${j.role}`);
   },
   async deleteAlumniJob(c, a, _p, i) {
     const jobId = posInt(i.jobId, 'job');
@@ -1117,7 +1477,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     ).rows[0];
     if (!row) throw new Fail(404, 'That job listing does not exist.');
     need(
-      row.alumni_id === a.id || isAdmin(a.role),
+      row.alumni_id === a.id || isAdmin(a.roles),
       'Only the author or an admin can delete this job.',
     );
     await c.query(`delete from alumni_jobs where id = $1`, [jobId]);
@@ -1147,7 +1507,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
   },
   async createInterviewTopic(c, a, _p, i) {
     need(
-      canFully(a.role, 'interview.topic.create'),
+      canFully(a.roles, 'interview.topic.create'),
       'Only alumni or admins can create interview topics.',
     );
     const name = text(i.name, 2, 80, 'Topic name');
@@ -1163,7 +1523,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
   },
   async createInterviewProblem(c, a, _p, i) {
     need(
-      canFully(a.role, 'interview.problem.create'),
+      canFully(a.roles, 'interview.problem.create'),
       'Only alumni or admins can add interview problems.',
     );
     const topicId = posInt(i.topicId, 'topic');
@@ -1189,7 +1549,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     ).rows[0];
     if (!p) throw new Fail(404, 'That problem does not exist.');
     need(
-      p.created_by === a.id || isAdmin(a.role),
+      p.created_by === a.id || isAdmin(a.roles),
       'Only the creator or an admin can delete this problem.',
     );
     await c.query(`delete from interview_problems where id = $1`, [problemId]);
@@ -1197,7 +1557,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
   },
   async createInterviewTip(c, a, _p, i) {
     need(
-      canFully(a.role, 'interview.tip.create'),
+      canFully(a.roles, 'interview.tip.create'),
       'Only alumni or admins can create interview tips.',
     );
     const topicId = i.topicId ? posInt(i.topicId, 'topic') : null;
@@ -1221,14 +1581,14 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     ).rows[0];
     if (!tip) throw new Fail(404, 'That tip does not exist.');
     need(
-      tip.author_id === a.id || isAdmin(a.role),
+      tip.author_id === a.id || isAdmin(a.roles),
       'Only the author or an admin can delete this tip.',
     );
     await c.query(`delete from interview_tips where id = $1`, [tipId]);
     await audit(c, a, `deleted interview tip #${tipId}: ${tip.title}`);
   },
   async createBlogPost(c, a, _p, i) {
-    need(canFully(a.role, 'blog.post.create'), 'Only alumni or admins can write blog posts.');
+    need(canFully(a.roles, 'blog.post.create'), 'Only alumni or admins can write blog posts.');
     const title = text(i.title, 2, 120, 'Title');
     const subtitle = i.subtitle ? text(i.subtitle, 1, 200, 'Subtitle') : null;
     const bodyMd = mdText(i.body_md ?? i.body, 1, 50_000, 'Story');
@@ -1287,7 +1647,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     ).rows[0];
     if (!post) throw new Fail(404, 'That post does not exist.');
     need(
-      post.author_id === a.id || isAdmin(a.role),
+      post.author_id === a.id || canFully(a.roles, 'blog.post.delete'),
       'Only the author or an admin can edit this post.',
     );
     const title = i.title ? text(i.title, 2, 120, 'Title') : post.title;
@@ -1348,7 +1708,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
       .rows[0];
     if (!post) throw new Fail(404, 'That post does not exist.');
     need(
-      post.author_id === a.id || isAdmin(a.role),
+      post.author_id === a.id || canFully(a.roles, 'blog.post.delete'),
       'Only the author or an admin can delete this post.',
     );
     await c.query(`delete from blog_posts where id = $1`, [id]);
@@ -1356,7 +1716,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
   },
   async promoteMember(c, a, _p, i) {
     need(
-      canFully(a.role, 'member.promote'),
+      canFully(a.roles, 'member.promote'),
       'Only the President or Super Admin can promote members.',
     );
     const userId = key(i.userId);
@@ -1370,13 +1730,13 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
   },
   async makeAlumni(c, a, _p, i) {
     need(
-      canFully(a.role, 'member.makeAlumni'),
+      canFully(a.roles, 'member.makeAlumni'),
       'Only the President or Super Admin can transition members to alumni.',
     );
     const userId = key(i.userId);
     need(userId !== a.id, 'You cannot transition your own account.');
     const r = await c.query(
-      `update users set role = 'alumni', title = 'Alumni' where id = $1 and not system and (role not in ('president', 'super_admin') or $2) returning name`,
+      `update users set role = 'alumni', title = 'Alumni', post = null where id = $1 and not system and (role not in ('president', 'super_admin') or $2) returning name`,
       [userId, a.role === 'super_admin'],
     );
     if (!r.rows[0]) throw new Fail(404, 'That member does not exist, or cannot be modified.');
@@ -1384,7 +1744,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
   },
   async deactivateMember(c, a, _p, i) {
     need(
-      canFully(a.role, 'member.deactivate'),
+      canFully(a.roles, 'member.deactivate'),
       'Only the President or Super Admin can deactivate members.',
     );
     const userId = key(i.userId);
@@ -1407,14 +1767,19 @@ export async function act(userId: string, input: unknown): Promise<string | void
   return tx(async (c) => {
     const u = (
       await c.query(
-        `select id, role, name, system, progress from users where id = $1 and not suspended for update`,
+        `select id, role, ${ROLES}, name, system, progress from users where id = $1 and not suspended for update`,
         [userId],
       )
     ).rows[0];
     if (!u) throw new Fail(401, 'Sign in again.');
     const p = progress(u.progress),
       before = JSON.stringify(p);
-    const info = await run(c, { id: u.id, role: u.role, name: u.name, system: u.system }, p, i);
+    const info = await run(
+      c,
+      { id: u.id, role: u.role, roles: u.roles, name: u.name, system: u.system },
+      p,
+      i,
+    );
     const after = JSON.stringify(p);
     if (after !== before)
       await c.query(`update users set progress = $2 where id = $1`, [userId, after]);
@@ -1456,12 +1821,14 @@ export async function apply(db: Db, i: In) {
 export async function exportMembers(userId: string) {
   return tx(async (c) => {
     const u = (
-      await c.query(`select role, name from users where id = $1 and not suspended`, [userId])
+      await c.query(`select role, ${ROLES}, name from users where id = $1 and not suspended`, [
+        userId,
+      ])
     ).rows[0];
-    if (!u || !can(u.role, 'data.export')) throw new Fail(403, 'Your role cannot export data.');
+    if (!u || !can(u.roles, 'data.export')) throw new Fail(403, 'Your role cannot export data.');
     await audit(
       c,
-      { id: userId, role: u.role, name: u.name, system: false },
+      { id: userId, role: u.role, roles: u.roles, name: u.name, system: false },
       'exported member data (CSV)',
     );
     const rows = (
@@ -1540,7 +1907,7 @@ export async function listFeedPosts(
   const sql = `
     select fp.id, fp.user_id, u.name as author_name, greatest(u.problems_solved, u.solved) as author_solved,
       u.rating as author_rating, u.title as author_role, u.avatar_url as author_avatar,
-      fp.title, fp.body_md, fp.category, fp.score,
+      fp.title, left(fp.body_md, 400) as body_md, fp.category, fp.score,
       coalesce(v.value, 0)::int as my_vote,
       fp.created_at, fp.updated_at
     from feed_posts fp
@@ -1556,6 +1923,28 @@ export async function listFeedPosts(
   const nextCursor =
     hasMore && last ? (sort === 'top' ? `${last.score}:${last.id}` : String(last.id)) : null;
   return { items, nextCursor };
+}
+
+/** Reported feed posts, most-reported first, for members who moderate the feed. */
+export async function listFeedReports(db: Db, userId: string) {
+  const r = (await db.query(`select ${ROLES} from users where id = $1`, [userId])).rows[0];
+  need(r && can(r.roles, 'feed.moderate'));
+  return {
+    items: (
+      await db.query(
+        `select fp.id, fp.title, u.name as author_name, count(*)::int as reports,
+          json_agg(fr.reason order by fr.id desc) as reasons, max(fr.created_at) as last_at
+        from feed_reports fr join feed_posts fp on fp.id = fr.post_id join users u on u.id = fp.user_id
+        group by fp.id, u.name order by reports desc, last_at desc limit 50`,
+      )
+    ).rows as {
+      id: number;
+      title: string;
+      author_name: string;
+      reports: number;
+      reasons: string[];
+    }[],
+  };
 }
 
 /** Full detail for a single Feed post modal (body, author contribution stats, author recent posts). */
@@ -1661,7 +2050,7 @@ export async function listIdeas(
     with base as (
       select i.id, i.user_id, u.name as author_name, greatest(u.problems_solved, u.solved) as author_solved,
         u.rating as author_rating, u.avatar_url as author_avatar,
-        i.title, i.body_md, i.type, i.status, i.roles,
+        i.title, left(i.body_md, 400) as body_md, i.type, i.status, i.roles,
         (select count(*)::int from reactions r where r.target = 'idea:' || i.id) as upvotes,
         (select count(*)::int from community_comments cc where cc.target_type = 'idea' and cc.target_id = i.id) as comment_count,
         (select count(*)::int from idea_interests ii where ii.idea_id = i.id) as interested_count,
@@ -2049,11 +2438,13 @@ export async function fetchAlumniJobs(
 ): Promise<{ added: number; jobs: AlumniJob[] }> {
   const userId = key(input.userId);
   const actor = (
-    await db.query(`select id, role, name from users where id = $1 and not suspended`, [actorId])
+    await db.query(`select id, role, ${ROLES}, name from users where id = $1 and not suspended`, [
+      actorId,
+    ])
   ).rows[0];
   if (!actor) throw new Fail(401, 'Sign in again.');
   need(
-    actor.id === userId || isAdmin(actor.role),
+    actor.id === userId || isAdmin(actor.roles),
     'Only the alumni member or an admin can refresh fetched jobs.',
   );
 
@@ -2073,7 +2464,8 @@ export async function fetchAlumniJobs(
 
   let added = 0;
   for (const b of boards) {
-    if (!/^[a-z0-9_-]{1,60}$/i.test(b.slug)) continue;
+    if (typeof b?.slug !== 'string' || !/^[a-z0-9_-]{1,60}$/i.test(b.slug)) continue;
+    const company = text(b.company || b.slug, 1, 100, 'Company');
     try {
       let parsed: { role: string; location: string | null; url: string }[] = [];
       if (b.provider === 'greenhouse') {
@@ -2123,7 +2515,7 @@ export async function fetchAlumniJobs(
           }
         }
       }
-      for (const item of parsed) {
+      for (const item of parsed.filter((x) => /^https:\/\//i.test(x.url))) {
         const exists =
           (
             await db.query(`select 1 from alumni_jobs where alumni_id = $1 and url = $2`, [
@@ -2134,7 +2526,7 @@ export async function fetchAlumniJobs(
         if (!exists) {
           await db.query(
             `insert into alumni_jobs (alumni_id, company, role, location, url, source, fetched_at) values ($1, $2, $3, $4, $5, 'fetched', now())`,
-            [userId, b.company.slice(0, 100), item.role, item.location, item.url],
+            [userId, company, item.role, item.location, item.url],
           );
           added++;
         }
@@ -2308,12 +2700,12 @@ export async function kudosMilestone(
   return tx(async (c) => {
     const u = (
       await c.query(
-        `select id, role, name, system from users where id = $1 and not suspended for update`,
+        `select id, role, ${ROLES}, name, system from users where id = $1 and not suspended for update`,
         [userId],
       )
     ).rows[0];
     if (!u) throw new Fail(401, 'Sign in again.');
-    const actor: Actor = { id: u.id, role: u.role, name: u.name, system: u.system };
+    const actor: Actor = { id: u.id, role: u.role, roles: u.roles, name: u.name, system: u.system };
     person(actor);
     return giveMilestoneKudosTx(c, actor, milestoneId);
   });
@@ -2494,14 +2886,16 @@ export async function setAvailableForQuestions(
   const { actorId: userId, input } = parseActorAndInput(a, b, c);
   return tx(async (conn) => {
     const u = (
-      await conn.query(`select id, role from users where id = $1 and not suspended`, [userId])
+      await conn.query(`select id, role, ${ROLES} from users where id = $1 and not suspended`, [
+        userId,
+      ])
     ).rows[0];
     if (!u) throw new Fail(401, 'Sign in again.');
     const rawTarget = input.userId ?? input.alumniId;
     const targetId = typeof rawTarget === 'string' && KEY.test(rawTarget) ? rawTarget : userId;
     need(
-      targetId === userId || isAdmin(u.role),
-      'Only the account owner or an admin can change mentoring availability.',
+      targetId === userId || canFully(u.roles, 'alumni.toggleMentoring'),
+      'Only the account owner or the President can change mentoring availability.',
     );
     const val = input.available !== undefined ? Boolean(input.available) : Boolean(input.value);
     await conn.query(`update users set available_for_questions = $1 where id = $2 and not system`, [
@@ -2656,76 +3050,27 @@ export async function createAlumniJob(
   const { actorId: userId, input } = parseActorAndInput(a, b, c);
   return tx(async (conn) => {
     const u = (
-      await conn.query(`select id, role, name, system from users where id = $1 and not suspended`, [
-        userId,
-      ])
+      await conn.query(
+        `select id, role, ${ROLES}, name, system from users where id = $1 and not suspended`,
+        [userId],
+      )
     ).rows[0];
     if (!u) throw new Fail(401, 'Sign in again.');
-    const actor: Actor = { id: u.id, role: u.role, name: u.name, system: u.system };
+    const actor: Actor = { id: u.id, role: u.role, roles: u.roles, name: u.name, system: u.system };
     person(actor);
-    need(canFully(actor.role, 'alumni.job.post'), 'Only alumni or admins can post alumni jobs.');
+    need(canFully(actor.roles, 'alumni.job.post'), 'Only alumni or admins can post alumni jobs.');
 
-    const company = text(input.company, 1, 100, 'Company');
-    const roleTitle = text(input.title ?? input.role, 1, 120, 'Role');
-    const url = optionalUrl(input.url, 'Job URL');
-    if (!url) throw new Fail(400, 'Job URL is required.');
-    const location = input.location ? text(input.location, 1, 100, 'Location') : null;
-    const vacancies = Math.max(1, Math.min(999, posInt(input.vacancies ?? 1, 'vacancies')));
-    const jobType = input.job_type ? String(input.job_type) : 'Full-time';
-    const experience = input.experience ? text(input.experience, 1, 100, 'Experience') : null;
-    const salary = input.salary ? text(input.salary, 1, 100, 'Salary') : null;
-    const description = input.description ? String(input.description).trim() : null;
-    const responsibilities = Array.isArray(input.responsibilities)
-      ? input.responsibilities
-          .map(String)
-          .map((s) => s.trim())
-          .filter(Boolean)
-      : [];
-    const requirements = Array.isArray(input.requirements)
-      ? input.requirements
-          .map(String)
-          .map((s) => s.trim())
-          .filter(Boolean)
-      : [];
-    const deadline = input.deadline ? String(input.deadline).slice(0, 10) : null;
-    const companyLogoUrl =
-      typeof input.company_logo_url === 'string' && input.company_logo_url.trim()
-        ? input.company_logo_url.trim()
-        : null;
-
-    const ins = await conn.query(
-      `insert into alumni_jobs (
-         alumni_id, company, role, title, location, url, source,
-         vacancies, job_type, experience, salary, description, responsibilities, requirements, deadline, company_logo_url, posted_at
-       ) values ($1, $2, $3, $3, $4, $5, 'manual', $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, coalesce($13::date, current_date + interval '30 days'), $14, now())
-       returning id`,
-      [
-        userId,
-        company,
-        roleTitle,
-        location,
-        url,
-        vacancies,
-        jobType,
-        experience,
-        salary,
-        description,
-        JSON.stringify(responsibilities),
-        JSON.stringify(requirements),
-        deadline,
-        companyLogoUrl,
-      ],
-    );
-    await audit(conn, actor, `posted alumni job: ${company} — ${roleTitle}`);
-    const jobId = Number(ins.rows[0].id);
+    const j = jobFields(input as In);
+    const jobId = await insertJob(conn, userId, j);
+    await audit(conn, actor, `posted alumni job: ${j.company} — ${j.role}`);
     return {
       success: true,
       jobId,
       id: jobId,
-      company,
-      role: roleTitle,
-      title: roleTitle,
-      vacancies,
+      company: j.company,
+      role: j.role,
+      title: j.role,
+      vacancies: j.vacancies,
       mine: true,
     };
   });
@@ -2739,12 +3084,13 @@ export async function deleteAlumniJob(
   const { actorId: userId, input } = parseActorAndInput(a, b, c);
   return tx(async (conn) => {
     const u = (
-      await conn.query(`select id, role, name, system from users where id = $1 and not suspended`, [
-        userId,
-      ])
+      await conn.query(
+        `select id, role, ${ROLES}, name, system from users where id = $1 and not suspended`,
+        [userId],
+      )
     ).rows[0];
     if (!u) throw new Fail(401, 'Sign in again.');
-    const actor: Actor = { id: u.id, role: u.role, name: u.name, system: u.system };
+    const actor: Actor = { id: u.id, role: u.role, roles: u.roles, name: u.name, system: u.system };
     person(actor);
     const jobId = posInt(input.jobId, 'job');
     const row = (
@@ -2754,7 +3100,7 @@ export async function deleteAlumniJob(
     ).rows[0];
     if (!row) throw new Fail(404, 'That job listing does not exist.');
     need(
-      row.alumni_id === userId || isAdmin(actor.role),
+      row.alumni_id === userId || isAdmin(actor.roles),
       'Only the author or an admin can delete this job.',
     );
     await conn.query(`delete from alumni_jobs where id = $1`, [jobId]);
@@ -2910,15 +3256,16 @@ export async function createInterviewTopic(
   const { actorId: userId, input } = parseActorAndInput(a, b, c);
   return tx(async (conn) => {
     const u = (
-      await conn.query(`select id, role, name, system from users where id = $1 and not suspended`, [
-        userId,
-      ])
+      await conn.query(
+        `select id, role, ${ROLES}, name, system from users where id = $1 and not suspended`,
+        [userId],
+      )
     ).rows[0];
     if (!u) throw new Fail(401, 'Sign in again.');
-    const actor: Actor = { id: u.id, role: u.role, name: u.name, system: u.system };
+    const actor: Actor = { id: u.id, role: u.role, roles: u.roles, name: u.name, system: u.system };
     person(actor);
     need(
-      canFully(actor.role, 'interview.topic.create'),
+      canFully(actor.roles, 'interview.topic.create'),
       'Only alumni or admins can create interview topics.',
     );
 
@@ -2958,15 +3305,16 @@ export async function createInterviewProblem(
   const { actorId: userId, input } = parseActorAndInput(a, b, c);
   return tx(async (conn) => {
     const u = (
-      await conn.query(`select id, role, name, system from users where id = $1 and not suspended`, [
-        userId,
-      ])
+      await conn.query(
+        `select id, role, ${ROLES}, name, system from users where id = $1 and not suspended`,
+        [userId],
+      )
     ).rows[0];
     if (!u) throw new Fail(401, 'Sign in again.');
-    const actor: Actor = { id: u.id, role: u.role, name: u.name, system: u.system };
+    const actor: Actor = { id: u.id, role: u.role, roles: u.roles, name: u.name, system: u.system };
     person(actor);
     need(
-      canFully(actor.role, 'interview.problem.create'),
+      canFully(actor.roles, 'interview.problem.create'),
       'Only alumni or admins can add interview problems.',
     );
 
@@ -2997,12 +3345,13 @@ export async function deleteInterviewProblem(
   const { actorId: userId, input } = parseActorAndInput(a, b, c);
   return tx(async (conn) => {
     const u = (
-      await conn.query(`select id, role, name, system from users where id = $1 and not suspended`, [
-        userId,
-      ])
+      await conn.query(
+        `select id, role, ${ROLES}, name, system from users where id = $1 and not suspended`,
+        [userId],
+      )
     ).rows[0];
     if (!u) throw new Fail(401, 'Sign in again.');
-    const actor: Actor = { id: u.id, role: u.role, name: u.name, system: u.system };
+    const actor: Actor = { id: u.id, role: u.role, roles: u.roles, name: u.name, system: u.system };
     person(actor);
     const problemId = posInt(input.problemId, 'problem');
     const p = (
@@ -3012,7 +3361,7 @@ export async function deleteInterviewProblem(
     ).rows[0];
     if (!p) throw new Fail(404, 'That problem does not exist.');
     need(
-      p.created_by === userId || isAdmin(actor.role),
+      p.created_by === userId || isAdmin(actor.roles),
       'Only the creator or an admin can delete this problem.',
     );
     await conn.query(`delete from interview_problems where id = $1`, [problemId]);
@@ -3049,15 +3398,16 @@ export async function createInterviewTip(
   const { actorId: userId, input } = parseActorAndInput(a, b, c);
   return tx(async (conn) => {
     const u = (
-      await conn.query(`select id, role, name, system from users where id = $1 and not suspended`, [
-        userId,
-      ])
+      await conn.query(
+        `select id, role, ${ROLES}, name, system from users where id = $1 and not suspended`,
+        [userId],
+      )
     ).rows[0];
     if (!u) throw new Fail(401, 'Sign in again.');
-    const actor: Actor = { id: u.id, role: u.role, name: u.name, system: u.system };
+    const actor: Actor = { id: u.id, role: u.role, roles: u.roles, name: u.name, system: u.system };
     person(actor);
     need(
-      canFully(actor.role, 'interview.tip.create'),
+      canFully(actor.roles, 'interview.tip.create'),
       'Only alumni or admins can create interview tips.',
     );
 
@@ -3097,12 +3447,13 @@ export async function deleteInterviewTip(
   const { actorId: userId, input } = parseActorAndInput(a, b, c);
   return tx(async (conn) => {
     const u = (
-      await conn.query(`select id, role, name, system from users where id = $1 and not suspended`, [
-        userId,
-      ])
+      await conn.query(
+        `select id, role, ${ROLES}, name, system from users where id = $1 and not suspended`,
+        [userId],
+      )
     ).rows[0];
     if (!u) throw new Fail(401, 'Sign in again.');
-    const actor: Actor = { id: u.id, role: u.role, name: u.name, system: u.system };
+    const actor: Actor = { id: u.id, role: u.role, roles: u.roles, name: u.name, system: u.system };
     person(actor);
     const tipId = posInt(input.tipId, 'tip');
     const tip = (
@@ -3110,7 +3461,7 @@ export async function deleteInterviewTip(
     ).rows[0];
     if (!tip) throw new Fail(404, 'That tip does not exist.');
     need(
-      tip.author_id === userId || isAdmin(actor.role),
+      tip.author_id === userId || isAdmin(actor.roles),
       'Only the author or an admin can delete this tip.',
     );
     await conn.query(`delete from interview_tips where id = $1`, [tipId]);
@@ -3156,9 +3507,9 @@ export async function listBlogPosts(
   const offset = page * pageSize;
 
   const viewerRow = viewerId
-    ? (await db.query(`select role from users where id = $1`, [viewerId])).rows[0]
+    ? (await db.query(`select role, ${ROLES} from users where id = $1`, [viewerId])).rows[0]
     : null;
-  const admin = viewerRow && isAdmin(viewerRow.role);
+  const admin = viewerRow && canFully(viewerRow.roles, 'blog.post.delete');
 
   const conditions: string[] = [];
   const params: unknown[] = [viewerId || null];
@@ -3312,8 +3663,9 @@ export async function getBlogPost(
   if (!row) throw new Fail(404, 'That blog post does not exist.');
 
   if (viewerId) {
-    const viewerRow = (await db.query(`select role from users where id = $1`, [viewerId])).rows[0];
-    const admin = viewerRow && isAdmin(viewerRow.role);
+    const viewerRow = (await db.query(`select role, ${ROLES} from users where id = $1`, [viewerId]))
+      .rows[0];
+    const admin = viewerRow && canFully(viewerRow.roles, 'blog.post.delete');
     if (row.status !== 'published' && row.author_id !== viewerId && !admin) {
       throw new Fail(403, 'This draft post is private.');
     }
@@ -3362,14 +3714,15 @@ export async function createBlogPost(
   const { actorId: userId, input } = parseActorAndInput(a, b, c);
   return tx(async (conn) => {
     const u = (
-      await conn.query(`select id, role, name, system from users where id = $1 and not suspended`, [
-        userId,
-      ])
+      await conn.query(
+        `select id, role, ${ROLES}, name, system from users where id = $1 and not suspended`,
+        [userId],
+      )
     ).rows[0];
     if (!u) throw new Fail(401, 'Sign in again.');
-    const actor: Actor = { id: u.id, role: u.role, name: u.name, system: u.system };
+    const actor: Actor = { id: u.id, role: u.role, roles: u.roles, name: u.name, system: u.system };
     person(actor);
-    need(canFully(actor.role, 'blog.post.create'), 'Only alumni or admins can write blog posts.');
+    need(canFully(actor.roles, 'blog.post.create'), 'Only alumni or admins can write blog posts.');
 
     const title = text(input.title, 2, 120, 'Title');
     const subtitle = input.subtitle ? text(input.subtitle, 1, 200, 'Subtitle') : null;
@@ -3459,12 +3812,13 @@ export async function updateBlogPost(
   const { actorId: userId, input } = parseActorAndInput(a, b, c);
   return tx(async (conn) => {
     const u = (
-      await conn.query(`select id, role, name, system from users where id = $1 and not suspended`, [
-        userId,
-      ])
+      await conn.query(
+        `select id, role, ${ROLES}, name, system from users where id = $1 and not suspended`,
+        [userId],
+      )
     ).rows[0];
     if (!u) throw new Fail(401, 'Sign in again.');
-    const actor: Actor = { id: u.id, role: u.role, name: u.name, system: u.system };
+    const actor: Actor = { id: u.id, role: u.role, roles: u.roles, name: u.name, system: u.system };
     person(actor);
     const id = posInt(input.id, 'post');
     const post = (
@@ -3475,7 +3829,7 @@ export async function updateBlogPost(
     ).rows[0];
     if (!post) throw new Fail(404, 'That post does not exist.');
     need(
-      post.author_id === userId || isAdmin(actor.role),
+      post.author_id === userId || canFully(actor.roles, 'blog.post.delete'),
       'Only the author or an admin can edit this post.',
     );
 
@@ -3554,12 +3908,13 @@ export async function deleteBlogPost(
   const { actorId: userId, input } = parseActorAndInput(a, b, c);
   return tx(async (conn) => {
     const u = (
-      await conn.query(`select id, role, name, system from users where id = $1 and not suspended`, [
-        userId,
-      ])
+      await conn.query(
+        `select id, role, ${ROLES}, name, system from users where id = $1 and not suspended`,
+        [userId],
+      )
     ).rows[0];
     if (!u) throw new Fail(401, 'Sign in again.');
-    const actor: Actor = { id: u.id, role: u.role, name: u.name, system: u.system };
+    const actor: Actor = { id: u.id, role: u.role, roles: u.roles, name: u.name, system: u.system };
     person(actor);
     const id = posInt(input.id, 'post');
     const post = (
@@ -3567,7 +3922,7 @@ export async function deleteBlogPost(
     ).rows[0];
     if (!post) throw new Fail(404, 'That post does not exist.');
     need(
-      post.author_id === userId || isAdmin(actor.role),
+      post.author_id === userId || canFully(actor.roles, 'blog.post.delete'),
       'Only the author or an admin can delete this post.',
     );
 

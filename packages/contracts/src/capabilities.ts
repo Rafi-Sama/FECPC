@@ -1,4 +1,4 @@
-import type { Role } from './roles.ts';
+import { asRoles, type Role, type Who } from './roles.ts';
 
 export type Grant = 'none' | 'view' | 'scope' | 'propose' | 'full';
 export type Cell = true | 'scope' | 'view' | 'propose';
@@ -76,6 +76,13 @@ export const matrix = {
     president: Y,
     super_admin: Y,
   },
+  'contest.run': {
+    label: 'Choose the contests on the contest-day scoreboard',
+    cp_head: Y,
+    secretary: Y,
+    president: Y,
+    super_admin: Y,
+  },
   'announce.post': {
     label: 'Post announcements',
     mentor: 'scope',
@@ -92,6 +99,12 @@ export const matrix = {
     mentor: Y,
     cp_head: Y,
     treasurer: Y,
+    secretary: Y,
+    president: Y,
+    super_admin: Y,
+  },
+  'feed.moderate': {
+    label: 'Review reported feed posts',
     secretary: Y,
     president: Y,
     super_admin: Y,
@@ -232,25 +245,33 @@ export type Cap = Capability;
 
 /**
  * The matrix cell: true, a limited grant ("scope" | "view" | "propose"), or false.
+ * For several roles, the strongest grant any of them holds.
  */
-export const can = (role: Role, cap: Capability): Cell | false =>
-  (matrix[cap] as Partial<Record<Role, Cell>>)[role] ?? false;
+export const can = (who: Who, cap: Capability): Cell | false => {
+  let best: Cell | false = false;
+  for (const r of asRoles(who)) {
+    const c = (matrix[cap] as Partial<Record<Role, Cell>>)[r] ?? false;
+    if (c === true) return true;
+    best ||= c;
+  }
+  return best;
+};
 
 /**
  * Standardized Grant string: 'none' | 'view' | 'scope' | 'propose' | 'full'
  */
-export const grantOf = (role: Role, cap: Capability): Grant => {
-  const c = can(role, cap);
+export const grantOf = (who: Who, cap: Capability): Grant => {
+  const c = can(who, cap);
   if (c === true) return 'full';
   if (c === false) return 'none';
   return c;
 };
 
 /** Full, unrestricted grant only. Use for destructive or money-moving actions. */
-export const canFully = (role: Role, cap: Capability): boolean => can(role, cap) === true;
+export const canFully = (who: Who, cap: Capability): boolean => can(who, cap) === true;
 
 /** May open the admin panel: holds at least one account, audit or export capability. */
-export const isAdmin = (r: Role): boolean =>
+export const isAdmin = (r: Who): boolean =>
   !!(
     can(r, 'application.approve') ||
     can(r, 'roles.assign') ||

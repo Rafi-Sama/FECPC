@@ -5,21 +5,22 @@ import { useStore } from '@/components/app/Store';
 import { can, matrix, roleName, roles, type Cap } from '@fecpc/contracts';
 import { AdminExtra } from '@/components/app/admin/AdminExtra';
 
+const hues = ['#3de1ff', '#ff8a3d', '#7ce38b', '#ff4d8d'];
 const cell = (v: unknown) => (v === true ? '✓' : v ? String(v) : '–');
 
 export default function Admin() {
   const { s, act, office, members } = useStore();
   const applications = office.applications ?? [];
   const caps = {
-    apps: can(s.role, 'application.approve'),
-    roles: can(s.role, 'roles.assign'),
-    audit: can(s.role, 'audit.view'),
-    exp: can(s.role, 'data.export'),
+    apps: can(s.roles, 'application.approve'),
+    roles: can(s.roles, 'roles.assign'),
+    audit: can(s.roles, 'audit.view'),
+    exp: can(s.roles, 'data.export'),
   };
   const tabs = [
     'Dashboard',
     ...(caps.apps ? ['Applications'] : []),
-    'Members',
+    ...(caps.apps || caps.roles ? ['Members'] : []),
     'Permissions',
     ...(caps.audit ? ['Audit log'] : []),
   ];
@@ -85,20 +86,24 @@ export default function Admin() {
       <Tabs tabs={tabs} value={cur} onChange={setTab} />
       {cur === 'Dashboard' && (
         <div className="bento">
-          {tiles.map(([l, v, d]) => (
-            <section key={l} className="panel c3">
+          {tiles.map(([l, v, d], i) => (
+            <section
+              key={l}
+              className="panel c3 tile"
+              style={{ '--hue': hues[i % hues.length] } as React.CSSProperties}
+            >
               <p className="label">{l}</p>
               <p className="big">{v}</p>
               <p className="body">{d}</p>
             </section>
           ))}
           {caps.exp && (
-            <section className="panel c4">
+            <section
+              className="panel c4 tile"
+              style={{ '--hue': '#ffd23f' } as React.CSSProperties}
+            >
               <p className="label">Member list</p>
-              <p className="body">
-                Name, handle, batch, department, rating, solves and status. Each export is written
-                to the audit log.
-              </p>
+              <p className="body">Exports are written to the audit log.</p>
               <button className="btn sm" style={{ alignSelf: 'flex-start' }} onClick={download}>
                 Export members (CSV)
               </button>
@@ -208,7 +213,7 @@ export default function Admin() {
         <div className="stack">
           <p className="body" style={{ maxWidth: '70ch' }}>
             ✓ full · scope: only their own mentees · view: read only · propose: starts a decision
-            that a second officer finishes. Roles are assigned under Members.
+            that a second officer finishes. Posts are assigned from a member's ⋯ menu.
           </p>
           <div className="scroll-x">
             <table className="tbl matrix">

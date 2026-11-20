@@ -5,7 +5,7 @@
 // - Sidebar freshness window: 14 days (older milestones stay on the member's profile only).
 import { previousRankTitle, ratingRankFor } from '@fecpc/contracts';
 import type { MilestoneType } from '@fecpc/contracts';
-import type { Db } from './db.ts';
+import { tx, type Db } from './db.ts';
 
 export const DAILY_KUDOS_CAP = 20;
 export const MILESTONE_FRESHNESS_DAYS = 14;
@@ -233,13 +233,22 @@ export async function syncCodeforces(
     const day = new Date(sub.creationTimeSeconds * 1000).toISOString().slice(0, 10);
     days[day] = (days[day] ?? 0) + 1;
   }
-  const cfHandle = info[0].handle ?? handle;
-  const res = await syncUserCodeforcesStats(db, userId, {
-    cf_handle: cfHandle,
-    cf_rating: typeof info[0].rating === 'number' ? info[0].rating : null,
-    problems_solved: solved.size,
-    current_streak: computeStreakFromDays(days),
-    meta: { cf_handle: cfHandle, source: 'cf_sync' },
+  const cfHandle = info[0].handle ?? handle,
+    rating = info[0].rating;
+  // The accepted set replaces the stored one in the same transaction as the stats, so sheet XP never sees half a sync.
+  const res = await tx(async (c) => {
+    await c.query(`delete from cf_solves where user_id = $1`, [userId]);
+    await c.query(
+      `insert into cf_solves (user_id, problem) select $1, unnest($2::text[]) on conflict do nothing`,
+      [userId, [...solved].filter((p) => /^\d+[A-Z]\d?$/.test(p))],
+    );
+    return syncUserCodeforcesStats(c, userId, {
+      cf_handle: cfHandle,
+      cf_rating: typeof rating === 'number' ? rating : null,
+      problems_solved: solved.size,
+      current_streak: computeStreakFromDays(days),
+      meta: { cf_handle: cfHandle, source: 'cf_sync' },
+    });
   });
   return { handle: cfHandle, milestonesCreated: res.inserted };
 }
@@ -306,4 +315,48 @@ export async function backfillMilestones(db: Db): Promise<number> {
   }
 
   return inserted;
+}
+
+/** VJudge judges whose solves the Codeforces sync already counts. */
+const CF_ON_VJUDGE = new Set(['CodeForces', 'Gym']);
+
+/** Distinct accepted problems in a VJudge `solveDetail` answer, Codeforces ones excluded. */
+export function countVjudgeSolved(detail: { acRecords?: Record<string, unknown> } | null): number {
+  let n = 0;
+  for (const [oj, list] of Object.entries(detail?.acRecords ?? {}))
+    if (!CF_ON_VJUDGE.has(oj) && Array.isArray(list)) n += new Set(list).size;
+  return n;
+}
+
+/**
+ * Fetches the member's own linked VJudge handle from VJudge (never from the caller) and stores the solve count,
+ * which feeds the member's XP. Returns null when there is no linked handle or VJudge does not answer.
+ */
+export async function syncVjudge(
+  db: Db,
+  userId: string,
+): Promise<{ handle: string; solved: number } | null> {
+  const handle = (
+    await db.query(
+      `select vjudge_handle as h from users where id = $1 and not system and not suspended`,
+      [userId],
+    )
+  ).rows[0]?.h as string | undefined;
+  if (!handle || !/^[\w.-]{2,30}$/.test(handle)) return null;
+  const res = await fetch(`https://vjudge.net/user/solveDetail/${encodeURIComponent(handle)}`, {
+    signal: AbortSignal.timeout(8000),
+  }).catch(() => null);
+  if (!res?.ok) return null;
+  const detail = (await res.json().catch(() => null)) as {
+    acRecords?: Record<string, unknown>;
+  } | null;
+  if (!detail?.acRecords) return null;
+  const solved = countVjudgeSolved(detail);
+  // Only if the handle is still the one we fetched: the member may have changed it meanwhile.
+  await db.query(`update users set vj_solved = $3 where id = $1 and vjudge_handle = $2`, [
+    userId,
+    handle,
+    solved,
+  ]);
+  return { handle, solved };
 }

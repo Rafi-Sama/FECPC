@@ -5,6 +5,7 @@ import { earned, level, quests, XP, type Earn } from '../src/xp.ts';
 const base: Earn = {
   base: { solved: 9, done: 1 },
   solved: Array(9).fill('x'),
+  verified: [],
   done: ['r1'],
   lessons: [],
   quiz: {},
@@ -24,8 +25,18 @@ test('xp: base state earns nothing, actions add up, shop items never earn', () =
   assert.equal(earned({ ...base, checkin: true }), XP.checkin);
   assert.equal(earned({ ...base, kudos: ['shop:Sticker pack'] }), 0);
   assert.equal(earned({ ...base, quiz: { a: 1, b: 3 } }), XP.quiz); // only passes (2+ of 3) count
-  const all3 = { ...base, solved: [...base.solved, 'y'], lessons: ['l1'], kudos: ['f1'] };
+  const all3 = {
+    ...base,
+    solved: [...base.solved, 'y'],
+    verified: ['y'],
+    lessons: ['l1'],
+    kudos: ['f1'],
+  };
   assert.equal(earned(all3), XP.solve + XP.lesson + XP.kudos + XP.quest);
+  // a tick Codeforces has not confirmed is tracked but earns nothing, and does not finish the quest
+  const unverified = { ...all3, verified: [] };
+  assert.equal(earned(unverified), XP.lesson + XP.kudos);
+  assert.equal(quests(unverified)[0]!.done, false);
   assert.deepEqual(level(3100), { lv: 3, into: 100, title: 'Grinder' });
 });
 
@@ -37,7 +48,7 @@ test('xp: a payment earns only once verified; a new member with no base starts a
   assert.equal(earned({ ...base, pay: { a: { status: 'verified' } } }), XP.pay);
   const fresh = { ...base, base: { solved: 0, done: 0 }, solved: [], done: [] };
   assert.equal(earned(fresh), 0);
-  assert.equal(quests({ ...fresh, solved: ['4A'] })[0]!.done, true);
+  assert.equal(quests({ ...fresh, solved: ['4A'], verified: ['4A'] })[0]!.done, true);
   assert.deepEqual(level(-50), { lv: 1, into: 0, title: 'Rookie' }); // never negative after spending
 });
 

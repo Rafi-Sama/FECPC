@@ -2,10 +2,10 @@
 import { useState } from 'react';
 import { Page } from '@/components/app/Shell';
 import { useStore } from '@/components/app/Store';
-import { HandleBox, useJudge } from '@/components/app/Judge';
+import { HandleBox, useJudge, VjudgeBox } from '@/components/app/Judge';
 import { Heatmap, Line, Radar } from '@/components/app/Charts';
 import { cfTitle } from '@fecpc/content/site';
-import { lcg } from '@/lib/lcg';
+import { sheet } from '@fecpc/content/member-area';
 import { roleName } from '@fecpc/contracts';
 import QR from '@/components/app/QR';
 
@@ -71,32 +71,23 @@ function Password() {
 export default function Profile() {
   const { s, me, act } = useStore();
   const { data } = useJudge();
-  // Seeded fallback so the page has a shape before a handle is linked.
-  const rnd = lcg(me.name.length * 977);
   const days = data
     ? Array.from(
         { length: 364 },
         (_, i) =>
           data.days[new Date(Date.now() - (363 - i) * 864e5).toISOString().slice(0, 10)] ?? 0,
       )
-    : Array.from({ length: 364 }, () => (rnd() < 0.45 ? 0 : Math.floor(rnd() * 5)));
-  const hist =
-    data?.history ??
-    Array.from({ length: 14 }, (_, i) =>
-      Math.round(800 + ((me.rating - 800) * (i + 1)) / 14 + (rnd() - 0.5) * 90),
-    );
+    : [];
+  const hist = data?.history ?? [];
+  // Without a judge handle the radar shows what the member cleared on the club sheet, never made-up numbers.
   const tags: [string, number][] = data
     ? Object.entries(data.tags)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 6)
-    : [
-        ['implementation', 61],
-        ['greedy', 44],
-        ['math', 38],
-        ['strings', 30],
-        ['graphs', 17],
-        ['dp', 12],
-      ];
+    : [...new Set(sheet.map((x) => x.topic))].map((t) => [
+        t.toLowerCase(),
+        sheet.filter((x) => x.topic === t && s.solved.includes(x.id)).length,
+      ]);
   const rating = data?.rating ?? me.rating,
     solved = data?.solved.length ?? me.solved;
   return (
@@ -128,6 +119,7 @@ export default function Profile() {
           <div className="panel">
             <p className="label">Judge handles</p>
             <HandleBox />
+            <VjudgeBox />
           </div>
         </section>
         <section className="panel c6">
@@ -166,7 +158,7 @@ export default function Profile() {
         <section className="panel c8">
           <div className="row between">
             <p className="label">Solves, last 52 weeks</p>
-            <span className="label">{days.reduce((a, b) => a + b, 0)} total</span>
+            {data && <span className="label">{days.reduce((a, b) => a + b, 0)} total</span>}
           </div>
           {data ? (
             <>
@@ -238,7 +230,7 @@ export default function Profile() {
             </label>
           </div>
           <p className="label">
-            {me.email} · {roleName[s.role]}
+            {me.email} · {me.role || roleName[s.role]}
           </p>
           <button className="btn sm" style={{ alignSelf: 'flex-start' }}>
             Save details

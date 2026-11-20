@@ -4,7 +4,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { Avatar } from '@/components/pixel/Sprites';
 import { myInvoices, owes } from '@fecpc/content/member-area';
-import { canFully, isAdmin, isCommittee, roleName, LEVEL, level } from '@fecpc/contracts';
+import { can, canFully, isAdmin, isCommittee, roleName, LEVEL, level } from '@fecpc/contracts';
 import { site } from '@/lib/site';
 import { useStore } from './Store';
 
@@ -211,9 +211,9 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   // An operator account is not a member: it gets the officer screens, the directory and its own account, nothing personal.
   const show = (href: string) =>
     href === '/app/ops'
-      ? isCommittee(s.role)
+      ? isCommittee(s.roles)
       : href === '/app/admin'
-        ? isAdmin(s.role)
+        ? isAdmin(s.roles)
         : !me.system ||
           [
             '/app/directory',
@@ -222,6 +222,8 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             '/app/notifications',
             '/app/community',
             '/app/events',
+            ...(can(s.roles, 'contest.run') ? ['/app/contests', '/app/contest-day'] : []),
+            ...(canFully(s.roles, 'mentees.view') ? ['/app/teams'] : []),
           ].includes(href);
   const router = useRouter();
   useEffect(() => {
@@ -239,7 +241,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     '/app/notifications': inbox.filter((n) => !s.read.includes(n.id)).length,
     '/app/finance':
       (me.system ? 0 : myInvoices(s.reg).filter((i) => owes(s.pay, i.id)).length) +
-      (canFully(s.role, 'payments.verify')
+      (canFully(s.roles, 'payments.verify')
         ? (office.queue ?? []).filter((q) => q.status === 'pending' && !q.mine).length
         : 0),
     '/app/admin': Object.values(s.apps).filter((x) => x === 'pending').length,
@@ -319,7 +321,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             .map((g) => ({ ...g, items: g.items.filter((i) => show(i[0])) }))
             .filter((g) => g.items.length)
             .map((g) => (
-              <div key={g.g} className="nav-g">
+              <div key={g.g} className="nav-g" data-g={g.g}>
                 <p className="label">{g.g}</p>
                 {g.items.map(link)}
               </div>
@@ -363,7 +365,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                 <Avatar name={me.name} size={28} />
                 <span>
                   <strong>{me.name}</strong>
-                  <span className="label">{roleName[s.role]}</span>
+                  <span className="label">{me.role || roleName[s.role]}</span>
                 </span>
               </summary>
               <div className="me-menu">

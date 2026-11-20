@@ -1,74 +1,52 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { notFound, useParams } from 'next/navigation';
 import { useState } from 'react';
 import QR from '@/components/app/QR';
 import { useStore } from '@/components/app/Store';
 import { events, fmtDate } from '@fecpc/content/site';
+import { can } from '@fecpc/contracts';
 import { eventTicketCode, getEventDetails } from '@/lib/event-details';
 
 export default function EventDetailPage() {
-  const params = useParams();
-  const rawId =
-    typeof params?.id === 'string' ? params.id : Array.isArray(params?.id) ? params.id[0] : '';
-  const id = rawId || 'weekly-42';
-  const event =
-    events.find((e) => e.id === id) || events.find((e) => e.id === 'weekly-42') || events[0];
-
-  const { s, me, act, counts } = useStore();
-
-  const [applyRole, setApplyRole] = useState('judge');
-  const [cfHandle, setCfHandle] = useState(s.handle || me?.handle || '');
-  const [whyYou, setWhyYou] = useState('');
-  const [submitted, setSubmitted] = useState(false);
+  const { id } = useParams<{ id: string }>();
+  const event = events.find((e) => e.id === id);
+  const { s, me, act, counts, office } = useStore();
+  const [role, setRole] = useState('');
+  const [why, setWhy] = useState('');
+  const [sent, setSent] = useState(false);
+  const [code, setCode] = useState('');
+  if (!event) notFound();
 
   const details = getEventDetails(event);
-  const isGoing = s.reg.includes(event.id) || event.id === 'weekly-42';
-  const takenCount = event.taken + (counts.reg[event.id] ?? 0);
-  const seatsLeft = Math.max(0, event.seats - takenCount);
-  const ticketCode = eventTicketCode(event);
+  const going = s.reg.includes(event.id);
+  const here = s.present.includes(event.id);
+  const left = Math.max(0, event.seats - event.taken - (counts.reg[event.id] ?? 0));
+  const organiser = !!can(s.roles, 'event.publish');
+  const names = office.events?.registrants[event.id] ?? [];
+  const live = office.events?.event === event.id;
 
-  const submitApplication = async (e: React.FormEvent) => {
+  const apply = async (e: React.FormEvent) => {
     e.preventDefault();
-    await act('send', {
+    const ok = await act('send', {
       kind: 'feedback',
-      body: `[Event Application: ${event.title} - ${applyRole}] Applicant: ${me?.name} (Batch ${me?.batch}). CF: ${cfHandle}. Why: ${whyYou}`,
+      body: `[Application: ${event.title} · ${role}] ${me.name}, batch ${me.batch}: ${why.trim()}`,
     });
-    setSubmitted(true);
+    if (ok) setSent(true);
   };
 
   return (
-    <div
-      style={{
-        maxWidth: 1180,
-        margin: '0 auto',
-        padding: 40,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 24,
-      }}
-    >
-      {/* Breadcrumb matching Detail.dc.html */}
-      <p className="m" style={{ margin: 0 }}>
-        <Link href="/app/events" style={{ color: 'inherit', textDecoration: 'none' }}>
-          Events
-        </Link>{' '}
-        / {event.title}
+    <div className="page ev-detail">
+      <p className="label">
+        <Link href="/app/events">Events</Link> / {details.bannerTitle}
       </p>
-
-      {/* Hero Banner inside .bx matching Detail.dc.html */}
-      {/* TODO: The banner section shall contain image not the title */}
-      <div className="bx">
-        <div className="ban" style={{ height: 220 }}>
-          <span style={{ fontSize: 56 }}>{event.title}</span>
-        </div>
+      <div className="ban ev-hero" data-type={event.type}>
+        <span>{details.bannerTitle}</span>
       </div>
 
-      {/* 2-Column Split matching Detail.dc.html */}
-      <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-        {/* Left Column (flex: 2) */}
-        <div style={{ flex: 2, minWidth: 340, display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div className="ev-split">
+        <div className="stack">
           <div className="row">
             <span className="tag b">{event.type}</span>
             <span className="tag">
@@ -76,184 +54,162 @@ export default function EventDetailPage() {
               {event.time}
             </span>
             <span className="tag">{event.place.split(',')[0]}</span>
-            <span className="tag">Members</span>
+            {event.fee > 0 && <span className="tag">৳{event.fee}</span>}
           </div>
-
-          <h1 style={{ fontSize: 44, letterSpacing: '-.03em', margin: 0, lineHeight: 1.15 }}>
-            {details.headline}
-          </h1>
-
-          <div
-            className="bx"
-            style={{
-              padding: 24,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 14,
-              lineHeight: 1.6,
-            }}
-          >
-            <h2 style={{ fontSize: 22, margin: 0 }}>About</h2>
-            <p style={{ margin: 0 }}>{details.about}</p>
-
-            <h2 style={{ fontSize: 22, margin: 0 }}>Schedule</h2>
-            <table style={{ borderCollapse: 'collapse', width: '100%' }}>
-              <tbody>
-                <tr>
-                  <th>Time</th>
-                  <th>What</th>
-                </tr>
-                {details.schedule.map((row) => (
-                  <tr key={row.time}>
-                    <td>{row.time}</td>
-                    <td>{row.what}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            <h2 style={{ fontSize: 22, margin: 0 }}>Organisers</h2>
-            <p style={{ margin: 0 }}>{details.organisersDesc}</p>
-          </div>
+          <h1 className="h2">{details.headline}</h1>
+          <section className="panel stack">
+            <p className="body">{details.about}</p>
+            <p className="label">Schedule</p>
+            <ol className="list ev-sched">
+              {details.schedule.map((r) => (
+                <li key={r.time}>
+                  <span className="mono acc">{r.time}</span>
+                  <span>{r.what}</span>
+                </li>
+              ))}
+            </ol>
+            <p className="label">Organisers</p>
+            <ul className="row">
+              {details.organisers.map((o) => (
+                <li key={o.name} className="chip">
+                  {o.name} · {o.role}
+                </li>
+              ))}
+            </ul>
+          </section>
         </div>
 
-        {/* Right Sticky Aside matching Detail.dc.html */}
-        <aside
-          style={{
-            flex: 1,
-            minWidth: 300,
-            position: 'sticky',
-            top: 24,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 16,
-          }}
-        >
-          {/* Opportunities Box matching Detail.dc.html */}
-          <div
-            className="bx"
-            style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}
-          >
-            <div className="m">Opportunities</div>
+        <aside className="stack ev-aside">
+          <section className="panel stack ev-card">
+            <div className="row between">
+              <b>Participate</b>
+              <span className="label">
+                {left} of {event.seats} left
+              </span>
+            </div>
+            {going ? (
+              <>
+                <div className="dash">
+                  <QR text={`FECPC ticket ${event.id}`} size={52} />
+                  <span className="mono acc ev-ticket">{eventTicketCode(event)}</span>
+                </div>
+                {event.fee > 0 && (
+                  <Link className="btn sm line" href="/app/finance">
+                    Pay ৳{event.fee}
+                  </Link>
+                )}
+                <button
+                  className="btn sm line"
+                  type="button"
+                  onClick={() => act('toggle', { list: 'reg', id: event.id, on: false })}
+                >
+                  Cancel registration
+                </button>
+              </>
+            ) : (
+              <button
+                className="btn sm b"
+                type="button"
+                disabled={left === 0 || me.system}
+                onClick={() => act('toggle', { list: 'reg', id: event.id, on: true })}
+              >
+                {left === 0 ? 'Full' : 'Register'}
+              </button>
+            )}
+          </section>
 
-            {/* Participate Card */}
-            <div
-              style={{
-                border: '1px solid var(--ink, #0b0b0b)',
-                padding: 14,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 10,
+          {going && (
+            <form
+              className="panel stack ev-card"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (await act('attend', { code })) setCode('');
               }}
             >
-              <div className="row" style={{ justifyContent: 'space-between' }}>
-                <b>Participate</b>
-                {isGoing ? (
-                  <span className="tag k">Going</span>
-                ) : (
-                  <button
-                    className="btn b"
-                    style={{ minHeight: 32, padding: '0 14px', fontSize: 13 }}
-                    type="button"
-                    onClick={() => act('toggle', { list: 'reg', id: event.id, on: true })}
-                  >
-                    Register
+              <b>Check in</b>
+              {here ? (
+                <p className="ok">You are checked in. +20 XP</p>
+              ) : (
+                <div className="row">
+                  <input
+                    className="input grow"
+                    aria-label="Room code"
+                    placeholder="Code on the projector"
+                    value={code}
+                    maxLength={12}
+                    onChange={(e) => setCode(e.target.value)}
+                  />
+                  <button className="btn sm" disabled={code.trim().length < 4}>
+                    Check in
                   </button>
-                )}
-              </div>
-              <p className="m" style={{ margin: 0 }}>
-                {seatsLeft} of {event.seats} left · closes{' '}
-                {fmtDate(event.date, { day: 'numeric', month: 'short' })} 18:00
-              </p>
-              {isGoing && (
-                <div className="dash">
-                  <div className="qr">
-                    <QR text={`FECPC ticket ${event.id}`} size={52} />
-                  </div>
-                  <div
-                    style={{
-                      font: "500 20px 'JetBrains Mono', monospace",
-                      color: 'var(--acc, #1a30ff)',
-                    }}
-                  >
-                    {ticketCode}
-                  </div>
                 </div>
               )}
-            </div>
+            </form>
+          )}
 
-            {/* Judge */}
-            <div
-              style={{
-                border: '1px solid var(--ink, #0b0b0b)',
-                padding: 14,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 10,
-              }}
-            >
-              <b>{details.role2Title}</b>
-              <p className="m" style={{ margin: 0 }}>
-                {details.role2Sub}
-              </p>
-              <button
-                className="btn b"
-                type="button"
-                onClick={() => setApplyRole(details.role2Title)}
-              >
-                Apply
-              </button>
+          <form className="panel stack ev-card" onSubmit={apply}>
+            <b>Help run it</b>
+            <div className="row" role="radiogroup" aria-label="Role">
+              {[details.role2Title, 'Volunteer'].map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  role="radio"
+                  aria-checked={role === r}
+                  className={`tag tab ${role === r ? 'on' : ''}`}
+                  onClick={() => setRole(r)}
+                >
+                  {r}
+                </button>
+              ))}
             </div>
+            <span className="label">
+              {role === 'Volunteer' ? 'desk and monitoring' : details.role2Sub}
+            </span>
+            {sent ? (
+              <p className="ok">Sent. The organisers will reply.</p>
+            ) : (
+              <>
+                <textarea
+                  className="input"
+                  aria-label="Why you?"
+                  placeholder="Why you?"
+                  rows={3}
+                  maxLength={600}
+                  value={why}
+                  onChange={(e) => setWhy(e.target.value)}
+                />
+                <button className="btn sm" disabled={!role || why.trim().length < 3 || me.system}>
+                  Apply
+                </button>
+              </>
+            )}
+          </form>
 
-            {/* Volunteer */}
-            <div
-              style={{
-                border: '1px solid var(--ink, #0b0b0b)',
-                padding: 14,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 10,
-              }}
-            >
-              <b>Volunteer</b>
-              <p className="m" style={{ margin: 0 }}>
-                3 left · desk and monitoring
-              </p>
-              <button className="btn" type="button" onClick={() => setApplyRole('Volunteer')}>
-                Apply
-              </button>
-            </div>
-          </div>
-
-          {/* Apply Form Box matching Detail.dc.html */}
-          <div
-            className="bx"
-            style={{
-              padding: 20,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 12,
-              borderColor: 'var(--acc, #1a30ff)',
-            }}
-          >
-            <div className="m">Apply as {applyRole.toLowerCase()} · name and batch prefilled</div>
-            <label className="m" htmlFor="a">
-              Codeforces handle
-            </label>
-            <input
-              id="a"
-              placeholder="your_handle"
-              value={cfHandle}
-              onChange={(e) => setCfHandle(e.target.value)}
-            />
-            <label className="m" htmlFor="b">
-              Why you?
-            </label>
-            <textarea id="b" rows={3} value={whyYou} onChange={(e) => setWhyYou(e.target.value)} />
-            <button className="btn b" type="button" onClick={submitApplication}>
-              {submitted ? 'Application submitted ✓' : 'Submit application'}
-            </button>
-          </div>
+          {organiser && (
+            <section className="panel stack ev-card ev-org">
+              <div className="row between">
+                <b>Organiser</b>
+                <span className="label">{names.length} via platform</span>
+              </div>
+              {live && (
+                <div className="ev-code">
+                  <span className="label">Room code</span>
+                  <span className="mono">{office.events!.code}</span>
+                  <span className="label">{office.events!.arrived[event.id] ?? 0} checked in</span>
+                </div>
+              )}
+              {names.length ? (
+                <ol className="ev-names">
+                  {names.map((n) => (
+                    <li key={n}>{n}</li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="empty">No registrations yet.</p>
+              )}
+            </section>
+          )}
         </aside>
       </div>
     </div>

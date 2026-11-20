@@ -32,11 +32,13 @@ export function AnnouncementModal({
   alreadyRead,
   onMarkRead,
   onClose,
+  onDelete,
 }: {
   item: UnifiedAnnouncement | null;
   alreadyRead: boolean;
   onMarkRead: (id: string) => void;
   onClose: () => void;
+  onDelete?: () => void;
 }) {
   const markedRef = useRef<string | null>(null);
 
@@ -99,6 +101,11 @@ export function AnnouncementModal({
               <span>· {formatFullTimestamp(item.at)}</span>
             </div>
           </div>
+          {onDelete && (
+            <button type="button" className="btn xs line" onClick={onDelete}>
+              Delete
+            </button>
+          )}
           <button type="button" className="cm-modal-close" aria-label="Close" onClick={onClose}>
             ×
           </button>

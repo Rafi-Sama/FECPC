@@ -96,11 +96,11 @@ Google, and links or signs in the matching active member. `403` if no member use
 | Field | Contents |
 | --- | --- |
 | `me` | the member's roster entry plus email and mentor |
-| `s` | personal progress: role, Codeforces handle, solved/done/lessons/read lists, quiz scores, XP spent, check-in, kudos, registrations, attendance, votes, payments, sent pings, preference flags and values, and the officer decision maps (`queue`, `exp`, `apps`, `log`) |
+| `s` | personal progress: role, effective `roles` (role plus post grants), Codeforces and VJudge handles, solved/done/lessons/read lists, quiz scores, XP spent, check-in, kudos, registrations, attendance, votes, payments, sent pings, preference flags and values, and the officer decision maps (`queue`, `exp`, `apps`, `log`) |
 | `members` | the roster (roles with an admin capability also see suspended and not-yet-joined accounts) |
 | `counts` | live totals: registrations, volunteers, kudos, votes, solves per problem, announcement reads, kudos given today, recent milestones |
 | `news`, `inbox` | announcements, and notifications built from real records |
-| `myExpenses`, `fundTotal` | own expense requests; club fund total |
+| `myExpenses`, `myWaivers`, `fundTotal`, `term` | own expense and waiver requests; club fund total; this term's real incoming and spent (since 1 Jan or 1 Jul) |
 | `office` | only the officer datasets this role has a capability for: payment queue, fund, expenses, waivers, mentees, applications, suggestions, feedback, event registrants, ops |
 
 ### `POST /v1/me/actions`
@@ -115,9 +115,10 @@ the list is in [Member-area actions](member-area-actions.md#queries).
 
 ### `POST /v1/me/codeforces/sync`
 
-No body. Fetches the member's own linked handle from Codeforces (never a handle from the request), updates
-rating, solves and streak, and records crossed milestones. At most once per 10 minutes per member; otherwise
-`{ synced: false }`. Answer: `{ synced, milestonesCreated }`.
+No body. Fetches the member's own linked handles from Codeforces and VJudge (never a handle from the request).
+Codeforces: updates rating, solves and streak, and records crossed milestones. VJudge: stores `vj_solved`, the
+distinct accepted problems outside Codeforces/Gym. Both feed the member's XP. At most once a minute per member;
+otherwise `{ synced: false }`. Answer: `{ synced, milestonesCreated }`. The web store calls it once per visit.
 
 ### `POST /v1/applications` (public)
 

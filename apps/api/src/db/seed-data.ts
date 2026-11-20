@@ -1054,6 +1054,8 @@ export async function setup(db: Db, password: string) {
   // First-deploy backfill: ensure existing active members with problems_solved > 0 and no milestones yet
   // receive their current rank/solved milestone so the Feed sidebar is never empty on first deploy.
   await backfillMilestones(db);
+  // schema.sql adds its demo rows (waivers, ops board, budgets) only once the demo members exist.
+  if (!seededBefore) await applySchema(db);
 
   return !seededBefore;
 }

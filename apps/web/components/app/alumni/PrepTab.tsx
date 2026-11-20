@@ -46,7 +46,7 @@ export function PrepTab({
   readonly onShowToast?: (msg: string) => void;
 }) {
   const { s } = useStore();
-  const canManage = Boolean(can(s.role, 'interview.topic.create') || s.role === 'alumni');
+  const canManage = Boolean(can(s.roles, 'interview.topic.create') || s.role === 'alumni');
 
   const [topics, setTopics] = useState<InterviewTopic[]>([]);
   // Roadmap selection: default to opened tree view or list

@@ -7,7 +7,7 @@ import { posts } from '@fecpc/content/training';
 import { byId } from '@fecpc/content/site';
 
 export default function Blog() {
-  const { s, act } = useStore();
+  const { s, me, act } = useStore();
   const [open, setOpen] = useState(posts[0].id);
   const [step, setStep] = useState<Record<string, number>>({});
   const p = posts.find((x) => x.id === open)!,
@@ -44,6 +44,7 @@ export default function Blog() {
             <button
               className={`btn xs ${s.kudos.includes('post:' + p.id) ? '' : 'line'}`}
               aria-pressed={s.kudos.includes('post:' + p.id)}
+              disabled={p.by === me.id}
               onClick={() => act('toggle', { list: 'kudos', id: 'post:' + p.id })}
             >
               ▲ {p.up + (s.kudos.includes('post:' + p.id) ? 1 : 0)}

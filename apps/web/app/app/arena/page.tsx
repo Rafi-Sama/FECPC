@@ -3,19 +3,31 @@ import { useState } from 'react';
 import Board from '@/components/site/Board';
 import { Page, Tabs } from '@/components/app/Shell';
 import { useStore } from '@/components/app/Store';
-import { Avatar, Bug, Heart } from '@/components/pixel/Sprites';
-import { bounties, cfUrl, duels, potd, shop } from '@fecpc/content/member-area';
+import { Avatar, Bug } from '@/components/pixel/Sprites';
+import { bounties, cfUrl, duels, myInvoices, owes, potd, shop } from '@fecpc/content/member-area';
 import { badges, byId, squads } from '@fecpc/content/site';
-import { LEVEL, level, XP } from '@fecpc/contracts';
+import { LEVEL, level } from '@fecpc/contracts';
 import { ArenaExtra } from '@/components/app/arena/ArenaExtra';
+import { Verified } from '@/components/app/sheets/Verified';
 
 const tabs = ['DAILY', 'RANKS', 'DUELS', 'SEASON'] as const;
-const earned = ['first-ac', '100', 'streak30', 'zero-dues'];
 
 export default function Arena() {
   const { s, me, xp, act, members } = useStore();
   const [tab, setTab] = useState<(typeof tabs)[number]>('DAILY');
   const lv = level(xp);
+  const [rival, setRival] = useState('');
+  const [prob, setProb] = useState(potd[1]?.id ?? potd[0]!.id);
+  const solvedN = Math.max(me.problems_solved ?? 0, me.solved);
+  // Badges follow the member's real record; the rest wait for data the club does not track yet.
+  const got: Record<string, boolean> = {
+    'first-ac': solvedN > 0,
+    '100': solvedN >= 100,
+    streak30: (me.current_streak ?? me.streak) >= 30,
+    contests10: (me.contests_participated ?? 0) >= 10,
+    'zero-dues': !me.system && !myInvoices(s.reg).some((i) => owes(s.pay, i.id)),
+  };
+  const sentKey = `${rival}:duel:${prob}`;
   return (
     <Page title="ARENA">
       <div className="strip">
@@ -40,11 +52,10 @@ export default function Arena() {
           </strong>
         </div>
         <div>
-          <span className="label">Freeze tokens</span>
-          <strong className="row" style={{ '--g': '6px' } as React.CSSProperties}>
-            <Heart size={22} />
-            <Heart size={22} />
-            <Heart size={22} off />
+          <span className="label">Daily cleared</span>
+          <strong>
+            {potd.filter((p) => s.solved.includes(p.id)).length}
+            <small>/ {potd.length}</small>
           </strong>
         </div>
       </div>
@@ -67,7 +78,8 @@ export default function Arena() {
                     className="btn sm"
                     onClick={() => act('toggle', { list: 'solved', id: p.id })}
                   >
-                    {done ? 'CLEARED ✓' : `SOLVE · +${XP.solve} XP`}
+                    {done ? 'CLEARED' : 'SOLVE'}
+                    {done && <Verified on={s.verified.includes(p.id)} />}
                   </button>
                 </div>
               );
@@ -116,19 +128,42 @@ export default function Arena() {
           ))}
           <div className="panel">
             <p className="label">CHALLENGE</p>
-            {me.id === 'farhan' ? (
-              <p className="body">Challenges you receive show up in your inbox.</p>
-            ) : (
+            <div className="row">
+              <select
+                className="input grow"
+                aria-label="Rival"
+                value={rival}
+                onChange={(e) => setRival(e.target.value)}
+              >
+                <option value="">Pick a rival</option>
+                {members
+                  .filter((m) => m.id !== me.id && !m.suspended)
+                  .map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+              </select>
+              <select
+                className="input"
+                aria-label="Problem"
+                value={prob}
+                onChange={(e) => setProb(e.target.value)}
+              >
+                {potd.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.id} · {p.rating}
+                  </option>
+                ))}
+              </select>
               <button
                 className="btn sm"
-                disabled={s.sent.includes('farhan:duel:455A')}
-                onClick={() => act('ping', { kind: 'duel', to: 'farhan', ref: '455A' })}
+                disabled={!rival || me.system || s.sent.includes(sentKey)}
+                onClick={() => act('ping', { kind: 'duel', to: rival, ref: prob })}
               >
-                {s.sent.includes('farhan:duel:455A')
-                  ? 'CHALLENGE SENT TO FARHAN'
-                  : 'CHALLENGE FARHAN ON 455A'}
+                {s.sent.includes(sentKey) ? 'SENT ✓' : 'CHALLENGE'}
               </button>
-            )}
+            </div>
           </div>
           <h2 className="h3 acc">FANTASY</h2>
           <ArenaExtra tab="FANTASY" />
@@ -143,9 +178,9 @@ export default function Arena() {
             style={{ '--min': '300px', '--g': '16px' } as React.CSSProperties}
           >
             {badges.map((b, i) => {
-              const got = earned.includes(b.id);
+              const has = !!got[b.id];
               return (
-                <li key={b.id} style={{ opacity: got ? 1 : 0.4 }}>
+                <li key={b.id} className={has ? 'got' : ''} style={{ opacity: has ? 1 : 0.4 }}>
                   <span
                     className="glyph"
                     style={{ color: ['#FFD23F', '#3DE1FF', '#FF4D8D'][i % 3] }}
@@ -156,7 +191,7 @@ export default function Arena() {
                     <p className="arcade nm">{b.name}</p>
                     <p className="body">{b.desc}</p>
                   </div>
-                  <span className="arcade xp">{got ? 'GOT' : '+' + b.xp}</span>
+                  <span className="arcade xp">{has ? 'GOT' : '+' + b.xp}</span>
                 </li>
               );
             })}

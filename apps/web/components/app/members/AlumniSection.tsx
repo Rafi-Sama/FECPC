@@ -37,8 +37,8 @@ export function AlumniSection({
   if (!profile.is_alumni) return null;
 
   const isOwner = me.id === profile.id;
-  const admin = isAdmin(s.role);
-  const canPost = (isOwner && canFully(s.role, 'alumni.job.post')) || admin;
+  const admin = isAdmin(s.roles);
+  const canPost = (isOwner && canFully(s.roles, 'alumni.job.post')) || admin;
   const canDeleteJob = (j: AlumniJob) => j.alumni_id === me.id || admin;
 
   const fetched = profile.jobs_fetched ?? [];

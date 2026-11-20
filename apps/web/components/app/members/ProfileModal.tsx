@@ -293,7 +293,7 @@ export function ProfileModal({
                               NOT MENTORING
                             </span>
                           )}
-                          {(isOwner || isAdmin(s.role)) && (
+                          {(isOwner || isAdmin(s.roles)) && (
                             <button
                               type="button"
                               className="btn xs line"
@@ -644,7 +644,6 @@ export function ProfileModal({
                     userId={profile.id}
                     memberName={profile.name}
                     isAlumni={profile.is_alumni}
-                    currentRoleLabel={profile.role}
                     onDone={async () => {
                       await onMutated();
                       await loadProfile();

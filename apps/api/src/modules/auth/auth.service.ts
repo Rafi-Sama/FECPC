@@ -57,11 +57,12 @@ export class AuthService {
   async login(email: string, pass: string, ip: string): Promise<AuthSessionResult> {
     await this.throttling.checkThrottling(email, ip);
 
+    // The operator (system) account signs in too: it is the Super Admin. Member actions still refuse it.
     const row = (
       await this.db.query(
         `SELECT ${USER_COLS}, coalesce(c.password_hash, u.pass_hash) AS hash
          FROM users u LEFT JOIN credentials c ON c.user_id = u.id
-         WHERE u.email = $1 AND u.status <> 'deleted' AND NOT u.system`,
+         WHERE u.email = $1 AND u.status <> 'deleted'`,
         [email.trim().toLowerCase()],
       )
     ).rows[0];

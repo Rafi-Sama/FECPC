@@ -22,7 +22,7 @@ export function ExperienceModal({
   const modalRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
 
-  const canDelete = tip.author_id === me.id || isAdmin(s.role);
+  const canDelete = tip.author_id === me.id || isAdmin(s.roles);
 
   // Scroll lock
   useEffect(() => {

@@ -197,7 +197,7 @@ export function JobDetailModal({
   const closeBtnRef = useRef<HTMLButtonElement>(null);
 
   const isOwner = job.mine || (job.alumni_id && job.alumni_id === me.id);
-  const canDelete = isOwner || isAdmin(s.role);
+  const canDelete = isOwner || isAdmin(s.roles);
 
   const { text: deadlineText, isClosed } = formatDeadlineStatus(job.deadline);
   const companyColor = deterministicColor(job.company);

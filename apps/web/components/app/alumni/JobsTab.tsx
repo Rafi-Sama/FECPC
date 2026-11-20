@@ -21,7 +21,7 @@ export function JobsTab({
   onShowToast?: (msg: string) => void;
 }) {
   const { s } = useStore();
-  const canPost = can(s.role, 'alumni.job.post') || s.role === 'alumni';
+  const canPost = can(s.roles, 'alumni.job.post') || s.role === 'alumni';
 
   const [q, setQ] = useState(searchQuery ?? '');
   const [jobType, setJobType] = useState('all');
@@ -143,20 +143,7 @@ export function JobsTab({
             marginBottom: 16,
           }}
         >
-          <button
-            type="button"
-            className="btn k"
-            onClick={() => setPostModalOpen(true)}
-            style={{
-              minHeight: 44,
-              padding: '0 18px',
-              fontFamily: 'var(--sans)',
-              fontSize: 13,
-              fontWeight: 600,
-              textTransform: 'none',
-              letterSpacing: 0,
-            }}
-          >
+          <button type="button" className="btn sm" onClick={() => setPostModalOpen(true)}>
             + Add job
           </button>
         </div>

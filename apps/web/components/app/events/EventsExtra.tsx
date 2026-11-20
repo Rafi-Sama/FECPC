@@ -8,7 +8,7 @@ import { certificates, events, fmtDate } from '@fecpc/content/site';
 const css = (o: Record<string, string | number>) => o as React.CSSProperties;
 
 export function EventsExtra({ tab }: { tab: string }) {
-  const { s, me, act, counts } = useStore();
+  const { s, me, act, counts, office } = useStore();
   if (tab === 'Calendar') {
     const marks = new Map(
       events.filter((e) => e.date.startsWith('2026-11')).map((e) => [+e.date.slice(8), e]),
@@ -166,6 +166,44 @@ export function EventsExtra({ tab }: { tab: string }) {
         )}
       </form>
     );
+  if (tab === 'Organiser') {
+    const ev = office.events;
+    return (
+      <div className="bento">
+        <section className="panel c6">
+          <p className="label">Registrations through the platform</p>
+          <ol className="list">
+            {events.map((e) => (
+              <li key={e.id}>
+                <Link className="grow" href={`/app/events/${e.id}`}>
+                  {e.title}
+                </Link>
+                {ev?.event === e.id && <span className="pill ok">code {ev.code}</span>}
+                <span className="mono acc">{ev?.registrants[e.id]?.length ?? 0}</span>
+              </li>
+            ))}
+          </ol>
+        </section>
+        <section className="panel c6">
+          <p className="label">Feedback and applications · {office.feedback?.length ?? 0}</p>
+          {office.feedback?.length ? (
+            <ol className="list">
+              {office.feedback.map((f, i) => (
+                <li key={i} className="ev-fb">
+                  <span className="grow">{f.body}</span>
+                  <span className="label">
+                    {fmtDate(f.at.slice(0, 10), { day: 'numeric', month: 'short' })}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="empty">Nothing yet.</p>
+          )}
+        </section>
+      </div>
+    );
+  }
   if (tab === 'Certificates') {
     const mine = certificates.filter((c) => c.name === me.name);
     return (
@@ -192,7 +230,7 @@ export function EventsExtra({ tab }: { tab: string }) {
               <button className="btn sm" onClick={() => print()}>
                 Print
               </button>
-              <Link className="btn sm line" href="/verify">
+              <Link className="btn sm line" href={`/verify?code=${c.code}`}>
                 Public verification page
               </Link>
             </div>

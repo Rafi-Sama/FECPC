@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { Page } from '@/components/app/Shell';
 import { useStore } from '@/components/app/Store';
+import { Verified } from '@/components/app/sheets/Verified';
 import { Onboarding } from '@/components/app/home/Onboarding';
 import { announcements, cfUrl, myInvoices, owes, potd, sheet } from '@fecpc/content/member-area';
 import { events, fmtDate, squads } from '@fecpc/content/site';
@@ -65,7 +66,7 @@ export default function Today() {
             {potd.map((p) => {
               const done = s.solved.includes(p.id);
               return (
-                <div key={p.id}>
+                <div key={p.id} className={`potd ${done ? 'done' : ''}`} data-tier={p.tier}>
                   <span className="label acc2">
                     {p.tier} · {p.rating}
                   </span>
@@ -83,7 +84,8 @@ export default function Today() {
                     className={`btn sm ${done || (s.checkin && p !== firstOpen) || !s.checkin ? 'line' : ''}`}
                     onClick={() => act('toggle', { list: 'solved', id: p.id })}
                   >
-                    {done ? 'Solved ✓' : `Mark solved · +${XP.solve} XP`}
+                    {done ? 'Solved' : 'Mark solved'}
+                    {done && <Verified on={s.verified.includes(p.id)} />}
                   </button>
                 </div>
               );
@@ -184,47 +186,49 @@ export default function Today() {
             Contest calendar
           </Link>
         </section>
-        <section className="panel c4">
-          <p className="label">Squad cup</p>
-          <p className="big">
-            {['1st', '2nd', '3rd', '4th'][rank]}
-            <span className="mut" style={{ fontSize: '.36em' }}>
-              {' '}
-              · {me.squad}
-            </span>
-          </p>
-          <p className="body">
-            {ahead
-              ? `${ahead.pts - squads[rank].pts} points behind ${ahead.name}`
-              : 'Leading the cup'}
-          </p>
-          {squads.map((x) => (
-            <div
-              key={x.name}
-              className="row"
-              style={
-                {
-                  '--g': '10px',
-                  flexWrap: 'nowrap',
-                  opacity: x.name === me.squad ? 1 : 0.5,
-                } as React.CSSProperties
-              }
-            >
-              <span style={{ width: 52 }}>{x.name}</span>
+        {rank >= 0 && (
+          <section className="panel c4">
+            <p className="label">Squad cup</p>
+            <p className="big">
+              {['1st', '2nd', '3rd', '4th'][rank]}
+              <span className="mut" style={{ fontSize: '.36em' }}>
+                {' '}
+                · {me.squad}
+              </span>
+            </p>
+            <p className="body">
+              {ahead
+                ? `${ahead.pts - squads[rank].pts} points behind ${ahead.name}`
+                : 'Leading the cup'}
+            </p>
+            {squads.map((x) => (
               <div
-                className="meter grow"
+                key={x.name}
+                className="row"
                 style={
                   {
-                    '--v': `${((x.pts - 3500) / (squads[0].pts - 3500)) * 100}%`,
+                    '--g': '10px',
+                    flexWrap: 'nowrap',
+                    opacity: x.name === me.squad ? 1 : 0.5,
                   } as React.CSSProperties
                 }
               >
-                <i />
+                <span style={{ width: 52 }}>{x.name}</span>
+                <div
+                  className="meter grow"
+                  style={
+                    {
+                      '--v': `${((x.pts - 3500) / (squads[0].pts - 3500)) * 100}%`,
+                    } as React.CSSProperties
+                  }
+                >
+                  <i />
+                </div>
+                <span className="mono">{x.pts}</span>
               </div>
-              <span className="mono">{x.pts}</span>
-            </div>
-          ))}
-        </section>
+            ))}
+          </section>
+        )}
         <section className="panel c6">
           <p className="label">Coming up</p>
           <ul className="list">
@@ -234,7 +238,9 @@ export default function Today() {
                   {fmtDate(e.date)}
                 </span>
                 <span className="grow">
-                  <strong>{e.title}</strong>
+                  <Link className="link" href={`/app/events/${e.id}`}>
+                    <strong>{e.title}</strong>
+                  </Link>
                   <br />
                   <span className="label">
                     {e.time} · {e.place}

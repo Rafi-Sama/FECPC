@@ -12,7 +12,7 @@ and update it when behaviour changes.
 From the repository root:
 
 ```sh
-pnpm dev                  # web :3000 + api :3001 (Turborepo)
+pnpm dev                  # starts Postgres (docker compose), applies schema/seed, then web :3000 + api :3001
 pnpm db:setup             # apply apps/api/src/db/schema.sql, then seed an empty DB (accounts get SEED_PASSWORD)
 pnpm verify               # format:check, lint, typecheck, test, build — must pass before pushing
 pnpm check                # the same, auto-fixing format and lint

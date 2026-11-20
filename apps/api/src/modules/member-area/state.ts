@@ -9,6 +9,7 @@ import {
   isAdmin,
   isCommittee,
   type Role,
+  type Who,
 } from '@fecpc/contracts';
 import type {
   AppState,
@@ -18,6 +19,7 @@ import type {
   Office,
   Roster,
   S,
+  Waiver,
 } from '@fecpc/contracts';
 import * as data from './office-data.ts';
 import type { Db } from './db.ts';
@@ -28,7 +30,7 @@ export const today = (now = new Date()) =>
   new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(now); // YYYY-MM-DD
 export { isAdmin, isCommittee };
 /** The sponsor ledger needs a finance capability. */
-export const seesMoney = (r: Role) => !!(can(r, 'payments.verify') || can(r, 'expense.approve'));
+export const seesMoney = (r: Who) => !!(can(r, 'payments.verify') || can(r, 'expense.approve'));
 
 /** The member's own lists and preferences, as stored in users.progress. Unknown or missing fields fall back to empty. */
 export type Progress = {
@@ -64,12 +66,14 @@ export function progress(raw: Partial<Progress> | null): Progress {
 }
 
 const ROSTER = `json_build_object('id', id, 'no', member_no, 'name', name, 'handle', coalesce(nullif(cf_handle, ''), handle), 'cf_handle', nullif(coalesce(nullif(cf_handle, ''), handle), ''), 'batch', batch, 'dept', dept, 'squad', squad, 'role', title, 'is_alumni', role = 'alumni', 'rating', coalesce(cf_rating, rating), 'cf_rating', coalesce(cf_rating, nullif(rating, 0)), 'peak', peak,
-  'solved', greatest(problems_solved, solved), 'problems_solved', greatest(problems_solved, solved), 'avatar_url', avatar_url, 'streak', greatest(current_streak, streak), 'current_streak', greatest(current_streak, streak), 'contests_participated', contests_participated, 'helper', helper, 'skills', skills, 'xp', solved * 12 + streak * 30 + helper * 8, 'roleKey', role, 'suspended', suspended, 'system', system, 'mentorId', mentor_id, 'pending', pass_hash is null and google_sub is null)`;
+  'solved', greatest(problems_solved, solved), 'problems_solved', greatest(problems_solved, solved), 'avatar_url', avatar_url, 'streak', greatest(current_streak, streak), 'current_streak', greatest(current_streak, streak), 'contests_participated', contests_participated, 'helper', helper, 'skills', skills, 'xp', solved * 12 + vj_solved * 12 + streak * 30 + helper * 8, 'roleKey', role, 'post', post, 'email', email, 'suspended', suspended, 'system', system, 'mentorId', mentor_id, 'pending', pass_hash is null and google_sub is null)`;
 const EXPENSE = `json_build_object('id', 'EXP-' || e.id, 'by', e.by, 'name', w.name, 'what', e.what, 'amount', e.amount, 'event', e.event, 'status', e.status)`;
 const MINE = `
-select u.email, u.progress, u.mentor_id, (select name from users where id = u.mentor_id) as mentor_name, (select ${ROSTER} from users m where m.id = u.id) as me,
+select u.email, u.progress, u.mentor_id, u.vjudge_handle, u.vj_solved,
+  (select coalesce(json_object_agg(post, roles), '{}') from post_roles) as post_roles, (select name from users where id = u.mentor_id) as mentor_name, (select ${ROSTER} from users m where m.id = u.id) as me,
   (select coalesce(json_agg(event_id), '[]') from registrations where user_id = $1) as reg,
   (select coalesce(json_agg(key), '[]') from attendance where user_id = $1) as present,
+  (select coalesce(json_agg(c.problem), '[]') from cf_solves c where c.user_id = $1 and u.progress->'solved' ? c.problem) as verified,
   (select coalesce(json_object_agg(poll_id, option), '{}') from votes where user_id = $1) as votes,
   (select coalesce(json_agg(target), '[]') from reactions where user_id = $1) as kudos,
   (select coalesce(json_object_agg(invoice_id, j), '{}') from (select distinct on (invoice_id) invoice_id,
@@ -161,6 +165,39 @@ select
   case when $7 then (select coalesce(json_agg(json_build_object('body', body, 'at', created_at) order by id desc), '[]') from (select * from messages where kind = 'feedback' order by id desc limit 100) m) end as feedback,
   case when $7 then (select coalesce(json_object_agg(event_id, names), '{}') from (select r.event_id, json_agg(u.name order by u.name) names from registrations r join users u on u.id = r.user_id group by 1) x) end as registrants,
   case when $7 then (select coalesce(json_object_agg(key, n), '{}') from (select key, count(*)::int n from attendance where key not like 'vol:%' group by 1) x) end as arrived`;
+
+// Real money movements: verified payments in, approved expenses out. The ledger rows only for finance roles.
+const WAIVER = `json_build_object('id', 'W-' || w.id, 'who', w.user_id, 'invoice', w.invoice_id, 'what', w.what, 'amount', w.amount,
+  'reason', w.reason, 'status', w.status, 'proposedBy', w.proposed_by, 'at', w.created_at)`;
+// Real money and the committee's own records. $1 finance roles, $2 the member, $3 waiver deciders, $4 committee.
+const MONEY = `
+with term as (select date_trunc('year', now() at time zone '${TZ}')
+  + case when extract(month from now() at time zone '${TZ}') >= 7 then interval '6 months' else interval '0' end as since)
+select
+  (select coalesce(sum(amount), 0) from payments where status = 'verified')::int
+    - (select coalesce(sum(amount), 0) from expenses where status = 'approved')::int as net,
+  (select to_char(since, 'YYYY-MM-DD') from term) as since,
+  (select coalesce(sum(amount), 0)::int from payments, term where status = 'verified' and created_at at time zone '${TZ}' >= since) as incoming,
+  (select coalesce(sum(amount), 0)::int from expenses, term where status = 'approved' and created_at at time zone '${TZ}' >= since) as spent,
+  case when $1 then (select coalesce(json_agg(x order by x.date desc, x.what), '[]') from (
+    (select to_char(created_at at time zone '${TZ}', 'YYYY-MM-DD') as date, label || ' · PAY-' || id as what, 'Dues' as cat, amount as amt
+      from payments where status = 'verified' order by id desc limit 100)
+    union all
+    (select to_char(created_at at time zone '${TZ}', 'YYYY-MM-DD'), what || ' · EXP-' || id, 'Expense', -amount
+      from expenses where status = 'approved' order by id desc limit 100)) x) end as ledger,
+  case when $1 then (select coalesce(json_agg(json_build_object('id', b.id, 'name', b.name, 'plan', b.plan,
+      'spent', b.spent_before + (select coalesce(sum(amount), 0) from expenses e where e.status = 'approved' and e.event = b.name)) order by b.id), '[]')
+    from budgets b) end as budgets,
+  (select coalesce(json_agg(${WAIVER} order by w.id desc), '[]') from waiver_requests w where w.user_id = $2) as my_waivers,
+  case when $3 then (select coalesce(json_agg(${WAIVER} order by w.status not in ('pending', 'proposed'), w.id desc), '[]')
+    from (select * from waiver_requests order by id desc limit 200) w) end as waivers,
+  case when $4 then (select coalesce(json_agg(json_build_object('id', id, 'title', title, 'who', who, 'due', to_char(due, 'YYYY-MM-DD'), 'col', col) order by due nulls last, id), '[]')
+    from committee_tasks) end as tasks,
+  case when $4 then (select coalesce(json_agg(json_build_object('id', m.id, 'date', to_char(m.day, 'YYYY-MM-DD'), 'title', m.title, 'agenda', m.agenda,
+      'actions', (select coalesce(json_agg(json_build_object('id', a.id, 'what', a.what, 'who', a.who, 'done', a.done) order by a.id), '[]')
+        from meeting_actions a where a.meeting_id = m.id)) order by m.day desc, m.id desc), '[]')
+    from (select * from meetings order by day desc limit 50) m) end as meetings,
+  case when $4 then (select coalesce(json_agg(json_build_object('id', id, 'name', name, 'holder', holder) order by id), '[]') from inventory) end as inventory`;
 
 type Raw = Roster & {
   system: boolean;
@@ -285,19 +322,22 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
   await ensureSchemaOnce(db);
   const row = (await db.query(MINE, [userId])).rows[0];
   if (!row) return null;
-  const raw = row.me as Raw,
+  const postRoles = row.post_roles as AppState['postRoles'],
+    raw = row.me as Raw,
+    // Permissions come from the member's own role plus what their post grants.
+    roles: Role[] = [raw.roleKey, ...((raw.post && postRoles[raw.post]) || [])],
     role = raw.roleKey,
     p = progress(row.progress),
-    committee = isCommittee(role),
-    admin = isAdmin(role);
+    committee = isCommittee(roles),
+    admin = isAdmin(roles);
   const caps = {
-    queue: !!can(role, 'payments.verify'),
-    exp: !!can(role, 'expense.approve'),
-    waive: !!can(role, 'dues.waive'),
-    apps: !!can(role, 'application.approve'),
-    log: !!can(role, 'audit.view'),
+    queue: !!can(roles, 'payments.verify'),
+    exp: !!can(roles, 'expense.approve'),
+    waive: !!can(roles, 'dues.waive'),
+    apps: !!can(roles, 'application.approve'),
+    log: !!can(roles, 'audit.view'),
     suggest: admin,
-    feedback: !!can(role, 'event.publish'),
+    feedback: !!can(roles, 'event.publish'),
   };
   const off = Object.values(caps).some(Boolean)
     ? (await db.query(OFFICE, [...Object.values(caps), userId])).rows[0]
@@ -307,8 +347,10 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
     kv = { ...p.kv };
   for (const [k, v] of Object.entries(row.club as Record<string, unknown>)) {
     const [kind, key] = [k.slice(0, k.indexOf(':')), k.slice(k.indexOf(':') + 1)];
-    if (!committee && !(kind === 'flag' && (key === 'unfrozen' || key.startsWith('mod:'))))
-      continue; // members see only what changes their own screens
+    const everyone =
+      (kind === 'flag' && (key === 'unfrozen' || key.startsWith('mod:'))) ||
+      (kind === 'kv' && key === 'contests');
+    if (!committee && !everyone) continue; // members see only what changes their own screens
     if (kind === 'flag') flags[key] = v === true;
     else kv[key] = String(v);
   }
@@ -317,9 +359,13 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
       Object.fromEntries(list.filter((e) => e.status !== 'pending').map((e) => [e.id, e.status]));
   const s: S = {
     role,
+    roles,
     handle: p.handle,
+    vjudge: row.vjudge_handle ?? '',
+    vjSolved: row.vj_solved ?? 0,
     base: p.base,
     solved: p.solved,
+    verified: row.verified,
     done: p.done,
     lessons: p.lessons,
     read: p.read,
@@ -352,26 +398,46 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
 
   // The roster everyone gets: people only, no account-management fields. Officers who manage accounts get those too.
   const everyone = row.members as Raw[];
+  const assigns = canFully(roles, 'mentees.view');
   // The operator account is listed only for a Super Admin, who is the only one able to act on it.
   const members: Roster[] = everyone
     .filter((m) => (admin ? !m.system || role === 'super_admin' : !m.system && !m.suspended))
-    .map(({ system: _s, mentorId: _m, roleKey, suspended, pending, ...m }) =>
-      admin ? { ...m, roleKey, suspended, pending } : m,
-    );
+    // Emails only for the Super Admin, who appoints the President by email.
+    .map(({ system: _s, mentorId, roleKey, suspended, pending, email, ...m }) => ({
+      ...m,
+      ...(admin ? { roleKey, suspended, pending } : {}),
+      ...(role === 'super_admin' ? { email } : {}),
+      // Whoever assigns mentors sees every pairing, and who can mentor.
+      ...(assigns ? { mentorId, roleKey } : {}),
+    }));
   const { mentorId: _m, pending: _p, ...me } = raw;
 
+  const money = (await db.query(MONEY, [seesMoney(roles), userId, caps.waive, committee])).rows[0];
+  // An approved waiver settles its invoice, unless a payment already did.
+  for (const w of money.my_waivers as Waiver[])
+    if (w.status === 'waived' && (!row.pay[w.invoice] || row.pay[w.invoice].status === 'rejected'))
+      row.pay[w.invoice] = {
+        trx: '',
+        via: 'Waiver',
+        status: 'waived',
+        id: 0,
+        amount: w.amount,
+        label: w.what,
+        at: w.at,
+        note: w.reason,
+      };
   const office: Office = {};
   if (caps.queue) office.queue = off.queue;
-  if (seesMoney(role))
+  if (seesMoney(roles))
     office.fund = {
       accounts: [...data.accounts],
-      ledger: data.ledger,
-      budgets: [...data.budgets],
+      ledger: [...money.ledger, ...data.ledger],
+      budgets: money.budgets,
       cashflow: data.cashflow,
     };
   if (caps.exp) office.expenses = expenses;
-  if (caps.waive) office.waivers = data.waivers;
-  const view = can(role, 'mentees.view');
+  if (caps.waive) office.waivers = money.waivers;
+  const view = can(roles, 'mentees.view');
   if (view) {
     // A mentor ("scope") gets only the members assigned to them; the CP Head and above get everyone who has a mentor.
     const mine = new Set(
@@ -382,9 +448,19 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
     const last = new Map<string, { body: string; at: string }>();
     for (const c of [...row.checkins].reverse() as { from: string; body: string; at: string }[])
       last.set(c.from, { body: c.body, at: c.at });
-    office.mentees = data.mentees
-      .filter((m) => mine.has(m.id))
-      .map((m) => ({ ...m, checkin: last.get(m.id) }));
+    // Pairings are real (users.mentor_id); the weekly numbers are sample data where the seed has them.
+    office.mentees = everyone
+      .filter((m) => mine.has(m.id) && !m.suspended)
+      .map((m) => {
+        const d = data.mentees.find((x) => x.id === m.id);
+        return {
+          id: m.id,
+          week: d ? [...d.week] : [],
+          last: d?.last ?? (m.current_streak ? 'today' : 'not recently'),
+          flag: d?.flag ?? '',
+          checkin: last.get(m.id),
+        };
+      });
   }
   if (caps.apps) office.applications = off.apps;
   if (caps.suggest) office.suggestions = off.suggestions;
@@ -399,11 +475,11 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
   }
   if (committee)
     office.ops = {
-      tasks: data.tasks,
-      meetings: data.meetings,
+      tasks: money.tasks,
+      meetings: money.meetings,
       vault: data.vault,
-      inventory: data.inventory,
-      sponsors: seesMoney(role) ? data.sponsors : undefined,
+      inventory: money.inventory,
+      sponsors: seesMoney(roles) ? data.sponsors : undefined,
       reports: data.reports,
     };
 
@@ -504,7 +580,7 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
       href: '/app/learn',
     });
   const waiting = (off.queue ?? []).filter((q: { status: string }) => q.status === 'pending');
-  if (canFully(role, 'payments.verify') && waiting.length)
+  if (canFully(roles, 'payments.verify') && waiting.length)
     inbox.push({
       id: `n:queue:${waiting[0].id}`,
       cat: 'Finance',
@@ -515,7 +591,7 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
     (e) =>
       e.by !== userId &&
       (e.status === 'sent to President'
-        ? can(role, 'expense.approve') === true
+        ? can(roles, 'expense.approve') === true
         : e.status === 'pending'),
   );
   if (mineToDecide.length)
@@ -558,7 +634,11 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
     news: row.news,
     inbox,
     myExpenses: row.my_exp,
-    fundTotal: data.accounts.reduce((a, x) => a + x[1], 0),
+    myWaivers: money.my_waivers,
+    term: { since: money.since, incoming: money.incoming, spent: money.spent },
+    // The seeded opening balance plus every verified payment, minus every approved expense.
+    fundTotal: data.accounts.reduce((a, x) => a + x[1], 0) + money.net,
     office,
+    postRoles,
   };
 }

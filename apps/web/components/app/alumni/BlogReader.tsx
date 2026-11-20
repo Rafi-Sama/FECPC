@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { BlogPost } from '@fecpc/contracts';
 import { AvatarRing } from '@/components/app/shared/RatingBadge';
-import { rankFor, isAdmin } from '@fecpc/contracts';
+import { canFully, rankFor } from '@fecpc/contracts';
 import { useStore } from '@/components/app/Store';
 import { MarkdownBody } from '@/components/app/shared/MarkdownEditor';
 
@@ -30,7 +30,7 @@ export function BlogReader({
   const [upvoted, setUpvoted] = useState(false);
 
   const isAuthor = post.author_id === me.id;
-  const canManage = isAuthor || isAdmin(s.role);
+  const canManage = isAuthor || canFully(s.roles, 'blog.post.delete');
 
   const rank = rankFor(post.author_rating ?? 0);
   const tierColor = rank.color && rank.color !== '#6B6B6B' ? rank.color : 'var(--ink, #0B0B0B)';

@@ -304,7 +304,7 @@ function MembersInner() {
       ) : clubTotal === 0 ? (
         <div className="panel box members-empty">
           <p className="label">NO MEMBERS IN THE CLUB YET.</p>
-          {isAdmin(s.role) && (
+          {isAdmin(s.roles) && (
             <Link href="/app/admin" className="btn sm">
               Invite members
             </Link>

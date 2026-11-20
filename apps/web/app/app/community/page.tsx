@@ -11,6 +11,7 @@ import {
 import { MilestonesCard } from '@/components/app/feed/MilestonesCard';
 import { feedCategoryChip, NewPostModal } from '@/components/app/feed/NewPostModal';
 import { PostModal } from '@/components/app/feed/PostModal';
+import { ReportsPanel } from '@/components/app/feed/ReportsPanel';
 import { VoteWidget } from '@/components/app/feed/VoteWidget';
 import { IdeaModal } from '@/components/app/ideas/IdeaModal';
 import { ideaTypeLabel, NewIdeaModal } from '@/components/app/ideas/NewIdeaModal';
@@ -318,7 +319,7 @@ function CommunityContent() {
     const ok = await act('announce', {
       title: annTitle.trim(),
       body_md: annBody.trim(),
-      audience: can(s.role, 'announce.post') === 'scope' ? 'mentees' : annAudience,
+      audience: can(s.roles, 'announce.post') === 'scope' ? 'mentees' : annAudience,
       pinned: annPinned,
       requires_ack: annRequiresAck,
     });
@@ -443,7 +444,7 @@ function CommunityContent() {
     [members],
   );
   const activeMemberTotal = Math.max(1, members.filter((m) => !m.suspended).length);
-  const isOfficer = !!can(s.role, 'announce.post') || isCommittee(s.role);
+  const isOfficer = !!can(s.roles, 'announce.post') || isCommittee(s.roles);
 
   return (
     <Page
@@ -576,6 +577,10 @@ function CommunityContent() {
               </ol>
             </section>
 
+            {can(s.roles, 'feed.moderate') && (
+              <ReportsPanel onOpen={setActivePostId} onChange={() => fetchFeed(null, false)} />
+            )}
+
             <MilestonesCard onOpenMember={handleOpenProfile} />
           </aside>
         </div>
@@ -584,7 +589,7 @@ function CommunityContent() {
       {/* ────────── TAB 2: ANNOUNCEMENTS ────────── */}
       {tab === 'Announcements' && (
         <div className="stack">
-          {can(s.role, 'announce.post') && (
+          {can(s.roles, 'announce.post') && (
             <form
               className="panel stack"
               style={{ '--g': '14px' } as React.CSSProperties}
@@ -592,7 +597,7 @@ function CommunityContent() {
             >
               <p className="label">
                 Publish announcement · scope:{' '}
-                {can(s.role, 'announce.post') === 'scope'
+                {can(s.roles, 'announce.post') === 'scope'
                   ? 'only your mentees see this'
                   : 'club officers'}
               </p>
@@ -619,7 +624,7 @@ function CommunityContent() {
               />
               <div className="row between" style={{ '--g': '12px' } as React.CSSProperties}>
                 <div className="row" style={{ '--g': '16px' } as React.CSSProperties}>
-                  {can(s.role, 'announce.post') === true && (
+                  {can(s.roles, 'announce.post') === true && (
                     <label className="row" style={{ '--g': '8px' } as React.CSSProperties}>
                       <span className="label">Audience</span>
                       <select
@@ -905,6 +910,7 @@ function CommunityContent() {
                           type="button"
                           className={`btn xs ${upOn ? '' : 'line'}`}
                           aria-pressed={upOn}
+                          disabled={mine || me.system}
                           onClick={() => handleIdeaUpvote(it.id)}
                         >
                           ▲ {it.upvotes}
@@ -1030,6 +1036,16 @@ function CommunityContent() {
         alreadyRead={activeAnn ? isAnnRead(activeAnn.id) : false}
         onMarkRead={handleMarkAnnRead}
         onClose={() => setActiveAnn(null)}
+        onDelete={
+          activeAnn?.id.startsWith('an:') &&
+          (can(s.roles, 'announce.post') === true ||
+            news.some((n) => n.id === activeAnn.id && n.user_id === me.id))
+            ? async () => {
+                if (!confirm('Delete this announcement for everyone?')) return;
+                if (await act('deleteAnnouncement', { id: activeAnn.id })) setActiveAnn(null);
+              }
+            : undefined
+        }
       />
 
       <NewIdeaModal

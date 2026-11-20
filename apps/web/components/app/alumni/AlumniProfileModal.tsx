@@ -1,7 +1,7 @@
 'use client';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AvatarRing } from '@/components/app/shared/RatingBadge';
-import { rankFor, isAdmin } from '@fecpc/contracts';
+import { canFully, rankFor, isAdmin } from '@fecpc/contracts';
 import { useStore } from '@/components/app/Store';
 import type { MemberProfile, BlogPost, AlumniJob } from '@fecpc/contracts';
 
@@ -137,11 +137,11 @@ export function AlumniProfileModal({
   }, [onClose]);
 
   const isOwner = me.id === userId;
-  const canAdmin = isAdmin(s.role);
+  const canAdmin = isAdmin(s.roles),
+    canToggle = isOwner || canFully(s.roles, 'alumni.toggleMentoring');
 
   const handleToggleAvailable = async () => {
-    if (!isOwner && !canAdmin) return;
-    if (togglingAvailable) return;
+    if (!canToggle || togglingAvailable) return;
 
     const next = !available;
     setAvailable(next);
@@ -151,7 +151,11 @@ export function AlumniProfileModal({
       const res = await fetch('/api/alumni', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ action: 'setAvailableForQuestions', available: next }),
+        body: JSON.stringify({
+          action: 'setAvailableForQuestions',
+          available: next,
+          alumniId: userId,
+        }),
       });
       if (!res.ok) {
         setAvailable(!next); // revert
@@ -1143,8 +1147,7 @@ export function AlumniProfileModal({
                 )}
               </div>
 
-              {/* Available Toggle Checkbox for Owner and Admin */}
-              {(isOwner || canAdmin) && (
+              {canToggle && (
                 <label
                   style={{
                     display: 'flex',

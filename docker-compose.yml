@@ -10,6 +10,11 @@ services:
       POSTGRES_PASSWORD: fecpc_dev
       POSTGRES_DB: fecpc
     ports: ['127.0.0.1:5433:5432']
+    # Lets `docker compose up --wait` (pnpm dev) block until Postgres accepts connections.
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-U', 'fecpc', '-d', 'fecpc']
+      interval: 2s
+      retries: 15
     volumes:
       - fecpc_pg:/var/lib/postgresql/data
       - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro

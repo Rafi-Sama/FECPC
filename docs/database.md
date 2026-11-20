@@ -25,7 +25,7 @@ and extra columns on existing tables.
 
 | Table | Purpose | FK |
 | --- | --- | --- |
-| `users` | Every account: identity, role, status and `suspended`, title, profile, Codeforces stats, `progress` (personal JSON state), `mentor_id`, `system` (operator), invite hash, `google_sub` | — |
+| `users` | Every account: identity, role, status and `suspended`, title, `post`, profile, Codeforces stats, `vjudge_handle` and `vj_solved`, `progress` (personal JSON state), `mentor_id`, `system` (operator), invite hash, `google_sub` | — |
 | `credentials` | Current password hash (kept in step with `users.pass_hash`) | users |
 | `sessions` | SHA-256 of each session token, expiry, created and last-seen times | users |
 | `invite_tokens` | One-time set-password tokens (hashed); `users.invite_hash` holds the other form | users |
@@ -46,6 +46,7 @@ and extra columns on existing tables.
 | `pings` | Invites, duel challenges, nudges and team-up requests between members | users |
 | `club` | Shared switches and values (`flag:` and `kv:` keys) changed by officers | users |
 | `milestones` | Crossed Codeforces ranks, solved thresholds and streaks | users |
+| `post_roles` | Which existing roles each club post grants; edited by the Super Admin | — |
 | `milestone_kudos` | Kudos on milestones (20 per giver per day) | milestones, users |
 
 ### Money
@@ -54,10 +55,22 @@ and extra columns on existing tables.
 | --- | --- | --- |
 | `payments` | Submitted bKash/Nagad payments and their decisions; one live payment per transaction ID | users |
 | `expenses` | Expense requests and decisions | users |
-| `decisions` | Other officer decisions by kind and id (waivers) | users |
+| `decisions` | Older officer decisions by kind and id (no longer written for waivers) | users |
+| `waiver_requests` | A member's request to waive one invoice: `pending` → `proposed` → `waived`/`rejected` | users |
+| `committee_tasks` | Ops board tasks: assignee, due date, column | users |
+| `meetings`, `meeting_actions` | Committee meetings with agenda, and their action items | users |
+| `inventory` | Club equipment and who holds it | users |
+| `budgets` | Event budgets: plan, and spending from before the ledger (`spent_before`) | — |
 
-Invoices and the club fund figures are placeholder content (`packages/content/src/member-area.ts`,
-`apps/api/src/modules/member-area/office-data.ts`), not tables yet.
+Invoices, the fund's opening balance, accounts and cash flow are placeholder content
+(`packages/content/src/member-area.ts`, `apps/api/src/modules/member-area/office-data.ts`). The fund balance and
+ledger add the real movements on top: verified `payments` in, approved `expenses` out (`MONEY` in `state.ts`).
+Mentor pairings are `users.mentor_id`; only the weekly mentee numbers are sample data.
+The opening balance (`accounts` in `office-data.ts`) stays a seeded constant because nothing records the club's money
+before this ledger; replace it with a real opening entry once one exists. The transparency tab's term totals are real.
+`schema.sql` inserts the demo waivers, ops board, meetings, equipment and budgets once, and only after the demo
+members exist (the seed applies the schema again after creating them). Some old dev databases also hold empty
+prototype tables `waivers` and `ops_tasks`; nothing uses them.
 
 ### Community
 
@@ -72,6 +85,17 @@ Invoices and the club fund figures are placeholder content (`packages/content/sr
 | `ideas` | Ideas, teammate searches, study groups | users |
 | `idea_interests` | Requests to join an idea, and the poster's decision | ideas, users |
 | `idea_views` | Who viewed an idea | ideas, users |
+
+### ICPC teams
+
+Prefixed `icpc_` because some older databases carry an unrelated, unused `teams` table.
+
+| Table | Purpose | FK |
+| --- | --- | --- |
+| `icpc_teams` | Team name (unique) and coach | users |
+| `icpc_members` | Who is on which team; one team per member, at most three | icpc_teams, users |
+| `icpc_notes` | One notebook page per member per topic | icpc_teams, users |
+| `icpc_log` | The team's edit history | icpc_teams, users |
 
 ### Alumni and careers
 

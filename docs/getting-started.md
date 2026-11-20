@@ -21,7 +21,8 @@ cp apps/web/.env.example apps/web/.env.local      # `pnpm dev` also does this wh
 # 3. Schema + placeholder club (27 accounts). Safe to re-run: it never touches a non-empty database.
 pnpm db:setup
 
-# 4. Run both apps: web on http://localhost:3000, API on http://localhost:3001
+# 4. Run both apps: web on http://localhost:3000, API on http://localhost:3001.
+#    `pnpm dev` itself also runs steps 1 and 3 (waits for Postgres to be healthy), so after setup it is all you need.
 pnpm dev
 ```
 

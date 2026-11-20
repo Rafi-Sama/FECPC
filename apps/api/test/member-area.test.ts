@@ -12,10 +12,12 @@ import {
   getMemberProfile,
   kudosMilestone,
   listFeedPosts,
+  listFeedReports,
   listIdeas,
   listMembers,
   listRecentMilestones,
 } from '../src/modules/member-area/actions.ts';
+import { getTeam } from '../src/modules/member-area/teams.ts';
 import { HttpException } from '@nestjs/common';
 import { AuthService } from '../src/modules/auth/auth.service.ts';
 import { AuditService } from '../src/modules/audit/audit.service.ts';
@@ -30,6 +32,7 @@ import {
   detectCrossovers,
   syncCodeforces,
   syncUserCodeforcesStats,
+  countVjudgeSolved,
 } from '../src/modules/member-area/milestones.ts';
 import { setup } from '../src/db/seed-data.ts';
 import { loadState } from '../src/modules/member-area/state.ts';
@@ -95,6 +98,10 @@ test('auth: password login, sessions, logout', async () => {
   assert.equal(await sessionUser(s.token), null);
   const raw = (await db().query(`select token_hash from sessions limit 1`)).rows[0];
   assert.ok(!raw || raw.token_hash.length === 64, 'only a hash of the session token is stored');
+});
+test('auth: the operator account signs in with the seed password', async () => {
+  const s = await login('admin@fecpc.example', PW);
+  assert.equal(await sessionUser(s.token), 'admin');
 });
 test('auth: expired sessions stop working', async () => {
   const s = await login('zahid@fecpc.example', PW);
@@ -246,7 +253,7 @@ test('quiz is scored on the server; the client cannot send a score', async () =>
 test('sync: registrations, kudos and poll votes are counted across members', async () => {
   await act('shuvo', { type: 'toggle', list: 'reg', id: 'git-night' });
   await act('priya', { type: 'toggle', list: 'reg', id: 'git-night' });
-  await act('priya', { type: 'toggle', list: 'kudos', id: 'f1' });
+  await act('priya', { type: 'toggle', list: 'kudos', id: 'member:shuvo' });
   await act('shuvo', { type: 'vote', poll: 'p1', option: 'Sunday' });
   await act('priya', { type: 'vote', poll: 'p1', option: 'Sunday' });
   await act('priya', { type: 'vote', poll: 'p1', option: 'Saturday' }); // a poll vote can be changed
@@ -254,8 +261,112 @@ test('sync: registrations, kudos and poll votes are counted across members', asy
   await refused(403, act('priya', { type: 'toggle', list: 'reg', id: 'no-such-event' }));
   const seen = await st('tasnim');
   assert.equal(seen.counts.reg['git-night'], 2);
-  assert.equal(seen.counts.kudos.f1, 1);
+  assert.equal(seen.counts.kudos['member:shuvo'], 1);
   assert.deepEqual(seen.counts.votes.p1, { Sunday: 1, Saturday: 1 });
+});
+test('cheers, reads and seats cannot be invented: XP needs a real target', async () => {
+  await refused(403, act('priya', { type: 'toggle', list: 'kudos', id: 'member:priya' }));
+  await refused(403, act('priya', { type: 'toggle', list: 'kudos', id: 'made:up' }));
+  await refused(403, act('priya', { type: 'toggle', list: 'read', id: 'n:not-in-my-inbox' }));
+  await act('priya', { type: 'toggle', list: 'kudos', id: 'post:4A' }); // someone else's editorial
+  // a mentor's note to their own mentees is not another member's to read for XP
+  await act('rahim', { type: 'announce', title: 'Mentee-only note' });
+  const id = (await st('rahim')).news.find((n) => n.title === 'Mentee-only note')!.id;
+  const outsider = (await st('anika')).news.some((n) => n.id === id) ? null : 'anika';
+  if (outsider) {
+    await refused(403, act(outsider, { type: 'markAnnouncementRead', id }));
+    await refused(403, act(outsider, { type: 'toggle', list: 'read', id }));
+  }
+  // the last seat goes to one of two simultaneous registrations
+  await pool().query(
+    `insert into registrations select id, 'icpc-mock-3' from users where not system and id not in ('shuvo','priya') limit 5 on conflict do nothing`,
+  );
+  const r = await Promise.allSettled(
+    ['shuvo', 'priya'].map((u) =>
+      act(u, { type: 'toggle', list: 'reg', id: 'icpc-mock-3', on: true }),
+    ),
+  ); // 39 of 45 taken in the content, + 5 above = 44
+  assert.equal(r.filter((x) => x.status === 'fulfilled').length, 1);
+  await refused(409, act('imran', { type: 'toggle', list: 'reg', id: 'icpc-mock-3', on: true }));
+});
+test('feed moderation and announcement removal are role-gated and audited', async () => {
+  await act('priya', {
+    type: 'createFeedPost',
+    title: 'Spam spam spam',
+    body_md: 'buy now',
+    category: 'topic',
+  });
+  const post = (await listFeedPosts(db(), 'priya', { q: 'Spam spam' })).items[0]!;
+  await act('shuvo', { type: 'reportFeedPost', postId: post.id, reason: 'spam' });
+  await refused(403, listFeedReports(db(), 'shuvo'));
+  await refused(
+    403,
+    act('shuvo', { type: 'moderateFeedPost', postId: post.id, decision: 'remove' }),
+  );
+  assert.equal((await listFeedReports(db(), 'sadia')).items[0]!.id, post.id); // secretary
+  await act('sadia', { type: 'moderateFeedPost', postId: post.id, decision: 'dismiss' });
+  assert.equal((await listFeedReports(db(), 'sadia')).items.length, 0);
+  await act('sadia', { type: 'moderateFeedPost', postId: post.id, decision: 'remove' });
+  assert.equal((await listFeedPosts(db(), 'priya', { q: 'Spam spam' })).items.length, 0);
+
+  await act('nadia', { type: 'announce', title: 'Delete me later' });
+  const ann = (await st('nadia')).news.find((n) => n.title === 'Delete me later')!;
+  await refused(403, act('priya', { type: 'deleteAnnouncement', id: ann.id }));
+  await act('sadia', { type: 'deleteAnnouncement', id: ann.id }); // a full announce.post grant
+  assert.equal(
+    (await st('nadia')).news.some((n) => n.id === ann.id),
+    false,
+  );
+});
+test('contest day: the scoreboard list is chosen by contest.run holders and seen by everyone', async () => {
+  const contests = [{ id: '612840', name: 'Live', type: 'running' }];
+  await refused(403, act('priya', { type: 'contestDay', contests }));
+  await refused(
+    400,
+    act('nadia', { type: 'contestDay', contests: [{ id: 'abc', name: 'x', type: 'running' }] }),
+  );
+  await act('nadia', { type: 'contestDay', contests });
+  assert.equal(JSON.parse((await st('priya')).s.kv.contests!)[0].id, '612840');
+});
+test('ICPC teams: invite-only joining, own notebook pages, and only the team, its coach or the CP Head see it', async () => {
+  await refused(403, act('admin', { type: 'teamCreate', name: 'Ops' }));
+  await act('priya', { type: 'teamCreate', name: 'Test Lambdas' });
+  await refused(409, act('shuvo', { type: 'teamCreate', name: 'Test Lambdas' }));
+  const id = (await getTeam(db(), 'priya', {})).team!.id as number;
+  await refused(403, act('shuvo', { type: 'teamJoin', teamId: id })); // no invitation
+  await act('priya', { type: 'teamInvite', user: 'shuvo' });
+  await act('shuvo', { type: 'teamJoin', teamId: id });
+  await refused(403, act('shuvo', { type: 'teamCreate', name: 'Second' })); // one team each
+
+  await act('priya', { type: 'teamTopic', topic: 'DSU' });
+  await act('shuvo', { type: 'teamNote', topic: 'DSU', code: 'int p[N];' });
+  const t = await getTeam(db(), 'priya', {});
+  assert.match(t.notes!.find((n) => n.user_id === 'priya')!.code, /struct DSU/); // starts from the club template
+  assert.equal(t.notes!.find((n) => n.user_id === 'shuvo')!.code, 'int p[N];');
+  assert.ok(t.history!.some((h) => h.what === 'edited DSU'));
+
+  await refused(403, getTeam(db(), 'imran', { teamId: id })); // an outsider
+  await refused(403, act('imran', { type: 'teamNote', topic: 'DSU', code: 'x' }));
+  await refused(403, act('imran', { type: 'teamRename', teamId: id, name: 'Hijacked' }));
+  assert.equal((await getTeam(db(), 'nadia', { teamId: id })).team!.mine, false); // the CP Head oversees
+  await act('nadia', { type: 'teamRename', teamId: id, name: 'Test Lambdas 2' });
+  await refused(403, act('nadia', { type: 'teamNote', topic: 'DSU', code: 'x' })); // but writes no pages
+  await refused(403, act('priya', { type: 'teamCoach', teamId: id, user: 'mehedi' }));
+  await act('nadia', { type: 'teamCoach', teamId: id, user: 'mehedi' });
+  assert.equal((await getTeam(db(), 'mehedi', { teamId: id })).team!.name, 'Test Lambdas 2');
+
+  await act('priya', { type: 'teamInvite', user: 'imran' });
+  await act('priya', { type: 'teamInvite', user: 'mim' });
+  await act('imran', { type: 'teamJoin', teamId: id });
+  await refused(409, act('mim', { type: 'teamJoin', teamId: id })); // three is a team
+  await refused(409, act('priya', { type: 'teamInvite', user: 'zahid' }));
+
+  await act('shuvo', { type: 'teamLeave' });
+  assert.equal((await getTeam(db(), 'shuvo', {})).team, null);
+  assert.equal(
+    (await getTeam(db(), 'priya', {})).notes!.some((n) => n.user_id === 'shuvo'),
+    false,
+  );
 });
 test('election voting is removed', async () => {
   await refused(403, act('shuvo', { type: 'vote', poll: 'election', option: 'sadia' }));
@@ -465,16 +576,54 @@ test('expenses: filed by the committee; the Treasurer decides small ones and pas
   );
   assert.deepEqual((await st('sadia')).s.exp, {}, 'the Secretary has no view of expense decisions');
 });
-test('waivers: the Treasurer proposes, only the President waives', async () => {
-  await refused(400, act('anika', { type: 'decide', kind: 'waiver', id: 'w1', to: 'waived' }));
-  await refused(400, act('tanvir', { type: 'decide', kind: 'waiver', id: 'w1', to: 'waived' })); // the President cannot waive what nobody proposed
-  await act('tanvir', { type: 'decide', kind: 'waiver', id: 'w2', to: 'proposed' });
-  await refused(403, act('tanvir', { type: 'decide', kind: 'waiver', id: 'w2', to: 'waived' })); // nor decide his own proposal
-  await act('admin', { type: 'decide', kind: 'waiver', id: 'w2', to: 'rejected' });
-  await act('anika', { type: 'decide', kind: 'waiver', id: 'w1', to: 'proposed' });
-  await act('tanvir', { type: 'decide', kind: 'waiver', id: 'w1', to: 'waived' });
-  await refused(409, act('tanvir', { type: 'decide', kind: 'waiver', id: 'w1', to: 'rejected' }));
-  await refused(403, act('mehedi', { type: 'decide', kind: 'waiver', id: 'w2', to: 'proposed' }));
+test('waivers: a member asks; one officer proposes, a second with full authority waives; the invoice is settled', async () => {
+  await db().query(
+    `insert into users (id, email, name, handle, batch, dept) values ('zz_w', 'zz_w@x.test', 'ZZ Waiver', 'zzw', 26, 'CSE')`,
+  );
+  const ask = { type: 'requestWaiver', invoice: 'INV-2611', reason: 'Family emergency this month' };
+  await refused(403, act('admin', ask)); // the operator is not a member
+  await refused(400, act('zz_w', { ...ask, reason: 'short' }));
+  await refused(403, act('zz_w', { ...ask, invoice: 'INV-NOPE' }));
+  await act('zz_w', ask);
+  await refused(409, act('zz_w', ask)); // one live request per invoice
+  const id =
+    'W-' + (await db().query(`select id from waiver_requests where user_id = 'zz_w'`)).rows[0].id;
+  const decide = (who: string, to: string) => act(who, { type: 'decide', kind: 'waiver', id, to });
+  await refused(403, decide('zz_w', 'proposed'));
+  await refused(400, decide('tanvir', 'waived')); // nobody waives what nobody proposed
+  await decide('anika', 'proposed');
+  await refused(403, decide('anika', 'waived')); // the Treasurer only proposes
+  assert.ok(
+    (await st('tanvir')).office.waivers!.some((w) => w.id === id && w.proposedBy === 'anika'),
+  );
+  await decide('tanvir', 'waived');
+  await refused(409, decide('tanvir', 'rejected'));
+  const m = await st('zz_w');
+  assert.equal(m.s.pay['INV-2611']!.status, 'waived', 'a waived invoice is settled');
+  assert.equal(m.myWaivers[0]!.status, 'waived');
+  assert.equal(m.office.waivers, undefined);
+  await refused(
+    403,
+    act('zz_w', {
+      type: 'pay',
+      invoice: 'INV-2611',
+      via: 'bKash',
+      trx: 'ZZWAIVE001',
+      sender: '01700000001',
+    }),
+  );
+  // The seeded request for Zahid: the proposer cannot decide it; another officer turns it down.
+  const z =
+    'W-' + (await db().query(`select id from waiver_requests where user_id = 'zahid'`)).rows[0].id;
+  await act('tanvir', { type: 'decide', kind: 'waiver', id: z, to: 'proposed' });
+  await refused(403, act('tanvir', { type: 'decide', kind: 'waiver', id: z, to: 'waived' }));
+  await act('admin', { type: 'decide', kind: 'waiver', id: z, to: 'rejected' });
+  await refused(403, act('mehedi', { type: 'decide', kind: 'waiver', id: z, to: 'proposed' }));
+  // Nobody decides their own request.
+  await act('anika', ask);
+  const own =
+    'W-' + (await db().query(`select id from waiver_requests where user_id = 'anika'`)).rows[0].id;
+  await refused(403, act('anika', { type: 'decide', kind: 'waiver', id: own, to: 'proposed' }));
 });
 
 test('applications: the public form is validated; accepting creates an account with a one-time invite', async () => {
@@ -532,29 +681,21 @@ test('applications: the public form is validated; accepting creates an account w
   );
 });
 
-test('roles: only the President or Super Admin assigns; never to oneself; Super Admin is protected', async () => {
+test('roles: only the Super Admin assigns roles; never to oneself; the operator is untouchable', async () => {
   await refused(
     403,
-    act('sadia', { type: 'role', user: 'zahid', role: 'mentor', reason: 'term roster' }),
-  );
+    act('tanvir', { type: 'role', user: 'zahid', role: 'mentor', reason: 'term roster' }),
+  ); // the President assigns posts, not roles
   await refused(
     403,
-    act('tanvir', { type: 'role', user: 'tanvir', role: 'super_admin', reason: 'because' }),
-  );
-  await refused(
-    403,
-    act('tanvir', { type: 'role', user: 'zahid', role: 'super_admin', reason: 'because' }),
-  );
-  await refused(
-    404,
-    act('tanvir', { type: 'role', user: 'admin', role: 'member', reason: 'demote the admin' }),
+    act('admin', { type: 'role', user: 'admin', role: 'member', reason: 'demote myself' }),
   );
   await refused(
     400,
-    act('tanvir', { type: 'role', user: 'zahid', role: 'emperor', reason: 'term roster' }),
+    act('admin', { type: 'role', user: 'zahid', role: 'emperor', reason: 'term roster' }),
   );
-  await refused(400, act('tanvir', { type: 'role', user: 'zahid', role: 'mentor', reason: '' }));
-  await act('tanvir', { type: 'role', user: 'zahid', role: 'mentor', reason: 'term roster' });
+  await refused(400, act('admin', { type: 'role', user: 'zahid', role: 'mentor', reason: '' }));
+  await act('admin', { type: 'role', user: 'zahid', role: 'mentor', reason: 'term roster' });
   const z = await st('zahid');
   assert.equal(z.s.role, 'mentor');
   assert.deepEqual(
@@ -567,8 +708,39 @@ test('roles: only the President or Super Admin assigns; never to oneself; Super 
     /assigned role Mentor to Zahid Hasan \(reason: term roster\)/,
   );
   assert.equal(z.me.role, 'Mentor', 'the public title follows the role');
-  await act('tanvir', { type: 'role', user: 'nusrat', role: 'member', reason: 'term ended' });
+  await act('admin', { type: 'role', user: 'nusrat', role: 'member', reason: 'term ended' });
   assert.equal((await st('nusrat')).me.role, null, 'a demoted officer does not keep the title');
+});
+
+test('posts: the President assigns them, the Super Admin decides which roles each grants', async () => {
+  await refused(403, act('sadia', { type: 'post', user: 'zahid', post: 'treasurer' }));
+  await refused(403, act('tanvir', { type: 'post', user: 'tanvir', post: 'treasurer' }));
+  await refused(400, act('tanvir', { type: 'post', user: 'zahid', post: 'emperor' }));
+  await refused(404, act('tanvir', { type: 'post', user: 'admin', post: 'treasurer' }));
+  await act('tanvir', { type: 'post', user: 'zahid', post: 'joint_treasurer' });
+  let z = await st('zahid');
+  assert.equal(z.me.role, 'Joint Treasurer', 'the public title follows the post');
+  assert.ok(z.s.roles.includes('mentor') && z.s.roles.includes('treasurer'));
+  assert.ok(z.office.queue, 'the post grants what its roles can do');
+
+  await refused(
+    403,
+    act('tanvir', { type: 'postRole', post: 'joint_treasurer', role: 'treasurer', on: false }),
+  );
+  await refused(
+    400,
+    act('admin', { type: 'postRole', post: 'joint_treasurer', role: 'president', on: true }),
+  ); // a post never grants rank
+  await act('admin', { type: 'postRole', post: 'joint_treasurer', role: 'treasurer', on: false });
+  z = await st('zahid');
+  assert.deepEqual(z.s.roles, ['mentor']);
+  assert.equal(z.office.queue, undefined);
+  assert.deepEqual(z.postRoles.joint_treasurer, []);
+  await act('admin', { type: 'postRole', post: 'joint_treasurer', role: 'treasurer', on: true });
+  await act('admin', { type: 'postRole', post: 'joint_treasurer', role: 'treasurer', on: true });
+  assert.deepEqual((await st('zahid')).postRoles.joint_treasurer, ['treasurer'], 'no duplicates');
+  await act('tanvir', { type: 'post', user: 'zahid', post: null });
+  assert.deepEqual((await st('zahid')).s.roles, ['mentor']);
 });
 test('suspension signs the member out everywhere and blocks every door', async () => {
   const s = await login('sabbir@fecpc.example', PW);
@@ -597,18 +769,9 @@ test('shared switches: members cannot flip them and do not see committee state',
   await refused(403, act('tasnim', { type: 'kv', key: 'task:t1', value: 'Done' }));
   await refused(403, act('tasnim', { type: 'kv', key: 'role:tasnim', value: 'President' }));
   await refused(403, act('tasnim', { type: 'flag', key: 'nudgemim', on: true }));
-  await act('sadia', { type: 'kv', key: 'task:t1', value: 'Done' });
-  await refused(400, act('sadia', { type: 'kv', key: 'task:t1', value: 'Lost' }));
-  await act('sadia', { type: 'kv', key: 'inv:eq1', value: 'me' });
   await act('sadia', { type: 'flag', key: 'unfrozen', on: true });
   await act('tasnim', { type: 'flag', key: 'dark', on: true });
   const [member, officer] = [await st('tasnim'), await st('anika')];
-  assert.deepEqual(
-    [officer.s.kv['task:t1'], officer.s.kv['inv:eq1']],
-    ['Done', 'sadia'],
-    'the whole committee sees the same board',
-  );
-  assert.deepEqual([member.s.kv['task:t1'], member.s.kv['inv:eq1']], [undefined, undefined]);
   assert.deepEqual(
     [member.s.flags.unfrozen, member.s.flags.dark, officer.s.flags.dark],
     [true, true, undefined],
@@ -779,15 +942,6 @@ test('profile: a member edits their own details, within limits', async () => {
     'only name, department and batch change',
   );
 });
-test('equipment: only the holder or an admin returns it; a held item cannot be taken twice', async () => {
-  await refused(409, act('nadia', { type: 'kv', key: 'inv:eq1', value: 'me' })); // Sadia holds it from an earlier test
-  await refused(409, act('nadia', { type: 'kv', key: 'inv:eq1', value: '' }));
-  await refused(409, act('nadia', { type: 'kv', key: 'inv:eq2', value: '' })); // seeded as held by Nusrat
-  await act('sadia', { type: 'kv', key: 'inv:eq1', value: '' });
-  await act('nadia', { type: 'kv', key: 'inv:eq1', value: 'me' });
-  await act('tanvir', { type: 'kv', key: 'inv:eq1', value: '' }); // an admin can return it for her
-});
-
 test('reset links: issued only by someone who outranks the account, single-use, expiring, and they sign the old sessions out', async () => {
   const old = await login('priya@fecpc.example', PW);
   await refused(403, act('priya', { type: 'invite', user: 'priya' })); // own password is changed from the profile
@@ -821,6 +975,7 @@ test('reset links: issued only by someone who outranks the account, single-use, 
 test('the operator account is not a member: no ballot, no dues, no purchases', async () => {
   await refused(403, act('admin', { type: 'vote', poll: 'election', option: 'sadia' }));
   await refused(403, act('admin', { type: 'vote', poll: 'p1', option: 'Sunday' }));
+  await refused(403, act('admin', { type: 'toggle', list: 'reg', id: 'git-night', on: true }));
   await refused(
     403,
     act('admin', {
@@ -838,10 +993,7 @@ test('the operator account is not a member: no ballot, no dues, no purchases', a
     a.inbox.some((n) => n.id.startsWith('n:due:')),
     false,
   );
-  await refused(
-    404,
-    act('tanvir', { type: 'role', user: 'admin', role: 'member', reason: 'demote the operator' }),
-  );
+  await refused(404, act('tanvir', { type: 'post', user: 'admin', post: 'member' }));
 });
 test('sign-in limits: per address and per account, so rotating addresses does not help', async () => {
   for (let n = 0; n < 5; n++)
@@ -1297,7 +1449,8 @@ test('milestones: backfill, CF sync crossover detection, freshness window, perma
 test('officers cannot act on accounts at or above their rank; suspension blocks sign-in', async () => {
   const reason = 'rank test';
   await act('admin', { type: 'role', user: 'nusrat', role: 'president', reason });
-  await refused(404, act('tanvir', { type: 'role', user: 'nusrat', role: 'member', reason }));
+  await refused(403, act('tanvir', { type: 'role', user: 'nusrat', role: 'member', reason }));
+  await refused(404, act('tanvir', { type: 'post', user: 'nusrat', post: 'member' }));
   await refused(404, act('tanvir', { type: 'suspend', user: 'nusrat', on: true }));
   await refused(404, act('tanvir', { type: 'makeAlumni', userId: 'nusrat' }));
   await refused(404, act('tanvir', { type: 'deactivateMember', userId: 'nusrat' }));
@@ -1379,4 +1532,186 @@ test('profile: a member cannot set their own Codeforces rating or solve count', 
     [before.cf_rating, before.problems_solved, before.rating],
   );
   assert.equal(after.bio, 'hi', 'the rest of the profile still saves');
+});
+
+test('VJudge: Codeforces solves are not counted twice; a new handle starts from zero', async () => {
+  assert.equal(
+    countVjudgeSolved({
+      acRecords: { CodeForces: ['1A'], Gym: ['100001A'], UVA: ['100', '100', '101'], SPOJ: ['X'] },
+    }),
+    3,
+  );
+  assert.equal(countVjudgeSolved(null), 0);
+  await refused(400, act('tasnim', { type: 'vjudge', value: 'bad handle!' }));
+  await act('tasnim', { type: 'vjudge', value: 'tasnim_vj' });
+  await db().query(`update users set vj_solved = 40 where id = 'tasnim'`);
+  const before = await st('tasnim');
+  assert.deepEqual([before.s.vjudge, before.s.vjSolved], ['tasnim_vj', 40]);
+  await act('tasnim', { type: 'vjudge', value: 'tasnim_vj' });
+  assert.equal((await st('tasnim')).s.vjSolved, 40, 'relinking the same handle keeps the count');
+  await act('tasnim', { type: 'vjudge', value: '' });
+  const after = await st('tasnim');
+  assert.deepEqual([after.s.vjudge, after.s.vjSolved], ['', 0]);
+  assert.equal(before.me.xp - after.me.xp, 40 * 12, 'VJudge solves count toward XP');
+});
+
+test('appointPresident: Super Admin only, email re-checked, the old President steps down', async () => {
+  const appoint = (by: string, user: string, email: string) =>
+    act(by, { type: 'appointPresident', user, email });
+  await refused(403, appoint('tanvir', 'tasnim', 'tasnim@fecpc.example'));
+  await refused(404, appoint('admin', 'tasnim', 'anika@fecpc.example')); // email must match the account
+  await appoint('admin', 'tasnim', ' Tasnim@FECPC.example ');
+  const [t, old] = [await st('tasnim'), await st('tanvir')];
+  assert.deepEqual(
+    [t.s.role, t.me.role, old.s.role, old.me.role],
+    ['president', 'President', 'member', null],
+  );
+  assert.ok(
+    t.members.every((m) => m.email === undefined),
+    'emails go to the Super Admin only',
+  );
+  assert.ok((await st('admin')).members.some((m) => m.email === 'tasnim@fecpc.example'));
+  await appoint('admin', 'tanvir', 'tanvir@fecpc.example');
+  assert.equal((await st('tasnim')).s.role, 'member');
+});
+
+test('a post grants the powers of its ticked roles, and loses them when unticked', async () => {
+  await act('tanvir', { type: 'post', user: 'tasnim', post: 'vice_president' });
+  const vp = await st('tasnim');
+  assert.ok(vp.office.applications && vp.office.events, 'Secretary powers from the post');
+  await act('admin', { type: 'postRole', post: 'vice_president', role: 'secretary', on: false });
+  assert.equal((await st('tasnim')).office.applications, undefined);
+  await act('admin', { type: 'postRole', post: 'vice_president', role: 'secretary', on: true });
+  await act('tanvir', { type: 'post', user: 'tasnim', post: null });
+});
+
+test('mentors: the CP Head pairs members with real mentors; mentees come from the pairing', async () => {
+  await refused(403, act('rahim', { type: 'assignMentor', user: 'zahid', mentor: 'rahim' }));
+  await refused(403, act('nadia', { type: 'assignMentor', user: 'zahid', mentor: 'tasnim' }));
+  await act('nadia', { type: 'assignMentor', user: 'zahid', mentor: 'rahim' });
+  assert.ok((await st('rahim')).office.mentees!.some((m) => m.id === 'zahid'));
+  assert.equal((await st('nadia')).members.find((m) => m.id === 'zahid')!.mentorId, 'rahim');
+  assert.equal(
+    (await st('tasnim')).members[0]!.mentorId,
+    undefined,
+    'pairings stay with the CP Head',
+  );
+  await act('nadia', { type: 'assignMentor', user: 'zahid', mentor: 'mehedi' });
+  assert.ok(!(await st('rahim')).office.mentees!.some((m) => m.id === 'zahid'));
+});
+
+test('accounts: reinstating keeps an unjoined account invited; alumni lose their post', async () => {
+  await db().query(
+    `insert into users (id, email, name, handle, batch, dept) values ('zz_new', 'zz_new@x.test', 'ZZ New', 'zzn', 26, 'CSE')`,
+  );
+  await act('tanvir', { type: 'suspend', user: 'zz_new', on: true });
+  await act('tanvir', { type: 'suspend', user: 'zz_new', on: false });
+  assert.equal(
+    (await db().query(`select status from users where id = 'zz_new'`)).rows[0].status,
+    'invited',
+  );
+  await act('tanvir', { type: 'post', user: 'zz_new', post: 'treasurer' });
+  await act('tanvir', { type: 'makeAlumni', userId: 'zz_new' });
+  assert.equal((await db().query(`select post from users where id = 'zz_new'`)).rows[0].post, null);
+});
+
+test("alumni: availability is the owner's or the President's; jobs are bounded and links are http(s)", async () => {
+  await refused(
+    403,
+    act('anika', { type: 'setAvailableForQuestions', value: false, alumniId: 'shahriar' }),
+  );
+  await act('tanvir', { type: 'setAvailableForQuestions', value: true, alumniId: 'shahriar' });
+  const job = { type: 'createAlumniJob', company: 'Acme', title: 'SWE', url: 'https://acme.test' };
+  await refused(400, act('shahriar', { ...job, company_logo_url: 'javascript:alert(1)' }));
+  await refused(400, act('shahriar', { ...job, deadline: 'soon' }));
+  await refused(400, act('shahriar', { ...job, description: 'x'.repeat(7000) }));
+});
+
+test('club fund: verified payments add to it and approved expenses take from it', async () => {
+  const before = (await st('anika')).fundTotal;
+  const pay = (
+    await db().query(
+      `insert into payments (user_id, invoice_id, label, amount, via, trx, sender) values ('mim', 'INV-FUND', 'Fund test', 120, 'Nagad', 'FUNDTEST01', '01711111111') returning id`,
+    )
+  ).rows[0];
+  await act('anika', { type: 'decide', kind: 'payment', id: `PAY-${pay.id}`, to: 'verified' });
+  assert.equal((await st('anika')).fundTotal, before + 120);
+  await act('nusrat', { type: 'expense', what: 'Fund test', amount: 70, event: '' });
+  const e = (await db().query(`select id from expenses where what = 'Fund test'`)).rows[0];
+  const mid = (await st('anika')).fundTotal;
+  await act('anika', { type: 'decide', kind: 'expense', id: `EXP-${e.id}`, to: 'approved' });
+  const after = await st('anika');
+  assert.equal(after.fundTotal, mid - 70);
+  assert.ok(after.office.fund!.ledger.some((l) => l.what.includes(`EXP-${e.id}`) && l.amt === -70));
+  assert.equal((await st('tasnim')).office.fund, undefined, 'the ledger is for finance roles');
+});
+
+test('ops: the committee creates, edits, assigns and deletes tasks, meetings and equipment', async () => {
+  const ops = async () => (await st('nadia')).office.ops!;
+  await refused(403, act('tasnim', { type: 'saveTask', title: 'Not mine' }));
+  await refused(403, act('tasnim', { type: 'kv', key: 'inv:1', value: 'me' })); // the old switches are gone
+  await act('sadia', { type: 'saveTask', title: 'Book the hall', who: 'nadia', due: '2026-12-01' });
+  let t = (await ops()).tasks.find((x) => x.title === 'Book the hall')!;
+  assert.deepEqual([t.who, t.due, t.col], ['nadia', '2026-12-01', 'To do']);
+  await refused(400, act('nadia', { type: 'saveTask', ...t, col: 'Lost' }));
+  await refused(400, act('nadia', { type: 'saveTask', ...t, due: 'soon' }));
+  await refused(403, act('nadia', { type: 'saveTask', ...t, who: 'nobody_here' }));
+  await act('nadia', { type: 'saveTask', ...t, col: 'Done', who: null });
+  t = (await ops()).tasks.find((x) => x.id === t.id)!;
+  assert.deepEqual([t.who, t.col], [null, 'Done']);
+  await refused(403, act('nadia', { type: 'deleteTask', id: t.id })); // not hers, and she is not an admin
+  await act('sadia', { type: 'deleteTask', id: t.id });
+  assert.equal((await st('tasnim')).office.ops, undefined, "the workspace is the committee's");
+
+  await act('nadia', {
+    type: 'saveMeeting',
+    date: '2026-12-02',
+    title: 'Contest debrief',
+    agenda: ['Scores', ''],
+  });
+  const m = (await ops()).meetings.find((x) => x.title === 'Contest debrief')!;
+  assert.deepEqual(m.agenda, ['Scores']);
+  await act('nadia', {
+    type: 'saveMeetingAction',
+    meeting: m.id,
+    what: 'Upload the editorial',
+    who: 'rahim',
+  });
+  const x = (await ops()).meetings.find((y) => y.id === m.id)!.actions[0]!;
+  await act('sadia', { type: 'saveMeetingAction', ...x, done: true });
+  assert.equal((await ops()).meetings.find((y) => y.id === m.id)!.actions[0]!.done, true);
+  await refused(403, act('tasnim', { type: 'saveMeetingAction', ...x, done: false }));
+  await act('nadia', { type: 'deleteMeeting', id: m.id });
+  assert.ok(!(await ops()).meetings.some((y) => y.id === m.id));
+
+  await act('sadia', { type: 'saveItem', name: 'Spare router' });
+  const it = (await ops()).inventory.find((y) => y.name === 'Spare router')!;
+  await act('nadia', { type: 'holdItem', id: it.id, to: 'nadia' });
+  await refused(409, act('sadia', { type: 'holdItem', id: it.id, to: 'sadia' })); // already out
+  await refused(403, act('nadia', { type: 'holdItem', id: it.id, to: 'tasnim' })); // only an admin hands it on
+  await act('nadia', { type: 'holdItem', id: it.id, to: null });
+  await act('sadia', { type: 'holdItem', id: it.id, to: 'tasnim' });
+  await refused(403, act('nadia', { type: 'holdItem', id: it.id, to: null })); // she no longer holds it
+  await refused(403, act('nadia', { type: 'deleteItem', id: it.id }));
+  await act('sadia', { type: 'deleteItem', id: it.id });
+});
+
+test('budgets: the Treasurer plans them; spending and the term totals come from the real ledger', async () => {
+  const before = (await st('tasnim')).term;
+  assert.match(before.since, /^\d{4}-(01|07)-01$/);
+  await refused(403, act('tanvir', { type: 'saveBudget', name: 'Spring Fest', plan: 1000 })); // the President only views
+  await act('anika', { type: 'saveBudget', name: 'Spring Fest', plan: 1000 });
+  await refused(409, act('anika', { type: 'saveBudget', name: 'Spring Fest', plan: 1000 }));
+  await act('nusrat', { type: 'expense', what: 'Fest posters', amount: 300, event: 'Spring Fest' });
+  const e = (await db().query(`select id from expenses where what = 'Fest posters'`)).rows[0];
+  await act('anika', { type: 'decide', kind: 'expense', id: `EXP-${e.id}`, to: 'approved' });
+  const b = (await st('anika')).office.fund!.budgets.find((x) => x.name === 'Spring Fest')!;
+  assert.equal(b.spent, 300);
+  assert.equal((await st('tasnim')).term.spent, before.spent + 300);
+  await refused(400, act('anika', { type: 'saveBudget', id: b.id, name: 'Spring Fest', plan: 0 }));
+  await act('anika', { type: 'saveBudget', id: b.id, name: 'Spring Fest', plan: 2000 });
+  assert.equal((await st('anika')).office.fund!.budgets.find((x) => x.id === b.id)!.plan, 2000);
+  await refused(403, act('nusrat', { type: 'deleteBudget', id: b.id }));
+  await act('anika', { type: 'deleteBudget', id: b.id });
+  assert.equal((await st('tasnim')).office.fund, undefined, 'budgets are for finance roles');
 });

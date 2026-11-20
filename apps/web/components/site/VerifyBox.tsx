@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { certificates, fmtDate } from '@fecpc/content/site';
 import { site } from '@/lib/site';
 
@@ -7,6 +7,14 @@ import { site } from '@/lib/site';
 export default function VerifyBox() {
   const [q, setQ] = useState(certificates[0].code);
   const [asked, setAsked] = useState<string | null>(certificates[0].code); // open on a sample so the result state is visible
+  // A printed certificate's QR links here with ?code=…; open on that code.
+  useEffect(() => {
+    const c = new URLSearchParams(location.search).get('code')?.trim().toUpperCase();
+    if (c) {
+      setQ(c);
+      setAsked(c);
+    }
+  }, []);
   const hit = asked ? certificates.find((c) => c.code === asked) : undefined;
   return (
     <div className="stack" style={{ '--g': '32px' } as React.CSSProperties}>

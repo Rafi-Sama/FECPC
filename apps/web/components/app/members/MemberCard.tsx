@@ -112,7 +112,6 @@ export function MemberCard({
             userId={member.id}
             memberName={member.name}
             isAlumni={member.is_alumni}
-            currentRoleLabel={member.role}
             onDone={onMutated}
           />
         </div>

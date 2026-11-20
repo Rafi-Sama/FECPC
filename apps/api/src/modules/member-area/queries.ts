@@ -22,6 +22,7 @@ import {
   listAlumniJobs,
   listBlogPosts,
   listFeedPosts,
+  listFeedReports,
   listIdeas,
   listInterviewExperiences,
   listInterviewTopics,
@@ -33,6 +34,7 @@ import {
   updateBlogPost,
 } from './actions.ts';
 import { Fail, type Db } from './db.ts';
+import { getTeam } from './teams.ts';
 import { loadState } from './state.ts';
 
 type In = Record<string, unknown>;
@@ -244,6 +246,8 @@ export async function community(db: Db, id: string, b: In): Promise<unknown> {
     });
     return { items };
   }
+  if (action === 'listFeedReports') return listFeedReports(db, id);
+  if (action === 'getTeam') return getTeam(db, id, { teamId: b.teamId });
   if (action === 'getKudosTodayCount') {
     return { kudosToday: await getKudosTodayCount(db, id) };
   }

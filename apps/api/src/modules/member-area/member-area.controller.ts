@@ -2,7 +2,7 @@ import { Body, Controller, Get, Header, HttpCode, Param, Post } from '@nestjs/co
 import { act, apply, exportMembers } from './actions.ts';
 import { Fail, pool } from './db.ts';
 import * as queries from './queries.ts';
-import { syncCodeforces } from './milestones.ts';
+import { syncCodeforces, syncVjudge } from './milestones.ts';
 import { loadState } from './state.ts';
 import { CurrentUser, type RequestUser } from '../auth/decorators.ts';
 import { Public } from '../auth/decorators.ts';
@@ -46,15 +46,18 @@ export class MemberAreaController {
     return AREAS[area as keyof typeof AREAS](pool(), user.id, object(body));
   }
 
-  /** Refreshes the member's own Codeforces stats and milestones, at most once per 10 minutes. */
+  /** Refreshes the member's own Codeforces and VJudge stats and milestones, at most once a minute. */
   @Post('me/codeforces/sync')
   @HttpCode(200)
   async syncCodeforces(@CurrentUser() user: RequestUser) {
     const now = Date.now();
-    if (now - (lastCodeforcesSync.get(user.id) ?? 0) < 10 * 60_000) return { synced: false };
+    if (now - (lastCodeforcesSync.get(user.id) ?? 0) < 60_000) return { synced: false };
     lastCodeforcesSync.set(user.id, now);
-    const result = await syncCodeforces(pool(), user.id);
-    return { synced: !!result, milestonesCreated: result?.milestonesCreated ?? 0 };
+    const [cf, vj] = await Promise.all([
+      syncCodeforces(pool(), user.id),
+      syncVjudge(pool(), user.id),
+    ]);
+    return { synced: !!(cf || vj), milestonesCreated: cf?.milestonesCreated ?? 0 };
   }
 
   /** The public join form. Anyone may call it, so `apply` validates every field strictly. */

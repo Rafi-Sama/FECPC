@@ -4,12 +4,22 @@ import Roadmap from '@/components/site/Roadmap';
 import { Page, Tabs } from '@/components/app/Shell';
 import { useStore } from '@/components/app/Store';
 import { Avatar } from '@/components/pixel/Sprites';
-import { doubts, resources } from '@fecpc/content/member-area';
+import { doubts, resources, sheet } from '@fecpc/content/member-area';
+import { roadmap } from '@fecpc/content/site';
 import { byId } from '@fecpc/content/site';
 import { can } from '@fecpc/contracts';
 
 const tabs = ['Roadmap', 'Resources', 'Doubts', 'Mentorship'] as const;
 const levels = ['All', 'Beginner', 'Intermediate', 'Advanced'] as const;
+// A roadmap node is done when its green-sheet topic is cleared (every must-solve), or, with no sheet topic, its library shelf is read.
+const nodeSheet: Record<string, string> = {
+  cpp: 'Implementation',
+  stl: 'Strings',
+  math: 'Math',
+  graphs: 'Graphs',
+  dp: 'DP',
+};
+const nodeShelf: Record<string, string> = { ds: 'Data structures', icpc: 'ICPC' };
 
 export default function Learn() {
   const { s, me, act, office, who } = useStore();
@@ -22,14 +32,23 @@ export default function Learn() {
       (lvl === 'All' || r.level === lvl) &&
       (r.title + r.topic).toLowerCase().includes(q.toLowerCase()),
   );
-  const scope = can(s.role, 'mentees.view');
+  const scope = can(s.roles, 'mentees.view');
+  const done = roadmap
+    .filter((n) =>
+      nodeSheet[n.id]
+        ? sheet
+            .filter((x) => x.topic === nodeSheet[n.id] && x.must)
+            .every((x) => s.solved.includes(x.id))
+        : resources.filter((r) => r.topic === nodeShelf[n.id]).every((r) => s.done.includes(r.id)),
+    )
+    .map((n) => n.id);
   const [sent, setSent] = useState(false);
   return (
     <Page
       title={
         tab === 'Roadmap' ? (
           <>
-            2 of 7 nodes <span className="acc">done.</span>
+            {done.length} of {roadmap.length} nodes <span className="acc">done.</span>
           </>
         ) : (
           <>
@@ -42,7 +61,7 @@ export default function Learn() {
       <Tabs tabs={tabs} value={tab} onChange={setTab} />
       {tab === 'Roadmap' && (
         <>
-          <Roadmap done={['cpp', 'stl']} />
+          <Roadmap done={done} />
         </>
       )}
       {tab === 'Resources' && (
@@ -104,6 +123,7 @@ export default function Learn() {
               <button
                 className="btn xs line"
                 aria-pressed={s.kudos.includes(d.id)}
+                disabled={d.by === me.id}
                 onClick={() => act('toggle', { list: 'kudos', id: d.id })}
               >
                 {s.kudos.includes(d.id) ? 'Kudos sent' : 'Kudos'}

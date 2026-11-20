@@ -1,8 +1,8 @@
 'use client';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Page, Tabs } from '@/components/app/Shell';
 import { useStore } from '@/components/app/Store';
-import { isCommittee } from '@fecpc/contracts';
+import { can, isCommittee } from '@fecpc/contracts';
 import { balloonColor, balloons, prints } from '@fecpc/content/training';
 import type { VjudgeContestData } from '@/app/api/vjudge/route';
 
@@ -37,25 +37,16 @@ const DEFAULT_CONTESTS: ConfiguredContest[] = [
 export default function ContestDay() {
   const { s, act } = useStore();
 
-  // Registry of configured contests (stored in localStorage)
-  const [registry, setRegistry] = useState<ConfiguredContest[]>(DEFAULT_CONTESTS);
-  const loaded = useRef(false);
-
-  // Read after mount: the server render has no localStorage, so reading it during render breaks hydration.
-  useEffect(() => {
+  // The scoreboard's contests are club-wide, chosen by `contest.run` holders and stored on the server.
+  const registry = useMemo<ConfiguredContest[]>(() => {
     try {
-      const stored = localStorage.getItem('fecpc_vjudge_registry');
-      if (stored) setRegistry(JSON.parse(stored));
+      const r = JSON.parse(s.kv.contests ?? '');
+      if (Array.isArray(r) && r.length) return r;
     } catch {}
-    loaded.current = true;
-  }, []);
-
-  useEffect(() => {
-    if (!loaded.current) return;
-    try {
-      localStorage.setItem('fecpc_vjudge_registry', JSON.stringify(registry));
-    } catch {}
-  }, [registry]);
+    return DEFAULT_CONTESTS;
+  }, [s.kv.contests]);
+  const setRegistry = (next: (prev: ConfiguredContest[]) => ConfiguredContest[]) =>
+    void act('contestDay', { contests: next(registry) });
 
   const runningConfig = registry.find((c) => c.type === 'running') || registry[0];
   const previousConfigs = registry.filter((c) => c.type === 'previous');
@@ -63,12 +54,12 @@ export default function ContestDay() {
   const [selectedPrevId, setSelectedPrevId] = useState<string>(previousConfigs[0]?.id || '594821');
 
   // Tabs — ADMIN SETUP only visible to cp_head, president, super_admin
-  const isAdmin = s.role === 'cp_head' || s.role === 'president' || s.role === 'super_admin';
+  const isAdmin = !!can(s.roles, 'contest.run');
   const baseTabs = isAdmin
     ? (['RUNNING CONTEST', 'PREVIOUS CONTESTS', 'ADMIN SETUP'] as const)
     : (['RUNNING CONTEST', 'PREVIOUS CONTESTS'] as const);
   const runner =
-    isCommittee(s.role) || s.present.some((k) => /^vol:(Balloon|Print) runner$/.test(k));
+    isCommittee(s.roles) || s.present.some((k) => /^vol:(Balloon|Print) runner$/.test(k));
   const logisticsTabs = ['BALLOONS', 'PRINTS'] as const;
   const allTabs = runner ? [...baseTabs, ...logisticsTabs] : baseTabs;
 
@@ -140,7 +131,7 @@ export default function ContestDay() {
 
     // Extract ID from full URL (e.g. https://vjudge.net/contest/612840#rank)
     const match = adminInputId.match(/contest\/(?:rank\/single\/)?(\d+)/i);
-    const cleanId = match ? match[1] : adminInputId.trim().replace(/[^\w-]/g, '');
+    const cleanId = match ? match[1] : adminInputId.trim().replace(/\D/g, '');
 
     if (!cleanId) {
       setAdminMsg({ text: 'Invalid Contest ID format', error: true });
@@ -870,7 +861,7 @@ export default function ContestDay() {
                   Problem {b.p} · desk {b.desk}
                 </span>
               </span>
-              {isCommittee(s.role) && (
+              {isCommittee(s.roles) && (
                 <button
                   className={`btn xs ${done(b.id) ? 'line' : ''}`}
                   aria-pressed={!!done(b.id)}
@@ -896,7 +887,7 @@ export default function ContestDay() {
                   {p.pages} pages · desk {p.desk}
                 </span>
               </span>
-              {isCommittee(s.role) && (
+              {isCommittee(s.roles) && (
                 <button
                   className={`btn xs ${done(p.id) ? 'line' : ''}`}
                   aria-pressed={!!done(p.id)}

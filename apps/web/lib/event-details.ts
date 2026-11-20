@@ -56,7 +56,7 @@ const customDetails: Record<string, Partial<EventDetailData>> = {
       { name: 'Sadia Islam', role: 'Platform Lead' },
     ],
     role2Title: 'Judge',
-    role2Sub: '1 of 2 left · manual approval',
+    role2Sub: 'manual approval',
     role2Key: 'judge',
   },
   'dp-bootcamp': {
@@ -77,7 +77,7 @@ const customDetails: Record<string, Partial<EventDetailData>> = {
       { name: 'Nusrat Jahan', role: 'Lab Coordinator' },
     ],
     role2Title: 'Teaching Assistant',
-    role2Sub: '2 left · lab support & mentoring',
+    role2Sub: 'lab support & mentoring',
     role2Key: 'ta',
   },
   'git-night': {
@@ -98,7 +98,7 @@ const customDetails: Record<string, Partial<EventDetailData>> = {
       { name: 'Shuvo Das', role: 'Lab Support' },
     ],
     role2Title: 'Teaching Assistant',
-    role2Sub: '2 left · 1-on-1 terminal troubleshooting',
+    role2Sub: '1-on-1 terminal troubleshooting',
     role2Key: 'ta',
   },
   'icpc-mock-3': {
@@ -119,7 +119,7 @@ const customDetails: Record<string, Partial<EventDetailData>> = {
       { name: 'Mehedi Hasan', role: 'System & Scoreboard Lead' },
     ],
     role2Title: 'Judge',
-    role2Sub: '1 left · appeal review & clarification desk',
+    role2Sub: 'appeal review & clarification desk',
     role2Key: 'judge',
   },
   'alumni-talk': {
@@ -140,7 +140,7 @@ const customDetails: Record<string, Partial<EventDetailData>> = {
       { name: 'Tanvir Ahmed', role: 'Moderator' },
     ],
     role2Title: 'Stage Support',
-    role2Sub: '2 left · mic runner & guest reception',
+    role2Sub: 'mic runner & guest reception',
     role2Key: 'stage',
   },
   'hack-night': {
@@ -161,7 +161,7 @@ const customDetails: Record<string, Partial<EventDetailData>> = {
       { name: 'Imran Chowdhury', role: 'Technical Mentor' },
     ],
     role2Title: 'Judge',
-    role2Sub: '2 left · project demo scoring',
+    role2Sub: 'project demo scoring',
     role2Key: 'judge',
   },
   'intra-contest': {
@@ -184,7 +184,7 @@ const customDetails: Record<string, Partial<EventDetailData>> = {
       { name: 'Anika Tabassum', role: 'Finance & Awards' },
     ],
     role2Title: 'Judge',
-    role2Sub: '2 of 4 left · clarification desk',
+    role2Sub: 'clarification desk',
     role2Key: 'judge',
   },
 };
@@ -205,7 +205,7 @@ export function getEventDetails(event: ClubEvent): EventDetailData {
       { name: 'Tanvir Ahmed', role: 'Executive' },
     ],
     role2Title: custom.role2Title ?? (event.type === 'Contest' ? 'Judge' : 'Mentor / TA'),
-    role2Sub: custom.role2Sub ?? '1 left · manual approval',
+    role2Sub: custom.role2Sub ?? 'manual approval',
     role2Key: custom.role2Key ?? (event.type === 'Contest' ? 'judge' : 'ta'),
   };
 }

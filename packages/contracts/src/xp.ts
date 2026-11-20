@@ -38,6 +38,8 @@ export type Title = (typeof titles)[number];
 export type Earn = {
   base: { solved: number; done: number };
   solved: string[];
+  /** The ticked problems Codeforces confirmed (server-side sync). Only these earn solve XP. */
+  verified: string[];
   done: string[];
   lessons: string[];
   quiz: Record<string, number>;
@@ -58,10 +60,13 @@ export type Earn = {
 };
 
 const given = (s: Earn) => s.kudos.filter((k) => !k.startsWith('shop:')).length;
+/** Ticks made on the platform (after the pre-platform base) that Codeforces confirmed. A tick alone earns nothing. */
+export const verifiedNew = (s: Earn) =>
+  s.solved.slice(s.base.solved).filter((id) => s.verified.includes(id)).length;
 
 export function quests(s: Earn) {
   return [
-    { id: 'q1', text: 'Solve one problem', done: s.solved.length > s.base.solved },
+    { id: 'q1', text: 'Solve one problem', done: verifiedNew(s) > 0 },
     {
       id: 'q2',
       text: 'Finish a lesson or resource',
@@ -80,7 +85,7 @@ export function earned(s: Earn): number {
   const pollVotes = Object.keys(s.votes).filter((k) => k !== 'election').length;
 
   return (
-    Math.max(0, s.solved.length - s.base.solved) * XP.solve +
+    verifiedNew(s) * XP.solve +
     Math.max(0, s.done.length - s.base.done) * XP.resource +
     s.lessons.length * XP.lesson +
     Object.values(s.quiz).filter((v) => v >= 2).length * XP.quiz +

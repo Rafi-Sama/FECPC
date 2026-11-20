@@ -1,5 +1,5 @@
 // The shape of everything the server sends a signed-in member. Built by the API's loadState (modules/member-area/state.ts), read by the web store.
-import type { Role } from './roles.ts';
+import type { Post, Role } from './roles.ts';
 
 /** A club member as the roster shows them. */
 export type Member = {
@@ -22,7 +22,8 @@ export type Member = {
 export type Payment = {
   trx: string;
   via: string;
-  status: 'pending' | 'verified' | 'rejected';
+  /** `waived`: no payment, an approved waiver settles the invoice. */
+  status: 'pending' | 'verified' | 'rejected' | 'waived';
   id: number;
   amount: number;
   label: string;
@@ -31,9 +32,16 @@ export type Payment = {
 };
 export type S = {
   role: Role;
+  /** Effective roles: `role` plus whatever the member's post grants. Check permissions against these. */
+  roles: Role[];
   handle: string;
+  vjudge: string;
+  /** Accepted problems on VJudge outside Codeforces, synced by the server. */
+  vjSolved: number;
   base: { solved: number; done: number };
   solved: string[];
+  /** Ticked problems that Codeforces confirmed; only these earn solve XP. */
+  verified: string[];
   done: string[];
   lessons: string[];
   read: string[];
@@ -73,8 +81,11 @@ export type Roster = Member & {
   avatar_url?: string | null;
   is_alumni?: boolean;
   roleKey?: Role;
+  post?: Post | null;
+  /** Super Admin only. */ email?: string;
   suspended?: boolean;
   /** invited, has not set a password yet */ pending?: boolean;
+  /** Only for whoever assigns mentors (full `mentees.view`). */ mentorId?: string | null;
 };
 
 export type MemberExperience = {
@@ -253,6 +264,19 @@ export type Expense = {
   status: string;
 };
 
+/** A request to waive one invoice. Pending → proposed by one officer → waived or rejected by a second. */
+export type Waiver = {
+  id: string;
+  who: string;
+  invoice: string;
+  what: string;
+  amount: number;
+  reason: string;
+  status: 'pending' | 'proposed' | 'waived' | 'rejected';
+  proposedBy: string | null;
+  at: string;
+};
+
 export type FeedCategory = 'problem-solving' | 'upsolving' | 'topic';
 export type IdeaType = 'idea' | 'teammate' | 'study';
 export type IdeaStatus = 'open' | 'planned' | 'shipped' | 'closed';
@@ -384,11 +408,12 @@ export type Office = {
   fund?: {
     accounts: (readonly [string, number])[];
     ledger: { date: string; what: string; cat: string; amt: number }[];
-    budgets: (readonly [string, number, number])[];
+    /** `spent` = spent before the ledger existed + approved expenses filed under the budget's name. */
+    budgets: { id: number; name: string; plan: number; spent: number }[];
     cashflow: number[];
   };
   expenses?: Expense[];
-  waivers?: { id: string; who: string; what: string; amount: number; reason: string }[];
+  waivers?: Waiver[];
   mentees?: {
     id: string;
     week: number[];
@@ -419,10 +444,16 @@ export type Office = {
     registrants: Record<string, string[]>;
   };
   ops?: {
-    tasks: { id: string; title: string; who: string; due: string; col: string }[];
-    meetings: { id: string; date: string; title: string; agenda: string[]; actions: string[][] }[];
+    tasks: { id: number; title: string; who: string | null; due: string | null; col: string }[];
+    meetings: {
+      id: number;
+      date: string;
+      title: string;
+      agenda: string[];
+      actions: { id: number; what: string; who: string | null; done: boolean }[];
+    }[];
     vault: string[][];
-    inventory: [string, string, string][];
+    inventory: { id: number; name: string; holder: string | null }[];
     sponsors?: { name: string; promised: number; got: number; owe: string; last: string }[];
     reports: { growth: number[]; retention: number[]; solves: number[] };
   };
@@ -457,6 +488,12 @@ export type AppState = {
   inbox: { id: string; cat: string; text: string; href: string }[];
   /** Expense requests this member filed, whatever their role. */
   myExpenses: Expense[];
+  /** Waiver requests this member made. */
+  myWaivers: Waiver[];
   fundTotal: number;
+  /** Real money this term (since 1 Jan or 1 Jul): verified payments in, approved expenses out. */
+  term: { since: string; incoming: number; spent: number };
   office: Office;
+  /** Which roles each club post grants. Set by the Super Admin. */
+  postRoles: Partial<Record<Post, Role[]>>;
 };

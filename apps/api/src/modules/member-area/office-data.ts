@@ -78,11 +78,6 @@ export const expenses = [
     event: 'Intra-College Contest',
   },
 ];
-export const budgets = [
-  ['Intra-College Contest', 60000, 49200],
-  ['Winter Hack Night', 25000, 14400],
-  ['ICPC Mock series', 6000, 2700],
-] as const;
 export const cashflow = [18, 26, 22, 41, 35, 29, 44, 38, 52, 47, 61, 55];
 export const mentees = [
   { id: 'tasnim', week: [5, 4], last: 'today', flag: '' },
@@ -95,51 +90,6 @@ export const applications = [
   { id: 'ap2', name: 'Lamia Haque', dept: 'EEE', batch: 26, quiz: 74, src: 'Friend' },
   { id: 'ap3', name: 'Sakib Al Noman', dept: 'CSE', batch: 26, quiz: 91, src: 'Facebook' },
 ];
-export const tasks = [
-  {
-    id: 't1',
-    title: 'Book Central Lab for contest day',
-    who: 'nusrat',
-    due: '20 Nov',
-    col: 'Doing',
-  },
-  {
-    id: 't2',
-    title: 'Confirm title sponsor instalment 3',
-    who: 'anika',
-    due: '25 Nov',
-    col: 'To do',
-  },
-  { id: 't3', title: 'Set problems for Weekly #43', who: 'nadia', due: '21 Nov', col: 'Doing' },
-  {
-    id: 't4',
-    title: 'Print 180 participant certificates',
-    who: 'farhan',
-    due: '15 Dec',
-    col: 'To do',
-  },
-  { id: 't5', title: 'Publish election nominee list', who: 'sadia', due: '14 Nov', col: 'Done' },
-  { id: 't6', title: 'Order 400 balloons, 8 colours', who: 'farhan', due: '10 Dec', col: 'To do' },
-];
-export const meetings = [
-  {
-    id: 'm1',
-    date: '13 Nov',
-    title: 'General meeting',
-    agenda: ['Contest day roles', 'Budget vote', 'New mentor pairs'],
-    actions: [
-      ['Assign 12 volunteers to balloons', 'nusrat'],
-      ['Share budget sheet with members', 'anika'],
-    ],
-  },
-  {
-    id: 'm2',
-    date: '30 Oct',
-    title: 'Executive sync',
-    agenda: ["Freshers' Cup review", 'Sheet v2026.2'],
-    actions: [["Publish Freshers' Cup editorial", 'rahim']],
-  },
-];
 export const vault = [
   ['Constitution (2024 revision)', 'PDF', '12 pages'],
   ['MoU: department lab access', 'PDF', '3 pages'],
@@ -147,13 +97,6 @@ export const vault = [
   ['Annual report 2025', 'PDF', '28 pages'],
   ['Handover notes: 2025 committee', 'Doc', 'updated Jun'],
 ];
-export const inventory = [
-  ['Projector (Epson)', 'eq1', ''],
-  ['Laptop, contest spare #1', 'eq2', 'nusrat'],
-  ['Laptop, contest spare #2', 'eq3', ''],
-  ['Club banner, 8 ft', 'eq4', 'farhan'],
-  ['Champion trophy 2026', 'eq5', ''],
-] as [string, string, string][];
 export const sponsors = [
   {
     name: 'Title sponsor (fintech)',
@@ -176,22 +119,6 @@ export const reports = {
   retention: [71, 74, 70, 78, 81, 79, 84, 86],
   solves: [410, 520, 480, 690, 760, 720, 910, 1040],
 };
-export const waivers = [
-  {
-    id: 'w1',
-    who: 'jannat',
-    what: 'Semester subscription',
-    amount: 300,
-    reason: 'Financial hardship, advisor letter attached',
-  },
-  {
-    id: 'w2',
-    who: 'zahid',
-    what: 'Late fine',
-    amount: 50,
-    reason: 'Wallet outage on the due date',
-  },
-];
 export const quizAnswers: Record<string, number[]> = {
   dp: [1, 2, 0],
   cpp: [1, 2, 1],
