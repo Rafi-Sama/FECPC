@@ -1,4 +1,5 @@
-# Local development database only. Production reads DATABASE_URL from the host's secrets.
+# Local development database: PostgreSQL 16 with the dev database (fecpc) and the test database (fecpc_test).
+# Production reads DATABASE_URL from the host's secrets instead.
 services:
   db:
     image: postgres:16-alpine
@@ -8,7 +9,10 @@ services:
       POSTGRES_USER: fecpc
       POSTGRES_PASSWORD: fecpc_dev
       POSTGRES_DB: fecpc
-    ports: ["127.0.0.1:5433:5432"]
-    volumes: ["fecpc_pg:/var/lib/postgresql/data"]
+    ports: ['127.0.0.1:5433:5432']
+    volumes:
+      - fecpc_pg:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
 volumes:
   fecpc_pg:

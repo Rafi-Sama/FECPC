@@ -1,0 +1,29 @@
+{
+  "name": "@fecpc/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --test-concurrency=1 test",
+    "lint": "eslint src test",
+    "format:check": "prettier --check 'src/**/*.ts' 'test/**/*.ts'"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@fecpc/config-typescript": "workspace:*",
+    "@types/node": "^26.6.6",
+    "typescript": "^5.7.2"
+  }
+}

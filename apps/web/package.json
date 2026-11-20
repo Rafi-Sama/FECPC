@@ -1,0 +1,28 @@
+{
+  "name": "@fecpc/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev-ready.ts && next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint app components lib scripts",
+    "format:check": "prettier --check 'app/**/*.{ts,tsx,css}' 'components/**/*.{ts,tsx}' 'lib/**/*.ts' 'scripts/**/*.ts'"
+  },
+  "dependencies": {
+    "@fecpc/content": "workspace:*",
+    "@fecpc/contracts": "workspace:*",
+    "next": "^16.4.6",
+    "qrcode-generator": "^2.0.4",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@fecpc/config-typescript": "workspace:*",
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0"
+  }
+}

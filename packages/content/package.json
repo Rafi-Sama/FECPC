@@ -1,0 +1,23 @@
+{
+  "name": "@fecpc/content",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./site": "./src/site.ts",
+    "./member-area": "./src/member-area.ts",
+    "./training": "./src/training.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "format:check": "prettier --check 'src/**/*.ts'"
+  },
+  "dependencies": {
+    "@fecpc/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@fecpc/config-typescript": "workspace:*",
+    "typescript": "^5.7.2"
+  }
+}
