@@ -125,6 +125,8 @@ export async function syncUserCodeforcesStats(
   next: {
     cf_handle?: string | null;
     cf_rating?: number | null;
+    /** Codeforces' own max rating; when given it replaces the stored peak (which may be stale seed data). */
+    max_rating?: number | null;
     problems_solved?: number;
     current_streak?: number;
     meta?: Record<string, unknown>;
@@ -174,13 +176,20 @@ export async function syncUserCodeforcesStats(
     `update users set
        cf_rating = $2::int,
        rating = coalesce($2::int, rating),
-       peak = greatest(peak, $3::int),
+       peak = coalesce($6::int, greatest(peak, $3::int)),
        problems_solved = $4::int,
        solved = greatest(solved, $4::int),
        current_streak = $5::int,
        streak = greatest(streak, $5::int)
      where id = $1`,
-    [userId, resolved.cf_rating, newRatingInt, resolved.problems_solved, resolved.current_streak],
+    [
+      userId,
+      resolved.cf_rating,
+      newRatingInt,
+      resolved.problems_solved,
+      resolved.current_streak,
+      next.max_rating ?? null,
+    ],
   );
 
   return { inserted, detected };
@@ -213,23 +222,27 @@ export async function syncCodeforces(
   };
   const h = encodeURIComponent(handle);
   const [info, subs] = await Promise.all([
-    get<{ handle?: string; rating?: number }[]>(`user.info?handles=${h}`),
+    get<{ handle?: string; rating?: number; maxRating?: number }[]>(`user.info?handles=${h}`),
     get<
       {
         verdict?: string;
         creationTimeSeconds: number;
-        problem: { contestId?: number; index?: string };
+        problem: { contestId?: number; index?: string; rating?: number; tags?: string[] };
       }[]
     >(`user.status?handle=${h}&from=1&count=5000`),
   ]);
   if (!info?.[0] || !subs) return null;
 
-  const solved = new Set<string>();
+  const solved = new Map<string, { p: string; r: number | null; t: string[] }>();
   const days: Record<string, number> = {};
   for (const sub of subs) {
     const pid = `${sub.problem.contestId ?? ''}${sub.problem.index ?? ''}`;
     if (sub.verdict !== 'OK' || solved.has(pid)) continue;
-    solved.add(pid);
+    solved.set(pid, {
+      p: pid,
+      r: typeof sub.problem.rating === 'number' ? sub.problem.rating : null,
+      t: (sub.problem.tags ?? []).filter((t) => typeof t === 'string').slice(0, 20),
+    });
     const day = new Date(sub.creationTimeSeconds * 1000).toISOString().slice(0, 10);
     days[day] = (days[day] ?? 0) + 1;
   }
@@ -239,12 +252,15 @@ export async function syncCodeforces(
   const res = await tx(async (c) => {
     await c.query(`delete from cf_solves where user_id = $1`, [userId]);
     await c.query(
-      `insert into cf_solves (user_id, problem) select $1, unnest($2::text[]) on conflict do nothing`,
-      [userId, [...solved].filter((p) => /^\d+[A-Z]\d?$/.test(p))],
+      `insert into cf_solves (user_id, problem, rating, tags)
+       select $1, x.p, x.r, array(select jsonb_array_elements_text(x.t))
+       from jsonb_to_recordset($2::jsonb) as x(p text, r int, t jsonb) on conflict do nothing`,
+      [userId, JSON.stringify([...solved.values()].filter((s) => /^\d+[A-Z]\d?$/.test(s.p)))],
     );
     return syncUserCodeforcesStats(c, userId, {
       cf_handle: cfHandle,
       cf_rating: typeof rating === 'number' ? rating : null,
+      max_rating: typeof info[0]?.maxRating === 'number' ? info[0].maxRating : null,
       problems_solved: solved.size,
       current_streak: computeStreakFromDays(days),
       meta: { cf_handle: cfHandle, source: 'cf_sync' },

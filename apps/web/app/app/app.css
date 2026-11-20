@@ -5399,3 +5399,308 @@ textarea.tm-code {
     --side-w: 64px;
   }
 }
+
+/* ── inbox dropdown ── */
+.notif {
+  position: relative;
+}
+.notif summary {
+  list-style: none;
+  cursor: pointer;
+}
+.notif summary::-webkit-details-marker {
+  display: none;
+}
+.notif[open] summary {
+  color: var(--acc);
+}
+.notif-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  width: min(380px, 90vw);
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--line2);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+}
+.notif-menu > p {
+  padding: 16px;
+}
+.notif-menu > div:not(.notif-foot) {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.notif-menu > div[data-read] {
+  opacity: 0.55;
+}
+.notif-menu a {
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 15px;
+  line-height: 1.4;
+}
+.notif-menu a:hover {
+  color: var(--acc);
+}
+.notif-menu a:focus-visible,
+.notif-menu button:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 2px;
+}
+.notif-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+}
+.notif-foot button {
+  background: none;
+  border: 0;
+  cursor: pointer;
+  color: var(--mut);
+  font: inherit;
+  font-size: 14px;
+}
+.notif-foot button:hover {
+  color: var(--acc);
+}
+
+/* ── team overview (teams page) ── */
+.tov-board {
+  background: var(--ink);
+  color: var(--bg);
+  padding: clamp(20px, 2.6vw, 32px);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.tov-board-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  font:
+    14px var(--mono),
+    monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+.tov-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 20px;
+}
+.tov-kpis > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 14px;
+  border-left: 2px solid color-mix(in srgb, var(--bg) 25%, transparent);
+}
+.tov-kpis b {
+  font:
+    600 clamp(34px, 4.4vw, 52px) / 1 var(--mono),
+    monospace;
+  letter-spacing: -0.03em;
+}
+.tov-kpis span {
+  font:
+    14px var(--mono),
+    monospace;
+  opacity: 0.7;
+}
+.tov-share {
+  display: flex;
+  height: 10px;
+  gap: 3px;
+}
+.tov-share i {
+  min-width: 3px;
+}
+.tov-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font:
+    14px var(--mono),
+    monospace;
+}
+.tov-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.tov-legend i {
+  width: 12px;
+  height: 12px;
+  display: inline-block;
+}
+
+.tov-card {
+  border-top: 6px solid var(--rk) !important;
+  gap: 16px !important;
+}
+.tov-who {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.tov-who > span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.tov-who strong {
+  font-size: 17px;
+}
+.tov-rating {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.tov-rating b {
+  font:
+    600 56px / 1 var(--mono),
+    monospace;
+  color: var(--rk);
+  letter-spacing: -0.04em;
+}
+.tov-rank {
+  padding: 3px 10px;
+  border: 1px solid var(--rk);
+  color: var(--rk);
+  font:
+    14px var(--mono),
+    monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.tov-next {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tov-next > div {
+  height: 6px;
+  background: color-mix(in srgb, var(--ink) 12%, transparent);
+}
+.tov-next i {
+  display: block;
+  height: 100%;
+  background: var(--rk);
+}
+.tov-mini {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin: 0;
+  border-top: 1px solid var(--line);
+}
+.tov-mini > div {
+  padding: 10px 0 0;
+}
+.tov-mini dt {
+  font:
+    14px var(--mono),
+    monospace;
+  color: var(--mut);
+}
+.tov-mini dd {
+  margin: 2px 0 0;
+  font:
+    600 22px var(--mono),
+    monospace;
+}
+
+.tov-tags {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.tov-tag {
+  display: grid;
+  grid-template-columns: minmax(110px, 180px) 1fr 48px;
+  grid-template-areas: 'name track n' '. gap gap';
+  align-items: center;
+  column-gap: 14px;
+}
+.tov-tag-name {
+  grid-area: name;
+  font-size: 15px;
+}
+.tov-tag-track {
+  grid-area: track;
+  height: 18px;
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+}
+.tov-tag-track > div {
+  display: flex;
+  gap: 2px;
+  height: 100%;
+}
+.tov-tag-track i {
+  min-width: 3px;
+}
+.tov-tag-n {
+  grid-area: n;
+  text-align: right;
+  font:
+    600 18px var(--mono),
+    monospace;
+}
+.tov-gap {
+  grid-area: gap;
+  font:
+    14px var(--mono),
+    monospace;
+  color: var(--bad, #d1392b);
+}
+.tov-gap:empty {
+  display: none;
+}
+
+.tov-hist {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 220px;
+  padding-top: 8px;
+}
+.tov-hist > div {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: stretch;
+  gap: 6px;
+  text-align: center;
+}
+.tov-hist i {
+  display: block;
+}
+.tov-hist-n {
+  font:
+    600 16px var(--mono),
+    monospace;
+}
+.tov-hist-k {
+  font:
+    14px var(--mono),
+    monospace;
+  color: var(--mut);
+}
+
+@media (max-width: 560px) {
+  .tov-tag {
+    grid-template-columns: 1fr 48px;
+    grid-template-areas: 'name n' 'track track' 'gap gap';
+    row-gap: 6px;
+  }
+}

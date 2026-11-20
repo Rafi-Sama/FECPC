@@ -23,44 +23,44 @@ and extra columns on existing tables.
 
 ### People and access
 
-| Table | Purpose | FK |
-| --- | --- | --- |
-| `users` | Every account: identity, role, status and `suspended`, title, `post`, profile, Codeforces stats, `vjudge_handle` and `vj_solved`, `progress` (personal JSON state), `mentor_id`, `system` (operator), invite hash, `google_sub` | — |
-| `credentials` | Current password hash (kept in step with `users.pass_hash`) | users |
-| `sessions` | SHA-256 of each session token, expiry, created and last-seen times | users |
-| `invite_tokens` | One-time set-password tokens (hashed); `users.invite_hash` holds the other form | users |
-| `login_attempts` | Failed sign-in counters per (email, address) with a 15-minute window | — |
-| `applications` | Membership applications from `/join` and their decisions | users |
-| `audit` | Readable audit lines for the admin panel (who, what, when) | — |
-| `audit_log` | Structured audit records (actor, action, entity, summary, IP hash); rows cannot be changed | users |
+| Table            | Purpose                                                                                                                                                                                                                                      | FK    |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| `users`          | Every account: identity, role, status and `suspended`, title, `post`, profile, Codeforces stats, `vjudge_handle` and `vj_solved`, `progress` (personal JSON state), `mentor_id`, `system` (operator), invite hash, `google_sub`, `github_id` | —     |
+| `credentials`    | Current password hash (kept in step with `users.pass_hash`)                                                                                                                                                                                  | users |
+| `sessions`       | SHA-256 of each session token, expiry, created and last-seen times                                                                                                                                                                           | users |
+| `invite_tokens`  | One-time set-password tokens (hashed); `users.invite_hash` holds the other form                                                                                                                                                              | users |
+| `login_attempts` | Failed sign-in counters per (email, address) with a 15-minute window                                                                                                                                                                         | —     |
+| `applications`   | Membership applications from `/join` and their decisions                                                                                                                                                                                     | users |
+| `audit`          | Readable audit lines for the admin panel (who, what, when)                                                                                                                                                                                   | —     |
+| `audit_log`      | Structured audit records (actor, action, entity, summary, IP hash); rows cannot be changed                                                                                                                                                   | users |
 
 ### Member activity
 
-| Table | Purpose | FK |
-| --- | --- | --- |
-| `reactions` | Kudos on posts, ideas and other items (`target` keys) | users |
-| `votes` | Poll votes and event-feedback ratings | users |
-| `registrations` | Event registrations | users |
-| `attendance` | Event check-ins and volunteer-shift sign-ups (`vol:` keys) | users |
-| `messages` | Mentor check-ins, anonymous suggestions (no sender stored), event feedback | users |
-| `pings` | Invites, duel challenges, nudges and team-up requests between members | users |
-| `club` | Shared switches and values (`flag:` and `kv:` keys) changed by officers | users |
-| `milestones` | Crossed Codeforces ranks, solved thresholds and streaks | users |
-| `post_roles` | Which existing roles each club post grants; edited by the Super Admin | — |
-| `milestone_kudos` | Kudos on milestones (20 per giver per day) | milestones, users |
+| Table             | Purpose                                                                    | FK                |
+| ----------------- | -------------------------------------------------------------------------- | ----------------- |
+| `reactions`       | Kudos on posts, ideas and other items (`target` keys)                      | users             |
+| `votes`           | Poll votes and event-feedback ratings                                      | users             |
+| `registrations`   | Event registrations                                                        | users             |
+| `attendance`      | Event check-ins and volunteer-shift sign-ups (`vol:` keys)                 | users             |
+| `messages`        | Mentor check-ins, anonymous suggestions (no sender stored), event feedback | users             |
+| `pings`           | Invites, duel challenges, nudges and team-up requests between members      | users             |
+| `club`            | Shared switches and values (`flag:` and `kv:` keys) changed by officers    | users             |
+| `milestones`      | Crossed Codeforces ranks, solved thresholds and streaks                    | users             |
+| `post_roles`      | Which existing roles each club post grants; edited by the Super Admin      | —                 |
+| `milestone_kudos` | Kudos on milestones (20 per giver per day)                                 | milestones, users |
 
 ### Money
 
-| Table | Purpose | FK |
-| --- | --- | --- |
-| `payments` | Submitted bKash/Nagad payments and their decisions; one live payment per transaction ID | users |
-| `expenses` | Expense requests and decisions | users |
-| `decisions` | Older officer decisions by kind and id (no longer written for waivers) | users |
-| `waiver_requests` | A member's request to waive one invoice: `pending` → `proposed` → `waived`/`rejected` | users |
-| `committee_tasks` | Ops board tasks: assignee, due date, column | users |
-| `meetings`, `meeting_actions` | Committee meetings with agenda, and their action items | users |
-| `inventory` | Club equipment and who holds it | users |
-| `budgets` | Event budgets: plan, and spending from before the ledger (`spent_before`) | — |
+| Table                         | Purpose                                                                                 | FK    |
+| ----------------------------- | --------------------------------------------------------------------------------------- | ----- |
+| `payments`                    | Submitted bKash/Nagad payments and their decisions; one live payment per transaction ID | users |
+| `expenses`                    | Expense requests and decisions                                                          | users |
+| `decisions`                   | Older officer decisions by kind and id (no longer written for waivers)                  | users |
+| `waiver_requests`             | A member's request to waive one invoice: `pending` → `proposed` → `waived`/`rejected`   | users |
+| `committee_tasks`             | Ops board tasks: assignee, due date, column                                             | users |
+| `meetings`, `meeting_actions` | Committee meetings with agenda, and their action items                                  | users |
+| `inventory`                   | Club equipment and who holds it                                                         | users |
+| `budgets`                     | Event budgets: plan, and spending from before the ledger (`spent_before`)               | —     |
 
 Invoices, the fund's opening balance, accounts and cash flow are placeholder content
 (`packages/content/src/member-area.ts`, `apps/api/src/modules/member-area/office-data.ts`). The fund balance and
@@ -74,40 +74,43 @@ prototype tables `waivers` and `ops_tasks`; nothing uses them.
 
 ### Community
 
-| Table | Purpose | FK |
-| --- | --- | --- |
-| `announcements` | Officer announcements (audience: everyone or a mentor's mentees), pinned, needs acknowledgement | users |
-| `announcement_reads` | Acknowledgements | users |
-| `feed_posts` | Feed posts with category and score | users |
-| `feed_votes` | Up and down votes on posts | feed_posts, users |
-| `feed_reports` | Reports on posts | feed_posts, users |
-| `community_comments` | Comments on posts and ideas | users |
-| `ideas` | Ideas, teammate searches, study groups | users |
-| `idea_interests` | Requests to join an idea, and the poster's decision | ideas, users |
-| `idea_views` | Who viewed an idea | ideas, users |
+| Table                | Purpose                                                                                         | FK                |
+| -------------------- | ----------------------------------------------------------------------------------------------- | ----------------- |
+| `announcements`      | Officer announcements (audience: everyone or a mentor's mentees), pinned, needs acknowledgement | users             |
+| `announcement_reads` | Acknowledgements                                                                                | users             |
+| `feed_posts`         | Feed posts with category and score                                                              | users             |
+| `feed_votes`         | Up and down votes on posts                                                                      | feed_posts, users |
+| `feed_reports`       | Reports on posts                                                                                | feed_posts, users |
+| `community_comments` | Comments on posts and ideas                                                                     | users             |
+| `ideas`              | Ideas, teammate searches, study groups                                                          | users             |
+| `idea_interests`     | Requests to join an idea, and the poster's decision                                             | ideas, users      |
+| `idea_views`         | Who viewed an idea                                                                              | ideas, users      |
 
 ### ICPC teams
 
 Prefixed `icpc_` because some older databases carry an unrelated, unused `teams` table.
 
-| Table | Purpose | FK |
-| --- | --- | --- |
-| `icpc_teams` | Team name (unique) and coach | users |
-| `icpc_members` | Who is on which team; one team per member, at most three | icpc_teams, users |
-| `icpc_notes` | One notebook page per member per topic | icpc_teams, users |
-| `icpc_log` | The team's edit history | icpc_teams, users |
+| Table          | Purpose                                                                                                                                                 | FK                |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| `icpc_teams`   | Team name (unique) and coach                                                                                                                            | users             |
+| `icpc_members` | Who is on which team; one team per member, at most three                                                                                                | icpc_teams, users |
+| `notebook`     | One notebook page per member per topic; stays with the member, team or not                                                                              | users             |
+| `notebook_log` | Each member's notebook history (added, renamed, removed, edited with +/− lines); `by` names a teammate who edited the page                              | users             |
+| `cf_solves`    | Each member's accepted Codeforces problems, with difficulty `rating` and `tags`; written by the Codeforces sync, read by sheet XP and the team overview | users             |
+| `icpc_notes`   | Legacy; emptied into `notebook` on migrate                                                                                                              | icpc_teams, users |
+| `icpc_log`     | The team's own events (joined, left, renamed, coach)                                                                                                    | icpc_teams, users |
 
 ### Alumni and careers
 
-| Table | Purpose | FK |
-| --- | --- | --- |
-| `alumni_saves` | Bookmarked alumni profiles | users |
-| `alumni_jobs` | Jobs posted by alumni, or fetched from public job boards | users |
-| `interview_topics` | Interview-prep topics | users |
-| `interview_problems` | Problems in a topic | interview_topics, users |
-| `interview_user_progress` | Which prep problems a member solved | interview_problems, users |
-| `interview_tips` | Tips and interview experiences | interview_topics, users |
-| `blog_posts` | Alumni blog posts (draft or published) | users |
+| Table                     | Purpose                                                  | FK                        |
+| ------------------------- | -------------------------------------------------------- | ------------------------- |
+| `alumni_saves`            | Bookmarked alumni profiles                               | users                     |
+| `alumni_jobs`             | Jobs posted by alumni, or fetched from public job boards | users                     |
+| `interview_topics`        | Interview-prep topics                                    | users                     |
+| `interview_problems`      | Problems in a topic                                      | interview_topics, users   |
+| `interview_user_progress` | Which prep problems a member solved                      | interview_problems, users |
+| `interview_tips`          | Tips and interview experiences                           | interview_topics, users   |
+| `blog_posts`              | Alumni blog posts (draft or published)                   | users                     |
 
 ## Where state lives
 

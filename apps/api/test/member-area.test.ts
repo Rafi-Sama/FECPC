@@ -17,7 +17,7 @@ import {
   listMembers,
   listRecentMilestones,
 } from '../src/modules/member-area/actions.ts';
-import { getTeam } from '../src/modules/member-area/teams.ts';
+import { getTeam, lineDiff } from '../src/modules/member-area/teams.ts';
 import { HttpException } from '@nestjs/common';
 import { AuthService } from '../src/modules/auth/auth.service.ts';
 import { AuditService } from '../src/modules/audit/audit.service.ts';
@@ -46,6 +46,8 @@ const db = () => pool();
 // The API's real sign-in service, on the same pool as the member-area actions.
 process.env.GOOGLE_CLIENT_ID = 'test-client';
 process.env.GOOGLE_CLIENT_SECRET = 'test-secret';
+process.env.GITHUB_CLIENT_ID = 'test-client';
+process.env.GITHUB_CLIENT_SECRET = 'test-secret';
 const cfg = new ConfigService();
 const dbs = new DbService(cfg);
 dbs.onModuleInit();
@@ -136,6 +138,37 @@ test('auth: Google sign-in only for a verified address that is already a member'
     await refused(403, auth.loginWithGoogle('code')); // the link cannot be taken over
     globalThis.fetch = (async () => Response.json({ error: 'invalid_grant' })) as typeof fetch;
     await refused(401, auth.loginWithGoogle('forged-code')); // no code, no identity
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('auth: GitHub sign-in links the first account whose verified email is a member', async () => {
+  const realFetch = globalThis.fetch;
+  const githubSays = (id: number, emails: object[]) => {
+    globalThis.fetch = (async (url: string) =>
+      Response.json(
+        String(url).includes('access_token')
+          ? { access_token: 'at' }
+          : String(url).endsWith('/emails')
+            ? emails
+            : { id },
+      )) as typeof fetch;
+  };
+  try {
+    githubSays(7, [{ email: 'mim@fecpc.example', verified: false, primary: true }]);
+    await refused(401, auth.loginWithGithub('code')); // unverified addresses never count
+    githubSays(7, [{ email: 'stranger@gmail.com', verified: true, primary: true }]);
+    await refused(403, auth.loginWithGithub('code'));
+    githubSays(7, [
+      { email: 'me@gmail.com', verified: true, primary: true },
+      { email: 'Mim@FECPC.example', verified: true, primary: false },
+    ]);
+    assert.equal(await sessionUser((await auth.loginWithGithub('code')).token), 'mim');
+    githubSays(8, [{ email: 'mim@fecpc.example', verified: true, primary: true }]);
+    await refused(403, auth.loginWithGithub('code')); // the link cannot be taken over
+    githubSays(7, [{ email: 'me@gmail.com', verified: true, primary: true }]);
+    assert.equal(await sessionUser((await auth.loginWithGithub('code')).token), 'mim'); // linked id wins
   } finally {
     globalThis.fetch = realFetch;
   }
@@ -329,44 +362,128 @@ test('contest day: the scoreboard list is chosen by contest.run holders and seen
   assert.equal(JSON.parse((await st('priya')).s.kv.contests!)[0].id, '612840');
 });
 test('ICPC teams: invite-only joining, own notebook pages, and only the team, its coach or the CP Head see it', async () => {
-  await refused(403, act('admin', { type: 'teamCreate', name: 'Ops' }));
-  await act('priya', { type: 'teamCreate', name: 'Test Lambdas' });
-  await refused(409, act('shuvo', { type: 'teamCreate', name: 'Test Lambdas' }));
-  const id = (await getTeam(db(), 'priya', {})).team!.id as number;
-  await refused(403, act('shuvo', { type: 'teamJoin', teamId: id })); // no invitation
+  await refused(403, act('admin', { type: 'teamInvite', user: 'shuvo' }));
+  await refused(403, act('shuvo', { type: 'teamJoin', from: 'priya' })); // no invitation
   await act('priya', { type: 'teamInvite', user: 'shuvo' });
-  await act('shuvo', { type: 'teamJoin', teamId: id });
-  await refused(403, act('shuvo', { type: 'teamCreate', name: 'Second' })); // one team each
+  assert.equal((await getTeam(db(), 'priya', {})).team, null); // no team of one
+  assert.ok(!(await getTeam(db(), 'priya', {})).free.some((m) => m.id === 'priya'));
+  await act('priya', { type: 'teamInvite', user: 'zahid' });
+  // Shuvo answers from the inbox: the notification carries the exact action.
+  const [join] = (await st('shuvo')).inbox.find(
+    (n) => n.actions?.[0]?.type === 'teamJoin',
+  )!.actions!;
+  await act('shuvo', { type: join!.type, ...join!.args });
+  const id = (await getTeam(db(), 'priya', {})).team!.id as number;
+  assert.equal((await getTeam(db(), 'shuvo', {})).team!.id, id);
+  assert.equal((await getTeam(db(), 'zahid', {})).invites[0]!.name, `Team ${id}`); // still valid, now for the team
+  await act('priya', { type: 'teamRename', name: 'Test Lambdas' });
+  assert.ok(!(await getTeam(db(), 'imran', {})).free.some((m) => m.id === 'shuvo')); // on a team: not invitable
+  await refused(403, act('shuvo', { type: 'teamInvite', user: 'priya' }));
 
   await act('priya', { type: 'teamTopic', topic: 'DSU' });
+  await refused(403, act('shuvo', { type: 'teamNote', topic: 'DSU', code: 'x' })); // Priya's topic, not his
+  await act('shuvo', { type: 'teamTopic', topic: 'DSU' }); // same name, another person: fine
+  await refused(409, act('priya', { type: 'teamTopic', topic: 'dsu' })); // no duplicates, ignoring case
+  await act('shuvo', { type: 'teamNote', topic: 'DSU', code: 'int p[N];' });
+  // A teammate may edit Shuvo's page; it is logged on his page with her name, and stale saves are refused.
+  const opened = (await getTeam(db(), 'priya', {})).notes!.find((n) => n.user_id === 'shuvo')!;
+  await act('priya', {
+    type: 'teamNote',
+    owner: 'shuvo',
+    topic: 'DSU',
+    code: 'int p[N];\nint find(int x);',
+    since: opened.updated_at,
+  });
+  await refused(
+    409,
+    act('priya', {
+      type: 'teamNote',
+      owner: 'shuvo',
+      topic: 'DSU',
+      code: 'x',
+      since: opened.updated_at,
+    }),
+  );
+  await refused(403, act('imran', { type: 'teamNote', owner: 'shuvo', topic: 'DSU', code: 'x' }));
+  const byPriya = (await getTeam(db(), 'shuvo', {})).history!.find((h) => h.by === 'priya')!;
+  assert.deepEqual([byPriya.user_id, byPriya.what], ['shuvo', 'edited DSU (+1 −0 lines)']);
   await act('shuvo', { type: 'teamNote', topic: 'DSU', code: 'int p[N];' });
   const t = await getTeam(db(), 'priya', {});
   assert.match(t.notes!.find((n) => n.user_id === 'priya')!.code, /struct DSU/); // starts from the club template
   assert.equal(t.notes!.find((n) => n.user_id === 'shuvo')!.code, 'int p[N];');
-  assert.ok(t.history!.some((h) => h.what === 'edited DSU'));
+  assert.ok(
+    t.history!.some((h) => h.user_id === 'shuvo' && /^edited DSU \(\+1 −\d+ lines\)$/.test(h.what)),
+  );
+  await act('priya', { type: 'teamTopic', topic: 'Graphs' });
+  await refused(409, act('priya', { type: 'teamTopicRename', topic: 'Graphs', to: 'dsu' }));
+  await act('priya', { type: 'teamTopicRename', topic: 'DSU', to: 'Union-Find' });
+  await act('priya', { type: 'teamTopic', topic: 'Graphs', on: false });
+  const mine = (await getTeam(db(), 'priya', {})).notes!;
+  assert.deepEqual(
+    mine.map((n) => `${n.user_id}:${n.topic}`).sort(),
+    ['priya:Union-Find', 'shuvo:DSU'], // renaming and removing touch only the owner's topics
+  );
+  // Team overview: distinct problems across the team, per-tag counts per member, difficulty bands.
+  await db().query(
+    `insert into cf_solves (user_id, problem, rating, tags) values
+       ('priya', '9001A', 1300, '{dp,math}'), ('shuvo', '9001A', 1300, '{dp,math}'), ('shuvo', '9001B', 1700, '{dp}')
+     on conflict do nothing`,
+  );
+  const st8 = (await getTeam(db(), 'priya', {})).stats!;
+  const dp = st8.tags.find((x) => x.tag === 'dp')!;
+  assert.deepEqual([dp.team, dp.per.priya, dp.per.shuvo], [2, 1, 2]);
+  assert.ok(st8.solvedByAll >= 1 && st8.distinctSolved >= 2);
+  assert.ok(st8.spread.some((b) => b.band === 1200) && st8.spread.some((b) => b.band === 1600));
+  assert.equal(st8.members.length, 2);
+  assert.deepEqual(lineDiff('a\nb\nc', 'a\nc\nd\ne'), [2, 1]);
 
   await refused(403, getTeam(db(), 'imran', { teamId: id })); // an outsider
   await refused(403, act('imran', { type: 'teamNote', topic: 'DSU', code: 'x' }));
   await refused(403, act('imran', { type: 'teamRename', teamId: id, name: 'Hijacked' }));
   assert.equal((await getTeam(db(), 'nadia', { teamId: id })).team!.mine, false); // the CP Head oversees
   await act('nadia', { type: 'teamRename', teamId: id, name: 'Test Lambdas 2' });
-  await refused(403, act('nadia', { type: 'teamNote', topic: 'DSU', code: 'x' })); // but writes no pages
+  await refused(403, act('nadia', { type: 'teamNote', topic: 'DSU', code: 'x' })); // and writes only her own pages
   await refused(403, act('priya', { type: 'teamCoach', teamId: id, user: 'mehedi' }));
   await act('nadia', { type: 'teamCoach', teamId: id, user: 'mehedi' });
   assert.equal((await getTeam(db(), 'mehedi', { teamId: id })).team!.name, 'Test Lambdas 2');
 
   await act('priya', { type: 'teamInvite', user: 'imran' });
   await act('priya', { type: 'teamInvite', user: 'mim' });
-  await act('imran', { type: 'teamJoin', teamId: id });
-  await refused(409, act('mim', { type: 'teamJoin', teamId: id })); // three is a team
-  await refused(409, act('priya', { type: 'teamInvite', user: 'zahid' }));
+  assert.ok((await getTeam(db(), 'imran', {})).free.some((m) => m.id === 'priya')); // the inviter shows up
+  await act('imran', { type: 'teamInvite', user: 'priya' }); // inviting back accepts
+  assert.equal((await getTeam(db(), 'imran', {})).team!.id, id);
+  await refused(409, act('mim', { type: 'teamJoin', from: 'priya' })); // three is a team
+  await refused(409, act('priya', { type: 'teamInvite', user: 'sadia' }));
 
   await act('shuvo', { type: 'teamLeave' });
-  assert.equal((await getTeam(db(), 'shuvo', {})).team, null);
+  const gone = await getTeam(db(), 'shuvo', {});
+  assert.equal(gone.team, null);
+  assert.deepEqual(
+    gone.notes!.map((n) => n.topic),
+    ['DSU'],
+  ); // topics stay with the person
   assert.equal(
     (await getTeam(db(), 'priya', {})).notes!.some((n) => n.user_id === 'shuvo'),
     false,
   );
+});
+
+test('notebook: a member with no team keeps, edits and renames their own topics', async () => {
+  await act('mim', { type: 'teamTopic', topic: 'Segment Tree' });
+  await act('mim', { type: 'teamNote', topic: 'Segment Tree', code: 'int t[4 * N];' });
+  await act('mim', { type: 'teamTopicRename', topic: 'Segment Tree', to: 'SegTree' });
+  await refused(409, act('mim', { type: 'teamTopic', topic: 'segtree' }));
+  const nb = await getTeam(db(), 'mim', {});
+  assert.equal(nb.team, null);
+  assert.deepEqual(
+    nb.notes!.map((n) => [n.topic, n.code]),
+    [['SegTree', 'int t[4 * N];']],
+  );
+  assert.deepEqual(nb.history!.map((h) => h.what).reverse(), [
+    'added topic Segment Tree',
+    'edited Segment Tree (+1 −1 lines)',
+    'renamed topic Segment Tree to SegTree',
+  ]);
 });
 test('election voting is removed', async () => {
   await refused(403, act('shuvo', { type: 'vote', poll: 'election', option: 'sadia' }));
@@ -679,6 +796,27 @@ test('applications: the public form is validated; accepting creates an account w
     (await st('tasnim')).members.some((m) => m.id === 'rina_akter'),
     "the new member appears in everyone's roster",
   );
+});
+
+test('applications: bots fill the honeypot for nothing; one address is capped at 10 an hour', async () => {
+  const form = (n: number) => ({
+    name: `Bot ${n}`,
+    sid: `2026-000-${n}`,
+    dept: 'CSE',
+    batch: '26',
+    email: `bot${n}@example.com`,
+    track: 'cp',
+    why: 'Just here to flood the form.',
+  });
+  await apply(db(), { ...form(0), website: 'spam.example' }, '203.0.113.9');
+  const count = async () =>
+    (await db().query(`select count(*)::int as n from applications where name like 'Bot %'`))
+      .rows[0].n;
+  assert.equal(await count(), 0);
+  for (let n = 1; n <= 10; n++) await apply(db(), form(n), '203.0.113.9');
+  await refused(429, apply(db(), form(11), '203.0.113.9'));
+  await apply(db(), form(12), '198.51.100.4'); // another address is unaffected
+  assert.equal(await count(), 11);
 });
 
 test('roles: only the Super Admin assigns roles; never to oneself; the operator is untouchable', async () => {
@@ -1155,7 +1293,12 @@ test('community ideas: poster-only interested payload, expressInterest, decideIn
     403,
     act('priya', { type: 'decideInterest', ideaId, userId: 'priya', decision: 'accepted' }),
   );
-  await act('farhan', { type: 'decideInterest', ideaId, userId: 'priya', decision: 'accepted' });
+  // Farhan accepts from the inbox: the notification carries the exact action.
+  const accept = (await st('farhan')).inbox
+    .find((n) => n.text.includes('is interested in'))!
+    .actions!.find((x) => x.label === 'Accept')!;
+  await act('farhan', { type: accept.type, ...accept.args });
+  assert.ok(!(await st('farhan')).inbox.some((n) => n.text.includes('is interested in'))); // answered, gone
   const priyaState = await st('priya');
   assert.equal(earned(priyaState.s) - xApp0, XP.interestAccepted);
   assert.ok(
@@ -1471,14 +1614,14 @@ test('codeforces sync: uses the handle stored for the member, never one from the
     asked.push(String(url));
     return Response.json(
       String(url).includes('user.info')
-        ? { status: 'OK', result: [{ handle: 'priya_cf', rating: 1650 }] }
+        ? { status: 'OK', result: [{ handle: 'priya_cf', rating: 1650, maxRating: 1700 }] }
         : {
             status: 'OK',
             result: [
               {
                 verdict: 'OK',
                 creationTimeSeconds: Date.now() / 1000,
-                problem: { contestId: 1, index: 'A' },
+                problem: { contestId: 1, index: 'A', rating: 800, tags: ['math', 'greedy'] },
               },
               {
                 verdict: 'OK',
@@ -1504,10 +1647,15 @@ test('codeforces sync: uses the handle stored for the member, never one from the
       asked.every((u) => u.includes('priya_cf')),
       'only the stored handle is fetched',
     );
+    await db().query(`update users set peak = 9999 where id = 'priya'`); // a stale stored peak
+    await syncCodeforces(db(), 'priya');
     const row = (
-      await db().query(`select cf_rating, problems_solved from users where id = 'priya'`)
+      await db().query(`select cf_rating, peak, problems_solved from users where id = 'priya'`)
     ).rows[0];
-    assert.deepEqual([row.cf_rating, row.problems_solved], [1650, 1]); // duplicates and wrong answers do not count
+    assert.deepEqual([row.cf_rating, row.peak, row.problems_solved], [1650, 1700, 1]); // peak is Codeforces' max; duplicates and wrong answers do not count
+    const stored = (await db().query(`select rating, tags from cf_solves where user_id = 'priya'`))
+      .rows;
+    assert.deepEqual(stored, [{ rating: 800, tags: ['math', 'greedy'] }]); // kept for the team solve map
 
     globalThis.fetch = (async () => Response.json({ status: 'FAILED' })) as typeof fetch;
     assert.equal(await syncCodeforces(db(), 'priya'), null, 'a failed fetch changes nothing');

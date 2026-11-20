@@ -527,6 +527,9 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
       id: `n:ping:${g.id}`,
       cat: 'Social',
       text: `${g.from} ${ping[g.kind]}`,
+      ...(g.kind === 'invite' && {
+        actions: [{ label: 'Join team', type: 'teamJoin', args: { from: g.id.split(':')[0] } }],
+      }),
       href:
         g.kind === 'duel'
           ? '/app/arena'
@@ -547,6 +550,11 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
       cat: 'Community',
       text: `${ii.from} is interested in "${ii.title}"`,
       href: '/app/community?tab=ideas',
+      actions: (['accepted', 'declined'] as const).map((decision) => ({
+        label: decision === 'accepted' ? 'Accept' : 'Decline',
+        type: 'decideInterest',
+        args: { ideaId: ii.ideaId, userId: ii.userId, decision },
+      })),
     });
   for (const di of row.decided_interests as { ideaId: number; status: string; title: string }[])
     inbox.push({

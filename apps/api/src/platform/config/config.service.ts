@@ -33,6 +33,15 @@ export const EnvSchema = z.object({
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   GOOGLE_REDIRECT_URI: z.string().optional(),
+  /** Optional GitHub sign-in (OAuth app; callback APP_PUBLIC_URL/api/auth/github/callback). */
+  GITHUB_CLIENT_ID: z.string().optional(),
+  GITHUB_CLIENT_SECRET: z.string().optional(),
+
+  /** Optional SMTP for acceptance emails, e.g. smtps://user:app-password@smtp.gmail.com:465. */
+  SMTP_URL: z.string().optional(),
+  MAIL_FROM: z.string().optional(),
+  /** Optional Cloudflare Turnstile secret; when set, the join form must pass the human check. */
+  TURNSTILE_SECRET_KEY: z.string().optional(),
 });
 
 export type EnvConfig = z.infer<typeof EnvSchema>;

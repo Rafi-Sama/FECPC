@@ -28,25 +28,25 @@ pnpm dev
 
 Sign in at <http://localhost:3000/login> as any seeded account with your `SEED_PASSWORD`:
 
-| Role | Accounts (`<id>@fecpc.example`) |
-| --- | --- |
-| Super Admin (operator) | `admin` |
-| President | `tanvir` |
-| Treasurer | `anika` |
-| Secretary | `nusrat`, `sadia` |
-| CP Head | `nadia` |
-| Mentor | `rahim`, `mehedi` |
-| Member | `tasnim`, `priya`, `farhan`, `imran`, `sabbir`, `shuvo`, `zahid`, `mim`, `jannat` |
-| Alumni | `shahriar`, `rifat`, `tahmina`, `tanim`, `fariha`, `sabrina`, `nabila`, `nusrat_al`, `asif`, `mahmud` |
+| Role                   | Accounts (`<id>@fecpc.example`)                                                                       |
+| ---------------------- | ----------------------------------------------------------------------------------------------------- |
+| Super Admin (operator) | `admin`                                                                                               |
+| President              | `tanvir`                                                                                              |
+| Treasurer              | `anika`                                                                                               |
+| Secretary              | `nusrat`, `sadia`                                                                                     |
+| CP Head                | `nadia`                                                                                               |
+| Mentor                 | `rahim`, `mehedi`                                                                                     |
+| Member                 | `tasnim`, `priya`, `farhan`, `imran`, `sabbir`, `shuvo`, `zahid`, `mim`, `jannat`                     |
+| Alumni                 | `shahriar`, `rifat`, `tahmina`, `tanim`, `fariha`, `sabrina`, `nabila`, `nusrat_al`, `asif`, `mahmud` |
 
 Signing in as different roles is the fastest way to see what each one can do.
 
 ## Where configuration comes from
 
-| App | File(s) read | Notes |
-| --- | --- | --- |
+| App | File(s) read                                                                  | Notes                                                                                                                                  |
+| --- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | API | real environment, then `apps/api/.env.local`, then the repo-root `.env.local` | Every variable has a default except `SEED_PASSWORD`. See `apps/api/.env.example` and `apps/api/src/platform/config/config.service.ts`. |
-| Web | `apps/web/.env.local` (Next.js convention) | `API_INTERNAL_URL`, `TRUST_PROXY`, `GOOGLE_CLIENT_ID`, `GOOGLE_REDIRECT_URI`. See `apps/web/.env.example`. |
+| Web | `apps/web/.env.local` (Next.js convention)                                    | `API_INTERNAL_URL`, `TRUST_PROXY`, `GOOGLE_CLIENT_ID`, `GOOGLE_REDIRECT_URI`. See `apps/web/.env.example`.                             |
 
 The database URL defaults to `postgres://fecpc:fecpc_dev@127.0.0.1:5433/fecpc`, which matches
 `docker-compose.yml`.
@@ -55,16 +55,16 @@ The database URL defaults to `postgres://fecpc:fecpc_dev@127.0.0.1:5433/fecpc`, 
 
 From the repository root:
 
-| Command | What it does |
-| --- | --- |
-| `pnpm dev` | Both apps in watch mode (Turborepo). The API rebuilds and restarts on every change. |
-| `pnpm db:migrate` | Applies `apps/api/src/db/schema.sql` (idempotent, one transaction). |
-| `pnpm db:seed` | Applies the schema and seeds the placeholder club if the database is empty. |
-| `pnpm db:setup` | `db:migrate` then `db:seed`. |
-| `pnpm verify` | format check, lint, typecheck, tests and production builds for every package. Run before pushing. |
-| `pnpm check` | The same, with auto-fixing of format and lint, and a summary table (`scripts/check.mjs`). |
-| `pnpm --filter @fecpc/api test` | API tests only (needs the `fecpc_test` database). |
-| `pnpm --filter @fecpc/contracts test` | Shared-rules tests only (no database). |
+| Command                               | What it does                                                                                      |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `pnpm dev`                            | Both apps in watch mode (Turborepo). The API rebuilds and restarts on every change.               |
+| `pnpm db:migrate`                     | Applies `apps/api/src/db/schema.sql` (idempotent, one transaction).                               |
+| `pnpm db:seed`                        | Applies the schema and seeds the placeholder club if the database is empty.                       |
+| `pnpm db:setup`                       | `db:migrate` then `db:seed`.                                                                      |
+| `pnpm verify`                         | format check, lint, typecheck, tests and production builds for every package. Run before pushing. |
+| `pnpm check`                          | The same, with auto-fixing of format and lint, and a summary table (`scripts/check.mjs`).         |
+| `pnpm --filter @fecpc/api test`       | API tests only (needs the `fecpc_test` database).                                                 |
+| `pnpm --filter @fecpc/contracts test` | Shared-rules tests only (no database).                                                            |
 
 One test file: `cd apps/api && node --import tsx --test test/password.test.ts`. Details in
 [Testing](testing.md).
@@ -81,11 +81,11 @@ Google sign-in only works for an address that already belongs to an active membe
 
 ## Troubleshooting
 
-| Symptom | Cause and fix |
-| --- | --- |
-| `pnpm db:seed` says "Set SEED_PASSWORD" | Put `SEED_PASSWORD=...` (10+ characters) in `apps/api/.env.local` or the root `.env.local`. |
+| Symptom                                                    | Cause and fix                                                                                                  |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `pnpm db:seed` says "Set SEED_PASSWORD"                    | Put `SEED_PASSWORD=...` (10+ characters) in `apps/api/.env.local` or the root `.env.local`.                    |
 | API tests fail with `database "fecpc_test" does not exist` | The Docker volume predates `infra/postgres/init.sql`. Run `createdb -h 127.0.0.1 -p 5433 -U fecpc fecpc_test`. |
-| Every member page redirects to `/login` | The API is not running or `API_INTERNAL_URL` is wrong; the web app treats an unreachable API as "signed out". |
-| `403 Origin not allowed` on every change | The page's origin is not in the API's `CORS_ORIGINS`. Add it (for example `http://127.0.0.1:3000`). |
-| `429 Too many failed login attempts` | 5 failures per email and address in 15 minutes. Wait, or `DELETE FROM login_attempts` locally. |
-| Port 3000 or 3001 already in use | Another `pnpm dev` is running. Stop it, or set `PORT` (API) / `next dev -p` (web). |
+| Every member page redirects to `/login`                    | The API is not running or `API_INTERNAL_URL` is wrong; the web app treats an unreachable API as "signed out".  |
+| `403 Origin not allowed` on every change                   | The page's origin is not in the API's `CORS_ORIGINS`. Add it (for example `http://127.0.0.1:3000`).            |
+| `429 Too many failed login attempts`                       | 5 failures per email and address in 15 minutes. Wait, or `DELETE FROM login_attempts` locally.                 |
+| Port 3000 or 3001 already in use                           | Another `pnpm dev` is running. Stop it, or set `PORT` (API) / `next dev -p` (web).                             |

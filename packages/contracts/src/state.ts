@@ -485,7 +485,14 @@ export type AppState = {
   };
   news: AnnouncementItem[];
   /** What needs this member's attention, worked out on the server from real records. */
-  inbox: { id: string; cat: string; text: string; href: string }[];
+  inbox: {
+    id: string;
+    cat: string;
+    text: string;
+    href: string;
+    /** One-click answers: each is a member action (`act(type, args)`); its handler re-checks permission. */
+    actions?: { label: string; type: string; args: Record<string, unknown> }[];
+  }[];
   /** Expense requests this member filed, whatever their role. */
   myExpenses: Expense[];
   /** Waiver requests this member made. */

@@ -27,14 +27,14 @@
 
 ## Adding things, step by step
 
-| Change | Steps |
-| --- | --- |
-| A member action | [Member-area actions → Adding an action](member-area-actions.md#adding-an-action) |
-| A permission | [Roles and permissions → Changing permissions](roles-and-permissions.md#changing-permissions) |
-| A table or column | append to `apps/api/src/db/schema.sql`, run `pnpm db:migrate`, extend `loadState` / `AppState` if pages need it |
-| An environment variable | add it to `EnvSchema` in `apps/api/src/platform/config/config.service.ts` (with a default if it is optional) and to `apps/api/.env.example`; for the web app, `apps/web/.env.example` |
-| A page | `apps/web/app/app/<name>/page.tsx`, a nav entry and icon in `components/app/Shell.tsx`, components in `components/app/<name>/` |
-| A browser-facing endpoint | an API route (with its own checks), then a one-line `proxy()` route in `apps/web/app/api/` |
+| Change                    | Steps                                                                                                                                                                                 |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A member action           | [Member-area actions → Adding an action](member-area-actions.md#adding-an-action)                                                                                                     |
+| A permission              | [Roles and permissions → Changing permissions](roles-and-permissions.md#changing-permissions)                                                                                         |
+| A table or column         | append to `apps/api/src/db/schema.sql`, run `pnpm db:migrate`, extend `loadState` / `AppState` if pages need it                                                                       |
+| An environment variable   | add it to `EnvSchema` in `apps/api/src/platform/config/config.service.ts` (with a default if it is optional) and to `apps/api/.env.example`; for the web app, `apps/web/.env.example` |
+| A page                    | `apps/web/app/app/<name>/page.tsx`, a nav entry and icon in `components/app/Shell.tsx`, components in `components/app/<name>/`                                                        |
+| A browser-facing endpoint | an API route (with its own checks), then a one-line `proxy()` route in `apps/web/app/api/`                                                                                            |
 
 ## Commit messages
 

@@ -49,6 +49,7 @@ import type {
   MilestoneDTO,
 } from '@fecpc/contracts';
 import { newToken, sha } from './tokens.ts';
+import { sendMail } from './mail.ts';
 import * as data from './office-data.ts';
 import { Fail, tx, type Db } from './db.ts';
 import { teamHandlers } from './teams.ts';
@@ -909,7 +910,15 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
       );
       if (!made.rows[0]) throw new Fail(409, 'A member already uses that email address.');
       await audit(c, a, `accepted applicant ${app.name}; account created`);
-      return `Account created for ${app.name}. Send them this link to set a password. It works once and expires in 7 days: /login?invite=${token}`;
+      const site = process.env.APP_PUBLIC_URL || 'http://localhost:3000';
+      const mailed = await sendMail(
+        app.email,
+        'Welcome to FECPC: set your password',
+        `Hi ${app.name},\n\nYour FECPC membership application was accepted.\n\nSign-in email: ${app.email}\nSet your password (works once, expires in 7 days): ${site}/login?invite=${token}\n\nYou can also use "Sign in with Google" with this same address.\n\nFECPC`,
+      );
+      return mailed
+        ? `Account created for ${app.name}. Their sign-in link was emailed to ${app.email}.`
+        : `Account created for ${app.name}. Email is not set up, so send them this link to set a password. It works once and expires in 7 days: /login?invite=${token}`;
     }
     // Expenses and waivers: two-person rules. Nobody decides their own request.
     if (kind === 'expense') {
@@ -1787,8 +1796,29 @@ export async function act(userId: string, input: unknown): Promise<string | void
   });
 }
 
+// A whole lab on one campus address may apply together, so this is a ceiling for bots, not for people.
+const APPLY_PER_IP_PER_HOUR = 10;
+
+/** Cloudflare Turnstile: the token the widget put in the form must verify with our secret. */
+async function humanCheck(token: unknown, ip: string): Promise<boolean> {
+  if (typeof token !== 'string' || !token || token.length > 2048) return false;
+  const r = (await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+    method: 'POST',
+    signal: AbortSignal.timeout(10_000),
+    body: new URLSearchParams({
+      secret: process.env.TURNSTILE_SECRET_KEY!,
+      response: token,
+      ...(ip && { remoteip: ip }),
+    }),
+  })
+    .then((res) => res.json())
+    .catch(() => ({}))) as { success?: boolean };
+  return r.success === true;
+}
+
 /** The public join form. Anyone can call it, so it is strict about what it accepts. */
-export async function apply(db: Db, i: In) {
+export async function apply(db: Db, i: In, ip = '') {
+  if (i.website) return; // honeypot: hidden from people, so only bots fill it; they get a fake success
   const email = text(i.email, 5, 200, 'Email').toLowerCase(),
     batch = Number(i.batch);
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
@@ -1806,12 +1836,23 @@ export async function apply(db: Db, i: In) {
     text(i.track, 2, 10, 'Track'),
     text(i.why, 10, 1000, 'Your answer'),
   ];
+  const ipHash = sha(ip);
+  const recent = (
+    await db.query(
+      `select count(*)::int as n from applications where ip_hash = $1 and created_at > now() - interval '1 hour'`,
+      [ipHash],
+    )
+  ).rows[0].n;
+  if (recent >= APPLY_PER_IP_PER_HOUR)
+    throw new Fail(429, 'Too many applications from this network. Try again in an hour.');
+  if (process.env.TURNSTILE_SECRET_KEY && !(await humanCheck(i['cf-turnstile-response'], ip)))
+    throw new Fail(400, 'The human check failed. Complete it and submit again.');
   const taken = (await db.query(`select 1 from users where email = $1`, [email])).rowCount;
   const r = taken
     ? { rowCount: 0 }
     : await db.query(
-        `insert into applications (name, sid, dept, batch, email, cf, track, why) values ($1, $2, $3, $4, $5, $6, $7, $8) on conflict do nothing`,
-        row,
+        `insert into applications (name, sid, dept, batch, email, cf, track, why, ip_hash) values ($1, $2, $3, $4, $5, $6, $7, $8, $9) on conflict do nothing`,
+        [...row, ipHash],
       );
   if (!r.rowCount)
     throw new Fail(409, 'An application or an account already exists for that email address.');

@@ -39,7 +39,7 @@ Take "mark problem 71A solved" on `/app/sheets`:
    and the client IP when `TRUST_PROXY=1`). It reshapes API errors to `{ error }` for the pages.
 3. **API guards.** `CsrfGuard` (global) rejects a write that is not JSON, comes from another site, or has an
    origin outside `CORS_ORIGINS`. `AuthGuard` (global) hashes the session cookie, loads the session and the
-   user's *current* role and status from the database, and slides the session's expiry.
+   user's _current_ role and status from the database, and slides the session's expiry.
 4. **Controller.** `MemberAreaController.act` (`modules/member-area/member-area.controller.ts`) passes the
    body to `act(userId, body)`.
 5. **Handler.** `act` (`modules/member-area/actions.ts`) opens one transaction, locks the acting user's row
@@ -54,7 +54,7 @@ Reads that need paging or search (feed, ideas, members, alumni, jobs, prep, blog
 in `modules/member-area/queries.ts`. Each of those checks its own permissions too.
 
 Server components (the `/app` layout and the admin and ops gates) get the same state through
-`serverState()` in `apps/web/lib/api.ts`. The page gates only *hide* pages; the API enforces every action
+`serverState()` in `apps/web/lib/api.ts`. The page gates only _hide_ pages; the API enforces every action
 again.
 
 ## Why one big state and one action endpoint
@@ -73,16 +73,16 @@ The member area was first built as a single Next.js app with the backend inside 
 
 ## The API's modules
 
-| Module | Path | Responsibility |
-| --- | --- | --- |
-| Config | `platform/config` | Parses and validates the environment once (zod). Single source of every setting. |
-| Database | `platform/database` | The pg pool, `run()` transactions with retry on serialization/deadlock, statement and lock timeouts. |
-| HTTP | `platform/http` | `CsrfGuard`, the problem+json error filter (`DomainException`), the zod validation pipe. |
-| Logging | `platform/logging` | pino through `nestjs-pino`, request IDs, redaction of cookies, passwords, tokens and phone numbers. |
-| Health | `platform/health` | `/health/live` and `/health/ready` (checks the database). |
-| Auth | `modules/auth` | Sign-in, logout, invites, password change, Google; `AuthGuard`; login throttling; `@Public`, `@CurrentUser`. |
-| Audit | `modules/audit` | `AuditService.record()` writes the structured `audit_log` row and the readable `audit` line the admin panel shows. |
-| Member area | `modules/member-area` | Controller, `act` handlers, queries, `loadState`, milestones and Codeforces sync, office placeholder data. |
+| Module      | Path                  | Responsibility                                                                                                     |
+| ----------- | --------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Config      | `platform/config`     | Parses and validates the environment once (zod). Single source of every setting.                                   |
+| Database    | `platform/database`   | The pg pool, `run()` transactions with retry on serialization/deadlock, statement and lock timeouts.               |
+| HTTP        | `platform/http`       | `CsrfGuard`, the problem+json error filter (`DomainException`), the zod validation pipe.                           |
+| Logging     | `platform/logging`    | pino through `nestjs-pino`, request IDs, redaction of cookies, passwords, tokens and phone numbers.                |
+| Health      | `platform/health`     | `/health/live` and `/health/ready` (checks the database).                                                          |
+| Auth        | `modules/auth`        | Sign-in, logout, invites, password change, Google; `AuthGuard`; login throttling; `@Public`, `@CurrentUser`.       |
+| Audit       | `modules/audit`       | `AuditService.record()` writes the structured `audit_log` row and the readable `audit` line the admin panel shows. |
+| Member area | `modules/member-area` | Controller, `act` handlers, queries, `loadState`, milestones and Codeforces sync, office placeholder data.         |
 
 `apps/api/src/main.ts` wires Fastify: a JSON body parser that accepts empty bodies, cookies, a global rate
 limit (per client IP), CORS for `CORS_ORIGINS`, the error filter, `CsrfGuard`, and the `/v1` prefix (every
@@ -94,11 +94,11 @@ turns into a problem+json response.
 
 ## Shared packages
 
-| Package | Contains | Used by |
-| --- | --- | --- |
+| Package            | Contains                                                                                                                                                                                                                                            | Used by   |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
 | `@fecpc/contracts` | roles and statuses, the capability matrix (`can`, `canFully`, `isAdmin`, `isCommittee`), XP and levels, Codeforces rank tiers, `AppState` and the other state types, notification wording, error codes and problem+json shape, auth request schemas | both apps |
-| `@fecpc/content` | `site` (public people, events, certificates, badges), `member-area` (sheet, shop, invoices, polls, announcements, resources), `training` (courses, wiki, templates, contest-day data, volunteer shifts) | both apps |
-| `@fecpc/config-*` | shared ESLint, Prettier and TypeScript settings | tooling |
+| `@fecpc/content`   | `site` (public people, events, certificates, badges), `member-area` (sheet, shop, invoices, polls, announcements, resources), `training` (courses, wiki, templates, contest-day data, volunteer shifts)                                             | both apps |
+| `@fecpc/config-*`  | shared ESLint, Prettier and TypeScript settings                                                                                                                                                                                                     | tooling   |
 
 The packages ship TypeScript source. Turbopack compiles them for the web app, esbuild and tsx do it for the
 API, and Node's type stripping loads them in the production API bundle (so they must stay free of enums and
@@ -109,10 +109,10 @@ so they never reach the browser.
 
 ## Outside services
 
-| Service | Called from | Purpose |
-| --- | --- | --- |
-| Codeforces API | web `/api/cf/[handle]` (cached 10 min) and API `POST /v1/me/codeforces/sync` (max once per 10 min per member) | profile, rating history, solves; milestones |
-| VJudge | web `/api/vjudge` (cached 30 s) | contest standings for contest day; falls back to simulated standings marked `source: "simulated"` |
-| Codeforces contest list | web `lib/cf.ts` | upcoming contests |
-| Greenhouse / Lever job boards | API `fetchAlumniJobs` query | public job listings for alumni |
-| Google OAuth | API `POST /v1/auth/google` | sign-in; the API redeems the code with the client secret |
+| Service                       | Called from                                                                                                   | Purpose                                                                                           |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Codeforces API                | web `/api/cf/[handle]` (cached 10 min) and API `POST /v1/me/codeforces/sync` (max once per 10 min per member) | profile, rating history, solves; milestones                                                       |
+| VJudge                        | web `/api/vjudge` (cached 30 s)                                                                               | contest standings for contest day; falls back to simulated standings marked `source: "simulated"` |
+| Codeforces contest list       | web `lib/cf.ts`                                                                                               | upcoming contests                                                                                 |
+| Greenhouse / Lever job boards | API `fetchAlumniJobs` query                                                                                   | public job listings for alumni                                                                    |
+| Google / GitHub OAuth         | API `POST /v1/auth/{google,github}`                                                                           | sign-in; the API redeems the code with the client secret                                          |

@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Header, HttpCode, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Header, HttpCode, Param, Post, Req } from '@nestjs/common';
+import type { FastifyRequest } from 'fastify';
 import { act, apply, exportMembers } from './actions.ts';
 import { Fail, pool } from './db.ts';
 import * as queries from './queries.ts';
@@ -64,8 +65,8 @@ export class MemberAreaController {
   @Public()
   @Post('applications')
   @HttpCode(200)
-  async apply(@Body() body: unknown) {
-    await apply(pool(), object(body));
+  async apply(@Body() body: unknown, @Req() req: FastifyRequest) {
+    await apply(pool(), object(body), req.ip);
     return { ok: true };
   }
 

@@ -6,12 +6,12 @@ Before using a Next API, read the bundled guide in `apps/web/node_modules/next/d
 
 ## Routes
 
-| Group | Folder | Notes |
-| --- | --- | --- |
-| Public site | `app/(site)/` | The `(site)` route group adds no URL segment. Shared `layout.tsx` (Nav, Footer) and `site.css`. Content comes from `@fecpc/content/site`. |
-| Member area | `app/app/` | Everything under `/app`. `layout.tsx` loads `AppState` on the server (`serverState()`) and redirects to `/login` without a session. Then `StoreProvider` and `Shell` wrap every page. |
-| Admin and ops gates | `app/app/admin/layout.tsx`, `app/app/ops/layout.tsx` | Answer 404 unless `isAdmin` / `isCommittee`. They hide pages only; the API enforces each action. |
-| Route handlers | `app/api/` | One-line `proxy()` calls to the API, plus the read-only `/api/cf/[handle]` and `/api/vjudge`. See [API reference](api-reference.md). |
+| Group               | Folder                                               | Notes                                                                                                                                                                                 |
+| ------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Public site         | `app/(site)/`                                        | The `(site)` route group adds no URL segment. Shared `layout.tsx` (Nav, Footer) and `site.css`. Content comes from `@fecpc/content/site`.                                             |
+| Member area         | `app/app/`                                           | Everything under `/app`. `layout.tsx` loads `AppState` on the server (`serverState()`) and redirects to `/login` without a session. Then `StoreProvider` and `Shell` wrap every page. |
+| Admin and ops gates | `app/app/admin/layout.tsx`, `app/app/ops/layout.tsx` | Answer 404 unless `isAdmin` / `isCommittee`. They hide pages only; the API enforces each action.                                                                                      |
+| Route handlers      | `app/api/`                                           | One-line `proxy()` calls to the API, plus the read-only `/api/cf/[handle]` and `/api/vjudge`. See [API reference](api-reference.md).                                                  |
 
 Most member pages are client components (`'use client'`) that read the store. `contests/page.tsx` is a server
 component that fetches the Codeforces contest list (`lib/cf.ts`) and passes it to `contests/client.tsx`.

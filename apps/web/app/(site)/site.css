@@ -1321,3 +1321,56 @@
 .nw {
   white-space: nowrap;
 }
+
+/* ── sign in ── */
+.auth .btn {
+  width: 100%;
+}
+.auth-or {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: var(--mut);
+}
+.auth-or::before,
+.auth-or::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--line2);
+}
+.auth-alt {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.auth-alt a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 52px;
+  border: 2px solid var(--ink);
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 16px;
+  font-weight: 500;
+  transition:
+    background 0.12s,
+    color 0.12s;
+}
+.auth-alt a:hover {
+  background: var(--ink);
+  color: var(--bg);
+}
+.auth-alt a:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 3px;
+}
+.auth-alt svg {
+  width: 20px;
+  height: 20px;
+}
+.auth-foot {
+  padding-top: 18px;
+  border-top: 1px dashed var(--line2);
+}

@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { Page } from '@/components/app/Shell';
+import { InboxActions, Page } from '@/components/app/Shell';
 import { useStore } from '@/components/app/Store';
 
 // Everything here is worked out on the server from real records (dues, decisions, announcements, requests from people).
@@ -47,6 +47,7 @@ export default function Inbox() {
                   <Link className="grow link" href={n.href}>
                     <strong>{n.text}</strong>
                   </Link>
+                  <InboxActions n={n} />
                   {!r && (
                     <button
                       className="btn xs line"

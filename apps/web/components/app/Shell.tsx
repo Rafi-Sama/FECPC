@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Avatar } from '@/components/pixel/Sprites';
 import { myInvoices, owes } from '@fecpc/content/member-area';
 import { can, canFully, isAdmin, isCommittee, roleName, LEVEL, level } from '@fecpc/contracts';
+import type { AppState } from '@fecpc/contracts';
 import { site } from '@/lib/site';
 import { useStore } from './Store';
 
@@ -348,18 +349,41 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             >
               <Icon k={dark ? 'sun' : 'moon'} />
             </button>
-            <Link
-              href="/app/notifications"
-              className="rail-btn"
-              aria-label={`Inbox, ${badge['/app/notifications']} unread`}
-              title="Inbox"
-              aria-current={top === '/app/notifications' ? 'page' : undefined}
-            >
-              <Icon k="/app/notifications" />
-              {badge['/app/notifications'] > 0 && (
-                <b className="nbadge">{badge['/app/notifications']}</b>
-              )}
-            </Link>
+            <details className="notif" key={'n' + path}>
+              <summary
+                className="rail-btn"
+                aria-label={`Inbox, ${badge['/app/notifications']} unread`}
+                title="Inbox"
+              >
+                <Icon k="/app/notifications" />
+                {badge['/app/notifications'] > 0 && (
+                  <b className="nbadge">{badge['/app/notifications']}</b>
+                )}
+              </summary>
+              <div className="notif-menu">
+                {inbox.length === 0 ? (
+                  <p className="body">Nothing yet.</p>
+                ) : (
+                  // Unread first; otherwise in the order the server lists them.
+                  [...inbox]
+                    .sort((a, b) => +s.read.includes(a.id) - +s.read.includes(b.id))
+                    .slice(0, 6)
+                    .map((n) => (
+                      <div key={n.id} data-read={s.read.includes(n.id) || undefined}>
+                        <span className="label">{n.cat}</span>
+                        <Link href={n.href}>{n.text}</Link>
+                        <InboxActions n={n} />
+                      </div>
+                    ))
+                )}
+                <div className="notif-foot">
+                  <Link href="/app/notifications">See all</Link>
+                  {badge['/app/notifications'] > 0 && (
+                    <button onClick={() => act('readAll')}>Mark all read</button>
+                  )}
+                </div>
+              </div>
+            </details>
             <details className="me" key={path}>
               <summary>
                 <Avatar name={me.name} size={28} />
@@ -480,5 +504,30 @@ export function Tabs<T extends string>({
         </button>
       ))}
     </div>
+  );
+}
+
+/** One-click answers on a notification; the action's handler re-checks permission. */
+export function InboxActions({ n }: { n: AppState['inbox'][number] }) {
+  const { act } = useStore();
+  const [busy, setBusy] = useState(false);
+  if (!n.actions?.length) return null;
+  return (
+    <span className="row" style={{ '--g': '8px' } as React.CSSProperties}>
+      {n.actions.map((x) => (
+        <button
+          key={x.label}
+          className="btn xs line"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            await act(x.type, x.args); // once answered, the server leaves it out of the inbox
+            setBusy(false);
+          }}
+        >
+          {x.label}
+        </button>
+      ))}
+    </span>
   );
 }

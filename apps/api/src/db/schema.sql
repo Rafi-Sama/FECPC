@@ -649,3 +649,34 @@ create table if not exists cf_solves (
   problem text not null,
   primary key (user_id, problem)
 );
+
+-- Join-form abuse limit: applications per hashed client address.
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS ip_hash text;
+CREATE INDEX IF NOT EXISTS ix_applications__ip_hash ON applications (ip_hash, created_at);
+
+-- GitHub sign-in: the GitHub account linked on first use, like google_sub.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS github_id text UNIQUE;
+
+-- Notebook topics belong to the member, on a team or not. Team pages show each member's own notebook.
+create table if not exists notebook (
+  user_id text not null references users on delete cascade,
+  topic text not null,
+  code text not null default '',
+  updated_at timestamptz not null default now(),
+  primary key (user_id, topic)
+);
+create table if not exists notebook_log (
+  id bigint generated always as identity primary key,
+  user_id text not null references users on delete cascade,
+  what text not null,
+  at timestamptz not null default now()
+);
+create index if not exists notebook_log_user on notebook_log (user_id, id desc);
+-- Move pages from the old team-keyed table once; the delete keeps re-runs from bringing removed topics back.
+with moved as (delete from icpc_notes returning user_id, topic, code, updated_at)
+insert into notebook (user_id, topic, code, updated_at) select * from moved on conflict do nothing;
+-- Who made a notebook change when it was not the page's owner (a teammate's edit).
+ALTER TABLE notebook_log ADD COLUMN IF NOT EXISTS by text REFERENCES users ON DELETE SET NULL;
+-- Codeforces tags and difficulty of each accepted problem, for the team solve map. Filled by the next sync.
+ALTER TABLE cf_solves ADD COLUMN IF NOT EXISTS rating int;
+ALTER TABLE cf_solves ADD COLUMN IF NOT EXISTS tags text[] NOT NULL DEFAULT '{}';

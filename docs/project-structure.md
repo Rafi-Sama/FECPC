@@ -54,20 +54,20 @@ A pnpm workspace orchestrated by Turborepo: two apps, two shared packages, three
 
 ## Where new code goes
 
-| You are adding… | Put it in |
-| --- | --- |
-| Something a signed-in member does | a handler in `apps/api/src/modules/member-area/actions.ts` (see [Member-area actions](member-area-actions.md)) |
-| A paged or searched read for a page | a function in `actions.ts` and a branch in `queries.ts` |
-| Data every member page needs | `loadState` in `member-area/state.ts`, and its type in `packages/contracts/src/state.ts` |
-| A rule both apps must agree on (permission, XP, rank) | `packages/contracts` |
-| Static club content | `packages/content` (it ships to the browser: no secrets, no answer keys) |
-| Server-only reference data | `apps/api/src/modules/member-area/office-data.ts` |
-| A table or column | append idempotent SQL to `apps/api/src/db/schema.sql` |
-| A new page | `apps/web/app/app/<name>/page.tsx` (member) or `apps/web/app/(site)/<name>/page.tsx` (public), plus a nav entry in `Shell.tsx` |
-| A component for one page | `apps/web/components/app/<feature>/` |
-| A component several pages use | `apps/web/components/app/shared/` |
-| A browser-facing endpoint | a one-line `proxy()` route in `apps/web/app/api/`, and the real endpoint in the API |
-| A cross-cutting API concern | `apps/api/src/platform/` |
+| You are adding…                                       | Put it in                                                                                                                      |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Something a signed-in member does                     | a handler in `apps/api/src/modules/member-area/actions.ts` (see [Member-area actions](member-area-actions.md))                 |
+| A paged or searched read for a page                   | a function in `actions.ts` and a branch in `queries.ts`                                                                        |
+| Data every member page needs                          | `loadState` in `member-area/state.ts`, and its type in `packages/contracts/src/state.ts`                                       |
+| A rule both apps must agree on (permission, XP, rank) | `packages/contracts`                                                                                                           |
+| Static club content                                   | `packages/content` (it ships to the browser: no secrets, no answer keys)                                                       |
+| Server-only reference data                            | `apps/api/src/modules/member-area/office-data.ts`                                                                              |
+| A table or column                                     | append idempotent SQL to `apps/api/src/db/schema.sql`                                                                          |
+| A new page                                            | `apps/web/app/app/<name>/page.tsx` (member) or `apps/web/app/(site)/<name>/page.tsx` (public), plus a nav entry in `Shell.tsx` |
+| A component for one page                              | `apps/web/components/app/<feature>/`                                                                                           |
+| A component several pages use                         | `apps/web/components/app/shared/`                                                                                              |
+| A browser-facing endpoint                             | a one-line `proxy()` route in `apps/web/app/api/`, and the real endpoint in the API                                            |
+| A cross-cutting API concern                           | `apps/api/src/platform/`                                                                                                       |
 
 ## Naming
 

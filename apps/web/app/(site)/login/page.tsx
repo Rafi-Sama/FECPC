@@ -23,11 +23,7 @@ export default async function Login({
           <h1 className="h2" style={{ marginBottom: 28 }}>
             {invite ? 'Set your password.' : 'Sign in.'}
           </h1>
-          <LoginForm
-            invite={invite?.slice(0, 100)}
-            error={error?.slice(0, 200)}
-            google={!!process.env.GOOGLE_CLIENT_ID}
-          />
+          <LoginForm invite={invite?.slice(0, 100)} error={error?.slice(0, 200)} />
         </div>
       </section>
     </main>

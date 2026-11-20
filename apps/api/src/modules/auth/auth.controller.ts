@@ -113,4 +113,16 @@ export class AuthController {
     this.setSession(reply, result.token);
     return { user: result.user };
   }
+
+  @Public()
+  @Post('github')
+  @HttpCode(HttpStatus.OK)
+  async githubAuth(
+    @Body(new ZodValidationPipe(GoogleCodeSchema)) body: GoogleCode,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ) {
+    const result = await this.authService.loginWithGithub(body.code);
+    this.setSession(reply, result.token);
+    return { user: result.user };
+  }
 }

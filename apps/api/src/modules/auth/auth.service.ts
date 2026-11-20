@@ -280,22 +280,75 @@ export class AuthService {
       throw refuse('Google did not confirm that email address.');
     }
 
+    return this.oauthSignIn('google_sub', profile.sub, [profile.email.trim().toLowerCase()]);
+  }
+
+  /** GitHub sign-in: same rules as Google. Any verified address on the GitHub account may match a member. */
+  async loginWithGithub(code: string): Promise<AuthSessionResult> {
+    const { GITHUB_CLIENT_ID: id, GITHUB_CLIENT_SECRET: secret } = this.config.env;
+    const refuse = (msg: string) =>
+      new DomainException(msg, HttpStatus.UNAUTHORIZED, ErrorCodes.UNAUTHENTICATED);
+    if (!id || !secret) throw refuse('GitHub sign-in is not configured.');
+
+    const get = (url: string, init: RequestInit) =>
+      fetch(url, { ...init, signal: AbortSignal.timeout(10_000) })
+        .then((r) => r.json())
+        .catch(() => ({}));
+    const tok = (await get('https://github.com/login/oauth/access_token', {
+      method: 'POST',
+      headers: { accept: 'application/json' },
+      body: new URLSearchParams({ code, client_id: id, client_secret: secret }),
+    })) as { access_token?: string };
+    if (!tok.access_token) throw refuse('GitHub did not complete the sign-in.');
+
+    const headers = {
+      authorization: `Bearer ${tok.access_token}`,
+      accept: 'application/vnd.github+json',
+      'user-agent': 'fecpc-web', // GitHub's API refuses requests without one
+    };
+    const [user, emails] = (await Promise.all([
+      get('https://api.github.com/user', { headers }),
+      get('https://api.github.com/user/emails', { headers }),
+    ])) as [{ id?: unknown }, unknown];
+    const verified = Array.isArray(emails)
+      ? emails
+          .filter((e) => e?.verified === true && typeof e.email === 'string')
+          .map((e) => (e.email as string).trim().toLowerCase())
+      : [];
+    if (typeof user.id !== 'number' || !verified.length)
+      throw refuse('GitHub did not confirm an email address.');
+    return this.oauthSignIn('github_id', String(user.id), verified);
+  }
+
+  /**
+   * Signs in the member already linked to this provider account, else links the first sign-in to the
+   * member whose email matches. A linked member can't be taken over by another provider account.
+   */
+  private async oauthSignIn(
+    col: 'google_sub' | 'github_id',
+    sub: string,
+    emails: string[],
+  ): Promise<AuthSessionResult> {
     const row = (
       await this.db.query(
-        `UPDATE users u SET google_sub = $1
-         WHERE u.email = $2 AND (u.google_sub IS NULL OR u.google_sub = $1)
-           AND u.status = 'active' AND NOT u.suspended AND NOT u.system
-         RETURNING ${USER_COLS}`,
-        [profile.sub, profile.email.trim().toLowerCase()],
+        `SELECT ${USER_COLS}, u.system, u.${col} AS linked FROM users u
+         WHERE u.${col} = $1 OR (u.${col} IS NULL AND u.email = ANY($2))
+         ORDER BY u.${col} IS NULL LIMIT 1`,
+        [sub, emails],
       )
     ).rows[0];
-    if (!row) {
+    if (!row || row.system || row.status !== 'active' || isSuspended(row)) {
       throw new DomainException(
-        'No member account uses that Google address. Apply to join first, or sign in with your password.',
+        'No member account uses that address. Apply to join first, or sign in with your password.',
         HttpStatus.FORBIDDEN,
         ErrorCodes.FORBIDDEN_RESOURCE,
       );
     }
+    if (!row.linked)
+      await this.db.query(`UPDATE users SET ${col} = $1 WHERE id = $2 AND ${col} IS NULL`, [
+        sub,
+        row.id,
+      ]);
     return { token: await this.createSession(row.id), user: toUser(row) };
   }
 }

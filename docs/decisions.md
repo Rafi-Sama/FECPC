@@ -85,15 +85,15 @@ waivers and the club fund had no interface even though the API supported them. T
 
 ## Known gaps
 
-| Gap | Where to start |
-| --- | --- |
-| Password reset by email: `/v1/auth/password/forgot` sends nothing. Officers issue reset links instead (`invite` action). | add a mailer; store reset tokens like invite tokens |
-| No two-factor authentication. | `modules/auth` |
-| Invoices, the fund's opening balance and accounts, cash flow, mentee weekly stats and some public-site figures are placeholder content, not tables. Fund balance, ledger, term totals, budgets, waivers and the ops board are real. | `packages/content`, `member-area/office-data.ts` |
-| The public site (members, events, certificates, hall of fame) is static content. `/verify` checks certificates against that list. | `packages/content/src/site.ts` |
-| Contest-day contest IDs are saved in the admin's own browser (`localStorage`), not shared with members. | store them through a `club` key with the `kv` action |
-| VJudge falls back to simulated standings when it does not answer (`source: "simulated"`); the page does not label them yet. | `apps/web/app/app/contest-day/page.tsx` |
-| The rate limit and the Codeforces sync throttle are in memory: per process, reset on restart. | move to the database before running several API instances |
-| The ESLint config has no React Hooks rules. | add `eslint-plugin-react-hooks` to `packages/config-eslint` |
-| `users` still has columns only the removed modules used (for example `avatar`, `legacy_id`), and existing databases still have those modules' tables. | drop them with a deliberate, reviewed migration |
-| Codeforces stats refresh only when a member opens a page with their Codeforces data (at most every 10 minutes); there is no background job. | a scheduled call to `syncCodeforces` per member |
+| Gap                                                                                                                                                                                                                                 | Where to start                                              |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| Password reset by email: `/v1/auth/password/forgot` sends nothing. Officers issue reset links instead (`invite` action).                                                                                                            | add a mailer; store reset tokens like invite tokens         |
+| No two-factor authentication.                                                                                                                                                                                                       | `modules/auth`                                              |
+| Invoices, the fund's opening balance and accounts, cash flow, mentee weekly stats and some public-site figures are placeholder content, not tables. Fund balance, ledger, term totals, budgets, waivers and the ops board are real. | `packages/content`, `member-area/office-data.ts`            |
+| The public site (members, events, certificates, hall of fame) is static content. `/verify` checks certificates against that list.                                                                                                   | `packages/content/src/site.ts`                              |
+| Contest-day contest IDs are saved in the admin's own browser (`localStorage`), not shared with members.                                                                                                                             | store them through a `club` key with the `kv` action        |
+| VJudge falls back to simulated standings when it does not answer (`source: "simulated"`); the page does not label them yet.                                                                                                         | `apps/web/app/app/contest-day/page.tsx`                     |
+| The rate limit and the Codeforces sync throttle are in memory: per process, reset on restart.                                                                                                                                       | move to the database before running several API instances   |
+| The ESLint config has no React Hooks rules.                                                                                                                                                                                         | add `eslint-plugin-react-hooks` to `packages/config-eslint` |
+| `users` still has columns only the removed modules used (for example `avatar`, `legacy_id`), and existing databases still have those modules' tables.                                                                               | drop them with a deliberate, reviewed migration             |
+| Codeforces stats refresh only when a member opens a page with their Codeforces data (at most every 10 minutes); there is no background job.                                                                                         | a scheduled call to `syncCodeforces` per member             |

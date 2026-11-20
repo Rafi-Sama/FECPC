@@ -28,27 +28,32 @@ Set real environment variables. Do not ship `.env.local` files.
 
 ### API
 
-| Variable | Production value |
-| --- | --- |
-| `APP_ENV` | `production`. Secure `__Host-fecpc_session` cookie, so the site must be served over HTTPS. |
-| `DATABASE_URL` | the production database |
-| `APP_PUBLIC_URL` | the public origin, for example `https://fecpc.example.edu` |
-| `CORS_ORIGINS` | the public origin(s) only. Also used by the CSRF check. |
-| `TRUST_PROXY` | number of proxies in front of the API whose `X-Forwarded-For` is trusted. With only the web app in front: `1`. |
-| `HOST`, `PORT` | bind to a private interface |
-| `LOG_LEVEL` | `info` (JSON logs on stdout) |
-| `RATE_LIMIT_GLOBAL_PER_MIN` | `300` unless you have a reason |
-| `SESSION_IDLE_DAYS`, `SESSION_ABSOLUTE_DAYS`, `SESSION_MAX_PER_USER` | 14, 60, 10 by default |
-| `DB_POOL_MAX`, `DB_STATEMENT_TIMEOUT_MS`, `DB_LOCK_TIMEOUT_MS`, `DB_IDLE_TX_TIMEOUT_MS` | 20, 15000, 5000, 30000 by default |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` | optional; the redirect URI must be `https://<public origin>/api/auth/google/callback` and registered in Google Cloud |
+| Variable                                                                                | Production value                                                                                                                                                                |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `APP_ENV`                                                                               | `production`. Secure `__Host-fecpc_session` cookie, so the site must be served over HTTPS.                                                                                      |
+| `DATABASE_URL`                                                                          | the production database                                                                                                                                                         |
+| `APP_PUBLIC_URL`                                                                        | the public origin, for example `https://fecpc.example.edu`                                                                                                                      |
+| `CORS_ORIGINS`                                                                          | the public origin(s) only. Also used by the CSRF check.                                                                                                                         |
+| `TRUST_PROXY`                                                                           | number of proxies in front of the API whose `X-Forwarded-For` is trusted. With only the web app in front: `1`.                                                                  |
+| `HOST`, `PORT`                                                                          | bind to a private interface                                                                                                                                                     |
+| `LOG_LEVEL`                                                                             | `info` (JSON logs on stdout)                                                                                                                                                    |
+| `RATE_LIMIT_GLOBAL_PER_MIN`                                                             | `300` unless you have a reason                                                                                                                                                  |
+| `SESSION_IDLE_DAYS`, `SESSION_ABSOLUTE_DAYS`, `SESSION_MAX_PER_USER`                    | 14, 60, 10 by default                                                                                                                                                           |
+| `DB_POOL_MAX`, `DB_STATEMENT_TIMEOUT_MS`, `DB_LOCK_TIMEOUT_MS`, `DB_IDLE_TX_TIMEOUT_MS` | 20, 15000, 5000, 30000 by default                                                                                                                                               |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`                       | optional; the redirect URI must be `https://<public origin>/api/auth/google/callback` and registered in Google Cloud                                                            |
+| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`                                              | optional; a GitHub OAuth app whose callback URL is `https://<public origin>/api/auth/github/callback`                                                                           |
+| `SMTP_URL`, `MAIL_FROM`                                                                 | optional; e.g. `smtps://club%40gmail.com:<app-password>@smtp.gmail.com:465`. Without them, accepting an application shows the invite link to the officer instead of emailing it |
+| `TURNSTILE_SECRET_KEY`                                                                  | optional; Cloudflare Turnstile secret. When set, the join form must pass the human check                                                                                        |
 
 ### Web
 
-| Variable | Production value |
-| --- | --- |
-| `API_INTERNAL_URL` | the API's private address, for example `http://api.internal:3001` |
-| `TRUST_PROXY` | `1` when the reverse proxy sets `X-Forwarded-For`, so the client's address reaches the API |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_REDIRECT_URI` | optional; same values as the API |
+| Variable                                  | Production value                                                                           |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `API_INTERNAL_URL`                        | the API's private address, for example `http://api.internal:3001`                          |
+| `TRUST_PROXY`                             | `1` when the reverse proxy sets `X-Forwarded-For`, so the client's address reaches the API |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_REDIRECT_URI` | optional; same values as the API                                                           |
+| `GITHUB_CLIENT_ID`                        | optional; same value as the API                                                            |
+| `TURNSTILE_SITE_KEY`                      | optional; the public half of the API's `TURNSTILE_SECRET_KEY`                              |
 
 ### Getting the client address right
 
@@ -64,11 +69,11 @@ private network.
 
 ## Health checks
 
-| Endpoint | Meaning |
-| --- | --- |
-| `GET /health/live` (API) | the process is up |
+| Endpoint                  | Meaning                                |
+| ------------------------- | -------------------------------------- |
+| `GET /health/live` (API)  | the process is up                      |
 | `GET /health/ready` (API) | the database answers (`503` otherwise) |
-| `GET /login` (web) | the web app renders |
+| `GET /login` (web)        | the web app renders                    |
 
 ## Operations
 
@@ -85,6 +90,7 @@ private network.
             encode(sha256(convert_to('$TOKEN', 'utf8')), 'hex'), now() + interval '1 day')"
   echo "https://<public origin>/login?invite=$TOKEN"   # open it once to set the password
   ```
+
 - **Logs** are JSON (pino), one line per request, with a request ID (`X-Request-Id` is honoured). Cookies,
   passwords, tokens, transaction IDs and phone numbers are redacted.
 - **Scaling out:** the global rate limit and the Codeforces sync throttle are in process memory. With

@@ -2,6 +2,7 @@ import JoinForm from '@/components/site/JoinForm';
 import { site } from '@/lib/site';
 
 export const metadata = { title: 'Join' };
+export const dynamic = 'force-dynamic'; // reads TURNSTILE_SITE_KEY at request time, like the Google button
 const pipeline = [
   ['Apply', '4 min', 'The form below. Tell us your department, batch and what you want to build.'],
   [
@@ -66,7 +67,7 @@ export default function Join() {
       </section>
       <section className="sec t-b paper" data-t="b" id="apply">
         <div className="wrap split flip">
-          <JoinForm />
+          <JoinForm turnstile={process.env.TURNSTILE_SITE_KEY} />
           <aside className="stack" style={{ '--g': '32px' } as React.CSSProperties}>
             <div>
               <h2 className="h3" style={{ marginTop: 14 }}>

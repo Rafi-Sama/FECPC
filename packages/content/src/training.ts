@@ -175,24 +175,6 @@ export const templates = [
     code: 'vector<long long> dijkstra(int s, vector<vector<pair<int,int>>>& g) {\n  vector<long long> d(g.size(), LLONG_MAX);\n  priority_queue<pair<long long,int>, vector<pair<long long,int>>, greater<>> pq;\n  pq.push({d[s] = 0, s});\n  while (!pq.empty()) {\n    auto [du, u] = pq.top(); pq.pop();\n    if (du > d[u]) continue;\n    for (auto [v, w] : g[u])\n      if (du + w < d[v]) pq.push({d[v] = du + w, v});\n  }\n  return d;\n}',
   },
 ];
-export const myTeam = {
-  name: 'FEC_NullPointers',
-  coach: 'tanvir',
-  members: ['nadia', 'mehedi', 'rahim'],
-  mocks: [
-    ['Mock #1', 6, 14],
-    ['Mock #2', 8, 9],
-    ['Dhaka 2025 replay', 7, 11],
-  ] as [string, number, number][],
-  map: [
-    ['Graphs', 82],
-    ['DP', 74],
-    ['Math', 61],
-    ['Strings', 48],
-    ['Geometry', 22],
-    ['Flows', 31],
-  ] as [string, number][],
-};
 export const alumni = [
   {
     name: 'Shahriar Kabir',

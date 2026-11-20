@@ -19,7 +19,7 @@ export const InviteAcceptSchema = z
 
 export type InviteAccept = z.infer<typeof InviteAcceptSchema>;
 
-/** A Google OAuth authorization code; the API redeems it itself. */
+/** An OAuth authorization code (Google or GitHub); the API redeems it itself. */
 export const GoogleCodeSchema = z.object({ code: z.string().min(1).max(2048) }).strict();
 
 export type GoogleCode = z.infer<typeof GoogleCodeSchema>;
