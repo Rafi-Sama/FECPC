@@ -466,6 +466,8 @@ export type AppState = {
     blogsCount?: number;
   };
   news: AnnouncementItem[];
+  /** Newest 50 polls; live tallies are in `counts.votes[id]`. */
+  polls: { id: string; user_id: string; q: string; opts: string[]; by: string; at: string }[];
   /** What needs this member's attention, worked out on the server from real records. */
   inbox: {
     id: string;

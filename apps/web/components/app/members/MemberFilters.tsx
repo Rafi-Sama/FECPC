@@ -1,21 +1,12 @@
 'use client';
 import { RANK_TITLES } from '@fecpc/contracts';
 
-export type MemberTypeFilter = 'all' | 'current' | 'alumni';
-
 export type MemberFilterState = {
   q: string;
   rating: string;
   skill: string;
   batch: string;
-  type: MemberTypeFilter;
 };
-
-const TYPE_OPTIONS: { value: MemberTypeFilter; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'current', label: 'Current' },
-  { value: 'alumni', label: 'Alumni' },
-];
 
 export function MemberFilters({
   value,
@@ -94,20 +85,6 @@ export function MemberFilters({
       </div>
 
       <div className="member-filters__type">
-        <div className="member-type-group" role="group" aria-label="Member type">
-          {TYPE_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              type="button"
-              className={`tag tab${value.type === opt.value ? ' on' : ''}`}
-              aria-pressed={value.type === opt.value}
-              onClick={() => onChange({ type: opt.value })}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-
         {hasActive && (
           <button type="button" className="btn xs line" onClick={onReset}>
             Reset

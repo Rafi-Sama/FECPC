@@ -225,27 +225,6 @@ export const announcements = [
     edited_at: null as string | null,
   },
 ];
-export const polls = [
-  {
-    id: 'p1',
-    q: 'Which day for the Linux workshop?',
-    opts: [
-      ['Saturday', 31],
-      ['Sunday', 18],
-      ['Tuesday evening', 44],
-    ] as [string, number][],
-  },
-  {
-    id: 'p2',
-    q: 'Next bootcamp topic?',
-    opts: [
-      ['Graphs', 52],
-      ['Number theory', 23],
-      ['Strings', 29],
-    ] as [string, number][],
-  },
-];
-
 export const duels = [
   { a: 'farhan', b: 'nusrat', problem: '520B', state: 'live', elo: [1512, 1488] },
   { a: 'priya', b: 'shuvo', problem: '189A', state: 'priya won in 11:42', elo: [1534, 1471] },

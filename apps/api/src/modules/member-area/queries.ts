@@ -242,6 +242,7 @@ export async function community(db: Db, id: string, b: In): Promise<unknown> {
       q: typeof b.q === 'string' ? b.q : undefined,
       category: typeof b.category === 'string' ? b.category : undefined,
       sort: typeof b.sort === 'string' ? b.sort : undefined,
+      mine: b.mine === true,
       cursor: typeof b.cursor === 'string' || typeof b.cursor === 'number' ? b.cursor : undefined,
       limit: typeof b.limit === 'number' ? b.limit : undefined,
     });
@@ -255,6 +256,7 @@ export async function community(db: Db, id: string, b: In): Promise<unknown> {
       type: typeof b.type === 'string' ? b.type : undefined,
       status: typeof b.status === 'string' ? b.status : undefined,
       sort: typeof b.sort === 'string' ? b.sort : undefined,
+      mine: b.mine === true,
       cursor: typeof b.cursor === 'string' || typeof b.cursor === 'number' ? b.cursor : undefined,
       limit: typeof b.limit === 'number' ? b.limit : undefined,
     });
@@ -289,7 +291,6 @@ export async function members(db: Db, id: string, b: In): Promise<unknown> {
       rating: typeof b.rating === 'string' ? b.rating : undefined,
       skill: typeof b.skill === 'string' ? b.skill : undefined,
       batch: typeof b.batch === 'number' || typeof b.batch === 'string' ? b.batch : undefined,
-      type: typeof b.type === 'string' ? b.type : undefined,
       page: typeof b.page === 'number' ? b.page : undefined,
       pageSize: typeof b.pageSize === 'number' ? b.pageSize : undefined,
     });

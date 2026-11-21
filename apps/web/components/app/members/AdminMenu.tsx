@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from '@/components/app/Store';
-import { canFully, postName, posts } from '@fecpc/contracts';
+import { canFully } from '@fecpc/contracts';
 
 export function AdminMenu({
   userId,
@@ -22,18 +22,11 @@ export function AdminMenu({
   const canPromote = canFully(s.roles, 'member.promote');
   const canMakeAlumni = canFully(s.roles, 'member.makeAlumni');
   const canDeactivate = canFully(s.roles, 'member.deactivate');
-  const target = who(userId),
-    // Posts are for anyone below President; the server checks the same.
-    canPost =
-      canFully(s.roles, 'roles.assign') &&
-      'roleKey' in target &&
-      target.roleKey !== 'president' &&
-      target.roleKey !== 'super_admin';
+  const target = who(userId);
   // Rank rules the server applies: only a plain member becomes a Mentor; the top two are the Super Admin's.
   const roleKey = 'roleKey' in target ? target.roleKey : undefined,
     locked = (roleKey === 'president' || roleKey === 'super_admin') && s.role !== 'super_admin';
-  const allowed =
-    (canPromote || canMakeAlumni || canDeactivate || canPost) && userId !== me.id && !locked;
+  const allowed = (canPromote || canMakeAlumni || canDeactivate) && userId !== me.id && !locked;
 
   useEffect(() => {
     if (!open) return;
@@ -97,29 +90,6 @@ export function AdminMenu({
       </button>
       {open && (
         <div className="admin-menu__popover" role="menu" aria-label={`Manage ${memberName}`}>
-          {canPost && (
-            <select
-              className="input"
-              aria-label={`Post for ${memberName}`}
-              value={('post' in target && target.post) || ''}
-              disabled={busy}
-              onChange={async (e) => {
-                setBusy(true);
-                try {
-                  if (await act('post', { user: userId, post: e.target.value || null })) onDone?.();
-                } finally {
-                  setBusy(false);
-                }
-              }}
-            >
-              <option value="">No post</option>
-              {posts.map((p) => (
-                <option key={p} value={p}>
-                  {postName[p]}
-                </option>
-              ))}
-            </select>
-          )}
           {canPromote && (
             <button
               type="button"

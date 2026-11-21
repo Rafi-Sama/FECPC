@@ -818,3 +818,12 @@ alter table interview_topics add column if not exists link text;
 
 -- Why an organiser declined an entry; shown to the member.
 alter table event_entries add column if not exists reason text;
+
+-- Polls officers create; votes live in `votes` under poll_id 'poll:<id>'.
+create table if not exists club_polls (
+  id         int generated always as identity primary key,
+  user_id    text not null references users on delete cascade,
+  question   text not null,
+  options    text[] not null,
+  created_at timestamptz not null default now()
+);

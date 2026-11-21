@@ -5,7 +5,6 @@ import {
   announcements,
   doubts,
   invoices,
-  polls,
   resources,
   sheet,
   shop,
@@ -393,7 +392,12 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     if (poll === 'fb:freshers') pick(option, ['1', '2', '3', '4', '5'], 'rating');
     else
       need(
-        polls.find((x) => x.id === poll)?.opts.some((o) => o[0] === option),
+        (
+          await c.query(`select 1 from club_polls where 'poll:' || id = $1 and $2 = any(options)`, [
+            poll,
+            option,
+          ])
+        ).rowCount,
         'That is not an option in this poll.',
       );
     const r = await c.query(
@@ -632,6 +636,30 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     need(r.rows[0], 'Only the author or an officer can delete this announcement.');
     await c.query(`delete from announcement_reads where announcement_id = $1`, ['an:' + id]);
     await audit(c, a, `deleted announcement "${r.rows[0].title}"`);
+  },
+  async createPoll(c, a, _p, i) {
+    need(canFully(a.roles, 'poll.create'));
+    const question = text(i.question, 3, 160, 'The question');
+    const raw = Array.isArray(i.options) ? i.options : [];
+    const options = [...new Set(raw.map((o) => text(o, 1, 80, 'An option')))];
+    if (options.length < 2 || options.length > 8)
+      throw new Fail(400, 'A poll needs 2 to 8 different options.');
+    await c.query(`insert into club_polls (user_id, question, options) values ($1, $2, $3)`, [
+      a.id,
+      question,
+      options,
+    ]);
+    await audit(c, a, `created poll "${question}"`);
+  },
+  async deletePoll(c, a, _p, i) {
+    const id = posInt(String(i.id ?? '').replace(/^poll:/, ''), 'poll');
+    const r = await c.query(
+      `delete from club_polls where id = $1 and (user_id = $2 or $3) returning question`,
+      [id, a.id, canFully(a.roles, 'poll.create')],
+    );
+    need(r.rows[0], 'Only the author or an officer can delete this poll.');
+    await c.query(`delete from votes where poll_id = $1`, ['poll:' + id]);
+    await audit(c, a, `deleted poll "${r.rows[0].question}"`);
   },
   async reportFeedPost(c, a, _p, i) {
     person(a);
@@ -1789,6 +1817,7 @@ export async function listFeedPosts(
     q?: string;
     category?: string;
     sort?: string;
+    mine?: boolean;
     cursor?: string | number | null;
     limit?: number;
   } = {},
@@ -1797,10 +1826,12 @@ export async function listFeedPosts(
   const q = typeof input.q === 'string' ? input.q.trim() : '';
   const rawCat = typeof input.category === 'string' ? input.category.trim().toLowerCase() : '';
   const category = rawCat && rawCat !== 'all' ? (FEED_CAT_ALIAS[rawCat] ?? null) : null;
-  const sort = input.sort === 'top' ? 'top' : 'new';
-  const where: string[] = [];
+  const sort = input.sort === 'top' || input.sort === 'hot' ? input.sort : 'new';
+  const where: string[] = input.mine ? ['fp.user_id = $1'] : [];
   const params: unknown[] = [userId];
   let idx = 2;
+  // Hot ranks move as posts age, so a keyset cursor cannot hold; page by offset instead.
+  const offset = sort === 'hot' ? Math.max(0, Math.floor(Number(input.cursor)) || 0) : 0;
 
   if (q) {
     where.push(`(fp.title ilike $${idx} or fp.body_md ilike $${idx})`);
@@ -1812,7 +1843,12 @@ export async function listFeedPosts(
     params.push(category);
     idx++;
   }
-  if (input.cursor !== undefined && input.cursor !== null && String(input.cursor).trim() !== '') {
+  if (
+    sort !== 'hot' &&
+    input.cursor !== undefined &&
+    input.cursor !== null &&
+    String(input.cursor).trim() !== ''
+  ) {
     if (sort === 'top') {
       const m = /^(-?\d+):(\d+)$/.exec(String(input.cursor));
       if (m) {
@@ -1831,7 +1867,13 @@ export async function listFeedPosts(
   }
 
   params.push(limit + 1);
-  const orderBy = sort === 'top' ? `fp.score desc, fp.id desc` : `fp.created_at desc, fp.id desc`;
+  // Hot: net votes decay with age in hours (gravity 1.5), so fresh, well-voted posts rise.
+  const orderBy =
+    sort === 'top'
+      ? `fp.score desc, fp.id desc`
+      : sort === 'hot'
+        ? `(fp.score + 1) / power(extract(epoch from now() - fp.created_at) / 3600 + 2, 1.5) desc, fp.id desc`
+        : `fp.created_at desc, fp.id desc`;
   const sql = `
     select fp.id, fp.user_id, u.name as author_name, greatest(u.problems_solved, u.solved) as author_solved,
       u.rating as author_rating, u.title as author_role, u.avatar_url as author_avatar,
@@ -1843,13 +1885,19 @@ export async function listFeedPosts(
     left join feed_votes v on v.post_id = fp.id and v.user_id = $1
     ${where.length ? 'where ' + where.join(' and ') : ''}
     order by ${orderBy}
-    limit $${idx}`;
+    limit $${idx} offset ${offset}`;
   const rows = (await db.query(sql, params)).rows as FeedPostSummary[];
   const hasMore = rows.length > limit;
   const items = hasMore ? rows.slice(0, limit) : rows;
   const last = items[items.length - 1];
   const nextCursor =
-    hasMore && last ? (sort === 'top' ? `${last.score}:${last.id}` : String(last.id)) : null;
+    hasMore && last
+      ? sort === 'hot'
+        ? String(offset + limit)
+        : sort === 'top'
+          ? `${last.score}:${last.id}`
+          : String(last.id)
+      : null;
   return { items, nextCursor };
 }
 
@@ -1919,6 +1967,7 @@ export async function listIdeas(
     type?: string;
     status?: string;
     sort?: string;
+    mine?: boolean;
     cursor?: string | number | null;
     limit?: number;
   } = {},
@@ -1934,7 +1983,7 @@ export async function listIdeas(
       ? (input.status as IdeaStatus)
       : null;
   const sort = input.sort === 'new' ? 'new' : 'top';
-  const where: string[] = [];
+  const where: string[] = input.mine ? ['i.user_id = $1'] : [];
   const params: unknown[] = [userId];
   let idx = 2;
 
@@ -2065,7 +2114,6 @@ export async function listMembers(
     rating?: string;
     skill?: string;
     batch?: number | string;
-    type?: string;
     page?: number;
     pageSize?: number;
   } = {},
@@ -2086,9 +2134,8 @@ export async function listMembers(
     input.batch !== undefined && input.batch !== '' && input.batch !== null
       ? Number(input.batch)
       : NaN;
-  const type = typeof input.type === 'string' ? input.type.trim().toLowerCase() : 'all';
-
-  const where: string[] = [`not u.system`, `not u.suspended`];
+  // Alumni are listed in the alumni directory, not here.
+  const where: string[] = [`not u.system`, `not u.suspended`, `u.role <> 'alumni'`];
   const params: unknown[] = [];
   let idx = 1;
 
@@ -2139,21 +2186,15 @@ export async function listMembers(
     idx++;
   }
 
-  if (type === 'alumni') {
-    where.push(`u.role = 'alumni'`);
-  } else if (type === 'current') {
-    where.push(`u.role <> 'alumni'`);
-  }
-
   const whereSql = where.join(' and ');
   const [countRes, metaRes, rowsRes] = await Promise.all([
     db.query(`select count(*)::int as total from users u where ${whereSql}`, params),
     db.query(
       `select
          count(*)::int as club_total,
-         coalesce((select json_agg(s order by s) from (select distinct unnest(skills) as s from users where not system and not suspended) x), '[]'::json) as skills,
-         coalesce((select json_agg(b order by b desc) from (select distinct batch as b from users where not system and not suspended and batch > 0) y), '[]'::json) as batches
-       from users where not system and not suspended`,
+         coalesce((select json_agg(s order by s) from (select distinct unnest(skills) as s from users where not system and not suspended and role <> 'alumni') x), '[]'::json) as skills,
+         coalesce((select json_agg(b order by b desc) from (select distinct batch as b from users where not system and not suspended and role <> 'alumni' and batch > 0) y), '[]'::json) as batches
+       from users where not system and not suspended and role <> 'alumni'`,
     ),
     db.query(
       `select u.id, u.member_no as no, u.name,

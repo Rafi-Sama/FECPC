@@ -86,6 +86,13 @@ export const matrix = {
     president: Y,
     super_admin: Y,
   },
+  'poll.create': {
+    label: 'Create and close polls',
+    cp_head: Y,
+    secretary: Y,
+    president: Y,
+    super_admin: Y,
+  },
   'feed.post': {
     label: 'Create community feed posts',
     member: Y,

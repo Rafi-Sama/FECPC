@@ -123,7 +123,7 @@ Prefixed `icpc_` because some older databases carry an unrelated, unused `teams`
   preference flags and values. Only `act()` writes it, under a row lock.
 - **Everything shared between members** has its own table, so counts (registrations, kudos, votes, solves per
   problem) are computed with SQL across members.
-- **Static content** (sheet problems, courses, shop items, invoices, polls) is not in the database. It
+- **Static content** (sheet problems, courses, shop items, invoices) is not in the database. It
   lives in `packages/content`, and handlers check ids against it.
 
 ## Seeding

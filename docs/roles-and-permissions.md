@@ -34,6 +34,7 @@ Generated from `packages/contracts/src/capabilities.ts`.
 | `event.publish`             | Run events: create, registrations, feedback, certificates |        |        |        |         |           |     ✓     |     ✓     |      ✓      |
 | `contest.run`               | Choose the contests on the contest-day scoreboard         |        |        |        |    ✓    |           |     ✓     |     ✓     |      ✓      |
 | `announce.post`             | Post announcements                                        |        |        | scope  |    ✓    |     ✓     |     ✓     |     ✓     |      ✓      |
+| `poll.create`               | Create and close polls                                    |        |        |        |    ✓    |           |     ✓     |     ✓     |      ✓      |
 | `feed.post`                 | Create community feed posts                               |   ✓    |   ✓    |   ✓    |    ✓    |     ✓     |     ✓     |     ✓     |      ✓      |
 | `feed.moderate`             | Review reported feed posts                                |        |        |        |         |           |     ✓     |     ✓     |      ✓      |
 | `idea.create`               | Submit community ideas                                    |   ✓    |   ✓    |   ✓    |    ✓    |     ✓     |     ✓     |     ✓     |      ✓      |

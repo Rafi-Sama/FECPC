@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Page, Tabs } from '@/components/app/Shell';
 import { useStore } from '@/components/app/Store';
+import { AnnouncementBoard } from '@/components/app/announcements/AnnouncementBoard';
 import {
   AnnouncementModal,
   type UnifiedAnnouncement,
@@ -23,8 +24,8 @@ import {
 } from '@/components/app/shared/MarkdownEditor';
 import { TierAvatar, TierName } from '@/components/app/shared/SolvedTier';
 import { HighlightMatch } from '@/components/app/alumni/HighlightMatch';
-import { announcements, polls } from '@fecpc/content/member-area';
-import { can, isCommittee } from '@fecpc/contracts';
+import { announcements } from '@fecpc/content/member-area';
+import { can, canFully, isCommittee } from '@fecpc/contracts';
 import type {
   FeedCategory,
   FeedPostSummary,
@@ -66,7 +67,7 @@ function parseTab(param: string | null): Tab {
 function CommunityContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { s, me, act, counts, news, members, who } = useStore();
+  const { s, me, act, counts, news, polls, members, who } = useStore();
   const [tab, setTab] = useState<Tab>(() => parseTab(searchParams.get('tab')));
   const [activeProfileId, setActiveProfileId] = useState<string | null>(() =>
     searchParams.get('profile'),
@@ -103,6 +104,8 @@ function CommunityContent() {
   const [feedQ, setFeedQ] = useState('');
   const [feedDebouncedQ, setFeedDebouncedQ] = useState('');
   const [feedCat, setFeedCat] = useState<(typeof FEED_FILTERS)[number]['key']>('all');
+  const [feedSort, setFeedSort] = useState<'hot' | 'new'>('hot');
+  const [feedMine, setFeedMine] = useState(false);
   const [feedItems, setFeedItems] = useState<FeedPostSummary[]>([]);
   const [feedCursor, setFeedCursor] = useState<string | null>(null);
   const [feedLoading, setFeedLoading] = useState(false);
@@ -129,7 +132,8 @@ function CommunityContent() {
             action: 'listFeedPosts',
             q: feedDebouncedQ,
             category: feedCat,
-            sort: 'new',
+            sort: feedSort,
+            mine: feedMine,
             cursor,
             limit: 20,
           }),
@@ -147,7 +151,7 @@ function CommunityContent() {
         if (seq === feedReqSeq.current) setFeedLoading(false);
       }
     },
-    [feedDebouncedQ, feedCat],
+    [feedDebouncedQ, feedCat, feedSort, feedMine],
   );
 
   useEffect(() => {
@@ -333,6 +337,7 @@ function CommunityContent() {
   const [ideaSort, setIdeaSort] = useState<'top' | 'new'>('top');
   const [ideaStatus, setIdeaStatus] = useState<'all' | Exclude<IdeaStatus, 'closed'>>('all');
   const [ideaType, setIdeaType] = useState<'all' | IdeaType>('all');
+  const [ideaMine, setIdeaMine] = useState(false);
   const [ideaItems, setIdeaItems] = useState<IdeaSummary[]>([]);
   const [ideaCursor, setIdeaCursor] = useState<string | null>(null);
   const [ideaLoading, setIdeaLoading] = useState(false);
@@ -361,6 +366,7 @@ function CommunityContent() {
             type: ideaType === 'all' ? undefined : ideaType,
             status: ideaStatus === 'all' ? undefined : ideaStatus,
             sort: ideaSort,
+            mine: ideaMine,
             cursor,
             limit: 20,
           }),
@@ -378,7 +384,7 @@ function CommunityContent() {
         if (seq === ideaReqSeq.current) setIdeaLoading(false);
       }
     },
-    [ideaDebouncedQ, ideaType, ideaStatus, ideaSort],
+    [ideaDebouncedQ, ideaType, ideaStatus, ideaSort, ideaMine],
   );
 
   useEffect(() => {
@@ -430,6 +436,24 @@ function CommunityContent() {
     if (!ok) await fetchIdeas(null, false);
   };
 
+  /* ────────── POLLS STATE ────────── */
+  const canPoll = canFully(s.roles, 'poll.create');
+  const [pollQ, setPollQ] = useState('');
+  const [pollOpts, setPollOpts] = useState('');
+  const resetPoll = () => {
+    setPollQ('');
+    setPollOpts('');
+  };
+  const handleCreatePoll = async () => {
+    const options = pollOpts
+      .split('\n')
+      .map((o) => o.trim())
+      .filter(Boolean);
+    const ok = await act('createPoll', { question: pollQ.trim(), options });
+    if (ok) resetPoll();
+    return ok;
+  };
+
   /* ────────── DERIVED SIDEBAR DATA ────────── */
   const topHelpers = useMemo(
     () =>
@@ -477,6 +501,28 @@ function CommunityContent() {
                   {f.label}
                 </button>
               ))}
+              <span aria-hidden>·</span>
+              {(['hot', 'new'] as const).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  className={`tag ${feedSort === k ? 'on' : ''}`}
+                  aria-pressed={feedSort === k}
+                  onClick={() => setFeedSort(k)}
+                >
+                  {k === 'hot' ? 'Hot' : 'New'}
+                </button>
+              ))}
+              {!me.system && (
+                <button
+                  type="button"
+                  className={`tag ${feedMine ? 'on' : ''}`}
+                  aria-pressed={feedMine}
+                  onClick={() => setFeedMine(!feedMine)}
+                >
+                  My posts
+                </button>
+              )}
             </div>
 
             <section className="panel">
@@ -623,90 +669,18 @@ function CommunityContent() {
               + Publish
             </button>
           )}
-          <section className="panel ann-list">
-            {filteredAnnouncements.length === 0 ? (
-              <p className="empty">No announcements match this filter.</p>
-            ) : (
-              <div className="list">
-                {filteredAnnouncements.map((a) => {
-                  const read = isAnnRead(a.id);
-                  const optimisticReadCount =
-                    a.read_count +
-                    (!s.read.includes(a.id) && optimisticReadIds.includes(a.id) ? 1 : 0);
-                  const pct = Math.min(
-                    100,
-                    Math.round((optimisticReadCount / activeMemberTotal) * 100),
-                  );
-                  return (
-                    <div
-                      key={a.id}
-                      className="cm-row-click"
-                      style={{ alignItems: 'flex-start' }}
-                      onClick={() => setActiveAnn(a)}
-                    >
-                      <span
-                        className={`cm-unread-dot ${read ? 'read' : ''}`}
-                        style={{ marginTop: 6 }}
-                        aria-label={read ? 'Read' : 'Unread'}
-                      />
-                      <div className="grow">
-                        <div className="row" style={{ '--g': '8px' } as React.CSSProperties}>
-                          <button
-                            type="button"
-                            className="cm-title"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveAnn(a);
-                            }}
-                          >
-                            {a.title}
-                          </button>
-                          {a.pinned && (
-                            <span className="pill" style={{ fontSize: 11, padding: '1px 6px' }}>
-                              Pinned
-                            </span>
-                          )}
-                          {a.requires_ack && (
-                            <span
-                              className="pill warn"
-                              style={{ fontSize: 11, padding: '1px 6px' }}
-                            >
-                              Must read
-                            </span>
-                          )}
-                        </div>
-                        {a.body_md && (
-                          <p className="cm-excerpt">{excerptFromMarkdown(a.body_md)}</p>
-                        )}
-                        <div className="cm-meta">
-                          <TierName name={a.by} solved={a.by_solved} />
-                          <span>· {a.scope}</span>
-                          <span>· {relTime(a.at)}</span>
-                        </div>
-                        {isOfficer && (
-                          <div
-                            className="row"
-                            style={
-                              { marginTop: 8, '--g': '10px', maxWidth: 320 } as React.CSSProperties
-                            }
-                          >
-                            <div
-                              className="meter grow"
-                              style={{ '--v': `${pct}%`, height: 6 } as React.CSSProperties}
-                            >
-                              <i />
-                            </div>
-                            <span className="label" style={{ fontSize: 11 }}>
-                              Read by {optimisticReadCount} of {activeMemberTotal}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+          <section className="ann-list">
+            <AnnouncementBoard
+              items={filteredAnnouncements}
+              isRead={isAnnRead}
+              readCount={(a) =>
+                a.read_count + (!s.read.includes(a.id) && optimisticReadIds.includes(a.id) ? 1 : 0)
+              }
+              onMarkRead={handleMarkAnnRead}
+              onOpen={setActiveAnn}
+              isOfficer={isOfficer}
+              memberTotal={activeMemberTotal}
+            />
           </section>
           {composeOpen && (
             <SaveForm
@@ -827,6 +801,16 @@ function CommunityContent() {
               >
                 New
               </button>
+              {!me.system && (
+                <button
+                  type="button"
+                  className={`tag ${ideaMine ? 'on' : ''}`}
+                  aria-pressed={ideaMine}
+                  onClick={() => setIdeaMine(!ideaMine)}
+                >
+                  My ideas
+                </button>
+              )}
             </div>
 
             <div className="cm-chips" role="group" aria-label="Filter ideas by type">
@@ -949,41 +933,91 @@ function CommunityContent() {
         </div>
       )}
 
-      {/* ────────── TAB 4: POLLS (unchanged) ────────── */}
+      {/* ────────── TAB 4: POLLS ────────── */}
       {tab === 'Polls' && (
         <div className="bento">
+          {canPoll && (
+            <SaveForm
+              className="panel stack"
+              style={{ '--g': '14px' } as React.CSSProperties}
+              label="Unpublished poll"
+              saveLabel="Publish"
+              onDiscard={resetPoll}
+              onSubmit={handleCreatePoll}
+            >
+              <label className="field">
+                <span className="label">Question</span>
+                <input
+                  className="input"
+                  value={pollQ}
+                  onChange={(e) => setPollQ(e.target.value)}
+                  required
+                  minLength={3}
+                  maxLength={160}
+                />
+              </label>
+              <label className="field">
+                <span className="label">Options, one per line (2 to 8)</span>
+                <textarea
+                  className="input"
+                  rows={4}
+                  value={pollOpts}
+                  onChange={(e) => setPollOpts(e.target.value)}
+                  required
+                />
+              </label>
+              <button className="btn sm" style={{ alignSelf: 'flex-start' }}>
+                Publish poll
+              </button>
+            </SaveForm>
+          )}
+          {polls.length === 0 && <p className="empty">No polls yet.</p>}
           {polls.map((p) => {
             const mine = s.votes[p.id];
             const live = counts.votes[p.id] ?? {};
-            const total = p.opts.reduce((a, o) => a + o[1] + (live[o[0]] ?? 0), 0);
+            const total = p.opts.reduce((a, o) => a + (live[o] ?? 0), 0);
             return (
               <section key={p.id} className="panel c6">
                 <h2 className="h3">{p.q}</h2>
-                {p.opts.map(([o, n]) => {
-                  const v = n + (live[o] ?? 0);
+                {p.opts.map((o) => {
+                  const pct = total ? Math.round(((live[o] ?? 0) / total) * 100) : 0;
                   return (
                     <button
                       key={o}
                       className="opt"
                       aria-pressed={mine === o}
+                      disabled={me.system}
                       onClick={() => act('vote', { poll: p.id, option: o })}
                     >
-                      {mine && <i style={{ width: `${(v / total) * 100}%` }} />}
+                      {mine && <i style={{ width: `${pct}%` }} />}
                       <span>
                         <b className="mono acc" style={{ marginRight: 10 }}>
                           {mine === o ? '●' : '○'}
                         </b>
                         {o}
                       </span>
-                      <span className="mono">
-                        {mine ? `${Math.round((v / total) * 100)}%` : ''}
-                      </span>
+                      <span className="mono">{mine ? `${pct}%` : ''}</span>
                     </button>
                   );
                 })}
-                <p className="label">
-                  {total} votes · closes Friday{mine ? '' : ' · vote to see results'}
-                </p>
+                <div className="row between">
+                  <p className="label">
+                    {total} votes · {p.by} · {relTime(p.at)}
+                    {mine ? '' : ' · vote to see results'}
+                  </p>
+                  {(canPoll || p.user_id === me.id) && (
+                    <button
+                      type="button"
+                      className="btn xs line"
+                      onClick={() =>
+                        window.confirm(`Delete the poll "${p.q}" and its votes?`) &&
+                        act('deletePoll', { id: p.id })
+                      }
+                    >
+                      Delete
+                    </button>
+                  )}
+                </div>
               </section>
             );
           })}

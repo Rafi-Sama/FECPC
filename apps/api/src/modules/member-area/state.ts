@@ -148,6 +148,9 @@ select u.email, u.progress, u.mentor_id, u.vjudge_handle, u.vj_solved,
       'read_count', (select count(*)::int from announcement_reads ar where ar.announcement_id = 'an:' || a.id)
     ) order by a.id desc), '[]')
      from (select * from announcements where audience = 'all' or user_id = $1 or audience = 'mentees:' || coalesce(u.mentor_id, '') order by id desc limit 50) a join users w on w.id = a.user_id) as news,
+  (select coalesce(json_agg(json_build_object('id', 'poll:' || p.id, 'user_id', p.user_id, 'q', p.question,
+      'opts', p.options, 'by', w.name, 'at', p.created_at) order by p.id desc), '[]')
+     from (select * from club_polls order by id desc limit 50) p join users w on w.id = p.user_id) as polls,
   (select coalesce(json_agg(${ROSTER} order by rating desc, id), '[]') from users) as members,
   (select coalesce(json_object_agg(key, value), '{}') from club) as club
 from users u where u.id = $1 and not u.suspended`;
@@ -644,6 +647,7 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
       blogsCount: Number(row.c_blogs ?? 0),
     },
     news: row.news,
+    polls: row.polls,
     inbox,
     myExpenses: row.my_exp,
     term: { since: money.since, incoming: money.incoming, spent: money.spent },

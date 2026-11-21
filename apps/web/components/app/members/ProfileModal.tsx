@@ -1,10 +1,10 @@
 'use client';
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
-import { AvatarRing, TierBadge } from '@/components/app/shared/RatingBadge';
+import { AvatarRing } from '@/components/app/shared/RatingBadge';
 import { useStore } from '@/components/app/Store';
-import { rankFor, isAdmin } from '@fecpc/contracts';
-import type { MemberProfile } from '@fecpc/contracts';
+import { RANKS, rankFor, isAdmin } from '@fecpc/contracts';
+import type { MemberContestRow, MemberProfile, Rank } from '@fecpc/contracts';
 import { AdminMenu } from './AdminMenu';
 import { AlumniSection } from './AlumniSection';
 import { ProfileEditMode } from './ProfileEditMode';
@@ -148,14 +148,14 @@ export function ProfileModal({
     }
   };
 
-  const statRating =
-    profile && typeof profile.cf_rating === 'number' && profile.cf_rating > 0
-      ? String(profile.cf_rating)
-      : null;
-  const statSolved = profile && !rank.unrated ? String(profile.problems_solved) : null;
-  const statStreak = profile && profile.current_streak > 0 ? `${profile.current_streak}d` : null;
-  const statContests =
-    profile && profile.contests_participated > 0 ? String(profile.contests_participated) : null;
+  const contests = profile ? [...profile.contest_history].slice(0, 24).reverse() : [];
+  const toContests =
+    contests.length > 0
+      ? () =>
+          document
+            .getElementById('dossier-contests')
+            ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      : undefined;
 
   return (
     <div
@@ -167,474 +167,309 @@ export function ProfileModal({
     >
       <div
         ref={modalRef}
-        className="profile-modal"
+        className="profile-modal dossier"
         role="dialog"
         aria-modal="true"
         aria-label={profile ? `${profile.name} profile` : 'Member profile'}
         style={
           {
-            '--rank-color': rank.color,
+            '--rank-color': rank.unrated ? 'var(--dim)' : rank.color,
             '--rank-text': rank.textColor,
           } as CSSProperties
         }
       >
-        {/* Sticky header: close button is first focusable element */}
         <header className="profile-modal__topbar">
-          <div className="row" style={{ '--g': '10px' } as React.CSSProperties}>
-            <span className="label" style={{ fontSize: 12 }}>
-              {editing
-                ? 'Edit profile'
-                : profile
-                  ? `Member · FEC-${String(profile.no).padStart(4, '0')}`
-                  : 'Member profile'}
-            </span>
-          </div>
-          <div className="row" style={{ '--g': '8px' } as React.CSSProperties}>
-            <button
-              ref={closeBtnRef}
-              type="button"
-              className="profile-modal__close"
-              aria-label="Close"
-              onClick={onClose}
-            >
-              ×
-            </button>
-          </div>
+          <span className="dossier__no">
+            {editing
+              ? 'Edit profile'
+              : profile
+                ? `FEC-${String(profile.no).padStart(4, '0')}`
+                : 'Member profile'}
+          </span>
+          <button
+            ref={closeBtnRef}
+            type="button"
+            className="profile-modal__close"
+            aria-label="Close"
+            onClick={onClose}
+          >
+            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden>
+              <path d="M3 3l10 10M13 3L3 13" stroke="currentColor" strokeWidth="2" />
+            </svg>
+          </button>
         </header>
 
-        {/* Scrollable two-column resume body */}
-        <div className="profile-modal__scroll">
+        <div className="dossier__scroll">
           {loading && !profile ? (
-            <div style={{ gridColumn: '1 / -1', padding: 32 }}>
-              <p className="label">Loading profile…</p>
+            <div className="dossier__state">
+              <span className="dossier__skel" />
+              <span className="dossier__skel dossier__skel--short" />
             </div>
           ) : error || !profile ? (
-            <div style={{ gridColumn: '1 / -1', padding: 32 }}>
+            <div className="dossier__state">
               <p className="body bad">{error || 'Member not found.'}</p>
+            </div>
+          ) : editing && isOwner ? (
+            <div className="dossier__edit">
+              <ProfileEditMode
+                profile={profile}
+                formId="profile-edit-form"
+                onCancel={() => setEditing(false)}
+                onBusyChange={setEditBusy}
+                onSaved={async () => {
+                  setEditing(false);
+                  await loadProfile();
+                  await onMutated();
+                }}
+              />
             </div>
           ) : (
             <>
-              {/* Left identity column (320px on desktop) */}
-              <aside className="profile-modal__left">
-                {editing && isOwner ? (
-                  <ProfileEditMode
-                    profile={profile}
-                    formId="profile-edit-form"
-                    onCancel={() => setEditing(false)}
-                    onBusyChange={setEditBusy}
-                    onSaved={async () => {
-                      setEditing(false);
-                      await loadProfile();
-                      await onMutated();
-                    }}
+              <section className="dossier__hero">
+                <div className="dossier__id">
+                  <AvatarRing
+                    name={profile.name}
+                    solved={profile.problems_solved}
+                    cfHandle={profile.cf_handle}
+                    avatarUrl={profile.avatar_url}
+                    size={84}
+                    ringWidth={3}
+                    ringOffset={4}
+                    notched
+                    rank={rank}
                   />
-                ) : (
-                  <>
-                    <div>
-                      <AvatarRing
-                        name={profile.name}
-                        solved={profile.problems_solved}
-                        cfHandle={profile.cf_handle}
-                        avatarUrl={profile.avatar_url}
-                        size={96}
-                        ringWidth={3}
-                        ringOffset={4}
-                        notched
-                        rank={rank}
-                      />
-                    </div>
-
-                    <div>
-                      <h2 className="profile-modal__name">{profile.name}</h2>
-                      <div
-                        className="member-card__meta-row"
-                        style={{ marginTop: 6, flexWrap: 'wrap' }}
-                      >
-                        <span className="label" style={{ fontSize: 12 }}>
-                          {roleLabel} · {profile.dept} · Batch {profile.batch}
-                        </span>
-                        {profile.is_alumni && <span className="alumni-tag">ALUMNI</span>}
-                      </div>
-
-                      {profile.is_alumni && (
-                        <div
-                          style={{
-                            marginTop: 8,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 8,
-                            flexWrap: 'wrap',
-                          }}
+                  <div className="dossier__who">
+                    <h2 className="dossier__name">{profile.name}</h2>
+                    <p className="dossier__line">
+                      {roleLabel} · {profile.dept} · Batch {profile.batch}
+                      {profile.is_alumni && <span className="alumni-tag">Alumni</span>}
+                    </p>
+                    <div className="dossier__links">
+                      {profile.cf_handle && (
+                        <ExtLink
+                          href={`https://codeforces.com/profile/${encodeURIComponent(profile.cf_handle)}`}
                         >
-                          {profile.available_for_questions ? (
-                            <span
-                              className="tag"
-                              style={{
-                                background: 'rgba(31, 59, 255, 0.1)',
-                                color: '#1F3BFF',
-                                border: '1px solid #1F3BFF',
-                                fontSize: 11,
-                              }}
-                            >
-                              AVAILABLE FOR QUESTIONS ✓
-                            </span>
-                          ) : (
-                            <span
-                              className="tag"
-                              style={{
-                                color: '#6B6B6B',
-                                border: '1px solid #6B6B6B',
-                                fontSize: 11,
-                              }}
-                            >
-                              NOT MENTORING
-                            </span>
-                          )}
-                          {(isOwner || isAdmin(s.roles)) && (
-                            <button
-                              type="button"
-                              className="btn xs line"
-                              style={{ fontSize: 11, padding: '2px 8px' }}
-                              onClick={async () => {
-                                const next = !profile.available_for_questions;
-                                const res = await fetch('/api/alumni', {
-                                  method: 'POST',
-                                  headers: { 'content-type': 'application/json' },
-                                  body: JSON.stringify({
-                                    action: 'setAvailableForQuestions',
-                                    userId: profile.id,
-                                    value: next,
-                                  }),
-                                });
-                                if (res.ok) {
-                                  setProfile((p) =>
-                                    p ? { ...p, available_for_questions: next } : p,
-                                  );
-                                  await onMutated();
-                                }
-                              }}
-                            >
-                              {profile.available_for_questions
-                                ? 'Turn off mentoring'
-                                : 'Make available'}
-                            </button>
-                          )}
-                        </div>
+                          {profile.cf_handle}
+                        </ExtLink>
+                      )}
+                      {profile.github_url && <ExtLink href={profile.github_url}>GitHub</ExtLink>}
+                      {profile.linkedin_url && (
+                        <ExtLink href={profile.linkedin_url}>LinkedIn</ExtLink>
                       )}
                     </div>
+                  </div>
+                </div>
+                <RankLadder solved={profile.problems_solved} rank={rank} />
+              </section>
 
-                    {!rank.unrated && (
-                      <div>
-                        <TierBadge
-                          solved={profile.problems_solved}
-                          rating={profile.cf_rating}
-                          cfHandle={profile.cf_handle}
-                          size="md"
-                          rank={rank}
-                        />
+              <div className="dossier__stats" aria-label="Member statistics">
+                <StatTile
+                  label="Rating"
+                  value={profile.cf_rating && profile.cf_rating > 0 ? profile.cf_rating : null}
+                  onClick={toContests}
+                />
+                <StatTile
+                  label="Streak"
+                  value={profile.current_streak > 0 ? profile.current_streak : null}
+                  suffix="d"
+                />
+                <StatTile
+                  label="Contests"
+                  value={profile.contests_participated > 0 ? profile.contests_participated : null}
+                  onClick={toContests}
+                />
+                <StatTile label="Kudos" value={kudosTotal > 0 ? kudosTotal : null} />
+              </div>
+
+              <div
+                className={`dossier__body${contests.length || profile.recent_activity.length ? '' : ' is-single'}`}
+              >
+                <div className="dossier__main">
+                  <section className="dossier__sec" aria-label="About">
+                    <h3 className="dossier__h">About</h3>
+                    {profile.bio ? (
+                      <p className="dossier__bio">{profile.bio}</p>
+                    ) : (
+                      <p className="dossier__empty">
+                        {isOwner ? 'Add a bio from Edit profile.' : 'No bio yet.'}
+                      </p>
+                    )}
+                    {profile.skills.length > 0 && (
+                      <div className="dossier__skills">
+                        {profile.skills.map((sk) => (
+                          <Link
+                            key={sk}
+                            href={`/app/directory?skill=${encodeURIComponent(sk)}`}
+                            className="dossier__skill"
+                            title={`Members with ${sk}`}
+                          >
+                            {sk}
+                          </Link>
+                        ))}
                       </div>
                     )}
-
-                    <div className="profile-modal__links" aria-label="External profiles">
-                      {profile.cf_handle ? (
-                        <a
-                          href={`https://codeforces.com/profile/${encodeURIComponent(profile.cf_handle)}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="profile-modal__link"
-                        >
-                          CF: {profile.cf_handle} ↗
-                        </a>
-                      ) : (
-                        <span className="profile-modal__link--missing">CF handle · —</span>
-                      )}
-
-                      {profile.github_url ? (
-                        <a
-                          href={profile.github_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="profile-modal__link"
-                        >
-                          GitHub ↗
-                        </a>
-                      ) : (
-                        <span className="profile-modal__link--missing">GitHub · —</span>
-                      )}
-
-                      {profile.linkedin_url ? (
-                        <a
-                          href={profile.linkedin_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="profile-modal__link"
-                        >
-                          LinkedIn ↗
-                        </a>
-                      ) : (
-                        <span className="profile-modal__link--missing">LinkedIn · —</span>
-                      )}
-                    </div>
-
-                    {pingOpen && !isOwner && (
-                      <form className="profile-modal__ping-box" onSubmit={handleSendPing}>
-                        <span className="label" style={{ fontSize: 11 }}>
-                          Ping · {profile.name}
+                    {profile.is_alumni && (
+                      <div className="dossier__mentor">
+                        <span className="dossier__tag">
+                          {profile.available_for_questions
+                            ? 'Available for questions'
+                            : 'Not mentoring'}
                         </span>
-                        <input
-                          className="member-filter-ctrl"
-                          value={pingNote}
-                          onChange={(e) => setPingNote(e.target.value)}
-                          placeholder="Short topic (optional)"
-                          maxLength={80}
-                          pattern="[\w:.&' \/+#\-]*"
-                          title="Letters, digits, spaces and : . & ' / + # - only"
-                          aria-label="Ping note"
-                        />
-                        <div
-                          className="row"
-                          style={
-                            { '--g': '6px', justifyContent: 'flex-end' } as React.CSSProperties
-                          }
-                        >
+                        {(isOwner || isAdmin(s.roles)) && (
                           <button
                             type="button"
                             className="btn xs line"
-                            onClick={() => setPingOpen(false)}
+                            onClick={async () => {
+                              const next = !profile.available_for_questions;
+                              const res = await fetch('/api/alumni', {
+                                method: 'POST',
+                                headers: { 'content-type': 'application/json' },
+                                body: JSON.stringify({
+                                  action: 'setAvailableForQuestions',
+                                  userId: profile.id,
+                                  value: next,
+                                }),
+                              });
+                              if (res.ok) {
+                                setProfile((p) =>
+                                  p ? { ...p, available_for_questions: next } : p,
+                                );
+                                await onMutated();
+                              }
+                            }}
                           >
-                            Cancel
+                            {profile.available_for_questions
+                              ? 'Turn off mentoring'
+                              : 'Make available'}
                           </button>
-                          <button type="submit" className="btn xs" disabled={pingBusy}>
-                            {pingBusy ? 'Sending…' : 'Send'}
-                          </button>
-                        </div>
-                      </form>
-                    )}
-                  </>
-                )}
-              </aside>
-
-              {/* Right resume column */}
-              <div className="profile-modal__right">
-                {/* 4-block stats band */}
-                <div className="stats-band" aria-label="Member statistics">
-                  <div className="stat-block" aria-label={`Rating: ${statRating ?? 'none'}`}>
-                    <span
-                      className={`stat-block__val${statRating ? '' : ' stat-block__val--empty'}`}
-                    >
-                      {statRating ?? '—'}
-                    </span>
-                    <span className="stat-block__label">Rating</span>
-                  </div>
-                  <div className="stat-block" aria-label={`Solved: ${statSolved ?? 'none'}`}>
-                    <span
-                      className={`stat-block__val${statSolved ? '' : ' stat-block__val--empty'}`}
-                    >
-                      {statSolved ?? '—'}
-                    </span>
-                    <span className="stat-block__label">Solved</span>
-                  </div>
-                  <div className="stat-block" aria-label={`Streak: ${statStreak ?? 'none'}`}>
-                    <span
-                      className={`stat-block__val${statStreak ? '' : ' stat-block__val--empty'}`}
-                    >
-                      {statStreak ?? '—'}
-                    </span>
-                    <span className="stat-block__label">Streak</span>
-                  </div>
-                  <div className="stat-block" aria-label={`Contests: ${statContests ?? 'none'}`}>
-                    <span
-                      className={`stat-block__val${statContests ? '' : ' stat-block__val--empty'}`}
-                    >
-                      {statContests ?? '—'}
-                    </span>
-                    <span className="stat-block__label">Contests</span>
-                  </div>
-                </div>
-
-                {/* · ABOUT */}
-                <section className="profile-section" aria-label="About">
-                  <div className="profile-section__head">
-                    <h3 className="profile-section__label">· About</h3>
-                  </div>
-                  {profile.bio ? (
-                    <p className="profile-bio">{profile.bio}</p>
-                  ) : (
-                    <p className="profile-empty-dash">—</p>
-                  )}
-                </section>
-
-                {/* Alumni-only sections above the fold when role = 'alumni' */}
-                {profile.is_alumni && <AlumniSection profile={profile} onReload={loadProfile} />}
-
-                {/* · SKILLS */}
-                <section className="profile-section" aria-label="Skills">
-                  <div className="profile-section__head">
-                    <h3 className="profile-section__label">· Skills</h3>
-                  </div>
-                  {profile.skills.length > 0 ? (
-                    <div className="profile-skills-wrap">
-                      {profile.skills.map((sk) => (
-                        <span key={sk} className="tag">
-                          {sk}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="profile-empty-dash">—</p>
-                  )}
-                </section>
-
-                {/* · EXPERIENCE */}
-                <section className="profile-section" aria-label="Experience">
-                  <div className="profile-section__head">
-                    <h3 className="profile-section__label">· Experience</h3>
-                  </div>
-                  {profile.experience.length > 0 ? (
-                    <ol className="timeline">
-                      {profile.experience.map((exp, idx) => (
-                        <li key={`${exp.period}-${exp.role}-${idx}`} className="timeline__item">
-                          <div className="timeline__rail" aria-hidden>
-                            <i className="timeline__dot" />
-                            <i className="timeline__line" />
-                          </div>
-                          <div className="timeline__body">
-                            <span className="label" style={{ fontSize: 11 }}>
-                              {exp.period}
-                            </span>
-                            <strong className="timeline__role">{exp.role}</strong>
-                            {exp.summary && (
-                              <p className="profile-bio" style={{ fontSize: 14 }}>
-                                {exp.summary}
-                              </p>
-                            )}
-                          </div>
-                        </li>
-                      ))}
-                    </ol>
-                  ) : (
-                    <p className="profile-empty-dash">—</p>
-                  )}
-                </section>
-
-                {/* · CONTEST HISTORY */}
-                <section className="profile-section" aria-label="Contest history">
-                  <div className="profile-section__head">
-                    <h3 className="profile-section__label">· Contest history</h3>
-                  </div>
-                  {profile.contest_history.length > 0 ? (
-                    <div>
-                      <div className="contest-head">
-                        <span className="grow">Contest</span>
-                        <span>Rank</span>
-                        <span style={{ width: 52, textAlign: 'right' }}>Δ</span>
+                        )}
                       </div>
-                      <ul className="list">
-                        {profile.contest_history.slice(0, 10).map((c, idx) => (
-                          <li key={`${c.name}-${idx}`}>
-                            <span className="grow">{c.name}</span>
-                            <span className="mono" style={{ fontSize: 13 }}>
-                              #{c.rank}
-                            </span>
-                            <span
-                              className={`mono ${c.delta >= 0 ? 'contest-delta-pos' : 'contest-delta-neg'}`}
-                              style={{ fontSize: 13, width: 52, textAlign: 'right' }}
-                            >
-                              {c.delta >= 0 ? `+${c.delta}` : `−${Math.abs(c.delta)}`}
-                            </span>
+                    )}
+                  </section>
+
+                  {profile.experience.length > 0 && (
+                    <section className="dossier__sec" aria-label="Experience">
+                      <h3 className="dossier__h">Experience</h3>
+                      <ol className="dossier__journey">
+                        {profile.experience.map((exp, idx) => (
+                          <li
+                            key={`${exp.period}-${exp.role}-${idx}`}
+                            style={{ '--i': idx } as CSSProperties}
+                          >
+                            <span className="dossier__period">{exp.period}</span>
+                            <strong className="dossier__role">{exp.role}</strong>
+                            {exp.summary && <p className="dossier__summary">{exp.summary}</p>}
                           </li>
                         ))}
-                      </ul>
-                    </div>
-                  ) : (
-                    <p className="profile-empty-dash">—</p>
+                      </ol>
+                    </section>
                   )}
-                </section>
 
-                {/* · RECENT ACTIVITY */}
-                <section className="profile-section" aria-label="Recent activity">
-                  <div className="profile-section__head">
-                    <h3 className="profile-section__label">· Recent activity</h3>
-                  </div>
-                  {profile.recent_activity.length > 0 ? (
-                    <ul className="list">
-                      {profile.recent_activity.slice(0, 5).map((item) => {
-                        const href =
-                          item.kind === 'feed'
-                            ? `/app/community?tab=feed&post=${item.id}`
-                            : `/app/community?tab=ideas&idea=${item.id}`;
-                        return (
-                          <li key={`${item.kind}-${item.id}`}>
-                            <span className="grow">
-                              <span className="label" style={{ fontSize: 11, marginRight: 8 }}>
-                                {item.kind === 'feed' ? 'Feed' : 'Idea'}
-                              </span>
-                              {item.title}
-                            </span>
-                            <Link href={href} className="profile-modal__link">
-                              Open ↗
-                            </Link>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  ) : (
-                    <p className="profile-empty-dash">—</p>
-                  )}
-                </section>
+                  {profile.is_alumni && <AlumniSection profile={profile} onReload={loadProfile} />}
+                </div>
+
+                {(contests.length > 0 || profile.recent_activity.length > 0) && (
+                  <aside className="dossier__side">
+                    {contests.length > 0 && (
+                      <section className="dossier__sec" id="dossier-contests" aria-label="Contests">
+                        <h3 className="dossier__h">Rating changes</h3>
+                        <ContestChart rows={contests} />
+                      </section>
+                    )}
+                    {profile.recent_activity.length > 0 && (
+                      <section className="dossier__sec" aria-label="Recent activity">
+                        <h3 className="dossier__h">Recent activity</h3>
+                        <ul className="dossier__activity">
+                          {profile.recent_activity.slice(0, 5).map((item) => (
+                            <li key={`${item.kind}-${item.id}`}>
+                              <Link
+                                href={
+                                  item.kind === 'feed'
+                                    ? `/app/community?tab=feed&post=${item.id}`
+                                    : `/app/community?tab=ideas&idea=${item.id}`
+                                }
+                              >
+                                <span className="dossier__kind">
+                                  {item.kind === 'feed' ? 'Post' : 'Idea'}
+                                </span>
+                                <span className="dossier__act-title">{item.title}</span>
+                                <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden>
+                                  <path
+                                    d="M5 11l6-6M6 5h5v5"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="1.6"
+                                  />
+                                </svg>
+                              </Link>
+                            </li>
+                          ))}
+                        </ul>
+                      </section>
+                    )}
+                  </aside>
+                )}
               </div>
             </>
           )}
         </div>
 
-        {/* Sticky action bar: Share is the last focusable button in view mode */}
         {profile && (
           <footer className="profile-modal__actionbar">
-            {editing && isOwner ? (
-              <div
-                className="row"
-                style={{ '--g': '8px', marginLeft: 'auto' } as React.CSSProperties}
-              >
-                <button
-                  type="button"
-                  className="btn sm line"
-                  data-close
-                  disabled={editBusy}
-                  onClick={() => setEditing(false)}
-                >
-                  Close editor
+            {pingOpen && !isOwner && (
+              <form className="dossier__ping" onSubmit={handleSendPing}>
+                <input
+                  className="input"
+                  value={pingNote}
+                  onChange={(e) => setPingNote(e.target.value)}
+                  placeholder={`Ping ${profile.name.split(' ')[0]} about… (optional)`}
+                  maxLength={80}
+                  pattern="[\w:.&' \/+#\-]*"
+                  title="Letters, digits, spaces and : . & ' / + # - only"
+                  aria-label="Ping note"
+                  autoFocus
+                />
+                <button type="button" className="btn xs line" onClick={() => setPingOpen(false)}>
+                  Cancel
                 </button>
-              </div>
+                <button type="submit" className="btn xs" disabled={pingBusy}>
+                  {pingBusy ? 'Sending…' : 'Send'}
+                </button>
+              </form>
+            )}
+            {editing && isOwner ? (
+              <button
+                type="button"
+                className="btn sm line"
+                style={{ marginLeft: 'auto' }}
+                data-close
+                disabled={editBusy}
+                onClick={() => setEditing(false)}
+              >
+                Close editor
+              </button>
             ) : (
               <>
-                <div className="row" style={{ '--g': '8px' } as React.CSSProperties}>
+                <div className="row" style={{ '--g': '8px' } as CSSProperties}>
                   {isOwner ? (
-                    <>
-                      <button type="button" className="btn sm" onClick={() => setEditing(true)}>
-                        Edit profile
-                      </button>
-                      <span className="label" aria-label={`${kudosTotal} kudos received`}>
-                        ♥ {kudosTotal} kudos
-                      </span>
-                    </>
+                    <button type="button" className="btn sm" onClick={() => setEditing(true)}>
+                      Edit profile
+                    </button>
                   ) : (
                     <>
-                      <button
-                        type="button"
-                        className={`btn sm ${hasKudos ? '' : 'line'}`}
-                        aria-pressed={hasKudos}
-                        onClick={() => void act('toggle', { list: 'kudos', id: kudosId })}
-                      >
-                        {hasKudos ? 'Kudos ✓' : 'Kudos'}
-                        {kudosTotal > 0 && ` · ${kudosTotal}`}
-                      </button>
+                      <KudosButton
+                        on={hasKudos}
+                        total={kudosTotal}
+                        onToggle={() => void act('toggle', { list: 'kudos', id: kudosId })}
+                      />
                       <button
                         type="button"
                         className="btn sm line"
                         disabled={alreadyPinged}
+                        aria-expanded={pingOpen}
                         onClick={() => setPingOpen((v) => !v)}
                       >
-                        {alreadyPinged ? 'Pinged ✓' : 'Ping'}
+                        {alreadyPinged ? 'Pinged' : 'Ping'}
                       </button>
                     </>
                   )}
@@ -648,9 +483,8 @@ export function ProfileModal({
                     }}
                   />
                 </div>
-
                 <button type="button" className="btn sm line" onClick={handleShare}>
-                  {copied ? 'Copied ✓' : 'Share'}
+                  {copied ? 'Link copied' : 'Share'}
                 </button>
               </>
             )}
@@ -658,6 +492,213 @@ export function ProfileModal({
         )}
       </div>
     </div>
+  );
+}
+
+const EASE = (t: number) => 1 - Math.pow(2, -10 * t);
+
+/** Counts from 0 to `to` once on mount; jumps straight there under reduced motion. */
+function useCountUp(to: number, ms = 900) {
+  const [v, setV] = useState(to);
+  useEffect(() => {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return setV(to);
+    let raf = 0;
+    const t0 = performance.now();
+    const tick = (t: number) => {
+      const p = Math.min(1, (t - t0) / ms);
+      setV(Math.round(to * EASE(p)));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [to, ms]);
+  return v;
+}
+
+function StatTile({
+  label,
+  value,
+  suffix = '',
+  onClick,
+}: {
+  label: string;
+  value: number | null;
+  suffix?: string;
+  onClick?: () => void;
+}) {
+  const n = useCountUp(value ?? 0);
+  const body = (
+    <>
+      <span className={`dossier__stat-v${value === null ? ' is-empty' : ''}`}>
+        {value === null ? '—' : `${n}${suffix}`}
+      </span>
+      <span className="dossier__stat-l">{label}</span>
+    </>
+  );
+  return onClick ? (
+    <button type="button" className="dossier__stat is-link" onClick={onClick}>
+      {body}
+    </button>
+  ) : (
+    <div className="dossier__stat">{body}</div>
+  );
+}
+
+/** Every tier as one rung; the current rung fills by progress through its range. */
+function RankLadder({ solved, rank }: { solved: number; rank: Rank }) {
+  const [hover, setHover] = useState<number | null>(null);
+  const shown = useCountUp(rank.unrated ? 0 : solved);
+  const idx = RANKS.findIndex((r) => r.title === rank.title);
+  const next = idx >= 0 ? RANKS[idx + 1] : RANKS[0];
+  const fill = (i: number) => {
+    if (rank.unrated || i > idx) return 0;
+    if (i < idx) return 1;
+    const r = RANKS[i]!;
+    return Number.isFinite(r.max) ? Math.min(1, (solved - r.min + 1) / (r.max - r.min + 1)) : 1;
+  };
+  const focus = hover !== null ? RANKS[hover]! : null;
+  return (
+    <div className="ladder">
+      <div className="ladder__top">
+        <span className="ladder__n">{rank.unrated ? '—' : shown}</span>
+        <span className="ladder__cap">
+          {focus
+            ? `${focus.title} · ${focus.min}${Number.isFinite(focus.max) ? `–${focus.max}` : '+'} solved`
+            : rank.unrated
+              ? 'Link a Codeforces handle to get ranked'
+              : next
+                ? `solved · ${rank.title} · ${next.min - solved} to ${next.title}`
+                : `solved · ${rank.title}`}
+        </span>
+      </div>
+      <div className="ladder__rungs" onPointerLeave={() => setHover(null)}>
+        {RANKS.map((r, i) => (
+          <button
+            key={r.title}
+            type="button"
+            className={`ladder__rung${i === idx ? ' is-here' : ''}`}
+            style={{ '--c': r.color, '--f': fill(i), '--i': i } as CSSProperties}
+            aria-label={`${r.title}: ${r.min}${Number.isFinite(r.max) ? ` to ${r.max}` : ' or more'} solved`}
+            onPointerEnter={() => setHover(i)}
+            onFocus={() => setHover(i)}
+            onBlur={() => setHover(null)}
+          >
+            <i />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Rating change per contest, oldest to newest; hover or arrow keys to read one. */
+function ContestChart({ rows }: { rows: MemberContestRow[] }) {
+  const [sel, setSel] = useState(rows.length - 1);
+  const max = Math.max(1, ...rows.map((r) => Math.abs(r.delta)));
+  const cur = rows[sel];
+  const net = rows.reduce((a, r) => a + r.delta, 0);
+  const fmt = (d: number) => (d >= 0 ? `+${d}` : `−${Math.abs(d)}`);
+  return (
+    <div className="chart">
+      <div className="chart__read" aria-live="polite">
+        {cur && (
+          <>
+            <strong className="chart__name">{cur.name}</strong>
+            <span className="chart__facts">
+              Rank #{cur.rank}
+              {cur.date ? ` · ${cur.date}` : ''}
+            </span>
+            <span className={`chart__delta ${cur.delta >= 0 ? 'up' : 'down'}`}>
+              {fmt(cur.delta)}
+            </span>
+          </>
+        )}
+      </div>
+      <div
+        className="chart__bars"
+        role="listbox"
+        aria-label={`Rating changes, net ${fmt(net)}`}
+        tabIndex={0}
+        aria-activedescendant={`chart-bar-${sel}`}
+        onKeyDown={(e) => {
+          const d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+          if (!d) return;
+          e.preventDefault();
+          setSel((v) => Math.max(0, Math.min(rows.length - 1, v + d)));
+        }}
+      >
+        {rows.map((r, i) => (
+          <div
+            key={`${r.name}-${i}`}
+            id={`chart-bar-${i}`}
+            role="option"
+            aria-selected={i === sel}
+            aria-label={`${r.name}: rank ${r.rank}, ${fmt(r.delta)}`}
+            className={`chart__col${i === sel ? ' is-sel' : ''}`}
+            onPointerEnter={() => setSel(i)}
+            onClick={() => setSel(i)}
+            style={{ '--h': Math.abs(r.delta) / max, '--i': i } as CSSProperties}
+          >
+            <i className={r.delta >= 0 ? 'up' : 'down'} />
+          </div>
+        ))}
+      </div>
+      <p className="chart__net">
+        Net over {rows.length} contest{rows.length === 1 ? '' : 's'}:{' '}
+        <b className={net >= 0 ? 'up' : 'down'}>{fmt(net)}</b>
+      </p>
+    </div>
+  );
+}
+
+function KudosButton({
+  on,
+  total,
+  onToggle,
+}: {
+  on: boolean;
+  total: number;
+  onToggle: () => void;
+}) {
+  const [burst, setBurst] = useState(0);
+  return (
+    <button
+      type="button"
+      className={`btn sm kudos${on ? '' : ' line'}`}
+      aria-pressed={on}
+      onClick={() => {
+        if (!on) setBurst((b) => b + 1);
+        onToggle();
+      }}
+    >
+      {burst > 0 && (
+        <span key={burst} className="kudos__burst" aria-hidden>
+          {Array.from({ length: 8 }, (_, i) => (
+            <i key={i} style={{ '--a': `${i * 45}deg` } as CSSProperties} />
+          ))}
+        </span>
+      )}
+      <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden className="kudos__heart">
+        <path
+          d="M8 14S2 10.2 2 6.1A3.1 3.1 0 0 1 8 4.6a3.1 3.1 0 0 1 6 1.5C14 10.2 8 14 8 14z"
+          fill={on ? 'currentColor' : 'none'}
+          stroke="currentColor"
+          strokeWidth="1.5"
+        />
+      </svg>
+      Kudos{total > 0 && <span className="kudos__n">{total}</span>}
+    </button>
+  );
+}
+
+function ExtLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="dossier__link">
+      {children}
+      <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden>
+        <path d="M5 11l6-6M6 5h5v5" fill="none" stroke="currentColor" strokeWidth="1.6" />
+      </svg>
+    </a>
   );
 }
 

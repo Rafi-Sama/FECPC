@@ -287,10 +287,26 @@ test('sync: registrations, kudos and poll votes are counted across members', asy
   await act('shuvo', { type: 'register', eventId: 'git-night', phone: '01700000000' });
   await act('priya', { type: 'register', eventId: 'git-night', phone: '01700000000' });
   await act('priya', { type: 'toggle', list: 'kudos', id: 'member:shuvo' });
-  await act('shuvo', { type: 'vote', poll: 'p1', option: 'Sunday' });
-  await act('priya', { type: 'vote', poll: 'p1', option: 'Sunday' });
-  await act('priya', { type: 'vote', poll: 'p1', option: 'Saturday' }); // a poll vote can be changed
-  await refused(403, act('priya', { type: 'vote', poll: 'p1', option: 'Never' }));
+  await refused(
+    403,
+    act('tasnim', {
+      type: 'createPoll',
+      question: 'Workshop day?',
+      options: ['Sunday', 'Saturday'],
+    }),
+  );
+  await refused(400, act('sadia', { type: 'createPoll', question: 'Day?', options: ['Sunday'] }));
+  await act('sadia', {
+    type: 'createPoll',
+    question: 'Workshop day?',
+    options: ['Sunday', 'Saturday'],
+  });
+  const p1 = (await st('tasnim')).polls[0]!.id;
+  await act('shuvo', { type: 'vote', poll: p1, option: 'Sunday' });
+  await act('priya', { type: 'vote', poll: p1, option: 'Sunday' });
+  await act('priya', { type: 'vote', poll: p1, option: 'Saturday' }); // a poll vote can be changed
+  await refused(403, act('priya', { type: 'vote', poll: p1, option: 'Never' }));
+  await refused(403, act('priya', { type: 'vote', poll: 'poll:999999', option: 'Sunday' }));
   await refused(
     404,
     act('priya', { type: 'register', eventId: 'no-such-event', phone: '01700000000' }),
@@ -299,7 +315,11 @@ test('sync: registrations, kudos and poll votes are counted across members', asy
   const list = (await eventsQuery(db(), 'tasnim', { action: 'list' })) as ClubEvent[];
   assert.equal(list.find((e) => e.id === 'git-night')!.taken, 2);
   assert.equal(seen.counts.kudos['member:shuvo'], 1);
-  assert.deepEqual(seen.counts.votes.p1, { Sunday: 1, Saturday: 1 });
+  assert.deepEqual(seen.counts.votes[p1], { Sunday: 1, Saturday: 1 });
+  await refused(403, act('priya', { type: 'deletePoll', id: p1 }));
+  await act('sadia', { type: 'deletePoll', id: p1 });
+  assert.equal((await st('tasnim')).polls.length, 0);
+  assert.equal((await st('tasnim')).counts.votes[p1], undefined);
 });
 test('cheers, reads and seats cannot be invented: XP needs a real target', async () => {
   await refused(403, act('priya', { type: 'toggle', list: 'kudos', id: 'member:priya' }));
@@ -1097,7 +1117,7 @@ test('reset links: issued only by someone who outranks the account, single-use, 
 });
 test('the operator account is not a member: no ballot, no dues, no purchases', async () => {
   await refused(403, act('admin', { type: 'vote', poll: 'election', option: 'sadia' }));
-  await refused(403, act('admin', { type: 'vote', poll: 'p1', option: 'Sunday' }));
+  await refused(403, act('admin', { type: 'vote', poll: 'poll:1', option: 'Sunday' }));
   await refused(
     403,
     act('admin', { type: 'register', eventId: 'git-night', phone: '01700000000' }),
@@ -1173,6 +1193,14 @@ test('community feed: create, list, filter, vote (+XP), edit/delete author-only'
   assert.equal(detail.score, 1);
   assert.equal(detail.my_vote, 1);
   assert.equal('comments' in detail, false);
+  // My posts; hot ranking pages by offset without repeats
+  const mine = await listFeedPosts(db(), 'farhan', { mine: true, limit: 50 });
+  assert.ok(mine.items.length >= 1 && mine.items.every((p) => p.user_id === 'farhan'));
+  assert.equal((await listFeedPosts(db(), 'priya', { mine: true, q: 'Bitmask' })).items.length, 0);
+  const hot1 = await listFeedPosts(db(), 'priya', { sort: 'hot', limit: 2 });
+  assert.equal(hot1.nextCursor, '2');
+  const hot2 = await listFeedPosts(db(), 'priya', { sort: 'hot', limit: 2, cursor: '2' });
+  assert.ok(hot2.items.every((p) => !hot1.items.some((x) => x.id === p.id)));
   await refused(
     400,
     act('priya', { type: 'comment', targetType: 'feed', targetId: post.id, body: 'Not allowed' }),
@@ -1307,7 +1335,7 @@ test('community ideas: poster-only interested payload, expressInterest, decideIn
   );
 });
 
-test('members redesign: paginated listMembers, composed AND filters, and alumni filter', async () => {
+test('members redesign: paginated listMembers, filters, and no alumni', async () => {
   const p0 = await listMembers(db(), 'tasnim', { page: 0, pageSize: 16 });
   assert.equal(p0.members.length, 16);
   assert.equal(p0.hasMore, true);
@@ -1317,24 +1345,12 @@ test('members redesign: paginated listMembers, composed AND filters, and alumni 
   assert.equal(p1.members.length, p0.total - 16);
   assert.equal(p1.hasMore, false);
 
-  // Type filter: alumni only
-  const alum = await listMembers(db(), 'tasnim', { type: 'alumni' });
-  assert.ok(alum.members.length >= 3);
-  assert.ok(alum.members.every((m) => m.is_alumni));
-
-  // Composed AND filters: rating tier (Master = 2000-2399 solved) + skill + type
-  const composed = await listMembers(db(), 'tasnim', {
-    rating: 'Master',
-    skill: 'Systems',
-    type: 'alumni',
-    q: 'shahriar',
-  });
-  assert.equal(composed.members.length, 1);
-  assert.equal(composed.members[0]!.id, 'shahriar');
+  // Alumni live in the alumni directory, never in the member list
+  assert.ok(p0.members.every((m) => !m.is_alumni));
+  assert.equal((await listMembers(db(), 'tasnim', { q: 'shahriar' })).members.length, 0);
 
   // Batch filter
   const batch16 = await listMembers(db(), 'tasnim', { batch: 16 });
-  assert.ok(batch16.members.some((m) => m.id === 'shahriar'));
   assert.ok(batch16.members.every((m) => m.batch === 16));
 });
 

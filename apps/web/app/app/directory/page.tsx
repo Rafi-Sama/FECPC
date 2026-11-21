@@ -5,21 +5,12 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { Page } from '@/components/app/Shell';
 import { useStore } from '@/components/app/Store';
 import { MemberCard } from '@/components/app/members/MemberCard';
-import {
-  MemberFilters,
-  type MemberFilterState,
-  type MemberTypeFilter,
-} from '@/components/app/members/MemberFilters';
+import { MemberFilters, type MemberFilterState } from '@/components/app/members/MemberFilters';
 import { ProfileModal } from '@/components/app/members/ProfileModal';
 import { isAdmin } from '@fecpc/contracts';
 import type { MemberSummary } from '@fecpc/contracts';
 
 const PAGE_SIZE = 16;
-
-function parseType(raw: string | null): MemberTypeFilter {
-  if (raw === 'current' || raw === 'alumni') return raw;
-  return 'all';
-}
 
 function parsePage(raw: string | null): number {
   const n = Number(raw);
@@ -32,7 +23,6 @@ function buildQuery(filters: MemberFilterState, page: number, profileId: string 
   if (filters.rating) sp.set('rating', filters.rating);
   if (filters.skill) sp.set('skill', filters.skill);
   if (filters.batch) sp.set('batch', filters.batch);
-  if (filters.type !== 'all') sp.set('type', filters.type);
   if (page > 0) sp.set('page', String(page));
   if (profileId) sp.set('profile', profileId);
   const qs = sp.toString();
@@ -50,7 +40,6 @@ function MembersInner() {
   const urlRating = searchParams.get('rating') ?? '';
   const urlSkill = searchParams.get('skill') ?? '';
   const urlBatch = searchParams.get('batch') ?? '';
-  const urlType = parseType(searchParams.get('type'));
   const urlPage = parsePage(searchParams.get('page'));
   const urlProfile = searchParams.get('profile');
 
@@ -59,7 +48,6 @@ function MembersInner() {
   const [rating, setRating] = useState(urlRating);
   const [skill, setSkill] = useState(urlSkill);
   const [batch, setBatch] = useState(urlBatch);
-  const [type, setType] = useState<MemberTypeFilter>(urlType);
   const [page, setPage] = useState(urlPage);
 
   const [items, setItems] = useState<MemberSummary[]>([]);
@@ -83,9 +71,8 @@ function MembersInner() {
     setRating(urlRating);
     setSkill(urlSkill);
     setBatch(urlBatch);
-    setType(urlType);
     setPage(urlPage);
-  }, [urlQ, urlRating, urlSkill, urlBatch, urlType, urlPage]);
+  }, [urlQ, urlRating, urlSkill, urlBatch, urlPage]);
 
   // Debounce text input by 250ms
   useEffect(() => {
@@ -102,16 +89,16 @@ function MembersInner() {
   }, [qInput]);
 
   const filterState: MemberFilterState = useMemo(
-    () => ({ q: qInput, rating, skill, batch, type }),
-    [qInput, rating, skill, batch, type],
+    () => ({ q: qInput, rating, skill, batch }),
+    [qInput, rating, skill, batch],
   );
 
   const appliedFilters: MemberFilterState = useMemo(
-    () => ({ q: debouncedQ, rating, skill, batch, type }),
-    [debouncedQ, rating, skill, batch, type],
+    () => ({ q: debouncedQ, rating, skill, batch }),
+    [debouncedQ, rating, skill, batch],
   );
 
-  const hasActiveFilters = Boolean(debouncedQ || rating || skill || batch || type !== 'all');
+  const hasActiveFilters = Boolean(debouncedQ || rating || skill || batch);
 
   // Persist filters & page in URL query string without wiping active ?profile=
   useEffect(() => {
@@ -155,7 +142,6 @@ function MembersInner() {
             rating: appliedFilters.rating || undefined,
             skill: appliedFilters.skill || undefined,
             batch: appliedFilters.batch ? Number(appliedFilters.batch) : undefined,
-            type: appliedFilters.type,
             page: reqPage,
             pageSize: reqPageSize,
           }),
@@ -214,13 +200,7 @@ function MembersInner() {
   // Trigger fetch whenever applied filters change
   useEffect(() => {
     void fetchList(page, 'replace');
-  }, [
-    appliedFilters.q,
-    appliedFilters.rating,
-    appliedFilters.skill,
-    appliedFilters.batch,
-    appliedFilters.type,
-  ]);
+  }, [appliedFilters.q, appliedFilters.rating, appliedFilters.skill, appliedFilters.batch]);
 
   const handleFilterChange = (patch: Partial<MemberFilterState>) => {
     if ('q' in patch) {
@@ -230,7 +210,6 @@ function MembersInner() {
     if ('rating' in patch) setRating(patch.rating ?? '');
     if ('skill' in patch) setSkill(patch.skill ?? '');
     if ('batch' in patch) setBatch(patch.batch ?? '');
-    if ('type' in patch && patch.type) setType(patch.type);
     setPage(0);
   };
 
@@ -240,7 +219,6 @@ function MembersInner() {
     setRating('');
     setSkill('');
     setBatch('');
-    setType('all');
     setPage(0);
     router.replace(pathname, { scroll: false });
   };
