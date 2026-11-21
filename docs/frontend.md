@@ -55,9 +55,9 @@ components/
 │   ├── Judge.tsx    useJudge(): the member's live Codeforces data; HandleBox to link a handle
 │   ├── QR.tsx       QR code (qrcode-generator)
 │   ├── admin/ arena/ community/ events/ home/ sheets/   page sections used by one page each
-│   ├── finance/officer.tsx   officer tabs of Finance (payments, requests, expenses, waivers, fund) and Receipt
+│   ├── finance/officer.tsx   officer tabs of Finance (payments, requests, expenses, fund) and Receipt
 │   ├── alumni/ feed/ ideas/ members/ announcements/  feature components and modals
-│   └── shared/      MarkdownEditor (+ safe markdown rendering), RatingBadge (Codeforces tier), SolvedTier
+│   └── shared/      MarkdownEditor (+ safe markdown rendering), RatingBadge (Codeforces tier), SolvedTier, PersonPicker (searchable people dropdown), DatePicker (calendar + clock), usePopover
 └── pixel/           pixel-art sprites (Sprites.tsx), canvas effects (Life, Rain, Sphere), useTicker
 ```
 

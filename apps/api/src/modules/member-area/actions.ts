@@ -11,7 +11,6 @@ import {
   shop,
 } from '@fecpc/content/member-area';
 import { cols, courses, posts as editorials, volunteerShifts, wiki } from '@fecpc/content/training';
-import { events } from '@fecpc/content/site';
 import {
   can,
   canFully,
@@ -29,7 +28,6 @@ import type {
   AlumniJob,
   AlumniSummary,
   BlogPost,
-  CommunityComment,
   FeedCategory,
   FeedPostDetail,
   FeedPostSummary,
@@ -53,6 +51,7 @@ import { sendMail } from './mail.ts';
 import * as data from './office-data.ts';
 import { Fail, tx, type Db } from './db.ts';
 import { teamHandlers } from './teams.ts';
+import { eventHandlers } from './events.ts';
 import { DAILY_KUDOS_CAP, detectCrossovers, MILESTONE_FRESHNESS_DAYS } from './milestones.ts';
 import { isAdmin, isCommittee, loadState, progress, today, type Progress } from './state.ts';
 
@@ -244,10 +243,10 @@ async function myInvoice(c: Db, a: Actor, id: unknown) {
   if (inv.event)
     need(
       (
-        await c.query(`select 1 from registrations where user_id = $1 and event_id = $2`, [
-          a.id,
-          inv.event,
-        ])
+        await c.query(
+          `select 1 from event_entries where user_id = $1 and event_id = $2 and role_id is null and status = 'approved'`,
+          [a.id, inv.event],
+        )
       ).rowCount,
       'That invoice is only for members registered for the event.',
     );
@@ -286,6 +285,7 @@ async function opsDelete(c: Db, a: Actor, table: string, id: unknown, what: stri
 
 const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<string | void>> = {
   ...teamHandlers,
+  ...eventHandlers,
   async toggle(c, a, p, i) {
     const id = key(i.id),
       list = String(i.list),
@@ -297,29 +297,6 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
         need(await inInbox(c, a.id, id), 'That item does not exist.');
       const k = list as 'solved' | 'done' | 'lessons' | 'read';
       p[k] = flip(p[k], id, now(p[k].includes(id)));
-    } else if (list === 'reg') {
-      const ev = events.find((e) => e.id === id);
-      need(ev, 'That event does not exist.');
-      person(a);
-      await c.query(`select pg_advisory_xact_lock(hashtext($1))`, ['reg:' + id]); // the last seat goes to one person
-      const has =
-        (
-          await c.query(`select 1 from registrations where user_id = $1 and event_id = $2`, [
-            a.id,
-            id,
-          ])
-        ).rowCount! > 0;
-      if (!now(has))
-        return void (await c.query(
-          `delete from registrations where user_id = $1 and event_id = $2`,
-          [a.id, id],
-        ));
-      if (has) return;
-      const n = (
-        await c.query(`select count(*)::int n from registrations where event_id = $1`, [id])
-      ).rows[0].n;
-      if (ev!.taken + n >= ev!.seats) throw new Fail(409, 'That event is full.');
-      await c.query(`insert into registrations values ($1, $2)`, [a.id, id]);
     } else if (list === 'kudos') {
       need(!id.startsWith('shop:'), 'That is not something you can cheer.');
       need(!id.startsWith('milestone:'), 'Use kudosMilestone for milestone kudos.');
@@ -501,18 +478,6 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     }
     await audit(c, a, `submitted payment PAY-${r.rows[0].id} for ${inv.id} (${via})`);
   },
-  async attend(c, a, _p, i) {
-    if (
-      String(i.code ?? '')
-        .replace(/[^a-z0-9]/gi, '')
-        .toUpperCase() !== data.ATTENDANCE.code
-    )
-      throw new Fail(400, 'That code is wrong or has expired. Read it off the projector again.');
-    await c.query(`insert into attendance values ($1, $2) on conflict do nothing`, [
-      a.id,
-      data.ATTENDANCE.event,
-    ]);
-  },
   async redeem(c, a, p, i) {
     person(a);
     const item = shop.find((x) => x[0] === i.item);
@@ -681,18 +646,6 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     );
     await audit(c, a, `reported feed post #${postId} ("${post.title}")`);
   },
-  async comment(c, a, _p, i) {
-    person(a);
-    const targetType = pick(i.targetType, ['idea'] as const, 'target');
-    const targetId = posInt(i.targetId, 'item');
-    const body = mdText(i.body, 1, 2000, 'Comment');
-    const exists = (await c.query(`select 1 from ideas where id = $1`, [targetId])).rowCount! > 0;
-    if (!exists) throw new Fail(404, 'That item does not exist.');
-    await c.query(
-      `insert into community_comments (target_type, target_id, user_id, body) values ($1, $2, $3, $4)`,
-      [targetType, targetId, a.id, body],
-    );
-  },
   async createIdea(c, a, _p, i) {
     person(a);
     need(can(a.roles, 'idea.create'));
@@ -860,7 +813,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     if (name !== a.name) await audit(c, a, `changed their name to ${name}`);
   },
   async decide(c, a, _p, i) {
-    const kind = pick(i.kind, ['payment', 'expense', 'waiver', 'application'] as const, 'decision'),
+    const kind = pick(i.kind, ['payment', 'expense', 'application'] as const, 'decision'),
       id = key(i.id),
       to = String(i.to);
     if (kind === 'payment') {
@@ -920,8 +873,8 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
         ? `Account created for ${app.name}. Their sign-in link was emailed to ${app.email}.`
         : `Account created for ${app.name}. Email is not set up, so send them this link to set a password. It works once and expires in 7 days: /login?invite=${token}`;
     }
-    // Expenses and waivers: two-person rules. Nobody decides their own request.
-    if (kind === 'expense') {
+    // Expenses: two-person rules. Nobody decides their own request.
+    {
       const n = /^EXP-(\d{1,9})$/.exec(id),
         lvl = can(a.roles, 'expense.approve');
       need(lvl);
@@ -963,56 +916,6 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
           : `${to} expense ${id} (${tk(x.amount)})`,
       ));
     }
-    // Waivers: two people. One officer proposes (or turns it down); a second, with the full grant, decides.
-    const n = /^W-(\d{1,9})$/.exec(id),
-      lvl = can(a.roles, 'dues.waive');
-    need(lvl);
-    need(n, 'That waiver does not exist.');
-    const w = (await c.query(`select * from waiver_requests where id = $1 for update`, [+n[1]!]))
-      .rows[0];
-    need(w, 'That waiver does not exist.');
-    need(w.user_id !== a.id, 'You cannot decide a waiver for yourself.');
-    if (w.status === 'pending')
-      pick(
-        to,
-        ['proposed', 'rejected'],
-        'decision: a waiver is first proposed, then decided by a second officer',
-      );
-    else if (w.status === 'proposed') {
-      need(lvl === true, 'A second officer with full authority decides a proposed waiver.');
-      need(w.proposed_by !== a.id, 'A second officer has to decide a waiver you proposed.');
-      pick(to, ['waived', 'rejected'], 'decision');
-    } else throw new Fail(409, 'That waiver has already been decided.');
-    await c.query(
-      `update waiver_requests set status = $2, ${to === 'proposed' ? 'proposed_by' : 'decided_by'} = $3 where id = $1`,
-      [w.id, to, a.id],
-    );
-    return void (await audit(
-      c,
-      a,
-      `${to} waiver ${id}: ${tk(w.amount)}, ${w.what} for ${w.user_id} (reason: ${w.reason})`,
-    ));
-  },
-  // A member asks to have one of their invoices waived. Officers decide it under `decide` (kind waiver).
-  async requestWaiver(c, a, _p, i) {
-    person(a);
-    const inv = await myInvoice(c, a, i.invoice),
-      reason = text(i.reason, 10, 400, 'The reason');
-    need(
-      !(
-        await c.query(
-          `select 1 from payments where user_id = $1 and invoice_id = $2 and status <> 'rejected'`,
-          [a.id, inv.id],
-        )
-      ).rowCount,
-      'That invoice already has a payment.',
-    );
-    const r = await c.query(
-      `insert into waiver_requests (user_id, invoice_id, what, amount, reason) values ($1, $2, $3, $4, $5) on conflict do nothing returning id`,
-      [a.id, inv.id, inv.label, inv.amount, reason],
-    );
-    if (!r.rows[0]) throw new Fail(409, 'You already asked to waive that invoice.');
-    await audit(c, a, `requested waiver W-${r.rows[0].id} for ${inv.id}`);
   },
   async saveTask(c, a, _p, i) {
     need(isCommittee(a.roles), 'Only the committee manages the workspace.');
@@ -2093,7 +1996,6 @@ export async function listIdeas(
         u.rating as author_rating, u.avatar_url as author_avatar,
         i.title, left(i.body_md, 400) as body_md, i.type, i.status, i.roles,
         (select count(*)::int from reactions r where r.target = 'idea:' || i.id) as upvotes,
-        (select count(*)::int from community_comments cc where cc.target_type = 'idea' and cc.target_id = i.id) as comment_count,
         (select count(*)::int from idea_interests ii where ii.idea_id = i.id) as interested_count,
         (select count(*)::int from idea_interests ii where ii.idea_id = i.id and ii.status = 'accepted') as accepted_count,
         (select ii.status from idea_interests ii where ii.idea_id = i.id and ii.user_id = $1) as my_interest,
@@ -2131,7 +2033,6 @@ export async function getIdeaDetail(
         u.rating as author_rating, u.avatar_url as author_avatar,
         i.title, i.body_md, i.type, i.status, i.roles,
         (select count(*)::int from reactions r where r.target = 'idea:' || i.id) as upvotes,
-        (select count(*)::int from community_comments cc where cc.target_type = 'idea' and cc.target_id = i.id) as comment_count,
         (select count(*)::int from idea_interests ii where ii.idea_id = i.id) as interested_count,
         (select count(*)::int from idea_interests ii where ii.idea_id = i.id and ii.status = 'accepted') as accepted_count,
         (select ii.status from idea_interests ii where ii.idea_id = i.id and ii.user_id = $1) as my_interest,
@@ -2150,19 +2051,7 @@ export async function getIdeaDetail(
     [ideaId, viewerId],
   );
 
-  const comments = (
-    await db.query(
-      `select cc.id, cc.user_id, u.name as author_name, greatest(u.problems_solved, u.solved) as author_solved,
-        u.avatar_url as author_avatar, cc.body, cc.created_at
-      from community_comments cc
-      join users u on u.id = cc.user_id
-      where cc.target_type = 'idea' and cc.target_id = $1
-      order by cc.id asc`,
-      [ideaId],
-    )
-  ).rows as CommunityComment[];
-
-  const detail: IdeaDetail = { ...row, comments };
+  const detail: IdeaDetail = { ...row };
   // Enforce server-side: interested[] returned ONLY if viewerId === idea.user_id.
   if (viewerId === row.user_id) {
     detail.interested = (

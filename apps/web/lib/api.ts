@@ -1,6 +1,6 @@
 // Next.js API routes are a thin proxy to the NestJS API, which owns sessions, permissions and validation.
 import { headers } from 'next/headers';
-import type { AppState } from '@fecpc/contracts';
+import type { AppState, PublicEvent } from '@fecpc/contracts';
 
 export const API = () => process.env.API_INTERNAL_URL ?? 'http://localhost:3001';
 
@@ -71,4 +71,10 @@ export async function serverState(): Promise<AppState | null> {
   );
   if (!res?.ok) return null;
   return ((await res.json()) as { state: AppState | null }).state;
+}
+
+/** Upcoming events for the public site; empty when the API is down. */
+export async function publicEvents(): Promise<PublicEvent[]> {
+  const res = await fetch(`${API()}/v1/events`, { cache: 'no-store' }).catch(() => null);
+  return res?.ok ? ((await res.json()) as PublicEvent[]) : [];
 }

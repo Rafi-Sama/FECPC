@@ -1,0 +1,186 @@
+// Events: shapes shared by the API and the web app, plus the certificate template filler and CSV reader.
+
+export const EVENT_STATUSES = [
+  'draft',
+  'published',
+  'open',
+  'closed',
+  'ongoing',
+  'completed',
+  'cancelled',
+] as const;
+export type EventStatus = (typeof EVENT_STATUSES)[number];
+export const EVENT_STATUS_LABEL: Record<EventStatus, string> = {
+  draft: 'Draft',
+  published: 'Published',
+  open: 'Registration open',
+  closed: 'Registration closed',
+  ongoing: 'Ongoing',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+};
+export const EVENT_TYPES = [
+  'Workshop',
+  'Class',
+  'Contest',
+  'Seminar',
+  'Hackathon',
+  'ICPC prep',
+  'Social',
+] as const;
+export type EntryStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
+
+/** A custom question on a registration form. With `options` it is a choice. */
+export type EventField = { label: string; required: boolean; options?: string[] };
+
+/** A volunteer, TA or other role the event recruits for. `counts` only for organisers and platform roles. */
+export type EventRole = {
+  id: number;
+  title: string;
+  about: string;
+  mode: 'platform' | 'form';
+  formUrl: string | null;
+  approval: 'auto' | 'manual';
+  fields: EventField[];
+  counts?: Partial<Record<EntryStatus, number>>;
+};
+
+/** One platform registration (roleId null) or role application. User fields only for organisers. */
+export type EventEntry = {
+  id: number;
+  roleId: number | null;
+  status: EntryStatus;
+  place: number | null;
+  name: string;
+  phone: string;
+  answers: Record<string, string>;
+  at: string;
+  userId?: string;
+  email?: string;
+  batch?: string;
+};
+
+/** Times are club-local `YYYY-MM-DDTHH:MM`. `taken` counts pending and approved platform registrations. */
+export type ClubEvent = {
+  id: string;
+  title: string;
+  type: string;
+  place: string;
+  about: string;
+  banner: string | null;
+  startsAt: string;
+  regOpens: string | null;
+  regCloses: string | null;
+  status: EventStatus;
+  seats: number | null;
+  fee: number;
+  mode: 'platform' | 'form';
+  formUrl: string | null;
+  approval: 'auto' | 'manual';
+  fields: EventField[];
+  certs: boolean;
+  taken: number;
+  /** Platform registration is accepted right now: status open and inside the window. */
+  regOpen: boolean;
+  roles: EventRole[];
+  mine: EventEntry[];
+};
+
+/** The public site's view of an upcoming event. */
+export type PublicEvent = Pick<
+  ClubEvent,
+  'id' | 'title' | 'type' | 'place' | 'about' | 'banner' | 'startsAt' | 'seats' | 'fee' | 'taken'
+>;
+
+export type EventDetail = ClubEvent & {
+  feedback: { rating: number; body: string } | null;
+  certificates: { code: string; kind: string; html: string }[];
+  /** Organisers only. */
+  admin?: {
+    entries: EventEntry[];
+    feedback: { name: string; rating: number; body: string; at: string }[];
+    templates: Record<string, string>;
+    issued: Record<string, number>;
+    /** The room code members type to check in, and how many have. */
+    checkin: { code: string; arrived: number };
+  };
+};
+
+/** What the public verify page shows for a certificate code. */
+export type VerifiedCertificate = {
+  code: string;
+  kind: string;
+  name: string;
+  role: string | null;
+  place: string | null;
+  event: string;
+  date: string;
+};
+
+/** Placeholders filled from the database. CSV imports map their columns onto any names. */
+export const CERT_VARS = [
+  'name',
+  'email',
+  'batch',
+  'dept',
+  'phone',
+  'event',
+  'date',
+  'role',
+  'place',
+  'code',
+] as const;
+
+const ESC: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+};
+/** Replaces `{{ key }}` with the HTML-escaped value; unknown keys become empty. */
+export const fillTemplate = (html: string, vars: Record<string, string>) =>
+  html.replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (_, k: string) =>
+    (vars[k] ?? '').replace(/[&<>"']/g, (ch) => ESC[ch]!),
+  );
+
+/** RFC 4180 CSV: quoted fields, doubled quotes, commas and newlines inside quotes. Blank lines dropped. */
+export function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [],
+    cell = '',
+    quoted = false;
+  const endCell = () => {
+    row.push(cell);
+    cell = '';
+  };
+  const endRow = () => {
+    endCell();
+    rows.push(row);
+    row = [];
+  };
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]!;
+    if (quoted) {
+      if (ch === '"' && text[i + 1] === '"') {
+        cell += '"';
+        i++;
+      } else if (ch === '"') quoted = false;
+      else cell += ch;
+    } else if (ch === '"') quoted = true;
+    else if (ch === ',') endCell();
+    else if (ch === '\n' || ch === '\r') {
+      if (ch === '\r' && text[i + 1] === '\n') i++;
+      endRow();
+    } else cell += ch;
+  }
+  endRow();
+  return rows.filter((r) => r.some((c) => c.trim()));
+}
+
+/** One CSV field: quoted when it holds a comma, quote or newline; a leading =+-@ is defused for spreadsheets. */
+export const csvCell = (v: unknown) => {
+  let s = String(v ?? '');
+  if (/^[=+\-@]/.test(s)) s = "'" + s;
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};

@@ -1,7 +1,7 @@
 'use client';
 import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Page, Tabs } from '@/components/app/Shell';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Page } from '@/components/app/Shell';
 import { useStore } from '@/components/app/Store';
 import { AlumniTab } from './AlumniTab';
 import { JobsTab } from './JobsTab';
@@ -10,16 +10,6 @@ import { BlogsTab } from './BlogsTab';
 import { AlumniProfileModal } from './AlumniProfileModal';
 
 export type AlumniSubTab = 'alumni' | 'jobs' | 'prep' | 'blogs';
-
-const COMMUNITY_TABS = [
-  'Feed',
-  'Announcements',
-  'Ideas',
-  'Alumni',
-  'Polls',
-  'Groups',
-  'Suggest',
-] as const;
 
 const SUB_TABS: { key: AlumniSubTab; label: string }[] = [
   { key: 'alumni', label: 'Alumni' },
@@ -39,11 +29,8 @@ function parseSubTab(param: string | null): AlumniSubTab {
 
 function AlumniPageInner() {
   const router = useRouter();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
   const { counts } = useStore();
-
-  const isCommunity = pathname === '/app/community';
 
   const [activeTab, setActiveTab] = useState<AlumniSubTab>(() =>
     parseSubTab(searchParams.get('tab')),
@@ -174,23 +161,6 @@ function AlumniPageInner() {
 
   return (
     <Page title={headerContent}>
-      {/* If accessed via /app/community, render top Community navigation tabs */}
-      {isCommunity && (
-        <div style={{ marginBottom: 20 }}>
-          <Tabs
-            tabs={COMMUNITY_TABS}
-            value="Alumni"
-            onChange={(t) => {
-              if (t === 'Alumni') {
-                router.push('/app/community?tab=alumni');
-              } else {
-                router.push(`/app/community?tab=${t.toLowerCase()}`);
-              }
-            }}
-          />
-        </div>
-      )}
-
       {/* 4 Sub-Tabs Bar: ALUMNI · JOBS · INTERVIEW PREP · BLOGS */}
       <div
         role="tablist"

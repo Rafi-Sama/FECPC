@@ -22,7 +22,7 @@ export type Member = {
 export type Payment = {
   trx: string;
   via: string;
-  /** `waived`: no payment, an approved waiver settles the invoice. */
+  /** `waived`: no payment; a waiver granted before waivers were removed settles the invoice. */
   status: 'pending' | 'verified' | 'rejected' | 'waived';
   id: number;
   amount: number;
@@ -52,7 +52,7 @@ export type S = {
   votes: Record<string, string>;
   /** The member's latest payment per invoice. A rejected one stays visible until it is replaced. */
   pay: Record<string, Payment>;
-  /** Officer decisions the role may see: payment queue, expenses and waivers, applications. */
+  /** Officer decisions the role may see: payment queue, expenses, applications. */
   queue: Record<string, string>;
   exp: Record<string, string>;
   apps: Record<string, string>;
@@ -264,19 +264,6 @@ export type Expense = {
   status: string;
 };
 
-/** A request to waive one invoice. Pending → proposed by one officer → waived or rejected by a second. */
-export type Waiver = {
-  id: string;
-  who: string;
-  invoice: string;
-  what: string;
-  amount: number;
-  reason: string;
-  status: 'pending' | 'proposed' | 'waived' | 'rejected';
-  proposedBy: string | null;
-  at: string;
-};
-
 export type FeedCategory = 'problem-solving' | 'upsolving' | 'topic';
 export type IdeaType = 'idea' | 'teammate' | 'study';
 export type IdeaStatus = 'open' | 'planned' | 'shipped' | 'closed';
@@ -300,16 +287,6 @@ export type MilestoneDTO = {
   has_kudos: boolean;
   /** Up to 3 recent giver names, populated only when the viewer owns the milestone. */
   recent_givers?: string[];
-};
-
-export type CommunityComment = {
-  id: number;
-  user_id: string;
-  author_name: string;
-  author_solved: number;
-  author_avatar: string | null;
-  body: string;
-  created_at: string;
 };
 
 export type FeedPostSummary = {
@@ -361,7 +338,6 @@ export type IdeaSummary = {
   status: IdeaStatus;
   roles: string[];
   upvotes: number;
-  comment_count: number;
   interested_count: number;
   accepted_count: number;
   my_interest: 'pending' | 'accepted' | 'declined' | null;
@@ -370,7 +346,6 @@ export type IdeaSummary = {
 };
 
 export type IdeaDetail = IdeaSummary & {
-  comments: CommunityComment[];
   /** Present ONLY when viewerId === idea.user_id; strictly omitted from server payload otherwise. */
   interested?: IdeaInterestRow[];
 };
@@ -413,7 +388,6 @@ export type Office = {
     cashflow: number[];
   };
   expenses?: Expense[];
-  waivers?: Waiver[];
   mentees?: {
     id: string;
     week: number[];
@@ -436,13 +410,6 @@ export type Office = {
   }[];
   suggestions?: { body: string; at: string }[];
   feedback?: { body: string; at: string }[];
-  /** For roles that run events: today's room code, how many checked in, and who registered through the platform. */
-  events?: {
-    code: string;
-    event: string;
-    arrived: Record<string, number>;
-    registrants: Record<string, string[]>;
-  };
   ops?: {
     tasks: { id: number; title: string; who: string | null; due: string | null; col: string }[];
     meetings: {
@@ -468,9 +435,8 @@ export type AppState = {
   };
   s: S;
   members: Roster[];
-  /** Live totals across all members: seats taken, poll votes, kudos, volunteer sign-ups, solves per problem, announcement reads, milestone kudos daily cap, recent milestones. */
+  /** Live totals across all members: poll votes, kudos, volunteer sign-ups, solves per problem, announcement reads, milestone kudos daily cap, recent milestones. */
   counts: {
-    reg: Record<string, number>;
     votes: Record<string, Record<string, number>>;
     kudos: Record<string, number>;
     vol: Record<string, number>;
@@ -495,8 +461,6 @@ export type AppState = {
   }[];
   /** Expense requests this member filed, whatever their role. */
   myExpenses: Expense[];
-  /** Waiver requests this member made. */
-  myWaivers: Waiver[];
   fundTotal: number;
   /** Real money this term (since 1 Jan or 1 Jul): verified payments in, approved expenses out. */
   term: { since: string; incoming: number; spent: number };

@@ -22,40 +22,39 @@ information as a string: `'full' | 'scope' | 'view' | 'propose' | 'none'`.
 
 Generated from `packages/contracts/src/capabilities.ts`.
 
-| Capability                  | What it allows                                    | Member | Alumni | Mentor | CP Head | Treasurer | Secretary | President | Super Admin |
-| --------------------------- | ------------------------------------------------- | :----: | :----: | :----: | :-----: | :-------: | :-------: | :-------: | :---------: |
-| `profile.own`               | Edit own profile, see own dues                    |   ✓    |   ✓    |   ✓    |    ✓    |     ✓     |     ✓     |     ✓     |      ✓      |
-| `profile.editOwn`           | Edit own public profile                           |   ✓    |   ✓    |   ✓    |    ✓    |     ✓     |     ✓     |     ✓     |      ✓      |
-| `directory.view`            | View member directory                             |   ✓    |   ✓    |   ✓    |    ✓    |     ✓     |     ✓     |     ✓     |      ✓      |
-| `mentees.view`              | View mentees' progress                            |        |        | scope  |    ✓    |           |           |     ✓     |      ✓      |
-| `sheet.edit`                | See sheet completion statistics                   |        |        |        |    ✓    |           |           |     ✓     |      ✓      |
-| `payments.verify`           | Verify member payments                            |        |        |        |         |     ✓     |           |   view    |      ✓      |
-| `expense.approve`           | Approve expenses                                  |        |        |        |         |  propose  |           |     ✓     |      ✓      |
-| `dues.waive`                | Waive dues or fines                               |        |        |        |         |  propose  |           |     ✓     |      ✓      |
-| `event.publish`             | Run events: code, registrants, scoreboard         |        |        |        |         |           |     ✓     |     ✓     |      ✓      |
-| `contest.run`               | Choose the contests on the contest-day scoreboard |        |        |        |    ✓    |           |     ✓     |     ✓     |      ✓      |
-| `announce.post`             | Post announcements                                |        |        | scope  |    ✓    |     ✓     |     ✓     |     ✓     |      ✓      |
-| `feed.post`                 | Create community feed posts                       |   ✓    |   ✓    |   ✓    |    ✓    |     ✓     |     ✓     |     ✓     |      ✓      |
-| `feed.moderate`             | Review reported feed posts                        |        |        |        |         |           |     ✓     |     ✓     |      ✓      |
-| `idea.create`               | Submit community ideas                            |   ✓    |   ✓    |   ✓    |    ✓    |     ✓     |     ✓     |     ✓     |      ✓      |
-| `idea.manage`               | Manage community ideas                            | scope  | scope  | scope  |  scope  |   scope   |   scope   |     ✓     |      ✓      |
-| `alumni.save`               | Save alumni profile                               |   ✓    |   ✓    |   ✓    |    ✓    |     ✓     |     ✓     |     ✓     |      ✓      |
-| `alumni.toggleMentoring`    | Toggle mentoring availability                     |        | scope  |        |         |           |           |     ✓     |      ✓      |
-| `alumni.job.post`           | Post alumni job listings                          |        |   ✓    |        |         |           |           |     ✓     |      ✓      |
-| `alumni.job.fetch`          | Fetch public job listings                         |        |        |        |         |           |           |     ✓     |      ✓      |
-| `interview.topic.create`    | Create interview prep topic                       |        |   ✓    |        |         |           |           |     ✓     |      ✓      |
-| `interview.problem.create`  | Add problem to topic                              |        |   ✓    |        |         |           |           |     ✓     |      ✓      |
-| `interview.tip.create`      | Post interview tip                                |        |   ✓    |        |         |           |           |     ✓     |      ✓      |
-| `interview.progress.toggle` | Toggle problem solved                             |   ✓    |   ✓    |   ✓    |    ✓    |     ✓     |     ✓     |     ✓     |      ✓      |
-| `blog.post.create`          | Write blog post                                   |        |   ✓    |        |         |           |           |     ✓     |      ✓      |
-| `blog.post.delete`          | Delete blog post                                  |        | scope  |        |         |           |           |     ✓     |      ✓      |
-| `application.approve`       | Approve applications                              |        |        |        |         |           |     ✓     |     ✓     |      ✓      |
-| `roles.assign`              | Assign roles                                      |        |        |        |         |           |           |     ✓     |      ✓      |
-| `member.promote`            | Promote member to mentor                          |        |        |        |         |           |           |     ✓     |      ✓      |
-| `member.makeAlumni`         | Transition member to alumni                       |        |        |        |         |           |           |     ✓     |      ✓      |
-| `member.deactivate`         | Deactivate member account                         |        |        |        |         |           |           |     ✓     |      ✓      |
-| `audit.view`                | View audit log                                    |        |        |        |         |           |           |     ✓     |      ✓      |
-| `data.export`               | Export the member list                            |        |        |        |         |     ✓     |     ✓     |     ✓     |      ✓      |
+| Capability                  | What it allows                                            | Member | Alumni | Mentor | CP Head | Treasurer | Secretary | President | Super Admin |
+| --------------------------- | --------------------------------------------------------- | :----: | :----: | :----: | :-----: | :-------: | :-------: | :-------: | :---------: |
+| `profile.own`               | Edit own profile, see own dues                            |   ✓    |   ✓    |   ✓    |    ✓    |     ✓     |     ✓     |     ✓     |      ✓      |
+| `profile.editOwn`           | Edit own public profile                                   |   ✓    |   ✓    |   ✓    |    ✓    |     ✓     |     ✓     |     ✓     |      ✓      |
+| `directory.view`            | View member directory                                     |   ✓    |   ✓    |   ✓    |    ✓    |     ✓     |     ✓     |     ✓     |      ✓      |
+| `mentees.view`              | View mentees' progress                                    |        |        | scope  |    ✓    |           |           |     ✓     |      ✓      |
+| `sheet.edit`                | See sheet completion statistics                           |        |        |        |    ✓    |           |           |     ✓     |      ✓      |
+| `payments.verify`           | Verify member payments                                    |        |        |        |         |     ✓     |           |   view    |      ✓      |
+| `expense.approve`           | Approve expenses                                          |        |        |        |         |  propose  |           |     ✓     |      ✓      |
+| `event.publish`             | Run events: create, registrations, feedback, certificates |        |        |        |         |           |     ✓     |     ✓     |      ✓      |
+| `contest.run`               | Choose the contests on the contest-day scoreboard         |        |        |        |    ✓    |           |     ✓     |     ✓     |      ✓      |
+| `announce.post`             | Post announcements                                        |        |        | scope  |    ✓    |     ✓     |     ✓     |     ✓     |      ✓      |
+| `feed.post`                 | Create community feed posts                               |   ✓    |   ✓    |   ✓    |    ✓    |     ✓     |     ✓     |     ✓     |      ✓      |
+| `feed.moderate`             | Review reported feed posts                                |        |        |        |         |           |     ✓     |     ✓     |      ✓      |
+| `idea.create`               | Submit community ideas                                    |   ✓    |   ✓    |   ✓    |    ✓    |     ✓     |     ✓     |     ✓     |      ✓      |
+| `idea.manage`               | Manage community ideas                                    | scope  | scope  | scope  |  scope  |   scope   |   scope   |     ✓     |      ✓      |
+| `alumni.save`               | Save alumni profile                                       |   ✓    |   ✓    |   ✓    |    ✓    |     ✓     |     ✓     |     ✓     |      ✓      |
+| `alumni.toggleMentoring`    | Toggle mentoring availability                             |        | scope  |        |         |           |           |     ✓     |      ✓      |
+| `alumni.job.post`           | Post alumni job listings                                  |        |   ✓    |        |         |           |           |     ✓     |      ✓      |
+| `alumni.job.fetch`          | Fetch public job listings                                 |        |        |        |         |           |           |     ✓     |      ✓      |
+| `interview.topic.create`    | Create interview prep topic                               |        |   ✓    |        |         |           |           |     ✓     |      ✓      |
+| `interview.problem.create`  | Add problem to topic                                      |        |   ✓    |        |         |           |           |     ✓     |      ✓      |
+| `interview.tip.create`      | Post interview tip                                        |        |   ✓    |        |         |           |           |     ✓     |      ✓      |
+| `interview.progress.toggle` | Toggle problem solved                                     |   ✓    |   ✓    |   ✓    |    ✓    |     ✓     |     ✓     |     ✓     |      ✓      |
+| `blog.post.create`          | Write blog post                                           |        |   ✓    |        |         |           |           |     ✓     |      ✓      |
+| `blog.post.delete`          | Delete blog post                                          |        | scope  |        |         |           |           |     ✓     |      ✓      |
+| `application.approve`       | Approve applications                                      |        |        |        |         |           |     ✓     |     ✓     |      ✓      |
+| `roles.assign`              | Assign roles                                              |        |        |        |         |           |           |     ✓     |      ✓      |
+| `member.promote`            | Promote member to mentor                                  |        |        |        |         |           |           |     ✓     |      ✓      |
+| `member.makeAlumni`         | Transition member to alumni                               |        |        |        |         |           |           |     ✓     |      ✓      |
+| `member.deactivate`         | Deactivate member account                                 |        |        |        |         |           |           |     ✓     |      ✓      |
+| `audit.view`                | View audit log                                            |        |        |        |         |           |           |     ✓     |      ✓      |
+| `data.export`               | Export the member list                                    |        |        |        |         |     ✓     |     ✓     |     ✓     |      ✓      |
 
 ## Posts
 
@@ -92,11 +91,9 @@ Rank rules, on top of the matrix:
 
 ## Separation of duties
 
-- Nobody verifies their own payment, or decides their own expense or waiver.
+- Nobody verifies their own payment, or decides their own expense.
 - Expenses above ৳5,000 (`APPROVAL_THRESHOLD` in `packages/content/src/member-area.ts`) need two officers:
   the Treasurer passes them up, a full `expense.approve` grant decides.
-- Waivers always need two officers: a member asks (`requestWaiver`), one officer proposes, a second with full
-  `dues.waive` waives. Any holder can turn a pending request down.
 - Event budgets are the Treasurer's (full `payments.verify`); the President sees them.
 - Ops tasks, meetings and equipment: the whole committee edits; the creator or an admin deletes.
 

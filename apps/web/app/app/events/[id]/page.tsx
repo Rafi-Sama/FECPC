@@ -3,215 +3,227 @@
 import Link from 'next/link';
 import { notFound, useParams } from 'next/navigation';
 import { useState } from 'react';
-import QR from '@/components/app/QR';
+import { EventAdmin } from '@/components/app/events/EventAdmin';
+import { SignUp } from '@/components/app/events/SignUp';
 import { useStore } from '@/components/app/Store';
-import { events, fmtDate } from '@fecpc/content/site';
-import { can } from '@fecpc/contracts';
-import { eventTicketCode, getEventDetails } from '@/lib/event-details';
+import { EVENT_STATUS_LABEL, type EventDetail } from '@fecpc/contracts';
+import { bannerStyle, fmtWhen, renderCertificate, useEventsQuery } from '@/lib/events';
+
+const CERT_NAME: Record<string, string> = {
+  participant: 'Participation',
+  winner1: '1st place',
+  winner2: '2nd place',
+  winner3: '3rd place',
+};
 
 export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const event = events.find((e) => e.id === id);
-  const { s, me, act, counts, office } = useStore();
-  const [role, setRole] = useState('');
-  const [why, setWhy] = useState('');
-  const [sent, setSent] = useState(false);
-  const [code, setCode] = useState('');
-  if (!event) notFound();
+  const { data: e, reload } = useEventsQuery<EventDetail>({ action: 'event', id });
+  if (e === null) notFound();
+  if (!e) return <div className="page" aria-busy="true" />;
 
-  const details = getEventDetails(event);
-  const going = s.reg.includes(event.id);
-  const here = s.present.includes(event.id);
-  const left = Math.max(0, event.seats - event.taken - (counts.reg[event.id] ?? 0));
-  const organiser = !!can(s.roles, 'event.publish');
-  const names = office.events?.registrants[event.id] ?? [];
-  const live = office.events?.event === event.id;
-
-  const apply = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const ok = await act('send', {
-      kind: 'feedback',
-      body: `[Application: ${event.title} · ${role}] ${me.name}, batch ${me.batch}: ${why.trim()}`,
-    });
-    if (ok) setSent(true);
-  };
+  const entry = (roleId: number | null) => e.mine.find((x) => x.roleId === roleId);
+  const tookPart = e.mine.some((x) => x.status === 'approved');
+  const over = e.status === 'completed' || e.status === 'cancelled';
+  const left = e.seats === null ? null : Math.max(0, e.seats - e.taken);
+  const certName = (k: string) =>
+    CERT_NAME[k] ?? e.roles.find((r) => `role:${r.id}` === k)?.title ?? k;
 
   return (
     <div className="page ev-detail">
       <p className="label">
-        <Link href="/app/events">Events</Link> / {details.bannerTitle}
+        <Link href="/app/events">Events</Link> / {e.title}
       </p>
-      <div className="ban ev-hero" data-type={event.type}>
-        <span>{details.bannerTitle}</span>
+      <div className="ban ev-hero" data-type={e.type} style={bannerStyle(e.banner)}>
+        {!e.banner && <span>{e.title}</span>}
       </div>
 
       <div className="ev-split">
         <div className="stack">
           <div className="row">
-            <span className="tag b">{event.type}</span>
-            <span className="tag">
-              {fmtDate(event.date, { weekday: 'short', day: 'numeric', month: 'short' })} ·{' '}
-              {event.time}
-            </span>
-            <span className="tag">{event.place.split(',')[0]}</span>
-            {event.fee > 0 && <span className="tag">৳{event.fee}</span>}
+            <span className="tag b">{e.type}</span>
+            <span className="tag">{fmtWhen(e.startsAt)}</span>
+            {e.place && <span className="tag">{e.place}</span>}
+            {e.fee > 0 && <span className="tag">৳{e.fee}</span>}
+            <span className="tag k">{EVENT_STATUS_LABEL[e.status]}</span>
           </div>
-          <h1 className="h2">{details.headline}</h1>
-          <section className="panel stack">
-            <p className="body">{details.about}</p>
-            <p className="label">Schedule</p>
-            <ol className="list ev-sched">
-              {details.schedule.map((r) => (
-                <li key={r.time}>
-                  <span className="mono acc">{r.time}</span>
-                  <span>{r.what}</span>
-                </li>
-              ))}
-            </ol>
-            <p className="label">Organisers</p>
-            <ul className="row">
-              {details.organisers.map((o) => (
-                <li key={o.name} className="chip">
-                  {o.name} · {o.role}
-                </li>
-              ))}
-            </ul>
-          </section>
+          <h1 className="h2">{e.title}</h1>
+          {e.about && (
+            <section className="panel">
+              <p className="body" style={{ whiteSpace: 'pre-line' }}>
+                {e.about}
+              </p>
+            </section>
+          )}
+          {e.admin && <EventAdmin e={e} reload={reload} />}
         </div>
 
         <aside className="stack ev-aside">
-          <section className="panel stack ev-card">
-            <div className="row between">
-              <b>Participate</b>
-              <span className="label">
-                {left} of {event.seats} left
-              </span>
-            </div>
-            {going ? (
-              <>
-                <div className="dash">
-                  <QR text={`FECPC ticket ${event.id}`} size={52} />
-                  <span className="mono acc ev-ticket">{eventTicketCode(event)}</span>
+          {e.certificates.length ? (
+            <section className="panel stack ev-card">
+              <b>Your certificates</b>
+              {e.certificates.map((c) => (
+                <div key={c.code} className="stack">
+                  <span>
+                    {certName(c.kind)} <span className="label mono">{c.code}</span>
+                  </span>
+                  <div className="row">
+                    {(['png', 'jpeg'] as const).map((t) => (
+                      <button
+                        key={t}
+                        className="btn sm"
+                        type="button"
+                        onClick={() => renderCertificate(c.html, t, `${e.id}-${c.code}`)}
+                      >
+                        {t === 'png' ? 'PNG' : 'JPG'}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                {event.fee > 0 && (
-                  <Link className="btn sm line" href="/app/finance">
-                    Pay ৳{event.fee}
-                  </Link>
-                )}
-                <button
-                  className="btn sm line"
-                  type="button"
-                  onClick={() => act('toggle', { list: 'reg', id: event.id, on: false })}
-                >
-                  Cancel registration
-                </button>
-              </>
-            ) : (
-              <button
-                className="btn sm b"
-                type="button"
-                disabled={left === 0 || me.system}
-                onClick={() => act('toggle', { list: 'reg', id: event.id, on: true })}
-              >
-                {left === 0 ? 'Full' : 'Register'}
-              </button>
-            )}
-          </section>
-
-          {going && (
-            <form
-              className="panel stack ev-card"
-              onSubmit={async (e) => {
-                e.preventDefault();
-                if (await act('attend', { code })) setCode('');
-              }}
-            >
-              <b>Check in</b>
-              {here ? (
-                <p className="ok">You are checked in. +20 XP</p>
-              ) : (
-                <div className="row">
-                  <input
-                    className="input grow"
-                    aria-label="Room code"
-                    placeholder="Code on the projector"
-                    value={code}
-                    maxLength={12}
-                    onChange={(e) => setCode(e.target.value)}
-                  />
-                  <button className="btn sm" disabled={code.trim().length < 4}>
-                    Check in
-                  </button>
-                </div>
-              )}
-            </form>
-          )}
-
-          <form className="panel stack ev-card" onSubmit={apply}>
-            <b>Help run it</b>
-            <div className="row" role="radiogroup" aria-label="Role">
-              {[details.role2Title, 'Volunteer'].map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  role="radio"
-                  aria-checked={role === r}
-                  className={`tag tab ${role === r ? 'on' : ''}`}
-                  onClick={() => setRole(r)}
-                >
-                  {r}
-                </button>
               ))}
-            </div>
-            <span className="label">
-              {role === 'Volunteer' ? 'desk and monitoring' : details.role2Sub}
-            </span>
-            {sent ? (
-              <p className="ok">Sent. The organisers will reply.</p>
-            ) : (
-              <>
-                <textarea
-                  className="input"
-                  aria-label="Why you?"
-                  placeholder="Why you?"
-                  rows={3}
-                  maxLength={600}
-                  value={why}
-                  onChange={(e) => setWhy(e.target.value)}
-                />
-                <button className="btn sm" disabled={!role || why.trim().length < 3 || me.system}>
-                  Apply
-                </button>
-              </>
-            )}
-          </form>
-
-          {organiser && (
-            <section className="panel stack ev-card ev-org">
+            </section>
+          ) : (
+            <section className="panel stack ev-card">
               <div className="row between">
-                <b>Organiser</b>
-                <span className="label">{names.length} via platform</span>
+                <b>Participate</b>
+                {e.mode === 'platform' && left !== null && (
+                  <span className="label">
+                    {left} of {e.seats} left
+                  </span>
+                )}
               </div>
-              {live && (
-                <div className="ev-code">
-                  <span className="label">Room code</span>
-                  <span className="mono">{office.events!.code}</span>
-                  <span className="label">{office.events!.arrived[event.id] ?? 0} checked in</span>
-                </div>
-              )}
-              {names.length ? (
-                <ol className="ev-names">
-                  {names.map((n) => (
-                    <li key={n}>{n}</li>
-                  ))}
-                </ol>
-              ) : (
-                <p className="empty">No registrations yet.</p>
+              <SignUp
+                eventId={e.id}
+                mode={e.mode}
+                formUrl={e.formUrl}
+                fields={e.fields}
+                entry={entry(null)}
+                open={e.regOpen && left !== 0}
+                closedText={left === 0 && e.regOpen ? 'Full.' : 'Registration is not open.'}
+                done={reload}
+              />
+              {e.fee > 0 && entry(null)?.status === 'approved' && (
+                <Link className="btn sm line" href="/app/finance">
+                  Pay ৳{e.fee}
+                </Link>
               )}
             </section>
           )}
+
+          {e.status === 'completed' && tookPart && <FeedbackForm e={e} done={reload} />}
+          {['open', 'closed', 'ongoing'].includes(e.status) &&
+            (e.admin || entry(null)?.status === 'approved') && <CheckIn e={e} />}
+
+          {!over &&
+            e.roles.map((r) => (
+              <section key={r.id} className="panel stack ev-card">
+                <b>{r.title}</b>
+                {r.about && <span className="label">{r.about}</span>}
+                <SignUp
+                  eventId={e.id}
+                  roleId={r.id}
+                  mode={r.mode}
+                  formUrl={r.formUrl}
+                  fields={r.fields}
+                  entry={entry(r.id)}
+                  open={['published', 'open', 'closed'].includes(e.status)}
+                  closedText="Applications are closed."
+                  done={reload}
+                />
+              </section>
+            ))}
         </aside>
       </div>
     </div>
+  );
+}
+
+/** The room code on the projector marks you present (+XP). Organisers see the code here. */
+function CheckIn({ e }: { e: EventDetail }) {
+  const { s, act } = useStore();
+  const [code, setCode] = useState('');
+  const room = e.admin?.checkin;
+  const approved = e.mine.some((x) => x.roleId === null && x.status === 'approved');
+  return (
+    <form
+      className="panel stack ev-card"
+      onSubmit={async (x) => {
+        x.preventDefault();
+        if (await act('attend', { eventId: e.id, code })) setCode('');
+      }}
+    >
+      <b>Check in</b>
+      {room && (
+        <div className="ev-code">
+          <span className="label">Room code</span>
+          <span className="mono">{room.code}</span>
+          <span className="label">{room.arrived} checked in</span>
+        </div>
+      )}
+      {!approved ? null : s.present.includes(e.id) ? (
+        <p className="ok">You are checked in.</p>
+      ) : (
+        <div className="row">
+          <input
+            className="input grow"
+            aria-label="Room code"
+            placeholder="Code on the projector"
+            value={code}
+            maxLength={12}
+            onChange={(x) => setCode(x.target.value)}
+          />
+          <button className="btn sm" disabled={code.trim().length < 4}>
+            Check in
+          </button>
+        </div>
+      )}
+    </form>
+  );
+}
+
+function FeedbackForm({ e, done }: { e: EventDetail; done: () => void }) {
+  const { act } = useStore();
+  const [rating, setRating] = useState(5);
+  const [body, setBody] = useState('');
+  if (e.feedback)
+    return (
+      <section className="panel ev-card">
+        <p className="ok">Thanks. You rated it {e.feedback.rating}/5.</p>
+      </section>
+    );
+  return (
+    <form
+      className="panel stack ev-card"
+      onSubmit={async (x) => {
+        x.preventDefault();
+        if (await act('eventFeedback', { eventId: e.id, rating, body })) done();
+      }}
+    >
+      <b>How was it?</b>
+      <div className="row" role="radiogroup" aria-label="Rating">
+        {[1, 2, 3, 4, 5].map((v) => (
+          <button
+            key={v}
+            type="button"
+            role="radio"
+            aria-checked={rating === v}
+            className={`tag tab ${rating === v ? 'on' : ''}`}
+            onClick={() => setRating(v)}
+          >
+            {v}
+          </button>
+        ))}
+      </div>
+      <textarea
+        className="input"
+        aria-label="What should change next time?"
+        placeholder="What should change next time?"
+        rows={3}
+        maxLength={2000}
+        value={body}
+        onChange={(x) => setBody(x.target.value)}
+      />
+      <button className="btn sm">Send feedback</button>
+    </form>
   );
 }

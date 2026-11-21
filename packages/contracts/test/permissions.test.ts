@@ -16,7 +16,6 @@ test("matrix matches the spec's risky cells", () => {
 
   assert.equal(can('treasurer', 'expense.approve'), 'propose');
   assert.equal(grantOf('treasurer', 'expense.approve'), 'propose');
-  assert.equal(canFully('treasurer', 'dues.waive'), false);
 
   assert.equal(can('mentor', 'mentees.view'), 'scope');
   assert.equal(grantOf('mentor', 'mentees.view'), 'scope');

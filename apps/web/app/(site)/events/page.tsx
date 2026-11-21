@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import Life from '@/components/pixel/Life';
 import EventRow from '@/components/site/EventRow';
-import { events } from '@fecpc/content/site';
+import { publicEvents } from '@/lib/api';
 
 export const metadata = { title: 'Events' };
 const types = [
@@ -32,9 +32,12 @@ const day = [
   ],
 ];
 
-export default function Events() {
+export default async function Events() {
+  const events = await publicEvents();
   const marks = new Map(
-    events.filter((e) => e.date.startsWith('2026-11')).map((e) => [+e.date.slice(8), e]),
+    events
+      .filter((e) => e.startsAt.startsWith('2026-11'))
+      .map((e) => [+e.startsAt.slice(8, 10), e]),
   );
   return (
     <>
@@ -49,7 +52,7 @@ export default function Events() {
             </h1>
             <p className="lede">Classes, contests, workshops and hack nights on one calendar.</p>
             <p style={{ pointerEvents: 'auto' }}>
-              <Link href="#dp-bootcamp" className="btn">
+              <Link href={`#${events[0]?.id ?? ''}`} className="btn">
                 See what is next
               </Link>
             </p>

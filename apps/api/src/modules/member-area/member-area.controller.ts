@@ -3,13 +3,19 @@ import type { FastifyRequest } from 'fastify';
 import { act, apply, exportMembers } from './actions.ts';
 import { Fail, pool } from './db.ts';
 import * as queries from './queries.ts';
+import { eventsQuery, publicEvents, verifyCertificate } from './events.ts';
 import { syncCodeforces, syncVjudge } from './milestones.ts';
 import { loadState } from './state.ts';
 import { CurrentUser, type RequestUser } from '../auth/decorators.ts';
 import { Public } from '../auth/decorators.ts';
 
 // AuthGuard (global) has proved who the user is. Every handler below checks what that user may do.
-const AREAS = { alumni: queries.alumni, community: queries.community, members: queries.members };
+const AREAS = {
+  alumni: queries.alumni,
+  community: queries.community,
+  members: queries.members,
+  events: eventsQuery,
+};
 
 // shortcut: per-process throttle, reset on restart and not shared between instances; move it to the DB if the API scales out.
 const lastCodeforcesSync = new Map<string, number>();
@@ -68,6 +74,22 @@ export class MemberAreaController {
   async apply(@Body() body: unknown, @Req() req: FastifyRequest) {
     await apply(pool(), object(body), req.ip);
     return { ok: true };
+  }
+
+  /** Upcoming events for the public site. */
+  @Public()
+  @Get('events')
+  async events() {
+    return publicEvents(pool());
+  }
+
+  /** One certificate by code, for the public verify page. Codes are 40 random bits, so they cannot be guessed. */
+  @Public()
+  @Get('certificates/:code')
+  async certificate(@Param('code') code: string) {
+    const c = await verifyCertificate(pool(), code);
+    if (!c) throw new Fail(404, 'No certificate has that code.');
+    return c;
   }
 
   /** Member list as CSV for roles with data.export. The download itself is audited. */

@@ -739,16 +739,16 @@
   align-items: center;
   gap: 8px;
 }
-.k {
+i.k {
   width: 12px;
   height: 12px;
   border: 1px solid var(--line2);
 }
-.k.done {
+i.k.done {
   background: var(--acc);
   border-color: var(--acc);
 }
-.k.open {
+i.k.open {
   border: 2px solid var(--acc);
 }
 .life-steps li {

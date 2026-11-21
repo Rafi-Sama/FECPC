@@ -301,13 +301,6 @@ export const prints = [
 ];
 
 export const cols = ['To do', 'Doing', 'Done'];
-export const groupsData = [
-  ['Competitive Programming', 'nadia', 96],
-  ['Web Engineering', 'sadia', 41],
-  ['AI / ML', 'anika', 33],
-  ['Game Dev', 'shuvo', 18],
-  ['Security', 'farhan', 22],
-] as const;
 export const volunteerShifts = [
   ['Registration desk', '08:30–10:00', 4, 3],
   ['Balloon runner', '10:00–15:00', 12, 9],

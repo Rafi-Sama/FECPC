@@ -819,7 +819,7 @@ export function AlumniProfileModal({
                         : ''}
                     </span>
                     <a
-                      href={`/app/community?tab=blogs&read=${post.slug}`}
+                      href={`/app/career?tab=blogs&read=${post.slug}`}
                       className="m"
                       style={{
                         color: 'var(--acc, #1F3BFF)',

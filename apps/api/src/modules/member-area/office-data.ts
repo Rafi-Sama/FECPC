@@ -124,4 +124,3 @@ export const quizAnswers: Record<string, number[]> = {
   cpp: [1, 2, 1],
   graphs: [0, 1, 2],
 };
-export const ATTENDANCE = { event: 'dp-bootcamp', code: 'K74QX2' }; // shortcut: one fixed code; rotate per class when attendance goes live

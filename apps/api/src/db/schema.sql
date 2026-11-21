@@ -680,3 +680,104 @@ ALTER TABLE notebook_log ADD COLUMN IF NOT EXISTS by text REFERENCES users ON DE
 -- Codeforces tags and difficulty of each accepted problem, for the team solve map. Filled by the next sync.
 ALTER TABLE cf_solves ADD COLUMN IF NOT EXISTS rating int;
 ALTER TABLE cf_solves ADD COLUMN IF NOT EXISTS tags text[] NOT NULL DEFAULT '{}';
+
+-- Events live in the database: President and Secretary create and run them (see docs/events.md).
+create table if not exists club_events (
+  id text primary key,
+  title text not null,
+  type text not null default 'Workshop',
+  place text not null default '',
+  about text not null default '',
+  banner text,                                   -- http(s) or data:image URL; null shows the type's pixel banner
+  starts_at timestamptz not null,
+  reg_opens timestamptz,
+  reg_closes timestamptz,
+  status text not null default 'draft' check (status in ('draft','published','open','closed','ongoing','completed','cancelled')),
+  seats int,                                     -- null: no limit
+  fee int not null default 0,
+  mode text not null default 'platform' check (mode in ('platform','form')),
+  form_url text,
+  approval text not null default 'auto' check (approval in ('auto','manual')),
+  fields jsonb not null default '[]',            -- custom questions: [{ label, required, options? }]
+  certs boolean not null default false,          -- certificate download switched on
+  created_by text references users on delete set null,
+  created_at timestamptz not null default now()
+);
+-- Volunteer, TA and other roles an event recruits for. Each has its own method, approval and questions.
+create table if not exists event_roles (
+  id bigint generated always as identity primary key,
+  event_id text not null references club_events on delete cascade,
+  title text not null,
+  about text not null default '',
+  mode text not null default 'platform' check (mode in ('platform','form')),
+  form_url text,
+  approval text not null default 'manual' check (approval in ('auto','manual')),
+  fields jsonb not null default '[]'
+);
+-- Platform registrations (role_id null) and role applications. Google Forms answers never land here.
+create table if not exists event_entries (
+  id bigint generated always as identity primary key,
+  event_id text not null references club_events on delete cascade,
+  role_id bigint references event_roles on delete cascade,
+  user_id text not null references users on delete cascade,
+  name text not null,
+  phone text not null,
+  answers jsonb not null default '{}',
+  status text not null check (status in ('pending','approved','rejected','cancelled')),
+  place int check (place between 1 and 3),       -- 1st, 2nd, 3rd: winners get their own certificate
+  at timestamptz not null default now()
+);
+create unique index if not exists event_entries_one on event_entries (event_id, coalesce(role_id, 0), user_id);
+create index if not exists event_entries_user on event_entries (user_id);
+create table if not exists event_feedback (
+  event_id text not null references club_events on delete cascade,
+  user_id text not null references users on delete cascade,
+  rating int not null check (rating between 1 and 5),
+  body text not null default '',
+  at timestamptz not null default now(),
+  primary key (event_id, user_id)
+);
+-- One raw HTML+CSS template per event and kind: participant, winner1..3, or role:<id>.
+create table if not exists cert_templates (
+  event_id text not null references club_events on delete cascade,
+  kind text not null,
+  html text not null,
+  primary key (event_id, kind)
+);
+-- Issued certificates, matched to members by email. `html` is the filled template, rendered to PNG/JPG in the browser.
+create table if not exists event_certificates (
+  code text primary key,
+  event_id text not null references club_events on delete cascade,
+  kind text not null,
+  email text not null,
+  vars jsonb not null,
+  html text not null,
+  issued_at timestamptz not null default now(),
+  unique (event_id, kind, email)
+);
+create index if not exists event_certificates_email on event_certificates (lower(email));
+
+-- The events that used to be static content, once.
+insert into club_events (id, title, type, place, about, starts_at, status, seats, fee)
+select * from (values
+  ('dp-bootcamp', 'DP Bootcamp, Day 1: states and transitions', 'Class', 'Lab 3, CSE Building', 'From Fibonacci to knapsack. Bring a laptop; assignments are auto-checked against your Codeforces submissions.', timestamptz '2026-11-14 15:00+06', 'open', 60, 0),
+  ('weekly-42', 'Weekly Club Contest #42', 'Contest', 'Online, Codeforces group', 'Five problems, two hours, rated for the club ladder. Upsolve thread opens when the timer stops.', '2026-11-16 20:00+06', 'open', 200, 0),
+  ('git-night', 'Git for people who are scared of Git', 'Workshop', 'Seminar Room', 'Branches, rebases and how to un-break a repository at 2 a.m. Aimed at first-years.', '2026-11-19 16:30+06', 'open', 80, 0),
+  ('icpc-mock-3', 'ICPC Mock #3 (Dhaka Regional replay)', 'ICPC prep', 'Lab 1 + Lab 2', 'Five hours, teams of three, one machine. Scoreboard freezes in the last hour, as it will on the day.', '2026-11-22 10:00+06', 'open', 45, 0),
+  ('alumni-talk', 'From Pupil to SWE: an alumni fireside', 'Seminar', 'Auditorium', 'Three graduates on interviews, first jobs and what competitive programming did and did not prepare them for.', '2026-11-27 18:00+06', 'open', 150, 0),
+  ('hack-night', 'Winter Hack Night', 'Hackathon', 'CSE Building, all labs', 'Twelve hours, teams of up to four, one theme announced at the door. Food included in the fee.', '2026-12-05 19:00+06', 'open', 120, 150),
+  ('intra-contest', 'Intra-College Programming Contest 2026', 'Contest', 'Central Lab Complex', 'The annual contest day. ICPC rules, live scoreboard, balloons, and a prize pool for the top five teams.', '2026-12-18 09:30+06', 'open', 180, 200)
+) v where not exists (select 1 from club_events);
+-- Old registrations become approved platform entries; the old table is then dropped (it is re-created empty above on each run).
+insert into event_entries (event_id, user_id, name, phone, status, at)
+  select r.event_id, r.user_id, u.name, '', case when r.status = 'cancelled' then 'cancelled' else 'approved' end, r.created_at
+  from registrations r join users u on u.id = r.user_id join club_events e on e.id = r.event_id
+  on conflict do nothing;
+drop table if exists registrations;
+
+-- Each event has its own check-in room code; attendance keys are event ids.
+alter table club_events add column if not exists checkin text not null default upper(substr(md5(random()::text), 1, 6));
+-- Certificate emails are stored lower-case, so one address gets one certificate per kind.
+delete from event_certificates c where email <> lower(email)
+  and exists (select 1 from event_certificates d where d.event_id = c.event_id and d.kind = c.kind and d.email = lower(c.email));
+update event_certificates set email = lower(email) where email <> lower(email);

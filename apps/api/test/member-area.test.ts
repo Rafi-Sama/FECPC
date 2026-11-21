@@ -1,7 +1,14 @@
 // Backend tests against a real PostgreSQL database (fecpc_test), rebuilt from the schema on every run.
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
-import { XP, earned, InviteAcceptSchema, PasswordChangeSchema } from '@fecpc/contracts';
+import {
+  XP,
+  earned,
+  InviteAcceptSchema,
+  PasswordChangeSchema,
+  type ClubEvent,
+  type EventDetail,
+} from '@fecpc/contracts';
 import {
   act,
   apply,
@@ -18,6 +25,7 @@ import {
   listRecentMilestones,
 } from '../src/modules/member-area/actions.ts';
 import { getTeam, lineDiff } from '../src/modules/member-area/teams.ts';
+import { eventsQuery, verifyCertificate } from '../src/modules/member-area/events.ts';
 import { HttpException } from '@nestjs/common';
 import { AuthService } from '../src/modules/auth/auth.service.ts';
 import { AuditService } from '../src/modules/audit/audit.service.ts';
@@ -191,13 +199,11 @@ test('visibility: each role receives only the datasets it has a capability for',
     'ops',
     'queue',
     'suggestions',
-    'waivers',
   ]);
   assert.equal(treasurer.office.queue!.length, 4);
   assert.match(treasurer.office.queue![0]!.sender, /^\d{3}••••\d{4}$/, 'sender numbers are masked');
   assert.deepEqual(Object.keys(secretary.office).sort(), [
     'applications',
-    'events',
     'feedback',
     'ops',
     'suggestions',
@@ -242,12 +248,6 @@ test('visibility: each role receives only the datasets it has a capability for',
     false,
     'only a Super Admin is shown the operator account',
   );
-  assert.deepEqual(
-    Object.keys(secretary.office.events!).sort(),
-    ['arrived', 'code', 'event', 'registrants'],
-    'event organisers get the room code and registrants',
-  );
-  assert.equal(member.office.events, undefined);
   assert.equal(member.me.email, 'tasnim@fecpc.example');
 });
 
@@ -284,16 +284,20 @@ test('quiz is scored on the server; the client cannot send a score', async () =>
 });
 
 test('sync: registrations, kudos and poll votes are counted across members', async () => {
-  await act('shuvo', { type: 'toggle', list: 'reg', id: 'git-night' });
-  await act('priya', { type: 'toggle', list: 'reg', id: 'git-night' });
+  await act('shuvo', { type: 'register', eventId: 'git-night', phone: '01700000000' });
+  await act('priya', { type: 'register', eventId: 'git-night', phone: '01700000000' });
   await act('priya', { type: 'toggle', list: 'kudos', id: 'member:shuvo' });
   await act('shuvo', { type: 'vote', poll: 'p1', option: 'Sunday' });
   await act('priya', { type: 'vote', poll: 'p1', option: 'Sunday' });
   await act('priya', { type: 'vote', poll: 'p1', option: 'Saturday' }); // a poll vote can be changed
   await refused(403, act('priya', { type: 'vote', poll: 'p1', option: 'Never' }));
-  await refused(403, act('priya', { type: 'toggle', list: 'reg', id: 'no-such-event' }));
+  await refused(
+    404,
+    act('priya', { type: 'register', eventId: 'no-such-event', phone: '01700000000' }),
+  );
   const seen = await st('tasnim');
-  assert.equal(seen.counts.reg['git-night'], 2);
+  const list = (await eventsQuery(db(), 'tasnim', { action: 'list' })) as ClubEvent[];
+  assert.equal(list.find((e) => e.id === 'git-night')!.taken, 2);
   assert.equal(seen.counts.kudos['member:shuvo'], 1);
   assert.deepEqual(seen.counts.votes.p1, { Sunday: 1, Saturday: 1 });
 });
@@ -311,16 +315,17 @@ test('cheers, reads and seats cannot be invented: XP needs a real target', async
     await refused(403, act(outsider, { type: 'toggle', list: 'read', id }));
   }
   // the last seat goes to one of two simultaneous registrations
-  await pool().query(
-    `insert into registrations select id, 'icpc-mock-3' from users where not system and id not in ('shuvo','priya') limit 5 on conflict do nothing`,
-  );
+  await pool().query(`update club_events set seats = 1 where id = 'icpc-mock-3'`);
   const r = await Promise.allSettled(
     ['shuvo', 'priya'].map((u) =>
-      act(u, { type: 'toggle', list: 'reg', id: 'icpc-mock-3', on: true }),
+      act(u, { type: 'register', eventId: 'icpc-mock-3', phone: '01700000000' }),
     ),
-  ); // 39 of 45 taken in the content, + 5 above = 44
+  );
   assert.equal(r.filter((x) => x.status === 'fulfilled').length, 1);
-  await refused(409, act('imran', { type: 'toggle', list: 'reg', id: 'icpc-mock-3', on: true }));
+  await refused(
+    409,
+    act('imran', { type: 'register', eventId: 'icpc-mock-3', phone: '01700000000' }),
+  );
 });
 test('feed moderation and announcement removal are role-gated and audited', async () => {
   await act('priya', {
@@ -500,9 +505,13 @@ test('volunteer shifts: a full shift refuses, and the last place goes to exactly
   assert.equal(r.filter((x) => x.status === 'fulfilled').length, 1);
   assert.equal((await st('tasnim')).counts.vol['vol:Registration desk'], 1);
 });
-test('attendance needs the room code', async () => {
-  await refused(400, act('shuvo', { type: 'attend', code: 'WRONG1' }));
-  await act('shuvo', { type: 'attend', code: 'k7-4q-x2' });
+test("attendance needs the event's room code and an approved registration", async () => {
+  await db().query(`update club_events set checkin = 'K74QX2' where id = 'dp-bootcamp'`);
+  await refused(403, act('tasnim', { type: 'attend', eventId: 'dp-bootcamp', code: 'K74QX2' })); // not registered
+  await act('shuvo', { type: 'register', eventId: 'dp-bootcamp', phone: '01700000000' });
+  await refused(400, act('shuvo', { type: 'attend', eventId: 'dp-bootcamp', code: 'WRONG1' }));
+  await refused(400, act('shuvo', { type: 'attend', eventId: 'git-night', code: 'K74QX2' })); // another event's code
+  await act('shuvo', { type: 'attend', eventId: 'dp-bootcamp', code: 'k7-4q-x2' });
   assert.ok((await st('shuvo')).s.present.includes('dp-bootcamp'));
 });
 
@@ -568,7 +577,7 @@ test('payments: a rejected payment can be resubmitted; nobody verifies their own
       sender: '01812345678',
     }),
   ); // an event fee, and she has not registered
-  await act('anika', { type: 'toggle', list: 'reg', id: 'hack-night', on: true });
+  await act('anika', { type: 'register', eventId: 'hack-night', phone: '01700000000' });
   await act('anika', {
     type: 'pay',
     invoice: 'INV-2612',
@@ -693,32 +702,20 @@ test('expenses: filed by the committee; the Treasurer decides small ones and pas
   );
   assert.deepEqual((await st('sadia')).s.exp, {}, 'the Secretary has no view of expense decisions');
 });
-test('waivers: a member asks; one officer proposes, a second with full authority waives; the invoice is settled', async () => {
+test('waivers: requests are gone; a waiver granted earlier still settles its invoice', async () => {
   await db().query(
     `insert into users (id, email, name, handle, batch, dept) values ('zz_w', 'zz_w@x.test', 'ZZ Waiver', 'zzw', 26, 'CSE')`,
   );
-  const ask = { type: 'requestWaiver', invoice: 'INV-2611', reason: 'Family emergency this month' };
-  await refused(403, act('admin', ask)); // the operator is not a member
-  await refused(400, act('zz_w', { ...ask, reason: 'short' }));
-  await refused(403, act('zz_w', { ...ask, invoice: 'INV-NOPE' }));
-  await act('zz_w', ask);
-  await refused(409, act('zz_w', ask)); // one live request per invoice
-  const id =
-    'W-' + (await db().query(`select id from waiver_requests where user_id = 'zz_w'`)).rows[0].id;
-  const decide = (who: string, to: string) => act(who, { type: 'decide', kind: 'waiver', id, to });
-  await refused(403, decide('zz_w', 'proposed'));
-  await refused(400, decide('tanvir', 'waived')); // nobody waives what nobody proposed
-  await decide('anika', 'proposed');
-  await refused(403, decide('anika', 'waived')); // the Treasurer only proposes
-  assert.ok(
-    (await st('tanvir')).office.waivers!.some((w) => w.id === id && w.proposedBy === 'anika'),
+  await refused(
+    400,
+    act('zz_w', { type: 'requestWaiver', invoice: 'INV-2611', reason: 'Family emergency' }),
   );
-  await decide('tanvir', 'waived');
-  await refused(409, decide('tanvir', 'rejected'));
-  const m = await st('zz_w');
-  assert.equal(m.s.pay['INV-2611']!.status, 'waived', 'a waived invoice is settled');
-  assert.equal(m.myWaivers[0]!.status, 'waived');
-  assert.equal(m.office.waivers, undefined);
+  await refused(400, act('tanvir', { type: 'decide', kind: 'waiver', id: 'W-1', to: 'waived' }));
+  await db().query(
+    `insert into waiver_requests (user_id, invoice_id, what, amount, reason, status)
+     select 'zz_w', 'INV-2611', 'Dues', 300, 'Granted earlier', 'waived'`,
+  );
+  assert.equal((await st('zz_w')).s.pay['INV-2611']!.status, 'waived');
   await refused(
     403,
     act('zz_w', {
@@ -729,18 +726,6 @@ test('waivers: a member asks; one officer proposes, a second with full authority
       sender: '01700000001',
     }),
   );
-  // The seeded request for Zahid: the proposer cannot decide it; another officer turns it down.
-  const z =
-    'W-' + (await db().query(`select id from waiver_requests where user_id = 'zahid'`)).rows[0].id;
-  await act('tanvir', { type: 'decide', kind: 'waiver', id: z, to: 'proposed' });
-  await refused(403, act('tanvir', { type: 'decide', kind: 'waiver', id: z, to: 'waived' }));
-  await act('admin', { type: 'decide', kind: 'waiver', id: z, to: 'rejected' });
-  await refused(403, act('mehedi', { type: 'decide', kind: 'waiver', id: z, to: 'proposed' }));
-  // Nobody decides their own request.
-  await act('anika', ask);
-  const own =
-    'W-' + (await db().query(`select id from waiver_requests where user_id = 'anika'`)).rows[0].id;
-  await refused(403, act('anika', { type: 'decide', kind: 'waiver', id: own, to: 'proposed' }));
 });
 
 test('applications: the public form is validated; accepting creates an account with a one-time invite', async () => {
@@ -1052,7 +1037,7 @@ test('inbox is built from real records and can be cleared', async () => {
     ['n:due:INV-2611'],
     'term dues only: no fee for an event he never registered for',
   );
-  await act('rahim', { type: 'toggle', list: 'reg', id: 'hack-night', on: true });
+  await act('rahim', { type: 'register', eventId: 'hack-night', phone: '01700000000' });
   assert.ok((await st('rahim')).inbox.some((n) => n.id === 'n:due:INV-2612'));
   await act('rahim', { type: 'readAll' });
   const after = await st('rahim');
@@ -1113,7 +1098,10 @@ test('reset links: issued only by someone who outranks the account, single-use, 
 test('the operator account is not a member: no ballot, no dues, no purchases', async () => {
   await refused(403, act('admin', { type: 'vote', poll: 'election', option: 'sadia' }));
   await refused(403, act('admin', { type: 'vote', poll: 'p1', option: 'Sunday' }));
-  await refused(403, act('admin', { type: 'toggle', list: 'reg', id: 'git-night', on: true }));
+  await refused(
+    403,
+    act('admin', { type: 'register', eventId: 'git-night', phone: '01700000000' }),
+  );
   await refused(
     403,
     act('admin', {
@@ -1726,7 +1714,7 @@ test('appointPresident: Super Admin only, email re-checked, the old President st
 test('a post grants the powers of its ticked roles, and loses them when unticked', async () => {
   await act('tanvir', { type: 'post', user: 'tasnim', post: 'vice_president' });
   const vp = await st('tasnim');
-  assert.ok(vp.office.applications && vp.office.events, 'Secretary powers from the post');
+  assert.ok(vp.office.applications && vp.office.feedback, 'Secretary powers from the post');
   await act('admin', { type: 'postRole', post: 'vice_president', role: 'secretary', on: false });
   assert.equal((await st('tasnim')).office.applications, undefined);
   await act('admin', { type: 'postRole', post: 'vice_president', role: 'secretary', on: true });
@@ -1862,4 +1850,174 @@ test('budgets: the Treasurer plans them; spending and the term totals come from 
   await refused(403, act('nusrat', { type: 'deleteBudget', id: b.id }));
   await act('anika', { type: 'deleteBudget', id: b.id });
   assert.equal((await st('tasnim')).office.fund, undefined, 'budgets are for finance roles');
+});
+
+test('events: organisers run them; members register, apply, rate and download certificates', async () => {
+  const ev = (id: string, who = 'nusrat') =>
+    eventsQuery(db(), who, { action: 'event', id }) as Promise<EventDetail>;
+  const base = { title: 'Graph Night', eventType: 'Workshop', startsAt: '2026-12-20T18:00' };
+  await refused(403, act('priya', { type: 'eventSave', ...base }));
+  await act('nusrat', {
+    type: 'eventSave',
+    ...base,
+    status: 'draft',
+    approval: 'manual',
+    fields: [{ label: 'Laptop?', required: true, options: ['Yes', 'No'] }],
+  });
+  const id = ((await eventsQuery(db(), 'nusrat', { action: 'list' })) as ClubEvent[]).find(
+    (e) => e.title === 'Graph Night',
+  )!.id;
+  await refused(404, ev(id, 'priya')); // drafts are for organisers
+  const save = (more: object) =>
+    act('nusrat', {
+      type: 'eventSave',
+      id,
+      ...base,
+      approval: 'manual',
+      fields: [{ label: 'Laptop?', required: true, options: ['Yes', 'No'] }],
+      ...more,
+    });
+  await refused(400, save({ startsAt: '2026-02-31T10:00' })); // not a real date
+  await save({ status: 'published' });
+  const reg = (u: string, more: object = {}) =>
+    act(u, {
+      type: 'register',
+      eventId: id,
+      phone: '01711111111',
+      answers: { 'Laptop?': 'Yes' },
+      ...more,
+    });
+  await refused(409, reg('priya')); // published, not open yet
+  await save({ status: 'open' });
+  await refused(400, reg('priya', { answers: {} })); // required question
+  await refused(400, reg('priya', { answers: { 'Laptop?': 'Maybe' } }));
+  await refused(400, reg('priya', { phone: 'call me' }));
+  await reg('priya');
+  await refused(409, reg('priya'));
+  assert.equal((await ev(id, 'priya')).mine[0]!.status, 'pending', 'manual approval');
+  assert.equal((await ev(id, 'priya')).admin, undefined, 'responses are for organisers');
+
+  // a Google Forms event takes no platform registrations
+  await save({ status: 'open', mode: 'form', formUrl: 'https://forms.gle/abc' });
+  await refused(409, reg('shuvo'));
+  await save({ status: 'open', approval: 'auto' });
+  await reg('shuvo');
+
+  // a volunteer role with its own question; the phone is required
+  await act('nusrat', {
+    type: 'roleSave',
+    eventId: id,
+    title: 'Volunteer',
+    fields: [{ label: 'Shift', required: false }],
+  });
+  const roleId = (await ev(id)).roles[0]!.id;
+  await refused(400, reg('imran', { roleId, phone: '' }));
+  await reg('imran', { roleId, answers: { Shift: 'morning' } });
+
+  const d = await ev(id);
+  const entry = (u: string, role: number | null = null) =>
+    d.admin!.entries.find((x) => x.userId === u && x.roleId === role)!;
+  assert.equal(d.roles[0]!.counts!.pending, 1);
+  await refused(
+    403,
+    act('priya', { type: 'entryStatus', id: entry('priya').id, status: 'approved' }),
+  );
+  await act('nusrat', {
+    type: 'entryStatus',
+    ids: [entry('priya').id, entry('imran', roleId).id],
+    status: 'approved',
+  });
+  // organisers cannot approve past the seat limit (priya and shuvo hold 2 seats)
+  await save({ status: 'open', approval: 'auto', seats: 2 });
+  await act('nusrat', { type: 'entryStatus', id: entry('shuvo').id, status: 'rejected' });
+  await reg('tasnim');
+  await refused(
+    409,
+    act('nusrat', { type: 'entryStatus', id: entry('shuvo').id, status: 'approved' }),
+  );
+  const tasnim = (await ev(id)).admin!.entries.find((x) => x.userId === 'tasnim')!;
+  await act('nusrat', { type: 'entryStatus', id: tasnim.id, status: 'rejected' });
+  await act('nusrat', { type: 'entryStatus', id: entry('shuvo').id, status: 'approved' });
+  await save({ status: 'open', approval: 'auto', seats: null });
+  await act('nusrat', { type: 'entryPlace', id: entry('shuvo').id, place: 1 });
+  await refused(
+    404,
+    act('nusrat', { type: 'entryPlace', id: entry('imran', roleId).id, place: 2 }),
+  );
+
+  // feedback once, only after completion, only from people who took part
+  await refused(409, act('priya', { type: 'eventFeedback', eventId: id, rating: 5 }));
+  await save({ status: 'completed', approval: 'auto' });
+  await refused(403, act('tasnim', { type: 'eventFeedback', eventId: id, rating: 5 }));
+  await refused(409, save({ status: 'open' })); // completed is final
+  await act('priya', { type: 'eventFeedback', eventId: id, rating: 4, body: 'Good' });
+  await refused(409, act('priya', { type: 'eventFeedback', eventId: id, rating: 5 }));
+  assert.deepEqual(
+    (await ev(id)).admin!.feedback.map((f) => f.rating),
+    [4],
+  );
+
+  // certificates: one template per kind, generated from the database, downloadable once switched on
+  const tpl = (kind: string) =>
+    act('nusrat', {
+      type: 'certTemplate',
+      eventId: id,
+      kind,
+      html: `<h1>${kind} {{name}} {{place}} {{code}}</h1>`,
+    });
+  await refused(
+    403,
+    act('priya', { type: 'certTemplate', eventId: id, kind: 'participant', html: 'x' }),
+  );
+  await tpl('participant');
+  await tpl('winner1');
+  await tpl(`role:${roleId}`);
+  await refused(400, tpl('role:999999'.replace('role', 'rolex')));
+  await act('nusrat', { type: 'certIssue', eventId: id });
+  assert.deepEqual((await ev(id)).admin!.issued, {
+    participant: 1,
+    winner1: 1,
+    [`role:${roleId}`]: 1,
+  });
+  assert.deepEqual((await ev(id, 'shuvo')).certificates, [], 'not until distribution is on');
+  await act('nusrat', { type: 'certDistribute', eventId: id, on: true });
+  const [mine] = (await ev(id, 'shuvo')).certificates;
+  assert.equal(mine!.kind, 'winner1');
+  assert.match(mine!.html, /^<h1>winner1 Shuvo [^<]* 1st FEC-[0-9A-F]{10}<\/h1>$/);
+  assert.equal((await verifyCertificate(db(), mine!.code.toLowerCase()))!.event, 'Graph Night');
+  assert.equal(await verifyCertificate(db(), 'FEC-0000000000'), null);
+  // re-issuing after a decline removes the certificate that entry no longer earns
+  await act('nusrat', { type: 'entryStatus', id: entry('priya').id, status: 'rejected' });
+  await act('nusrat', { type: 'certIssue', eventId: id });
+  assert.deepEqual((await ev(id)).admin!.issued, { winner1: 1, [`role:${roleId}`]: 1 });
+  assert.equal((await ev(id, 'shuvo')).certificates[0]!.code, mine!.code, 'codes stay stable');
+  // CSV rows keyed by email; values are escaped into the HTML
+  await act('nusrat', {
+    type: 'certIssue',
+    eventId: id,
+    kind: 'participant',
+    rows: [{ email: 'guest@example.com', name: '<script>x</script>' }],
+  });
+  // the same address in another case is the same person: updated, not a conflict
+  await act('nusrat', {
+    type: 'certIssue',
+    eventId: id,
+    kind: 'participant',
+    rows: [{ email: 'GUEST@example.com', name: '<script>x</script>' }],
+  });
+  assert.equal((await ev(id)).admin!.issued.participant, 1);
+  const html = (
+    await pool().query(`select html from event_certificates where email = 'guest@example.com'`)
+  ).rows[0].html;
+  assert.ok(html.includes('&lt;script&gt;') && !html.includes('<script>'));
+  await refused(
+    400,
+    act('nusrat', {
+      type: 'certIssue',
+      eventId: id,
+      kind: 'participant',
+      rows: [{ name: 'no email' }],
+    }),
+  );
+  await refused(409, act('nusrat', { type: 'eventDelete', id })); // issued certificates must stay verifiable
 });

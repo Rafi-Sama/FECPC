@@ -1,5 +1,5 @@
 'use client';
-// The officer side of Finance: verifying payments, filing and deciding expenses, waivers, the club fund.
+// The officer side of Finance: verifying payments, filing and deciding expenses, the club fund.
 // Each tab appears only for roles whose capability allows it; the API enforces every decision again.
 import { Bars } from '@/components/app/Charts';
 import QR from '@/components/app/QR';
@@ -19,7 +19,6 @@ export function officerTabs(role: Who): string[] {
     ...(verify ? ['Payments'] : []),
     ...(isCommittee(role) ? ['My requests'] : []),
     ...(approve ? ['Expenses'] : []),
-    ...(can(role, 'dues.waive') ? ['Waivers'] : []),
     ...(verify || approve ? ['Club fund'] : []),
   ];
 }
@@ -43,7 +42,6 @@ export function OfficerPanel({ tab }: { tab: string }) {
   if (tab === 'Payments') return <Payments />;
   if (tab === 'My requests') return <MyRequests />;
   if (tab === 'Expenses') return <Expenses />;
-  if (tab === 'Waivers') return <Waivers />;
   if (tab === 'Club fund') return <ClubFund />;
   return null;
 }
@@ -304,77 +302,6 @@ function Expenses() {
                 >
                   Pass up for a second decision
                 </button>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function Waivers() {
-  const { s, me, act, office, who } = useStore();
-  const waivers = office.waivers ?? [];
-  const full = can(s.roles, 'dues.waive') === true;
-  const reject = (id: string) =>
-    confirm('Turn this waiver down? The member can ask again.') &&
-    act('decide', { kind: 'waiver', id, to: 'rejected' });
-  return (
-    <div className="stack">
-      <p className="label">One officer proposes, a second with full authority waives.</p>
-      {waivers.length === 0 && <p className="body">No waiver requests.</p>}
-      <div className="list">
-        {waivers.map((w) => {
-          const own = w.who === me.id;
-          return (
-            <div key={w.id} style={{ flexWrap: 'wrap' }}>
-              <span className="grow">
-                <strong>
-                  {who(w.who).name} · {w.what}
-                </strong>
-                <br />
-                <span className="label">
-                  {w.id} · {w.reason}
-                  {w.proposedBy ? ` · proposed by ${who(w.proposedBy).name}` : ''}
-                </span>
-              </span>
-              <span className="mono" style={{ fontSize: 20 }}>
-                {tk(w.amount)}
-              </span>
-              {!own && w.status === 'pending' ? (
-                <>
-                  <button
-                    className="btn xs"
-                    onClick={() => act('decide', { kind: 'waiver', id: w.id, to: 'proposed' })}
-                  >
-                    Propose
-                  </button>
-                  <button className="btn xs line" onClick={() => reject(w.id)}>
-                    Turn down
-                  </button>
-                </>
-              ) : !own && w.status === 'proposed' && full && w.proposedBy !== me.id ? (
-                <>
-                  <button
-                    className="btn xs"
-                    onClick={() =>
-                      confirm(`Waive ${tk(w.amount)} for ${who(w.who).name}?`) &&
-                      act('decide', { kind: 'waiver', id: w.id, to: 'waived' })
-                    }
-                  >
-                    Waive
-                  </button>
-                  <button className="btn xs line" onClick={() => reject(w.id)}>
-                    Reject
-                  </button>
-                </>
-              ) : (
-                <span
-                  className={`pill ${w.status === 'rejected' ? 'bad' : w.status === 'waived' ? 'ok' : 'warn'}`}
-                >
-                  {w.status === 'proposed' ? 'proposed · awaiting a second officer' : w.status}
-                </span>
               )}
             </div>
           );

@@ -19,7 +19,6 @@ import type {
   Office,
   Roster,
   S,
-  Waiver,
 } from '@fecpc/contracts';
 import * as data from './office-data.ts';
 import type { Db } from './db.ts';
@@ -71,7 +70,7 @@ const EXPENSE = `json_build_object('id', 'EXP-' || e.id, 'by', e.by, 'name', w.n
 const MINE = `
 select u.email, u.progress, u.mentor_id, u.vjudge_handle, u.vj_solved,
   (select coalesce(json_object_agg(post, roles), '{}') from post_roles) as post_roles, (select name from users where id = u.mentor_id) as mentor_name, (select ${ROSTER} from users m where m.id = u.id) as me,
-  (select coalesce(json_agg(event_id), '[]') from registrations where user_id = $1) as reg,
+  (select coalesce(json_agg(distinct event_id), '[]') from event_entries where user_id = $1 and role_id is null and status = 'approved') as reg,
   (select coalesce(json_agg(key), '[]') from attendance where user_id = $1) as present,
   (select coalesce(json_agg(c.problem), '[]') from cf_solves c where c.user_id = $1 and u.progress->'solved' ? c.problem) as verified,
   (select coalesce(json_object_agg(poll_id, option), '{}') from votes where user_id = $1) as votes,
@@ -129,7 +128,6 @@ select u.email, u.progress, u.mentor_id, u.vjudge_handle, u.vj_solved,
   (select coalesce(json_agg(json_build_object('id', m.id, 'from', m.user_id, 'name', w.name, 'body', m.body, 'at', m.created_at) order by m.id desc), '[]')
      from (select * from messages where kind = 'checkin' and to_user = $1 order by id desc limit 100) m join users w on w.id = m.user_id) as checkins,
   (select coalesce(json_agg(${EXPENSE} order by e.id desc), '[]') from expenses e join users w on w.id = e.by where e.by = $1) as my_exp,
-  (select coalesce(json_object_agg(event_id, n), '{}') from (select event_id, count(*)::int n from registrations group by 1) x) as c_reg,
   (select coalesce(json_object_agg(key, n), '{}') from (select key, count(*)::int n from attendance where key like 'vol:%' group by 1) x) as c_vol,
   (select coalesce(json_agg(json_build_array(poll_id, option, n)), '[]') from (select poll_id, option, count(*)::int n from votes where poll_id not like 'fb:%' group by 1, 2) x) as c_votes,
   (select coalesce(json_object_agg(target, n), '{}') from (select target, count(*)::int n from reactions group by 1) x) as c_kudos,
@@ -153,23 +151,18 @@ from users u where u.id = $1 and not u.suspended`;
 const OFFICE = `
 select
   case when $1 then (select coalesce(json_agg(json_build_object('id', 'PAY-' || p.id, 'name', u.name, 'label', p.label, 'amount', p.amount, 'via', p.via, 'trx', p.trx,
-      'sender', left(p.sender, 3) || '••••' || right(p.sender, 4), 'status', p.status, 'mine', p.user_id = $8, 'at', p.created_at) order by (p.status <> 'pending'), case when p.status = 'pending' then p.id end, p.id desc), '[]')
+      'sender', left(p.sender, 3) || '••••' || right(p.sender, 4), 'status', p.status, 'mine', p.user_id = $7, 'at', p.created_at) order by (p.status <> 'pending'), case when p.status = 'pending' then p.id end, p.id desc), '[]')
     from (select * from payments order by (status <> 'pending'), id desc limit 500) p join users u on u.id = p.user_id) end as queue,
   case when $2 then (select coalesce(json_agg(${EXPENSE} order by e.id desc), '[]') from (select * from expenses order by id desc limit 200) e join users w on w.id = e.by) end as expenses,
-  case when $3 then (select coalesce(json_object_agg(id, status), '{}') from decisions where kind = 'waiver') end as waived,
-  case when $4 then (select coalesce(json_agg(json_build_object('id', id::text, 'name', name, 'dept', dept, 'batch', batch, 'quiz', quiz, 'src', src, 'status', status, 'email', email, 'sid', sid, 'cf', cf, 'track', track, 'why', why) order by id desc), '[]')
+  case when $3 then (select coalesce(json_agg(json_build_object('id', id::text, 'name', name, 'dept', dept, 'batch', batch, 'quiz', quiz, 'src', src, 'status', status, 'email', email, 'sid', sid, 'cf', cf, 'track', track, 'why', why) order by id desc), '[]')
     from (select * from applications order by id desc limit 200) a) end as apps,
-  case when $5 then (select coalesce(json_agg(json_build_object('t', to_char(at at time zone '${TZ}', 'YYYY-MM-DD HH24:MI'), 'who', who, 'what', what) order by id desc), '[]')
+  case when $4 then (select coalesce(json_agg(json_build_object('t', to_char(at at time zone '${TZ}', 'YYYY-MM-DD HH24:MI'), 'who', who, 'what', what) order by id desc), '[]')
     from (select * from audit order by id desc limit 200) a) end as log,
-  case when $6 then (select coalesce(json_agg(json_build_object('body', body, 'at', created_at) order by id desc), '[]') from (select * from messages where kind = 'suggest' order by id desc limit 100) m) end as suggestions,
-  case when $7 then (select coalesce(json_agg(json_build_object('body', body, 'at', created_at) order by id desc), '[]') from (select * from messages where kind = 'feedback' order by id desc limit 100) m) end as feedback,
-  case when $7 then (select coalesce(json_object_agg(event_id, names), '{}') from (select r.event_id, json_agg(u.name order by u.name) names from registrations r join users u on u.id = r.user_id group by 1) x) end as registrants,
-  case when $7 then (select coalesce(json_object_agg(key, n), '{}') from (select key, count(*)::int n from attendance where key not like 'vol:%' group by 1) x) end as arrived`;
+  case when $5 then (select coalesce(json_agg(json_build_object('body', body, 'at', created_at) order by id desc), '[]') from (select * from messages where kind = 'suggest' order by id desc limit 100) m) end as suggestions,
+  case when $6 then (select coalesce(json_agg(json_build_object('body', body, 'at', created_at) order by id desc), '[]') from (select * from messages where kind = 'feedback' order by id desc limit 100) m) end as feedback`;
 
 // Real money movements: verified payments in, approved expenses out. The ledger rows only for finance roles.
-const WAIVER = `json_build_object('id', 'W-' || w.id, 'who', w.user_id, 'invoice', w.invoice_id, 'what', w.what, 'amount', w.amount,
-  'reason', w.reason, 'status', w.status, 'proposedBy', w.proposed_by, 'at', w.created_at)`;
-// Real money and the committee's own records. $1 finance roles, $2 the member, $3 waiver deciders, $4 committee.
+// Real money and the committee's own records. $1 finance roles, $2 the member, $3 committee.
 const MONEY = `
 with term as (select date_trunc('year', now() at time zone '${TZ}')
   + case when extract(month from now() at time zone '${TZ}') >= 7 then interval '6 months' else interval '0' end as since)
@@ -188,16 +181,16 @@ select
   case when $1 then (select coalesce(json_agg(json_build_object('id', b.id, 'name', b.name, 'plan', b.plan,
       'spent', b.spent_before + (select coalesce(sum(amount), 0) from expenses e where e.status = 'approved' and e.event = b.name)) order by b.id), '[]')
     from budgets b) end as budgets,
-  (select coalesce(json_agg(${WAIVER} order by w.id desc), '[]') from waiver_requests w where w.user_id = $2) as my_waivers,
-  case when $3 then (select coalesce(json_agg(${WAIVER} order by w.status not in ('pending', 'proposed'), w.id desc), '[]')
-    from (select * from waiver_requests order by id desc limit 200) w) end as waivers,
-  case when $4 then (select coalesce(json_agg(json_build_object('id', id, 'title', title, 'who', who, 'due', to_char(due, 'YYYY-MM-DD'), 'col', col) order by due nulls last, id), '[]')
+  -- Waivers are no longer requested; ones already granted still settle their invoice.
+  (select coalesce(json_agg(json_build_object('invoice', invoice_id, 'what', what, 'amount', amount, 'reason', reason, 'at', created_at)), '[]')
+    from waiver_requests where user_id = $2 and status = 'waived') as waived,
+  case when $3 then (select coalesce(json_agg(json_build_object('id', id, 'title', title, 'who', who, 'due', to_char(due, 'YYYY-MM-DD'), 'col', col) order by due nulls last, id), '[]')
     from committee_tasks) end as tasks,
-  case when $4 then (select coalesce(json_agg(json_build_object('id', m.id, 'date', to_char(m.day, 'YYYY-MM-DD'), 'title', m.title, 'agenda', m.agenda,
+  case when $3 then (select coalesce(json_agg(json_build_object('id', m.id, 'date', to_char(m.day, 'YYYY-MM-DD'), 'title', m.title, 'agenda', m.agenda,
       'actions', (select coalesce(json_agg(json_build_object('id', a.id, 'what', a.what, 'who', a.who, 'done', a.done) order by a.id), '[]')
         from meeting_actions a where a.meeting_id = m.id)) order by m.day desc, m.id desc), '[]')
     from (select * from meetings order by day desc limit 50) m) end as meetings,
-  case when $4 then (select coalesce(json_agg(json_build_object('id', id, 'name', name, 'holder', holder) order by id), '[]') from inventory) end as inventory`;
+  case when $3 then (select coalesce(json_agg(json_build_object('id', id, 'name', name, 'holder', holder) order by id), '[]') from inventory) end as inventory`;
 
 type Raw = Roster & {
   system: boolean;
@@ -333,7 +326,6 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
   const caps = {
     queue: !!can(roles, 'payments.verify'),
     exp: !!can(roles, 'expense.approve'),
-    waive: !!can(roles, 'dues.waive'),
     apps: !!can(roles, 'application.approve'),
     log: !!can(roles, 'audit.view'),
     suggest: admin,
@@ -389,7 +381,7 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
     queue: Object.fromEntries(
       (off.queue ?? []).map((q: { id: string; status: string }) => [q.id, q.status]),
     ),
-    exp: { ...decided(expenses), ...(off.waived ?? {}) },
+    exp: decided(expenses),
     apps: Object.fromEntries(
       (off.apps ?? []).map((a: { id: string; status: string }) => [a.id, a.status]),
     ),
@@ -412,10 +404,16 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
     }));
   const { mentorId: _m, pending: _p, ...me } = raw;
 
-  const money = (await db.query(MONEY, [seesMoney(roles), userId, caps.waive, committee])).rows[0];
-  // An approved waiver settles its invoice, unless a payment already did.
-  for (const w of money.my_waivers as Waiver[])
-    if (w.status === 'waived' && (!row.pay[w.invoice] || row.pay[w.invoice].status === 'rejected'))
+  const money = (await db.query(MONEY, [seesMoney(roles), userId, committee])).rows[0];
+  // A waiver granted before the feature was removed settles its invoice, unless a payment already did.
+  for (const w of money.waived as {
+    invoice: string;
+    what: string;
+    amount: number;
+    reason: string;
+    at: string;
+  }[])
+    if (!row.pay[w.invoice] || row.pay[w.invoice].status === 'rejected')
       row.pay[w.invoice] = {
         trx: '',
         via: 'Waiver',
@@ -436,7 +434,6 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
       cashflow: data.cashflow,
     };
   if (caps.exp) office.expenses = expenses;
-  if (caps.waive) office.waivers = money.waivers;
   const view = can(roles, 'mentees.view');
   if (view) {
     // A mentor ("scope") gets only the members assigned to them; the CP Head and above get everyone who has a mentor.
@@ -464,15 +461,7 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
   }
   if (caps.apps) office.applications = off.apps;
   if (caps.suggest) office.suggestions = off.suggestions;
-  if (caps.feedback) {
-    office.feedback = off.feedback;
-    office.events = {
-      code: data.ATTENDANCE.code,
-      event: data.ATTENDANCE.event,
-      arrived: off.arrived,
-      registrants: off.registrants,
-    };
-  }
+  if (caps.feedback) office.feedback = off.feedback;
   if (committee)
     office.ops = {
       tasks: money.tasks,
@@ -626,7 +615,6 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
     s,
     members,
     counts: {
-      reg: row.c_reg,
       vol: row.c_vol,
       kudos: row.c_kudos,
       votes,
@@ -642,7 +630,6 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
     news: row.news,
     inbox,
     myExpenses: row.my_exp,
-    myWaivers: money.my_waivers,
     term: { since: money.since, incoming: money.incoming, spent: money.spent },
     // The seeded opening balance plus every verified payment, minus every approved expense.
     fundTotal: data.accounts.reduce((a, x) => a + x[1], 0) + money.net,

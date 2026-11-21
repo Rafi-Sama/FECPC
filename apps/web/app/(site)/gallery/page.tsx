@@ -2,12 +2,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { events, fmtDate } from '@fecpc/content/site';
+import { fmtDate } from '@fecpc/content/site';
+import { publicEvents } from '@/lib/api';
 
 export const metadata = { title: 'Gallery' };
 
 // Photos are whatever sits in public/gallery. File name becomes the caption.
-export default function Gallery() {
+export default async function Gallery() {
   const dir = path.join(process.cwd(), 'public/gallery');
   const shots = fs.existsSync(dir)
     ? fs
@@ -16,6 +17,7 @@ export default function Gallery() {
         .sort()
     : [];
   if (!shots.length) notFound(); // the page publishes itself once there is something to show
+  const next = (await publicEvents())[0];
   return (
     <>
       <section className="page-head t-d" data-t="d">
@@ -52,10 +54,15 @@ export default function Gallery() {
               <div className="stack">
                 <h2 className="h2" style={{ fontSize: 'clamp(28px,3.4vw,44px)' }}>
                   The first photos go up after{' '}
-                  <span className="acc">{events[0].title.split(',')[0]}.</span>
+                  <span className="acc">{next ? next.title.split(',')[0] : 'the next event'}.</span>
                 </h2>
                 <p className="lede">
-                  {fmtDate(events[0].date, { weekday: 'long', day: 'numeric', month: 'long' })}.
+                  {next &&
+                    fmtDate(next.startsAt.slice(0, 10), {
+                      weekday: 'long',
+                      day: 'numeric',
+                      month: 'long',
+                    }) + '. '}
                   Come and be in them.
                 </p>
                 <p>

@@ -4,6 +4,7 @@ import Board from '@/components/site/Board';
 import { Page, Tabs } from '@/components/app/Shell';
 import { useStore } from '@/components/app/Store';
 import { Avatar, Bug } from '@/components/pixel/Sprites';
+import { PersonPicker } from '@/components/app/shared/PersonPicker';
 import { bounties, cfUrl, duels, myInvoices, owes, potd, shop } from '@fecpc/content/member-area';
 import { badges, byId, squads } from '@fecpc/content/site';
 import { LEVEL, level } from '@fecpc/contracts';
@@ -129,21 +130,15 @@ export default function Arena() {
           <div className="panel">
             <p className="label">CHALLENGE</p>
             <div className="row">
-              <select
-                className="input grow"
-                aria-label="Rival"
-                value={rival}
-                onChange={(e) => setRival(e.target.value)}
-              >
-                <option value="">Pick a rival</option>
-                {members
-                  .filter((m) => m.id !== me.id && !m.suspended)
-                  .map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}
-                    </option>
-                  ))}
-              </select>
+              <PersonPicker
+                className="grow"
+                label="Rival"
+                none={null}
+                placeholder="Pick a rival"
+                people={members.filter((m) => m.id !== me.id && !m.suspended)}
+                value={rival || null}
+                onPick={(v) => setRival(v ?? '')}
+              />
               <select
                 className="input"
                 aria-label="Problem"

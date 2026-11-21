@@ -3,7 +3,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Page, Tabs } from '@/components/app/Shell';
 import { useStore } from '@/components/app/Store';
-import { Suggest } from '@/components/app/community/Suggest';
 import {
   AnnouncementModal,
   type UnifiedAnnouncement,
@@ -22,10 +21,8 @@ import {
   relTime,
 } from '@/components/app/shared/MarkdownEditor';
 import { TierAvatar, TierName } from '@/components/app/shared/SolvedTier';
-import { AlumniPage } from '@/components/app/alumni/AlumniPage';
 import { HighlightMatch } from '@/components/app/alumni/HighlightMatch';
 import { announcements, polls } from '@fecpc/content/member-area';
-import { groupsData } from '@fecpc/content/training';
 import { can, isCommittee } from '@fecpc/contracts';
 import type {
   FeedCategory,
@@ -35,7 +32,7 @@ import type {
   IdeaType,
 } from '@fecpc/contracts';
 
-const tabs = ['Feed', 'Announcements', 'Ideas', 'Alumni', 'Polls', 'Groups', 'Suggest'] as const;
+const tabs = ['Feed', 'Announcements', 'Ideas', 'Polls'] as const;
 type Tab = (typeof tabs)[number];
 
 const FEED_FILTERS = [
@@ -62,8 +59,6 @@ const IDEA_STATUS_FILTERS: { key: 'all' | Exclude<IdeaStatus, 'closed'>; label: 
 function parseTab(param: string | null): Tab {
   if (!param) return 'Feed';
   const lower = param.toLowerCase();
-  if (lower === 'alumni' || lower === 'jobs' || lower === 'prep' || lower === 'blogs')
-    return 'Alumni';
   return tabs.find((t) => t.toLowerCase() === lower) ?? 'Feed';
 }
 
@@ -79,10 +74,6 @@ function CommunityContent() {
 
   const handleTabChange = useCallback(
     (nextTab: Tab) => {
-      if (nextTab === 'Alumni') {
-        router.push('/app/community?tab=alumni');
-        return;
-      }
       setTab(nextTab);
       router.replace(`/app/community?tab=${nextTab.toLowerCase()}`, { scroll: false });
     },
@@ -915,7 +906,6 @@ function CommunityContent() {
                         >
                           ▲ {it.upvotes}
                         </button>
-                        <span className="cm-inert-pill">💬 {it.comment_count}</span>
                         <span className="cm-inert-pill">Interested ({it.interested_count})</span>
                         {mine && (
                           <>
@@ -987,35 +977,6 @@ function CommunityContent() {
         </div>
       )}
 
-      {/* ────────── TAB 5: GROUPS (unchanged) ────────── */}
-      {tab === 'Groups' && (
-        <div className="bento">
-          {groupsData.map(([n, lead, count]) => {
-            const k = 'group:' + n;
-            const on = s.flags[k] ?? n === 'Competitive Programming';
-            return (
-              <section key={n} className="panel c4">
-                <p className="label">
-                  {count + (on && n !== 'Competitive Programming' ? 1 : 0)} members · lead{' '}
-                  {who(lead).name.split(' ')[0]}
-                </p>
-                <h2 className="h3">{n}</h2>
-                <button
-                  className={`btn sm ${on ? 'line' : ''}`}
-                  aria-pressed={on}
-                  onClick={() => act('flag', { key: k, on: !on })}
-                >
-                  {on ? 'Joined ✓' : 'Join group'}
-                </button>
-              </section>
-            );
-          })}
-        </div>
-      )}
-
-      {/* ────────── TAB 6: SUGGEST (unchanged) ────────── */}
-      {tab === 'Suggest' && <Suggest />}
-
       {/* ────────── MODALS ────────── */}
       <NewPostModal
         open={newPostOpen}
@@ -1067,16 +1028,6 @@ function CommunityContent() {
   );
 }
 
-function CommunityInner() {
-  const searchParams = useSearchParams();
-  const tabParam = (searchParams.get('tab') || '').toLowerCase();
-  const isAlumni = ['alumni', 'jobs', 'prep', 'blogs'].includes(tabParam);
-  if (isAlumni) {
-    return <AlumniPage />;
-  }
-  return <CommunityContent />;
-}
-
 export default function Community() {
   return (
     <Suspense
@@ -1092,7 +1043,7 @@ export default function Community() {
         </Page>
       }
     >
-      <CommunityInner />
+      <CommunityContent />
     </Suspense>
   );
 }

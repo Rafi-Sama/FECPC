@@ -399,7 +399,7 @@ function PaymentModal({
 }
 
 export default function Finance() {
-  const { s, me, act, office, fundTotal, myWaivers, term } = useStore();
+  const { s, me, office, fundTotal, term } = useStore();
   // 'dues' and 'transparency' are for everyone; officer tabs depend on the role's capabilities.
   const officer = officerTabs(s.roles);
   const [tab, setTab] = useState('dues');
@@ -553,10 +553,7 @@ export default function Finance() {
               {invoices.length ? (
                 invoices.map((invoice) => {
                   const payment = s.pay[invoice.id];
-                  const canPay = owes(s.pay, invoice.id),
-                    waiver = myWaivers.find(
-                      (w) => w.invoice === invoice.id && w.status !== 'waived',
-                    );
+                  const canPay = owes(s.pay, invoice.id);
                   const invoiceState =
                     payment?.status === 'verified' || payment?.status === 'waived'
                       ? 'paid'
@@ -585,23 +582,6 @@ export default function Finance() {
                           >
                             <span>Pay {tk(invoice.amount)}</span>
                             <b aria-hidden="true">→</b>
-                          </button>
-                        ) : null}
-                        {canPay && waiver && waiver.status !== 'rejected' ? (
-                          <small>
-                            Waiver {waiver.status === 'proposed' ? 'proposed' : 'requested'}
-                          </small>
-                        ) : canPay ? (
-                          <button
-                            className="btn xs line"
-                            onClick={() => {
-                              const reason = prompt(
-                                `Why should ${invoice.id} be waived? Two officers will read this.`,
-                              );
-                              if (reason) act('requestWaiver', { invoice: invoice.id, reason });
-                            }}
-                          >
-                            {waiver ? 'Ask again to waive' : 'Ask to waive'}
                           </button>
                         ) : (
                           <small>Settled</small>

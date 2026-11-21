@@ -22,7 +22,7 @@ Every account has exactly one role. Officers are the "committee".
 | CP Head     | Runs training and contest logistics                                  |     ✓     |
 | Treasurer   | Verifies payments, files and decides small expenses                  |     ✓     |
 | Secretary   | Runs events, reviews applications                                    |     ✓     |
-| President   | Final say on expenses, waivers, roles                                |     ✓     |
+| President   | Final say on expenses, roles                                |     ✓     |
 | Super Admin | The operator account (`admin`); not a person, never listed or ranked |     ✓     |
 
 The full rules are in [Roles and permissions](roles-and-permissions.md).
@@ -39,13 +39,13 @@ The full rules are in [Roles and permissions](roles-and-permissions.md).
 | Courses       | `/app/courses`                    | Lessons and server-scored quizzes                                                                                                                                                    |
 | Learn         | `/app/learn`                      | Roadmap, resources, doubts, and mentorship (weekly check-ins, mentor nudges)                                                                                                         |
 | Wiki          | `/app/wiki`                       | Club knowledge base                                                                                                                                                                  |
-| Community     | `/app/community`                  | Feed (posts, votes, comments, reports, milestones and kudos), announcements, ideas (with interest requests), alumni, polls, groups, anonymous suggestions                            |
+| Community     | `/app/community`                  | Feed (posts, votes, comments, reports, milestones and kudos), announcements, ideas (with interest requests), polls                                                                   |
 | Blog          | `/app/blog`                       | Club blog reading list                                                                                                                                                               |
-| Events        | `/app/events`, `/app/events/[id]` | Register, check in with the room code, volunteer shifts, feedback                                                                                                                    |
+| Events        | `/app/events`, `/app/events/[id]` | Register or apply for roles, check in with the room code, feedback, certificates; organisers manage everything ([Events](events.md))                                                 |
 | Teams         | `/app/teams`                      | ICPC team, shared template notebook with edit history, team pings                                                                                                                    |
 | Members       | `/app/directory`                  | Searchable directory and member profiles; officer actions on members                                                                                                                 |
 | Alumni & jobs | `/app/career`                     | Alumni directory, job board, interview prep (topics, problems, tips), alumni blog                                                                                                    |
-| Finance       | `/app/finance`                    | Own dues and payments, receipts, transparency; officers: payment verification, expense requests and decisions, waivers, club fund                                                    |
+| Finance       | `/app/finance`                    | Own dues and payments, receipts, transparency; officers: payment verification, expense requests and decisions, club fund                                                    |
 | Notifications | `/app/notifications`              | Inbox built from real records (dues, decisions, pings, kudos, check-ins); latest six in the topbar bell; team invites and idea interests answer in one click (`actions` on the item) |
 | Profile       | `/app/profile`                    | Own details, Codeforces handle, password change                                                                                                                                      |
 | Admin         | `/app/admin`                      | Dashboard (counts, member export, suggestions), applications, members (role, post, suspend/reinstate, invite and reset links), permissions matrix, audit log                         |
@@ -69,7 +69,6 @@ password from an invite link, or Google sign-in).
   outcome; a verified payment has a printable receipt.
 - **Expenses.** A committee member files a request. Up to ৳5,000 the Treasurer decides; above it the Treasurer
   can only pass it up and the President decides. Nobody decides their own request.
-- **Waivers.** One officer proposes waiving a due; a second officer with full `dues.waive` authority decides.
 - **XP and levels.** Solving, check-ins, lessons, quizzes, posts, kudos and verified payments earn XP
   (`packages/contracts/src/xp.ts`). XP can be spent in the shop; spending never lowers the level.
 - **Milestones.** Crossing a Codeforces rank, a solved-count threshold or a streak creates a milestone that

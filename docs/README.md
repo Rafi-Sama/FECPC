@@ -14,6 +14,7 @@ Start with **Getting started** to run it, then **Architecture** to understand ho
 | [Project structure](project-structure.md)         | find where a piece of code lives, and where new code should go       |
 | [API reference](api-reference.md)                 | call or change an HTTP endpoint                                      |
 | [Member-area actions](member-area-actions.md)     | add or change something a member can do (`act` types and queries)    |
+| [Events](events.md)                               | event lifecycle, registration, responses, feedback, certificates     |
 | [Roles and permissions](roles-and-permissions.md) | check who may do what; change the capability matrix                  |
 | [Security](security.md)                           | understand sign-in, sessions, CSRF, rate limits and the threat model |
 | [Database](database.md)                           | understand the tables, change the schema, or reseed                  |

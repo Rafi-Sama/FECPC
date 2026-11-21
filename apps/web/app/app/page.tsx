@@ -5,7 +5,8 @@ import { useStore } from '@/components/app/Store';
 import { Verified } from '@/components/app/sheets/Verified';
 import { Onboarding } from '@/components/app/home/Onboarding';
 import { announcements, cfUrl, myInvoices, owes, potd, sheet } from '@fecpc/content/member-area';
-import { events, fmtDate, squads } from '@fecpc/content/site';
+import { fmtDate, squads } from '@fecpc/content/site';
+import { fmtWhen, usePublicEvents } from '@/lib/events';
 import { LEVEL, level, quests, XP } from '@fecpc/contracts';
 
 const TODAY = '2026-11-12'; // shortcut: seed data is dated around this day; use the real clock with real data
@@ -16,7 +17,8 @@ export default function Today() {
   const { s, me, xp, act, office, who } = useStore();
   const owed = myInvoices(s.reg).filter((i) => owes(s.pay, i.id));
   const next = sheet.find((p) => !s.solved.includes(p.id));
-  const contest = events.find((e) => e.type === 'Contest')!;
+  const events = usePublicEvents();
+  const contest = events.find((e) => e.type === 'Contest');
   const unread = announcements.filter((a) => !s.read.includes(a.id));
   const streak = me.streak + (s.checkin ? 1 : 0),
     lv = level(xp);
@@ -168,24 +170,23 @@ export default function Today() {
             Open sheet
           </Link>
         </section>
-        <section className="panel c4">
-          <p className="label">Next contest</p>
-          <p className="big">
-            {daysTo(contest.date)}
-            <span className="mut" style={{ fontSize: '.36em' }}>
-              {' '}
-              days
-            </span>
-          </p>
-          <p className="body">{contest.title}</p>
-          <p className="label">
-            {fmtDate(contest.date, { weekday: 'short', day: 'numeric', month: 'short' })} ·{' '}
-            {contest.time}
-          </p>
-          <Link href="/app/contests" className="btn sm line">
-            Contest calendar
-          </Link>
-        </section>
+        {contest && (
+          <section className="panel c4">
+            <p className="label">Next contest</p>
+            <p className="big">
+              {daysTo(contest.startsAt.slice(0, 10))}
+              <span className="mut" style={{ fontSize: '.36em' }}>
+                {' '}
+                days
+              </span>
+            </p>
+            <p className="body">{contest.title}</p>
+            <p className="label">{fmtWhen(contest.startsAt)}</p>
+            <Link href="/app/contests" className="btn sm line">
+              Contest calendar
+            </Link>
+          </section>
+        )}
         {rank >= 0 && (
           <section className="panel c4">
             <p className="label">Squad cup</p>
@@ -235,7 +236,7 @@ export default function Today() {
             {events.slice(0, 3).map((e) => (
               <li key={e.id}>
                 <span className="mono acc" style={{ width: 54 }}>
-                  {fmtDate(e.date)}
+                  {fmtDate(e.startsAt.slice(0, 10))}
                 </span>
                 <span className="grow">
                   <Link className="link" href={`/app/events/${e.id}`}>
@@ -243,7 +244,7 @@ export default function Today() {
                   </Link>
                   <br />
                   <span className="label">
-                    {e.time} · {e.place}
+                    {e.startsAt.slice(11)} · {e.place}
                   </span>
                 </span>
                 {s.reg.includes(e.id) && <span className="pill ok">going</span>}

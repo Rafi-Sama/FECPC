@@ -221,11 +221,6 @@ export async function setup(db: Db, password: string) {
        (1, 'nusrat', '{"What frontend stack are you comfortable with?":"React + clean design systems"}', 'accepted', now() - interval '90 minutes'),
        (2, 'mim', '{"What is your current Codeforces rating?":"920","Which topics do you enjoy most?":"Strings & greedy"}', 'pending', now() - interval '3 hours')`,
     );
-    await db.query(
-      `insert into community_comments (target_type, target_id, user_id, body, created_at) values
-       ('idea', 1, 'sadia', 'Love this project concept — happy to help test the replay UI!', now() - interval '50 minutes'),
-       ('idea', 4, 'rahim', 'Count me in! Ownership vs C++ references is the exact bridge people need.', now() - interval '12 hours')`,
-    );
   }
 
   // Seed alumni accounts, rich member profile fields, and alumni jobs idempotently.

@@ -7,17 +7,9 @@ import Roadmap from '@/components/site/Roadmap';
 import EventRow from '@/components/site/EventRow';
 import Faq from '@/components/site/Faq';
 import { site } from '@/lib/site';
+import { publicEvents } from '@/lib/api';
 import { upcomingContests, localTime } from '@/lib/cf';
-import {
-  badges,
-  cfTitle,
-  events,
-  lifecycle,
-  loops,
-  members,
-  squads,
-  tracks,
-} from '@fecpc/content/site';
+import { badges, cfTitle, lifecycle, loops, members, squads, tracks } from '@fecpc/content/site';
 
 const boot = [
   'mounting /dev/brain',
@@ -55,6 +47,7 @@ const sheet = [
 ] as const;
 
 export default async function Home() {
+  const events = await publicEvents();
   const contests = await upcomingContests(5);
   const top = [...members].sort((a, b) => b.rating - a.rating).slice(0, 6);
   const solved = members.reduce((s, x) => s + x.solved, 0);

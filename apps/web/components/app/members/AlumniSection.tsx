@@ -136,7 +136,7 @@ export function AlumniSection({
                 <span className="label" style={{ fontSize: 12 }}>
                   {fmtShortDate(t.created_at)}
                 </span>
-                <Link href={`/app/community?tab=prep`} className="profile-modal__link">
+                <Link href={`/app/career?tab=prep`} className="profile-modal__link">
                   View in Prep ↗
                 </Link>
               </li>
@@ -172,7 +172,7 @@ export function AlumniSection({
                   {fmtShortDate(b.published_at || b.created_at)}
                 </span>
                 <Link
-                  href={`/app/community?tab=blogs&read=${encodeURIComponent(b.slug)}`}
+                  href={`/app/career?tab=blogs&read=${encodeURIComponent(b.slug)}`}
                   className="profile-modal__link"
                 >
                   Read ↗

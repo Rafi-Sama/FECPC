@@ -1,4 +1,5 @@
 'use client';
+import { DatePicker } from '@/components/app/shared/DatePicker';
 import React, { useEffect, useRef, useState } from 'react';
 import type { AlumniJob } from '@fecpc/contracts';
 import { JobCard } from './JobCard';
@@ -518,20 +519,13 @@ export function PostJobModal({
                 >
                   CLOSING DEADLINE *
                 </label>
-                <input
-                  type="date"
-                  className="btn line"
+                <DatePicker
+                  className="grow"
+                  label="Closing deadline"
                   required
+                  invalid={!!errors.deadline}
                   value={deadline}
-                  onChange={(e) => setDeadline(e.target.value)}
-                  style={{
-                    width: '100%',
-                    minHeight: 40,
-                    textAlign: 'left',
-                    background: 'var(--bg, #FFFFFF)',
-                    color: 'var(--ink, #0B0B0B)',
-                    borderColor: errors.deadline ? 'var(--acc, #B00020)' : 'var(--line2, #0B0B0B)',
-                  }}
+                  onChange={setDeadline}
                 />
                 {errors.deadline && (
                   <span

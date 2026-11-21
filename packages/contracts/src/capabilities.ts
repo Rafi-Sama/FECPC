@@ -64,14 +64,8 @@ export const matrix = {
     president: Y,
     super_admin: Y,
   },
-  'dues.waive': {
-    label: 'Waive dues or fines',
-    treasurer: 'propose',
-    president: Y,
-    super_admin: Y,
-  },
   'event.publish': {
-    label: 'Run events: code, registrants, scoreboard',
+    label: 'Run events: create, registrations, feedback, certificates',
     secretary: Y,
     president: Y,
     super_admin: Y,

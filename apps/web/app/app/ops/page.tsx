@@ -7,6 +7,8 @@ import { cols } from '@fecpc/content/training';
 import { fmtDate } from '@fecpc/content/site';
 import { can, canFully, isAdmin } from '@fecpc/contracts';
 import { Avatar } from '@/components/pixel/Sprites';
+import { DatePicker } from '@/components/app/shared/DatePicker';
+import { PersonPicker } from '@/components/app/shared/PersonPicker';
 
 const allTabs = [
   'Board',
@@ -29,21 +31,12 @@ function Who({
 }) {
   const { members } = useStore();
   return (
-    <select
-      className="input sm"
-      aria-label={label}
-      value={value ?? ''}
-      onChange={(e) => onPick(e.target.value || null)}
-    >
-      <option value="">Nobody</option>
-      {members
-        .filter((m) => !m.suspended)
-        .map((m) => (
-          <option key={m.id} value={m.id}>
-            {m.name}
-          </option>
-        ))}
-    </select>
+    <PersonPicker
+      people={members.filter((m) => !m.suspended)}
+      value={value}
+      onPick={onPick}
+      label={label}
+    />
   );
 }
 const tk = (n: number) => '৳' + n.toLocaleString('en');
@@ -51,6 +44,9 @@ const tk = (n: number) => '৳' + n.toLocaleString('en');
 export default function Ops() {
   const { s, me, act, office, who, members } = useStore();
   const [tab, setTab] = useState<(typeof allTabs)[number]>('Board');
+  // Drag a card onto a column to move it; `moving` shows it there until the server confirms.
+  const [over, setOver] = useState<string | null>(null);
+  const [moving, setMoving] = useState<{ id: number; col: string } | null>(null);
   if (!office.ops)
     return (
       <Page title="Executive workspace">
@@ -107,84 +103,45 @@ export default function Ops() {
               required
               minLength={3}
             />
-            <select name="who" className="input sm" aria-label="Assign to" defaultValue="">
-              <option value="">Nobody</option>
-              {people.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
-            <input name="due" type="date" className="input sm" aria-label="Due" />
+            <PersonPicker name="who" people={people} label="Assign to" />
+            <DatePicker name="due" label="Due" placeholder="Due date" />
             <button className="btn sm">Add</button>
           </form>
           <div className="kanban">
             {cols.map((c) => {
-              const list = tasks.filter((t) => t.col === c);
+              const colOf = (t: (typeof tasks)[number]) =>
+                moving?.id === t.id ? moving.col : t.col;
+              const list = tasks.filter((t) => colOf(t) === c);
               const save = (t: (typeof tasks)[number], patch: Partial<(typeof tasks)[number]>) =>
                 act('saveTask', { ...t, ...patch });
               return (
-                <section key={c}>
+                <section
+                  key={c}
+                  className={over === c ? 'drop' : undefined}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setOver(c);
+                  }}
+                  onDragLeave={(e) => {
+                    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(null);
+                  }}
+                  onDrop={async (e) => {
+                    e.preventDefault();
+                    setOver(null);
+                    const t = tasks.find(
+                      (x) => String(x.id) === e.dataTransfer.getData('text/plain'),
+                    );
+                    if (!t || t.col === c) return;
+                    setMoving({ id: t.id, col: c });
+                    await save(t, { col: c });
+                    setMoving(null);
+                  }}
+                >
                   <p className="label">
                     {c} · {list.length}
                   </p>
                   {list.map((t) => (
-                    <article key={t.id} className="panel box">
-                      <span className="row between" style={{ flexWrap: 'nowrap' }}>
-                        <strong>{t.title}</strong>
-                        <span
-                          className="row"
-                          style={{ '--g': '4px', flexWrap: 'nowrap' } as React.CSSProperties}
-                        >
-                          <button
-                            className="btn xs line"
-                            aria-label={`Rename ${t.title}`}
-                            onClick={() => {
-                              const title = prompt('Task', t.title);
-                              if (title && title !== t.title) save(t, { title });
-                            }}
-                          >
-                            ✎
-                          </button>
-                          <button
-                            className="btn xs line danger"
-                            aria-label={`Delete ${t.title}`}
-                            onClick={() =>
-                              confirm(`Delete “${t.title}”?`) && act('deleteTask', { id: t.id })
-                            }
-                          >
-                            ×
-                          </button>
-                        </span>
-                      </span>
-                      <span className="row" style={{ '--g': '8px' } as React.CSSProperties}>
-                        {t.who && (
-                          <Avatar name={who(t.who).name} size={22} fg="#0D0D0B" bg="#DAD6CB" />
-                        )}
-                        <Who
-                          label={`Assignee of ${t.title}`}
-                          value={t.who}
-                          onPick={(v) => save(t, { who: v })}
-                        />
-                        <input
-                          type="date"
-                          className="input sm"
-                          aria-label={`Due date of ${t.title}`}
-                          value={t.due ?? ''}
-                          onChange={(e) => save(t, { due: e.target.value || null })}
-                        />
-                      </span>
-                      <select
-                        className="input sm"
-                        aria-label={`Status of ${t.title}`}
-                        value={c}
-                        onChange={(e) => save(t, { col: e.target.value })}
-                      >
-                        {cols.map((x) => (
-                          <option key={x}>{x}</option>
-                        ))}
-                      </select>
-                    </article>
+                    <TaskCard key={t.id} task={t} people={people} />
                   ))}
                   {list.length === 0 && <p className="body dim">Nothing here.</p>}
                 </section>
@@ -209,7 +166,7 @@ export default function Ops() {
                 f.reset();
             }}
           >
-            <input name="date" type="date" className="input sm" aria-label="Date" required />
+            <DatePicker name="date" label="Date" required />
             <input
               name="title"
               className="input"
@@ -313,14 +270,7 @@ export default function Ops() {
                     required
                     minLength={3}
                   />
-                  <select name="who" className="input sm" aria-label="Owner" defaultValue="">
-                    <option value="">Nobody</option>
-                    {people.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
+                  <PersonPicker name="who" people={people} label="Owner" />
                   <button className="btn xs">Add</button>
                 </form>
               </section>
@@ -509,23 +459,13 @@ function Mentors() {
                 </td>
                 <td className="mono">{m.batch || '—'}</td>
                 <td className="r">
-                  <select
-                    className="input sm"
-                    aria-label={`Mentor of ${m.name}`}
-                    value={m.mentorId ?? ''}
-                    onChange={(e) =>
-                      act('assignMentor', { user: m.id, mentor: e.target.value || null })
-                    }
-                  >
-                    <option value="">No mentor</option>
-                    {mentors
-                      .filter((x) => x.id !== m.id)
-                      .map((x) => (
-                        <option key={x.id} value={x.id}>
-                          {x.name}
-                        </option>
-                      ))}
-                  </select>
+                  <PersonPicker
+                    label={`Mentor of ${m.name}`}
+                    none="No mentor"
+                    people={mentors.filter((x) => x.id !== m.id)}
+                    value={m.mentorId ?? null}
+                    onPick={(v) => act('assignMentor', { user: m.id, mentor: v })}
+                  />
                 </td>
               </tr>
             ))}
@@ -533,5 +473,150 @@ function Mentors() {
         </table>
       </div>
     </div>
+  );
+}
+
+type Task = { id: number; title: string; who: string | null; due: string | null; col: string };
+
+// Read-only until Edit; then one form saves every field at once. Delete asks inline, not with a browser dialog.
+function TaskCard({
+  task: t,
+  people,
+}: {
+  task: Task;
+  people: { id: string; name: string; handle: string }[];
+}) {
+  const { act, who } = useStore();
+  const [draft, setDraft] = useState<Task | null>(null);
+  const [sure, setSure] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const overdue = !!t.due && t.col !== 'Done' && t.due < new Date().toISOString().slice(0, 10);
+  const close = () => {
+    setDraft(null);
+    setSure(false);
+  };
+  if (!draft)
+    return (
+      <article
+        className="panel box task"
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.setData('text/plain', String(t.id));
+          e.dataTransfer.effectAllowed = 'move';
+        }}
+      >
+        <span className="row between" style={{ flexWrap: 'nowrap', alignItems: 'flex-start' }}>
+          <strong>{t.title}</strong>
+          <button
+            className="btn xs line"
+            aria-label={`Edit ${t.title}`}
+            onClick={() => setDraft({ ...t })}
+          >
+            Edit
+          </button>
+        </span>
+        <span className="row task__meta" style={{ '--g': '8px' } as React.CSSProperties}>
+          {t.who ? (
+            <>
+              <Avatar name={who(t.who).name} size={22} fg="#0D0D0B" bg="#DAD6CB" />
+              <span>{who(t.who).name}</span>
+            </>
+          ) : (
+            <span className="dim">Unassigned</span>
+          )}
+          {t.due && (
+            <span className={overdue ? 'task__due bad' : 'task__due'}>
+              {overdue ? 'Overdue · ' : 'Due '}
+              {fmtDate(t.due)}
+            </span>
+          )}
+        </span>
+      </article>
+    );
+  return (
+    <form
+      className="panel box task editing"
+      onKeyDown={(e) => e.key === 'Escape' && close()}
+      onSubmit={async (e) => {
+        e.preventDefault();
+        setBusy(true);
+        const ok = await act('saveTask', draft);
+        setBusy(false);
+        if (ok) close();
+      }}
+    >
+      <label className="field">
+        <span className="label">Task</span>
+        <input
+          className="input sm"
+          autoFocus
+          required
+          minLength={3}
+          maxLength={140}
+          value={draft.title}
+          onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+        />
+      </label>
+      <span className="row" style={{ '--g': '8px' } as React.CSSProperties}>
+        <PersonPicker
+          people={people}
+          label={`Assignee of ${t.title}`}
+          value={draft.who}
+          onPick={(v) => setDraft({ ...draft, who: v })}
+        />
+        <DatePicker
+          label={`Due date of ${t.title}`}
+          placeholder="Due date"
+          value={draft.due}
+          onChange={(v) => setDraft({ ...draft, due: v || null })}
+        />
+        <select
+          className="input sm"
+          aria-label={`Status of ${t.title}`}
+          value={draft.col}
+          onChange={(e) => setDraft({ ...draft, col: e.target.value })}
+        >
+          {cols.map((x) => (
+            <option key={x}>{x}</option>
+          ))}
+        </select>
+      </span>
+      {sure ? (
+        <span className="row between" role="alert">
+          <span className="body">Delete this task?</span>
+          <span className="row" style={{ '--g': '6px' } as React.CSSProperties}>
+            <button type="button" className="btn xs line" onClick={() => setSure(false)}>
+              Keep
+            </button>
+            <button
+              type="button"
+              className="btn xs danger"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                await act('deleteTask', { id: t.id });
+                setBusy(false);
+              }}
+            >
+              Delete
+            </button>
+          </span>
+        </span>
+      ) : (
+        <span className="row between">
+          <button type="button" className="btn xs line danger" onClick={() => setSure(true)}>
+            Delete
+          </button>
+          <span className="row" style={{ '--g': '6px' } as React.CSSProperties}>
+            <button type="button" className="btn xs line" onClick={close}>
+              Cancel
+            </button>
+            <button className="btn xs" disabled={busy || draft.title.trim().length < 3}>
+              Save
+            </button>
+          </span>
+        </span>
+      )}
+    </form>
   );
 }

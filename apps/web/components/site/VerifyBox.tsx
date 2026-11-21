@@ -1,9 +1,14 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { certificates, fmtDate } from '@fecpc/content/site';
+import type { VerifiedCertificate } from '@fecpc/contracts';
 import { site } from '@/lib/site';
 
-// shortcut: looks up seed certificates in the bundle; move to a server lookup with the database.
+type Hit = { code: string; name: string; what: string; date: string; signedBy?: string };
+const what = (c: VerifiedCertificate) =>
+  `${c.kind.startsWith('winner') ? `${c.place} place` : c.kind.startsWith('role:') ? c.role : 'Participant'}, ${c.event}`;
+
+// The sample codes are static; every other code is looked up among issued event certificates.
 export default function VerifyBox() {
   const [q, setQ] = useState(certificates[0].code);
   const [asked, setAsked] = useState<string | null>(certificates[0].code); // open on a sample so the result state is visible
@@ -15,7 +20,28 @@ export default function VerifyBox() {
       setAsked(c);
     }
   }, []);
-  const hit = asked ? certificates.find((c) => c.code === asked) : undefined;
+  const sample = asked ? certificates.find((c) => c.code === asked) : undefined;
+  const [found, setFound] = useState<{ code: string; hit: Hit | null }>();
+  useEffect(() => {
+    if (!asked || sample) return;
+    let live = true;
+    fetch(`/api/certificates/${encodeURIComponent(asked)}`)
+      .then((r) => (r.ok ? (r.json() as Promise<VerifiedCertificate>) : null))
+      .catch(() => null)
+      .then((c) => {
+        if (live)
+          setFound({
+            code: asked,
+            hit: c && { code: c.code, name: c.name, what: what(c), date: c.date.slice(0, 10) },
+          });
+      });
+    return () => {
+      live = false;
+    };
+  }, [asked, sample]);
+  const hit: Hit | undefined =
+    sample ?? (found?.code === asked ? (found.hit ?? undefined) : undefined);
+  const pending = !!asked && !sample && found?.code !== asked;
   return (
     <div className="stack" style={{ '--g': '32px' } as React.CSSProperties}>
       <form
@@ -55,7 +81,7 @@ export default function VerifyBox() {
         ))}
       </p>
       <div aria-live="polite">
-        {asked && !hit && (
+        {asked && !hit && !pending && (
           <div className="panel box">
             <p className="label bad">No match</p>
             <h3 className="h3" style={{ marginTop: 8 }}>
@@ -87,10 +113,12 @@ export default function VerifyBox() {
                 <span className="label">Date</span>
                 <span>{fmtDate(hit.date, { day: 'numeric', month: 'long', year: 'numeric' })}</span>
               </div>
-              <div className="kv">
-                <span className="label">Signed by</span>
-                <span>{hit.signedBy}</span>
-              </div>
+              {hit.signedBy && (
+                <div className="kv">
+                  <span className="label">Signed by</span>
+                  <span>{hit.signedBy}</span>
+                </div>
+              )}
             </div>
             <i aria-hidden className="seal dither" />
           </div>

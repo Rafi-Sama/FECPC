@@ -1914,11 +1914,29 @@ kbd {
   min-width: 0;
 }
 
-.kanban article {
+.kanban .task {
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 16px;
+  cursor: grab;
+}
+
+.kanban article.task:active {
+  cursor: grabbing;
+}
+
+.kanban section {
+  /* The whole column is a drop target, down to the bottom of the screen. */
+  min-height: max(320px, calc(100dvh - 280px));
+  border-radius: 6px;
+  transition: background 0.12s;
+}
+
+.kanban section.drop {
+  background: color-mix(in srgb, var(--hue, currentColor) 12%, transparent);
+  outline: 2px dashed var(--hue, currentColor);
+  outline-offset: 4px;
 }
 
 .receipt {
@@ -3636,14 +3654,6 @@ kbd {
   gap: 12px;
 }
 
-.cm-comments {
-  border-top: 1px solid var(--line2);
-  padding-top: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
 .cm-sentinel {
   text-align: center;
   padding: 16px 0;
@@ -5225,7 +5235,7 @@ select.member-filter-ctrl {
   border-bottom: 3px solid var(--hue);
   padding-bottom: 6px;
 }
-.kanban article {
+.kanban .task {
   transition: transform 0.2s ease;
 }
 .kanban article:hover {
@@ -5703,4 +5713,306 @@ textarea.tm-code {
     grid-template-areas: 'name n' 'track track' 'gap gap';
     row-gap: 6px;
   }
+}
+
+/* PersonPicker: searchable people dropdown */
+.picker {
+  position: relative;
+  display: inline-block;
+}
+.picker__btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 150px;
+  cursor: pointer;
+  text-align: left;
+}
+.picker__btn span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.picker__pop {
+  position: fixed;
+  z-index: 10000;
+  width: 300px;
+  max-width: calc(100vw - 32px);
+  background: var(--panel);
+  border: 1px solid var(--line2);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+.picker__search {
+  display: block;
+  width: calc(100% - 24px);
+  margin: 10px 12px;
+  padding: 6px 10px;
+  border: 1px solid var(--line2);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--hi);
+  font-size: 14px;
+}
+.picker__search:focus {
+  outline: 2px solid var(--acc);
+  outline-offset: 1px;
+}
+.picker__list {
+  max-height: 260px;
+  overflow-y: auto;
+  border-top: 1px solid var(--line2);
+}
+.picker__list button {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  padding: 9px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  color: var(--hi);
+  text-align: left;
+  font-size: 14px;
+  cursor: pointer;
+}
+.picker__list button:hover,
+.picker__list button:focus-visible,
+.picker__list button[aria-selected='true'] {
+  background: var(--bg);
+}
+.picker__list .dim {
+  color: var(--dim);
+}
+.picker__empty {
+  margin: 0;
+  padding: 12px 14px;
+  color: var(--dim);
+  font-size: 14px;
+}
+.picker.grow .picker__btn {
+  width: 100%;
+}
+.kanban .task.editing {
+  cursor: auto;
+  outline: 2px solid var(--acc);
+}
+.task__meta {
+  font-size: 14px;
+  align-items: center;
+}
+.task__due {
+  margin-left: auto;
+  color: var(--dim);
+}
+.task__due.bad {
+  color: var(--bad);
+}
+
+/* DatePicker: calendar (and clock) dropdown */
+.datepick {
+  position: relative;
+  display: inline-block;
+}
+.datepick.grow,
+.field .datepick {
+  display: block;
+}
+.datepick.grow .datepick__btn,
+.field .datepick__btn {
+  width: 100%;
+}
+.datepick__field {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.datepick__btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 150px;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+}
+.datepick__btn.bad {
+  border-color: var(--bad);
+}
+.datepick__btn svg {
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+.datepick__btn .dim {
+  color: var(--dim);
+}
+.datepick__pop {
+  position: fixed;
+  z-index: 10000;
+  width: 300px;
+  max-width: calc(100vw - 32px);
+  padding: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line2);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+  color: var(--hi);
+  font-size: 14px;
+}
+.datepick__pop button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.datepick__views {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.datepick__views button,
+.clock__read button {
+  padding: 6px 8px;
+  border: 1px solid var(--line2);
+  border-radius: 4px;
+  background: none;
+}
+.datepick__views button[aria-pressed='true'],
+.clock__read button[aria-pressed='true'] {
+  background: var(--acc);
+  border-color: var(--acc);
+  color: var(--bg);
+}
+.datepick__views button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.datepick__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.datepick__head button {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  font-size: 20px;
+  line-height: 1;
+}
+.datepick__head button:hover {
+  background: var(--bg);
+}
+.datepick__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  text-align: center;
+}
+.datepick__dow {
+  padding: 4px 0;
+  color: var(--dim);
+  font-size: 14px;
+}
+.datepick__grid button {
+  aspect-ratio: 1;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: none;
+}
+.datepick__grid button:hover {
+  background: var(--bg);
+}
+.datepick__grid button:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 1px;
+}
+.datepick__grid button[aria-current='date'] {
+  border-color: var(--acc);
+}
+.datepick__grid button[aria-selected='true'] {
+  background: var(--acc);
+  color: var(--bg);
+  font-weight: 700;
+}
+.datepick__foot {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.datepick__foot .btn:last-child:not(:first-child) {
+  margin-left: auto;
+}
+
+/* Clock face inside the DatePicker */
+.clock__read {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  font-size: 22px;
+}
+.clock__read > button {
+  min-width: 52px;
+  font-variant-numeric: tabular-nums;
+}
+.clock__ampm {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-left: 8px;
+}
+.clock__ampm button {
+  padding: 2px 8px;
+  font-size: 14px;
+}
+.clock__face {
+  position: relative;
+  width: min(240px, 100%);
+  aspect-ratio: 1;
+  margin: 0 auto;
+  border-radius: 50%;
+  background: var(--bg);
+}
+.clock__face svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.clock__face line {
+  stroke: var(--acc);
+  stroke-width: 2;
+}
+.clock__face circle {
+  fill: var(--acc);
+}
+.clock__face button {
+  position: absolute;
+  width: 36px;
+  height: 36px;
+  translate: -50% -50%;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  font-size: 14px;
+}
+.clock__face button:hover {
+  background: var(--panel);
+}
+.clock__face button[aria-selected='true'] {
+  background: var(--acc);
+  color: var(--bg);
+  font-weight: 700;
 }

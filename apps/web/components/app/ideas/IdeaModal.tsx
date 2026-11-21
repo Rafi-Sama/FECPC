@@ -25,7 +25,6 @@ export function IdeaModal({
   const [editTitle, setEditTitle] = useState('');
   const [editBody, setEditBody] = useState('');
   const [editStatus, setEditStatus] = useState<IdeaStatus>('open');
-  const [commentText, setCommentText] = useState('');
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async (id: number) => {
@@ -153,23 +152,6 @@ export function IdeaModal({
     const ok = await act('closeIdea', { ideaId: detail.id });
     setBusy(false);
     if (ok) {
-      await load(detail.id);
-      onMutated();
-    }
-  };
-
-  const handleComment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!detail || busy || !commentText.trim()) return;
-    setBusy(true);
-    const ok = await act('comment', {
-      targetType: 'idea',
-      targetId: detail.id,
-      body: commentText.trim(),
-    });
-    setBusy(false);
-    if (ok) {
-      setCommentText('');
       await load(detail.id);
       onMutated();
     }
@@ -309,7 +291,6 @@ export function IdeaModal({
                 >
                   ▲ {detail.upvotes}
                 </button>
-                <span className="cm-inert-pill">💬 {detail.comments.length}</span>
                 <span className="cm-inert-pill">Interested ({detail.interested_count})</span>
               </div>
 
@@ -489,54 +470,6 @@ export function IdeaModal({
                 )}
               </section>
             )}
-
-            {/* Comments */}
-            <div className="cm-comments">
-              <p className="label">Comments · {detail.comments.length}</p>
-              {detail.comments.length === 0 ? (
-                <p className="body">No comments yet.</p>
-              ) : (
-                <div className="list">
-                  {detail.comments.map((c) => (
-                    <div key={c.id} style={{ alignItems: 'flex-start' }}>
-                      <TierAvatar
-                        name={c.author_name}
-                        solved={c.author_solved}
-                        avatarUrl={c.author_avatar}
-                        size={28}
-                      />
-                      <div className="grow">
-                        <div className="cm-meta" style={{ marginBottom: 4 }}>
-                          <TierName name={c.author_name} solved={c.author_solved} />
-                          <span>· {relTime(c.created_at)}</span>
-                        </div>
-                        <MarkdownBody markdown={c.body} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {!me.system && (
-                <form
-                  className="row"
-                  style={{ '--g': '8px', alignItems: 'stretch' } as React.CSSProperties}
-                  onSubmit={handleComment}
-                >
-                  <input
-                    className="input grow"
-                    style={{ minHeight: 42 }}
-                    value={commentText}
-                    onChange={(e) => setCommentText(e.target.value)}
-                    placeholder="Add a comment…"
-                    maxLength={2000}
-                    aria-label="Add a comment"
-                  />
-                  <button type="submit" className="btn sm" disabled={busy || !commentText.trim()}>
-                    Reply
-                  </button>
-                </form>
-              )}
-            </div>
           </>
         ) : (
           <div className="stack">
