@@ -2,13 +2,59 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { RoadmapTreeCanvas } from './RoadmapTreeCanvas';
 import { TopicDrawer } from './TopicDrawer';
-import { NewTopicModal } from './NewTopicModal';
-import { ExperienceModal } from './ExperienceModal';
-import { RoadmapEditor } from './RoadmapEditor';
+import { RoadmapEditor, type RoadmapProblem } from './RoadmapEditor';
 import { HighlightMatch } from './HighlightMatch';
-import type { InterviewTopic, InterviewProblem, InterviewTip } from '@fecpc/contracts';
+import type { InterviewProblem, InterviewRoadmap, InterviewTopic } from '@fecpc/contracts';
 import { useStore } from '@/components/app/Store';
-import { can } from '@fecpc/contracts';
+import { canFully } from '@fecpc/contracts';
+
+const mono = {
+  font: '14px ui-monospace, Menlo, monospace',
+  color: 'var(--dim, #5F5F5F)',
+} as const;
+const btn = {
+  font: '500 14px Inter, Arial, sans-serif',
+  border: '2px solid var(--line2, #0B0B0B)',
+  padding: '0 16px',
+  background: 'var(--panel, #F6F4EE)',
+  color: 'var(--ink, #0B0B0B)',
+  minHeight: 44,
+  cursor: 'pointer',
+} as const;
+
+async function query<T>(body: Record<string, unknown>): Promise<T | null> {
+  try {
+    const res = await fetch('/api/alumni', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return res.ok ? ((await res.json()) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+function Progress({ solved, total }: Readonly<{ solved: number; total: number }>) {
+  const pct = total > 0 ? Math.round((solved / total) * 100) : 0;
+  return (
+    <div style={{ width: 240 }}>
+      <div className="m" style={{ ...mono, marginBottom: 8 }}>
+        {solved}/{total} solved
+      </div>
+      <div className="pb" style={{ height: 8, background: 'var(--line, #DCD8CC)' }}>
+        <i
+          style={{
+            display: 'block',
+            height: '100%',
+            background: 'var(--ink, #0D0D0B)',
+            width: `${pct}%`,
+          }}
+        />
+      </div>
+    </div>
+  );
+}
 
 function PrepSearchInput({
   value,
@@ -46,19 +92,34 @@ export function PrepTab({
   readonly onShowToast?: (msg: string) => void;
 }) {
   const { s } = useStore();
-  const canManage = Boolean(can(s.roles, 'interview.topic.create') || s.role === 'alumni');
+  // Page gates are cosmetic; the API checks both capabilities again.
+  const canManageRoadmaps = canFully(s.roles, 'interview.roadmap.manage');
+  const canManageProblems = canFully(s.roles, 'interview.problem.create');
 
+  const [roadmaps, setRoadmaps] = useState<InterviewRoadmap[]>([]);
+  const [openId, setOpenId] = useState<number | null>(null);
   const [topics, setTopics] = useState<InterviewTopic[]>([]);
-  // Roadmap selection: default to opened tree view or list
-  const [selectedRoadmap, setSelectedRoadmap] = useState<string | null>(null);
+  // Which roadmap `topics` belongs to; editing waits for it so a save never starts from an empty tree.
+  const [topicsFor, setTopicsFor] = useState<number | null>(null);
+  // undefined = not editing, null = creating a new roadmap.
+  const [editing, setEditing] = useState<InterviewRoadmap | null | undefined>(undefined);
+  const [editProblems, setEditProblems] = useState<RoadmapProblem[]>([]);
+  const [opening, setOpening] = useState(false);
+  // The editor starts from the full roadmap (problems included), so it opens only once they load.
+  const openEditor = async (r: InterviewRoadmap) => {
+    setOpening(true);
+    const data = await query<{ problems: RoadmapProblem[] }>({
+      action: 'listInterviewProblems',
+      roadmapId: r.id,
+    });
+    setOpening(false);
+    if (!data) return onShowToast?.('Could not load the roadmap’s problems. Try again.');
+    setEditProblems(data.problems);
+    setEditing(r);
+  };
   const [prepSearch, setPrepSearch] = useState(searchQuery ?? '');
   const [drawerTopic, setDrawerTopic] = useState<InterviewTopic | null>(null);
   const [topicProblems, setTopicProblems] = useState<InterviewProblem[]>([]);
-
-  // Modals
-  const [newTopicOpen, setNewTopicOpen] = useState(false);
-  const [selectedExp, setSelectedExp] = useState<InterviewTip | null>(null);
-  const [isEditingRoadmap, setIsEditingRoadmap] = useState(false);
 
   useEffect(() => {
     if (searchQuery !== undefined) setPrepSearch(searchQuery);
@@ -69,154 +130,132 @@ export function PrepTab({
     onCountChangeRef.current = onCountChange;
   }, [onCountChange]);
 
-  const fetchTopics = useCallback(async () => {
-    try {
-      const res = await fetch('/api/alumni', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ action: 'listInterviewTopics' }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const list = (data.topics || []) as InterviewTopic[];
-        setTopics(list);
-        onCountChangeRef.current?.(list.length);
-      }
-    } catch {
-      // ignore
+  const fetchRoadmaps = useCallback(async () => {
+    const data = await query<{ roadmaps: InterviewRoadmap[] }>({
+      action: 'listInterviewRoadmaps',
+    });
+    if (!data) return;
+    setRoadmaps(data.roadmaps);
+    onCountChangeRef.current?.(data.roadmaps.reduce((n, r) => n + r.topicCount, 0));
+  }, []);
+
+  const fetchTopics = useCallback(async (roadmapId: number) => {
+    const data = await query<{ topics: InterviewTopic[] }>({
+      action: 'listInterviewTopics',
+      roadmapId,
+    });
+    if (data) {
+      setTopics(data.topics);
+      setTopicsFor(roadmapId);
     }
   }, []);
 
   useEffect(() => {
-    void fetchTopics();
-  }, [fetchTopics]);
+    void fetchRoadmaps();
+  }, [fetchRoadmaps]);
 
-  // Fetch problems when drawer topic changes
+  useEffect(() => {
+    setTopics([]);
+    setTopicsFor(null);
+    if (openId !== null) void fetchTopics(openId);
+  }, [openId, fetchTopics]);
+
   const fetchTopicProblems = useCallback(async (topicId: number) => {
-    try {
-      const res = await fetch('/api/alumni', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ action: 'getInterviewTopicDetail', topicId }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setTopicProblems(data.problems || []);
-      }
-    } catch {
-      // ignore
-    }
+    const data = await query<{ problems: InterviewProblem[] }>({
+      action: 'getInterviewTopicDetail',
+      topicId,
+    });
+    if (data) setTopicProblems(data.problems);
   }, []);
+
+  const refresh = () => {
+    void fetchRoadmaps();
+    if (openId !== null) void fetchTopics(openId);
+  };
 
   const handleSelectTopicNode = (topic: InterviewTopic) => {
     setDrawerTopic(topic);
-    onSelectTopicParam?.(topic.id > 0 ? topic.id : null);
-    if (topic.id > 0) {
-      void fetchTopicProblems(topic.id);
-    } else {
-      setTopicProblems([]);
-    }
+    onSelectTopicParam?.(topic.id);
+    setTopicProblems([]);
+    void fetchTopicProblems(topic.id);
   };
 
   const handleToggleProblem = async (problemId: number, currentlySolved: boolean) => {
-    const nextSolved = !currentlySolved;
+    const diff = currentlySolved ? -1 : 1;
     setTopicProblems((prev) =>
-      prev.map((p) => (p.id === problemId ? { ...p, solved: nextSolved } : p)),
+      prev.map((p) => (p.id === problemId ? { ...p, solved: !currentlySolved } : p)),
     );
-
-    if (drawerTopic) {
-      const diff = nextSolved ? 1 : -1;
+    if (drawerTopic)
       setTopics((prev) =>
         prev.map((t) =>
-          t.id === drawerTopic.id
-            ? { ...t, solvedCount: Math.max(0, (t.solvedCount || 0) + diff) }
-            : t,
+          t.id === drawerTopic.id ? { ...t, solvedCount: Math.max(0, t.solvedCount + diff) } : t,
         ),
       );
-    }
-
-    try {
-      await fetch('/api/alumni', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ action: 'toggleInterviewProblem', problemId, solved: nextSolved }),
-      });
-    } catch {
-      // revert if failed
-    }
+    if (!(await query({ action: 'toggleInterviewProblem', problemId }))) refresh();
+    else void fetchRoadmaps();
   };
 
   const handleDeleteProblem = async (problemId: number) => {
     if (!window.confirm('Delete this problem?')) return;
-    try {
-      const res = await fetch('/api/alumni', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ action: 'deleteInterviewProblem', problemId }),
-      });
-      if (res.ok) {
-        setTopicProblems((prev) => prev.filter((p) => p.id !== problemId));
-        onShowToast?.('Problem deleted');
-      }
-    } catch {
-      alert('Failed to delete problem.');
-    }
+    if (await query({ action: 'deleteInterviewProblem', problemId })) {
+      setTopicProblems((prev) => prev.filter((p) => p.id !== problemId));
+      onShowToast?.('Problem deleted');
+      refresh();
+    } else onShowToast?.('Could not delete the problem.');
   };
 
-  const handleAddProblem = async (data: { title: string; url?: string; difficulty: string }) => {
-    if (!drawerTopic || drawerTopic.id <= 0) return;
-    try {
-      const res = await fetch('/api/alumni', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          action: 'createInterviewProblem',
-          topicId: drawerTopic.id,
-          ...data,
-        }),
-      });
-      if (res.ok) {
-        onShowToast?.('Problem added');
-        void fetchTopicProblems(drawerTopic.id);
-        void fetchTopics();
-      }
-    } catch {
-      alert('Failed to add problem.');
+  const handleAddProblem = async (data: { title: string; url: string; difficulty: string }) => {
+    if (!drawerTopic) return false;
+    const res = await fetch('/api/alumni', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'createInterviewProblem', topicId: drawerTopic.id, ...data }),
+    }).catch(() => null);
+    if (!res?.ok) {
+      const j = await res?.json().catch(() => null);
+      onShowToast?.(j?.error ?? 'You seem to be offline. The problem was not added.');
+      return false;
     }
+    onShowToast?.('Problem added');
+    void fetchTopicProblems(drawerTopic.id);
+    refresh();
+    return true;
   };
 
-  const totalAllSolved = topics.reduce((acc, t) => acc + Number(t.solvedCount || 0), 0);
-  const totalAllProblems = topics.reduce((acc, t) => acc + Number(t.totalCount || 0), 0);
-  const pctOverall =
-    totalAllProblems > 0 ? Math.round((totalAllSolved / totalAllProblems) * 100) : 36;
-  const normalizedSearch = prepSearch.trim().toLowerCase();
-  const visibleTopics = normalizedSearch
-    ? topics.filter((topic) =>
-        `${topic.name} ${topic.description ?? ''} ${(topic.problemTitles ?? []).join(' ')}`
+  const open = roadmaps.find((r) => r.id === openId) ?? null;
+  const needle = prepSearch.trim().toLowerCase();
+  const visibleTopics = needle
+    ? topics.filter((t) =>
+        `${t.name} ${t.description ?? ''} ${(t.problemTitles ?? []).join(' ')}`
           .toLowerCase()
-          .includes(normalizedSearch),
+          .includes(needle),
       )
     : topics;
-  const dsaRoadmapMatches =
-    !normalizedSearch ||
-    visibleTopics.length > 0 ||
-    `data structures & algorithms neetcode 150 blind 75 curated curriculum`.includes(
-      normalizedSearch,
-    );
-  const systemRoadmapMatches =
-    !normalizedSearch ||
-    `system design & architecture high-scale systems caching microservices and databases`.includes(
-      normalizedSearch,
-    );
+  const visibleRoadmaps = needle
+    ? roadmaps.filter((r) =>
+        `${r.name} ${r.description ?? ''} ${r.topicNames.join(' ')}`.toLowerCase().includes(needle),
+      )
+    : roadmaps;
 
-  if (isEditingRoadmap) {
+  if (editing !== undefined) {
     return (
       <RoadmapEditor
-        onCancel={() => setIsEditingRoadmap(false)}
-        onSave={() => {
+        roadmap={editing}
+        topics={editing ? topics : []}
+        problems={editing ? editProblems : []}
+        onCancel={() => setEditing(undefined)}
+        onSaved={(id) => {
           onShowToast?.('Roadmap saved');
-          setIsEditingRoadmap(false);
-          void fetchTopics();
+          setEditing(undefined);
+          void fetchRoadmaps();
+          if (id === openId) void fetchTopics(id);
+          else setOpenId(id);
+        }}
+        onDeleted={() => {
+          onShowToast?.('Roadmap deleted');
+          setEditing(undefined);
+          setOpenId(null);
+          void fetchRoadmaps();
         }}
       />
     );
@@ -224,37 +263,23 @@ export function PrepTab({
 
   return (
     <div className="prep-tab-view">
-      {/* View 1: Interactive Tree View Mode matching mockup d49847ae */}
-      {selectedRoadmap ? (
+      {open ? (
         <div>
           <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
             <PrepSearchInput value={prepSearch} onChange={setPrepSearch} />
           </div>
-
-          {/* Back to all roadmaps affordance */}
           <button
             type="button"
             className="m"
-            onClick={() => setSelectedRoadmap(null)}
-            style={{
-              background: 'none',
-              border: 0,
-              padding: 0,
-              display: 'block',
-              marginBottom: 16,
-              cursor: 'pointer',
-              font: '11px ui-monospace, Menlo, monospace',
-              letterSpacing: '.06em',
-              textTransform: 'uppercase',
-              color: 'var(--dim, #5F5F5F)',
+            onClick={() => {
+              setOpenId(null);
+              setDrawerTopic(null);
             }}
+            style={{ ...mono, background: 'none', border: 0, padding: 0, marginBottom: 16 }}
           >
             ← All roadmaps
           </button>
-
-          {/* Progress row + Action buttons matching mockup d49847ae */}
           <div
-            className="fl"
             style={{
               display: 'flex',
               gap: 16,
@@ -263,75 +288,28 @@ export function PrepTab({
               marginBottom: 20,
             }}
           >
-            <div style={{ flex: '0 0 320px' }}>
-              <div
-                className="m"
-                style={{
-                  marginBottom: 8,
-                  font: '11px ui-monospace, Menlo, monospace',
-                  letterSpacing: '.06em',
-                  textTransform: 'uppercase',
-                  color: 'var(--dim, #5F5F5F)',
-                }}
+            <h2 style={{ margin: 0, fontSize: 22, flex: '1 1 auto' }}>{open.name}</h2>
+            <Progress solved={open.solvedCount} total={open.totalCount} />
+            {canManageRoadmaps && (
+              <button
+                type="button"
+                onClick={() => void openEditor(open)}
+                disabled={topicsFor !== open.id || opening}
+                style={btn}
               >
-                {totalAllSolved} of {totalAllProblems || 73} solved
-              </div>
-              <div className="pb" style={{ height: 8, background: 'var(--line, #DCD8CC)' }}>
-                <i
-                  style={{
-                    display: 'block',
-                    height: '100%',
-                    background: 'var(--ink, #0D0D0B)',
-                    width: `${pctOverall}%`,
-                  }}
-                />
-              </div>
-            </div>
-
-            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-              {canManage && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setIsEditingRoadmap(true)}
-                    style={{
-                      font: '500 13px Inter, Arial, sans-serif',
-                      border: '2px solid var(--line2, #0B0B0B)',
-                      padding: '0 16px',
-                      background: 'var(--panel, #F6F4EE)',
-                      minHeight: 40,
-                      color: 'var(--ink, #0B0B0B)',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Edit roadmap
-                  </button>
-                  <button
-                    type="button"
-                    className="btn line"
-                    onClick={() => setNewTopicOpen(true)}
-                    style={{
-                      font: '500 13px Inter, Arial, sans-serif',
-                      border: '2px solid var(--line2, #0B0B0B)',
-                      padding: '0 16px',
-                      background: 'var(--panel, #F6F4EE)',
-                      color: 'var(--ink, #0B0B0B)',
-                      minHeight: 40,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    + Add topic
-                  </button>
-                </>
-              )}
-            </div>
+                {opening ? 'Opening…' : 'Edit roadmap'}
+              </button>
+            )}
           </div>
 
-          {/* Interactive Tree Graph Canvas */}
-          {normalizedSearch && visibleTopics.length === 0 ? (
+          {visibleTopics.length === 0 ? (
             <div className="pn" style={{ padding: '48px 24px', textAlign: 'center' }}>
               <p className="m" style={{ margin: 0 }}>
-                No interview topics match “{prepSearch}”.
+                {topicsFor !== open.id
+                  ? 'Loading…'
+                  : needle
+                    ? `No topics match “${prepSearch}”.`
+                    : 'No topics yet.'}
               </p>
             </div>
           ) : (
@@ -339,42 +317,22 @@ export function PrepTab({
               topics={visibleTopics}
               activeTopicId={drawerTopic?.id ?? null}
               onSelectTopic={handleSelectTopicNode}
-              filterActive={Boolean(normalizedSearch)}
               highlightQuery={prepSearch}
             />
           )}
-
-          <div
-            className="m"
-            style={{
-              font: '11px ui-monospace, Menlo, monospace',
-              letterSpacing: '.06em',
-              textTransform: 'uppercase',
-              color: 'var(--dim, #5F5F5F)',
-              marginTop: 12,
-            }}
-          >
-            Click a box to open its problems and tips
-          </div>
         </div>
       ) : (
-        /* View 2: Roadmaps Stack Overview matching mockup 2bfab926 */
         <div>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16 }}>
             <PrepSearchInput value={prepSearch} onChange={setPrepSearch} />
-            {canManage && (
+            {canManageRoadmaps && (
               <button
                 type="button"
-                className="k"
-                onClick={() => setIsEditingRoadmap(true)}
+                onClick={() => setEditing(null)}
                 style={{
-                  font: '500 13px Inter, Arial, sans-serif',
-                  border: '2px solid var(--line2, #0B0B0B)',
-                  padding: '0 16px',
+                  ...btn,
                   background: 'var(--ink, #0B0B0B)',
                   color: 'var(--on, #FFFFFF)',
-                  minHeight: 44,
-                  cursor: 'pointer',
                   whiteSpace: 'nowrap',
                 }}
               >
@@ -383,22 +341,9 @@ export function PrepTab({
             )}
           </div>
 
-          <div
-            className="m"
-            style={{
-              marginBottom: 16,
-              font: '11px ui-monospace, Menlo, monospace',
-              letterSpacing: '.06em',
-              textTransform: 'uppercase',
-              color: 'var(--dim, #5F5F5F)',
-            }}
-          >
-            Pick a roadmap to open its tree
-          </div>
-
-          {/* Roadmap Card 1: Data structures & algorithms */}
-          {dsaRoadmapMatches && (
+          {visibleRoadmaps.map((r) => (
             <div
+              key={r.id}
               className="pn"
               style={{
                 display: 'flex',
@@ -411,226 +356,50 @@ export function PrepTab({
                 marginBottom: 16,
               }}
             >
-              {/* 112x64 SVG tree preview matching mockup 2bfab926 */}
-              <svg aria-hidden="true" width="112" height="64" viewBox="0 0 112 64">
-                <path
-                  d="M56 12V19M24 19H88M24 19V26M88 19V26M24 38V45M12 45H56M12 45V52M56 45V52M88 38V52"
-                  stroke="var(--line2, #0B0B0B)"
-                  strokeWidth="2"
-                  fill="none"
-                />
-                <g fill="var(--ink, #0B0B0B)">
-                  <rect x="44" width="24" height="12" />
-                  <rect x="12" y="26" width="24" height="12" />
-                  <rect x="76" y="26" width="24" height="12" />
-                  <rect y="52" width="24" height="12" />
-                  <rect x="44" y="52" width="24" height="12" />
-                  <rect x="88" y="52" width="24" height="12" />
-                </g>
-              </svg>
-
               <div style={{ flex: '1 1 240px', minWidth: 240 }}>
-                <h3
-                  style={{
-                    margin: '0 0 4px',
-                    fontSize: 18,
-                    fontWeight: 700,
-                    color: 'var(--ink, #0B0B0B)',
-                  }}
-                >
-                  <HighlightMatch text="Data structures & algorithms" query={prepSearch} />
+                <h3 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 700 }}>
+                  <HighlightMatch text={r.name} query={prepSearch} />
                 </h3>
                 <p className="t" style={{ fontSize: 14, color: 'var(--mut, #3B3A35)', margin: 0 }}>
                   <HighlightMatch
-                    text="NeetCode 150 & Blind 75 curated curriculum. 8 topics."
+                    text={`${r.description ? `${r.description} ` : ''}${r.topicCount} topics.`}
                     query={prepSearch}
                   />
                 </p>
               </div>
-
-              <div style={{ width: 240 }}>
-                <div
-                  className="m"
-                  style={{
-                    marginBottom: 8,
-                    font: '11px ui-monospace, Menlo, monospace',
-                    letterSpacing: '.06em',
-                    textTransform: 'uppercase',
-                    color: 'var(--dim, #5F5F5F)',
-                  }}
-                >
-                  {totalAllSolved}/{totalAllProblems || 73} solved
-                </div>
-                <div className="pb" style={{ height: 8, background: 'var(--line, #DCD8CC)' }}>
-                  <i
-                    style={{
-                      display: 'block',
-                      height: '100%',
-                      background: 'var(--ink, #0D0D0B)',
-                      width: `${pctOverall}%`,
-                    }}
-                  />
-                </div>
-              </div>
-
+              <Progress solved={r.solvedCount} total={r.totalCount} />
               <button
                 type="button"
-                className="btn"
-                onClick={() => setSelectedRoadmap('dsa')}
-                style={{
-                  font: '500 13px Inter, Arial, sans-serif',
-                  border: '2px solid var(--line2, #0B0B0B)',
-                  padding: '0 18px',
-                  background: 'var(--panel, #F6F4EE)',
-                  color: 'var(--ink, #0B0B0B)',
-                  minHeight: 44,
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                }}
+                onClick={() => setOpenId(r.id)}
+                style={{ ...btn, fontWeight: 600 }}
               >
                 Open roadmap
               </button>
             </div>
-          )}
+          ))}
 
-          {/* Roadmap Card 2: System design */}
-          {systemRoadmapMatches && (
-            <div
-              className="pn"
-              style={{
-                display: 'flex',
-                gap: 24,
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                background: 'var(--panel, #F6F4EE)',
-                border: '2px solid var(--line2, #0B0B0B)',
-                padding: 24,
-                marginBottom: 16,
-              }}
-            >
-              <svg aria-hidden="true" width="112" height="64" viewBox="0 0 112 64">
-                <path
-                  d="M56 12V19M24 19H88M24 19V26M88 19V26M24 38V45M12 45H56M12 45V52M56 45V52M88 38V52"
-                  stroke="var(--line2, #0B0B0B)"
-                  strokeWidth="2"
-                  fill="none"
-                />
-                <g fill="var(--ink, #0B0B0B)">
-                  <rect x="44" width="24" height="12" />
-                  <rect x="12" y="26" width="24" height="12" />
-                  <rect x="76" y="26" width="24" height="12" />
-                  <rect y="52" width="24" height="12" />
-                  <rect x="44" y="52" width="24" height="12" />
-                  <rect x="88" y="52" width="24" height="12" />
-                </g>
-              </svg>
-
-              <div style={{ flex: '1 1 240px', minWidth: 240 }}>
-                <h3
-                  style={{
-                    margin: '0 0 4px',
-                    fontSize: 18,
-                    fontWeight: 700,
-                    color: 'var(--ink, #0B0B0B)',
-                  }}
-                >
-                  <HighlightMatch text="System design & architecture" query={prepSearch} />
-                </h3>
-                <p className="t" style={{ fontSize: 14, color: 'var(--mut, #3B3A35)', margin: 0 }}>
-                  <HighlightMatch
-                    text="High-scale systems, caching, microservices, and databases."
-                    query={prepSearch}
-                  />
-                </p>
-              </div>
-
-              <div style={{ width: 240 }}>
-                <div
-                  className="m"
-                  style={{
-                    marginBottom: 8,
-                    font: '11px ui-monospace, Menlo, monospace',
-                    letterSpacing: '.06em',
-                    textTransform: 'uppercase',
-                    color: 'var(--dim, #5F5F5F)',
-                  }}
-                >
-                  0/40 solved
-                </div>
-                <div className="pb" style={{ height: 8, background: 'var(--line, #DCD8CC)' }}>
-                  <i
-                    style={{
-                      display: 'block',
-                      height: '100%',
-                      background: 'var(--ink, #0D0D0B)',
-                      width: '0%',
-                    }}
-                  />
-                </div>
-              </div>
-
-              <button
-                type="button"
-                className="btn"
-                onClick={() => setSelectedRoadmap('sys')}
-                style={{
-                  font: '500 13px Inter, Arial, sans-serif',
-                  border: '2px solid var(--line2, #0B0B0B)',
-                  padding: '0 18px',
-                  background: 'var(--panel, #F6F4EE)',
-                  color: 'var(--ink, #0B0B0B)',
-                  minHeight: 44,
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                }}
-              >
-                Open roadmap
-              </button>
-            </div>
-          )}
-
-          {normalizedSearch && !dsaRoadmapMatches && !systemRoadmapMatches && (
+          {visibleRoadmaps.length === 0 && (
             <div className="pn" style={{ padding: '48px 24px', textAlign: 'center' }}>
               <p className="m" style={{ margin: 0 }}>
-                No roadmaps, topics, or problems match “{prepSearch}”.
+                {needle ? `No roadmaps match “${prepSearch}”.` : 'No roadmaps yet.'}
               </p>
             </div>
           )}
         </div>
       )}
 
-      {/* Slide-out Topic Drawer matching mockup 3251c8e6 */}
-      {drawerTopic && (
+      {drawerTopic && open && (
         <TopicDrawer
-          roadmapName={
-            selectedRoadmap === 'sys'
-              ? 'System design & architecture'
-              : 'Data structures & algorithms'
-          }
+          roadmapName={open.name}
           topic={drawerTopic}
           problems={topicProblems}
-          canManage={canManage}
+          canManage={canManageProblems}
           onClose={() => setDrawerTopic(null)}
           onToggleProblem={handleToggleProblem}
           onDeleteProblem={handleDeleteProblem}
           onAddProblem={handleAddProblem}
         />
       )}
-
-      {/* New Topic Modal */}
-      {newTopicOpen && (
-        <NewTopicModal
-          onClose={() => setNewTopicOpen(false)}
-          onCreated={() => {
-            setNewTopicOpen(false);
-            void fetchTopics();
-            onShowToast?.('Topic created');
-          }}
-        />
-      )}
-
-      {/* Experience Modal */}
-      {selectedExp && <ExperienceModal tip={selectedExp} onClose={() => setSelectedExp(null)} />}
     </div>
   );
 }

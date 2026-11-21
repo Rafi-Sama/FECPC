@@ -1,6 +1,7 @@
 'use client';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Page } from '@/components/app/Shell';
+import { SaveForm } from '@/components/app/SaveBar';
 import { useStore } from '@/components/app/Store';
 import { templates } from '@fecpc/content/training';
 import { ratingRankFor } from '@fecpc/contracts';
@@ -422,7 +423,9 @@ export default function Teams() {
 
   async function saveEdit() {
     const owner = active === me.id ? {} : { owner: active };
-    if (await run('teamNote', { topic: tpl, code: draft, since, ...owner })) setDraft(null);
+    const ok = await run('teamNote', { topic: tpl, code: draft, since, ...owner });
+    if (ok) setDraft(null);
+    return ok;
   }
 
   function switchMember(id: string) {
@@ -618,6 +621,7 @@ export default function Teams() {
                       key={id}
                       className="tag tab"
                       aria-pressed={isActive}
+                      data-nav
                       onClick={() => switchMember(id)}
                       style={
                         isActive
@@ -779,6 +783,7 @@ export default function Teams() {
                       <button
                         className="tag tab"
                         aria-pressed={x === tpl}
+                        data-nav
                         onClick={() => switchTemplate(x)}
                         onDoubleClick={() => {
                           if (!own) return;
@@ -893,18 +898,9 @@ export default function Teams() {
               {(own || onTeam) &&
                 !!tpl &&
                 (editing ? (
-                  <div className="row" style={{ gap: 8 }}>
-                    <button className="btn sm line" onClick={cancelEdit}>
-                      CANCEL
-                    </button>
-                    <button
-                      className="btn sm"
-                      style={{ background: 'var(--acc)', color: '#fff', border: 'none' }}
-                      onClick={saveEdit}
-                    >
-                      SAVE
-                    </button>
-                  </div>
+                  <button className="btn sm line" data-close onClick={cancelEdit}>
+                    CLOSE EDITOR
+                  </button>
                 ) : (
                   <button className="btn sm line no-print" onClick={startEdit}>
                     ✎ EDIT
@@ -917,24 +913,33 @@ export default function Teams() {
               {/* code / textarea */}
               <div style={{ flex: 1, minWidth: 0 }}>
                 {editing ? (
-                  <textarea
-                    ref={textRef}
-                    value={draft ?? ''}
-                    onChange={(e) => setDraft(e.target.value)}
-                    style={{
-                      width: '100%',
-                      minHeight: 280,
-                      resize: 'vertical',
-                      outline: '2px solid var(--acc)',
-                      borderRadius: 4,
-                      fontFamily: 'var(--mono, monospace)',
-                      fontSize: '0.82rem',
-                      padding: 16,
-                      background: 'var(--bg2, #eeeee8)',
-                      boxSizing: 'border-box',
-                      lineHeight: 1.6,
-                    }}
-                  />
+                  <SaveForm
+                    label={`Unsaved changes to ${tpl}`}
+                    saveLabel="Save template"
+                    extraDirty={draft !== (codeOf(active, tpl) ?? '')}
+                    onDiscard={cancelEdit}
+                    onSubmit={saveEdit}
+                  >
+                    <textarea
+                      ref={textRef}
+                      value={draft ?? ''}
+                      maxLength={100000}
+                      onChange={(e) => setDraft(e.target.value)}
+                      style={{
+                        width: '100%',
+                        minHeight: 280,
+                        resize: 'vertical',
+                        outline: '2px solid var(--acc)',
+                        borderRadius: 4,
+                        fontFamily: 'var(--mono, monospace)',
+                        fontSize: '0.82rem',
+                        padding: 16,
+                        background: 'var(--bg2, #eeeee8)',
+                        boxSizing: 'border-box',
+                        lineHeight: 1.6,
+                      }}
+                    />
+                  </SaveForm>
                 ) : (
                   <pre
                     style={{

@@ -1,6 +1,8 @@
 'use client';
 // The officer side of Finance: verifying payments, filing and deciding expenses, the club fund.
 // Each tab appears only for roles whose capability allows it; the API enforces every decision again.
+import { usePrompt } from '@/components/app/shared/PromptDialog';
+import { SaveForm } from '@/components/app/SaveBar';
 import { Bars } from '@/components/app/Charts';
 import QR from '@/components/app/QR';
 import { useStore } from '@/components/app/Store';
@@ -48,9 +50,16 @@ export function OfficerPanel({ tab }: { tab: string }) {
 
 function Payments() {
   const { s, act, office } = useStore();
+  const ask = usePrompt();
   const queue = office.queue ?? [];
-  const reject = (id: string) => {
-    const reason = prompt('Why is this payment rejected? The member is shown this.');
+  const reject = async (id: string) => {
+    const reason = await ask({
+      title: 'Reject payment',
+      label: 'Why is it rejected? The member is shown this.',
+      minLength: 3,
+      confirmLabel: 'Reject payment',
+      danger: true,
+    });
     if (reason) act('decide', { kind: 'payment', id, to: 'rejected', reason });
   };
   return (
@@ -157,18 +166,21 @@ function MyRequests() {
   const { act, myExpenses } = useStore();
   return (
     <div className="stack">
-      <form
+      <SaveForm
         className="panel grid"
         style={css({ '--min': '200px', '--g': '12px', alignItems: 'end' })}
-        onSubmit={(e) => {
-          e.preventDefault();
+        label="Expense request not filed"
+        saveLabel="Request expense"
+        onSubmit={async (e) => {
           const f = e.currentTarget,
             d = new FormData(f);
-          act('expense', {
-            what: d.get('what'),
+          const ok = await act('expense', {
+            what: String(d.get('what')).trim(),
             amount: Number(d.get('amount')),
-            event: d.get('event'),
-          }).then((ok) => ok && f.reset());
+            event: String(d.get('event')).trim(),
+          });
+          if (ok) f.reset();
+          return ok;
         }}
       >
         <label className="field" style={{ gridColumn: 'span 2' }}>
@@ -198,8 +210,7 @@ function MyRequests() {
           <span className="label">Event (optional)</span>
           <input name="event" className="input" maxLength={80} />
         </label>
-        <button className="btn sm">Request expense</button>
-      </form>
+      </SaveForm>
       {myExpenses.length === 0 ? (
         <p className="body">You have not filed any expense requests.</p>
       ) : (
@@ -313,6 +324,7 @@ function Expenses() {
 
 function ClubFund() {
   const { s, act, office, fundTotal } = useStore();
+  const ask = usePrompt();
   const edit = canFully(s.roles, 'payments.verify');
   const { accounts = [], budgets = [], cashflow = [], ledger = [] } = office.fund ?? {};
   return (
@@ -360,9 +372,17 @@ function ClubFund() {
                 <span className="row" style={css({ '--g': '6px' })}>
                   <button
                     className="btn xs line"
-                    onClick={() => {
-                      const plan = Number(prompt(`Plan for ${g.name}, in taka`, String(g.plan)));
-                      if (plan) act('saveBudget', { id: g.id, name: g.name, plan });
+                    onClick={async () => {
+                      const plan = Number(
+                        await ask({
+                          title: `Plan for ${g.name}`,
+                          label: 'Amount in taka',
+                          initial: String(g.plan),
+                          numeric: true,
+                          confirmLabel: 'Save plan',
+                        }),
+                      );
+                      if (plan > 0) act('saveBudget', { id: g.id, name: g.name, plan });
                     }}
                   >
                     Edit plan
@@ -381,15 +401,20 @@ function ClubFund() {
           );
         })}
         {edit && (
-          <form
+          <SaveForm
             className="row"
             style={css({ '--g': '8px' })}
+            label="Budget not added"
+            saveLabel="Add budget"
             onSubmit={async (e) => {
-              e.preventDefault();
               const f = e.currentTarget,
                 d = new FormData(f);
-              if (await act('saveBudget', { name: d.get('name'), plan: Number(d.get('plan')) }))
-                f.reset();
+              const ok = await act('saveBudget', {
+                name: String(d.get('name')).trim(),
+                plan: Number(d.get('plan')),
+              });
+              if (ok) f.reset();
+              return ok;
             }}
           >
             <input
@@ -400,18 +425,20 @@ function ClubFund() {
               aria-label="Budget name"
               required
               minLength={3}
+              maxLength={80}
             />
             <input
               name="plan"
               type="number"
               min={1}
+              max={10000000}
+              step={1}
               className="input sm"
               placeholder="Plan ৳"
               aria-label="Plan in taka"
               required
             />
-            <button className="btn xs">Add budget</button>
-          </form>
+          </SaveForm>
         )}
       </section>
       <section className="panel c6">

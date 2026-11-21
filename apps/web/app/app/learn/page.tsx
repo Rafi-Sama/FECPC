@@ -1,4 +1,5 @@
 'use client';
+import { SaveForm } from '@/components/app/SaveBar';
 import { useState } from 'react';
 import Roadmap from '@/components/site/Roadmap';
 import { Page, Tabs } from '@/components/app/Shell';
@@ -204,17 +205,21 @@ export default function Learn() {
                 <strong className="h3">{me.mentor}</strong>
               </div>
             </section>
-            <form
+            <SaveForm
               className="panel c6"
-              onSubmit={(e) => {
-                e.preventDefault();
+              label="Check-in not sent"
+              saveLabel="Send check-in"
+              onSubmit={async (e) => {
                 const f = e.currentTarget;
-                act('send', { kind: 'checkin', body: new FormData(f).get('body') }).then((ok) => {
-                  if (ok) {
-                    f.reset();
-                    setSent(true);
-                  }
+                const ok = await act('send', {
+                  kind: 'checkin',
+                  body: String(new FormData(f).get('body')).trim(),
                 });
+                if (ok) {
+                  f.reset();
+                  setSent(true);
+                }
+                return ok;
               }}
             >
               <p className="label">Weekly check-in</p>
@@ -235,10 +240,7 @@ export default function Learn() {
                   style={{ minHeight: 88 }}
                 />
               </label>
-              <button className="btn sm" style={{ alignSelf: 'flex-start' }}>
-                Send check-in
-              </button>
-            </form>
+            </SaveForm>
           </div>
         ) : (
           <div className="panel">

@@ -42,8 +42,9 @@ Generated from `packages/contracts/src/capabilities.ts`.
 | `alumni.toggleMentoring`    | Toggle mentoring availability                             |        | scope  |        |         |           |           |     ✓     |      ✓      |
 | `alumni.job.post`           | Post alumni job listings                                  |        |   ✓    |        |         |           |           |     ✓     |      ✓      |
 | `alumni.job.fetch`          | Fetch public job listings                                 |        |        |        |         |           |           |     ✓     |      ✓      |
-| `interview.topic.create`    | Create interview prep topic                               |        |   ✓    |        |         |           |           |     ✓     |      ✓      |
-| `interview.problem.create`  | Add problem to topic                                      |        |   ✓    |        |         |           |           |     ✓     |      ✓      |
+| `interview.roadmap.manage`  | Create, edit and delete interview roadmaps                |        |        |        |    ✓    |           |           |     ✓     |      ✓      |
+| `interview.topic.create`    | Create interview prep topic                               |        |        |        |    ✓    |           |           |     ✓     |      ✓      |
+| `interview.problem.create`  | Add problem to topic                                      |        |        |        |    ✓    |           |           |     ✓     |      ✓      |
 | `interview.tip.create`      | Post interview tip                                        |        |   ✓    |        |         |           |           |     ✓     |      ✓      |
 | `interview.progress.toggle` | Toggle problem solved                                     |   ✓    |   ✓    |   ✓    |    ✓    |     ✓     |     ✓     |     ✓     |      ✓      |
 | `blog.post.create`          | Write blog post                                           |        |   ✓    |        |         |           |           |     ✓     |      ✓      |

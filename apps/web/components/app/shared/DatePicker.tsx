@@ -135,6 +135,8 @@ export function DatePicker({
   placeholder = 'Pick a date',
   className = '',
   invalid = false,
+  min,
+  max,
 }: {
   /** Controlled value; leave out (with `name`) to use the picker inside a plain form. */
   value?: string | null;
@@ -148,7 +150,13 @@ export function DatePicker({
   placeholder?: string;
   className?: string;
   invalid?: boolean;
+  /** Earliest / latest selectable day (a date or date-time; only the date part counts). */
+  min?: string | null;
+  max?: string | null;
 }) {
+  const lo = min?.slice(0, 10) || '',
+    hi = max?.slice(0, 10) || '';
+  const outside = (d: string) => (!!lo && d < lo) || (!!hi && d > hi);
   const [own, setOwn] = useState('');
   const current = (value === undefined ? own : value) ?? '';
   const day = current.slice(0, 10);
@@ -171,6 +179,11 @@ export function DatePicker({
     if (open && view === 'date')
       grid.current?.querySelector<HTMLButtonElement>('[tabindex="0"]')?.focus();
   }, [open, focus, view]);
+
+  // Let the owning form (and its save bar) see the pick.
+  useEffect(() => {
+    field.current?.dispatchEvent(new Event('change', { bubbles: true }));
+  }, [current]);
 
   const set = (v: string) => {
     setOwn(v);
@@ -291,6 +304,7 @@ export function DatePicker({
                       aria-selected={d === day}
                       aria-current={d === today ? 'date' : undefined}
                       aria-label={label(d, false)}
+                      disabled={outside(d)}
                       onClick={() => pick(d)}
                       onKeyDown={(e) => {
                         const step = {
@@ -318,7 +332,12 @@ export function DatePicker({
             </>
           )}
           <div className="datepick__foot">
-            <button type="button" className="btn xs line" onClick={() => pick(today)}>
+            <button
+              type="button"
+              className="btn xs line"
+              disabled={outside(today)}
+              onClick={() => pick(today)}
+            >
               Today
             </button>
             {!required && current && (

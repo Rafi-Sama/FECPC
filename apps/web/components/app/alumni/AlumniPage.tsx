@@ -5,16 +5,14 @@ import { Page } from '@/components/app/Shell';
 import { useStore } from '@/components/app/Store';
 import { AlumniTab } from './AlumniTab';
 import { JobsTab } from './JobsTab';
-import { PrepTab } from './PrepTab';
 import { BlogsTab } from './BlogsTab';
 import { AlumniProfileModal } from './AlumniProfileModal';
 
-export type AlumniSubTab = 'alumni' | 'jobs' | 'prep' | 'blogs';
+export type AlumniSubTab = 'alumni' | 'jobs' | 'blogs';
 
 const SUB_TABS: { key: AlumniSubTab; label: string }[] = [
   { key: 'alumni', label: 'Alumni' },
   { key: 'jobs', label: 'Jobs' },
-  { key: 'prep', label: 'Interview prep' },
   { key: 'blogs', label: 'Blogs' },
 ];
 
@@ -22,7 +20,6 @@ function parseSubTab(param: string | null): AlumniSubTab {
   if (!param) return 'alumni';
   const lower = param.toLowerCase();
   if (lower === 'jobs') return 'jobs';
-  if (lower === 'prep' || lower === 'interview' || lower === 'interview-prep') return 'prep';
   if (lower === 'blogs' || lower === 'blog') return 'blogs';
   return 'alumni';
 }
@@ -40,12 +37,10 @@ function AlumniPageInner() {
   const [tabCounts, setTabCounts] = useState<{
     alumni: number;
     jobs: number;
-    prep: number;
     blogs: number;
   }>({
     alumni: counts.alumniCount ?? 0,
     jobs: counts.jobsCount ?? 0,
-    prep: counts.prepTopicsCount ?? 0,
     blogs: counts.blogsCount ?? 0,
   });
 
@@ -55,10 +50,6 @@ function AlumniPageInner() {
 
   const handleJobsCountChange = useCallback((cnt: number) => {
     setTabCounts((prev) => (prev.jobs === cnt ? prev : { ...prev, jobs: cnt }));
-  }, []);
-
-  const handlePrepCountChange = useCallback((cnt: number) => {
-    setTabCounts((prev) => (prev.prep === cnt ? prev : { ...prev, prep: cnt }));
   }, []);
 
   const handleBlogsCountChange = useCallback((cnt: number) => {
@@ -88,6 +79,10 @@ function AlumniPageInner() {
   // Sync tab with URL
   useEffect(() => {
     const tabParam = searchParams.get('tab');
+    if (tabParam && /^(prep|interview|interview-prep)$/i.test(tabParam)) {
+      router.replace('/app/prep');
+      return;
+    }
     if (tabParam) {
       setActiveTab(parseSubTab(tabParam));
     }
@@ -95,7 +90,7 @@ function AlumniPageInner() {
     if (profParam) {
       setActiveProfileId(profParam);
     }
-  }, [searchParams]);
+  }, [router, searchParams]);
 
   const updateUrlParam = useCallback(
     (key: string, value: string | null) => {
@@ -143,13 +138,6 @@ function AlumniPageInner() {
         <strong>{n}</strong> open <span className="acc">roles.</span>
       </>
     );
-  } else if (activeTab === 'prep') {
-    const n = tabCounts.prep;
-    headerContent = (
-      <>
-        <strong>{n}</strong> interview <span className="acc">topics.</span>
-      </>
-    );
   } else {
     const n = tabCounts.blogs;
     headerContent = (
@@ -161,7 +149,7 @@ function AlumniPageInner() {
 
   return (
     <Page title={headerContent}>
-      {/* 4 Sub-Tabs Bar: ALUMNI · JOBS · INTERVIEW PREP · BLOGS */}
+      {/* Sub-tabs: ALUMNI · JOBS · BLOGS */}
       <div
         role="tablist"
         aria-label="Alumni sub-tabs"
@@ -217,15 +205,6 @@ function AlumniPageInner() {
           activeJobId={activeJobId}
           onSelectJob={(id) => updateUrlParam('job', id ? String(id) : null)}
           onCountChange={handleJobsCountChange}
-          onShowToast={showToast}
-        />
-      )}
-
-      {activeTab === 'prep' && (
-        <PrepTab
-          searchQuery={searchQuery}
-          onSelectTopicParam={(id) => updateUrlParam('topic', id ? String(id) : null)}
-          onCountChange={handlePrepCountChange}
           onShowToast={showToast}
         />
       )}

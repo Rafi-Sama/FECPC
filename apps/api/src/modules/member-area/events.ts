@@ -4,6 +4,8 @@
 import { randomBytes } from 'node:crypto';
 import {
   can,
+  certHeadline,
+  DEFAULT_CERT,
   EVENT_STATUSES,
   EVENT_TYPES,
   fillTemplate,
@@ -106,13 +108,20 @@ const phone = (v: unknown) => {
   if (!/^\+?[0-9][0-9 -]{5,18}$/.test(t)) throw new Fail(400, 'Enter a phone number.');
   return t;
 };
+/**
+ * Whether sign-up is open now. "Registration open" follows the optional window; a merely "Published" event
+ * opens by itself once it has an opening date and that date has come, so changing the dates always counts.
+ */
+const REG_OPEN = (e: string) =>
+  `((${e}status = 'open' or (${e}status = 'published' and ${e}reg_opens is not null))
+    and (${e}reg_opens is null or ${e}reg_opens <= now()) and (${e}reg_closes is null or ${e}reg_closes > now()))`;
 const audit = (c: Db, a: Actor, what: string) =>
   c.query(`insert into audit (who, what) values ($1, $2)`, [a.name, what]);
 
 async function eventRow(c: Db, id: unknown, lock = false) {
   const e = (
     await c.query(
-      `select *, status = 'open' and (reg_opens is null or reg_opens <= now()) and (reg_closes is null or reg_closes > now()) as reg_open
+      `select *, ${REG_OPEN('')} as reg_open
        from club_events where id = $1 ${lock ? 'for update' : ''}`,
       [typeof id === 'string' ? id : ''],
     )
@@ -210,13 +219,39 @@ export const eventHandlers: Record<
     if (v[11] === 'form') need(v[12], 'A Google Forms registration needs the form link.');
     if (v[6] && v[7] && v[6] >= v[7])
       throw new Fail(400, 'Registration must open before it closes.');
+    if (v[6] && v[5] && v[6] >= v[5])
+      throw new Fail(400, 'Registration must open before the event starts.');
+    if (v[7] && v[5] && v[7] > v[5])
+      throw new Fail(400, 'Registration must close by the time the event starts.');
     const set = `title = $2, type = $3, place = $4, about = $5, banner = $6, starts_at = $7::timestamp at time zone '${TZ}',
       reg_opens = $8::timestamp at time zone '${TZ}', reg_closes = $9::timestamp at time zone '${TZ}', status = $10, seats = $11,
       fee = $12, mode = $13, form_url = $14, approval = $15, fields = $16::jsonb`;
+    // Completing is final and only makes sense once the event has begun (start time is club-local).
+    if (
+      v[8] === 'completed' &&
+      (await c.query(`select $1::timestamp at time zone '${TZ}' > now() as future`, [v[5]])).rows[0]
+        .future
+    )
+      throw new Fail(409, 'An event can be marked completed only after it has started.');
     if (i.id) {
       const prev = await eventRow(c, i.id, true);
       if (prev.status === 'completed' && v[8] !== 'completed')
         throw new Fail(409, 'A completed event cannot be reopened.');
+      if (prev.status === 'completed')
+        throw new Fail(409, 'A completed event is final. Run it again as a new event instead.');
+      if (v[9] !== null) {
+        const taken = (
+          await c.query(
+            `select count(*)::int n from event_entries where event_id = $1 and role_id is null and status in ('pending','approved')`,
+            [prev.id],
+          )
+        ).rows[0].n;
+        if (Number(v[9]) < taken)
+          throw new Fail(
+            409,
+            `${taken} people already hold seats. Set at least ${taken}, or decline some first.`,
+          );
+      }
       const id = prev.id;
       await c.query(`update club_events set ${set} where id = $1`, [id, ...v]);
       await audit(c, a, `edited event ${id}`);
@@ -235,6 +270,22 @@ export const eventHandlers: Record<
       [id, title, a.id],
     );
     await c.query(`update club_events set ${set} where id = $1`, [id, ...v]);
+    if (typeof i.copyOf === 'string' && i.copyOf) {
+      const from = await eventRow(c, i.copyOf);
+      await c.query(
+        `insert into event_roles (event_id, title, about, mode, form_url, approval, fields)
+         select $1, title, about, mode, form_url, approval, fields from event_roles where event_id = $2 order by id`,
+        [id, from.id],
+      );
+      // Role templates point at the old role ids, so only the participant and winner designs carry over.
+      await c.query(
+        `insert into cert_templates (event_id, kind, html)
+         select $1, kind, html from cert_templates where event_id = $2 and kind !~ '^role:'`,
+        [id, from.id],
+      );
+      await audit(c, a, `created event ${id} as a copy of ${from.id}`);
+      return;
+    }
     await audit(c, a, `created event ${id}`);
   },
   async eventDelete(c, a, _p, i) {
@@ -351,6 +402,8 @@ export const eventHandlers: Record<
   async entryStatus(c, a, _p, i) {
     need(organiser(a.roles));
     const status = pick(i.status, ['pending', 'approved', 'rejected'] as const, 'status');
+    const reason =
+      status === 'rejected' ? str(i.reason ?? '', 3, 300, 'The reason for declining') : null;
     const ids = (Array.isArray(i.ids) ? i.ids : [i.id])
       .slice(0, 2000)
       .map((x) => posInt(x, 'entry'));
@@ -361,9 +414,9 @@ export const eventHandlers: Record<
     if (!evs.length) throw new Fail(404, 'Nothing to change.');
     const e = await eventRow(c, evs[0].event_id, true); // same lock as register, so seats cannot be oversold
     const r = await c.query(
-      `update event_entries set status = $2, place = case when $2 = 'approved' then place end
+      `update event_entries set status = $2, place = case when $2 = 'approved' then place end, reason = $3
        where id = any($1) and status <> 'cancelled'`,
-      [ids, status],
+      [ids, status, reason],
     );
     if (!r.rowCount) throw new Fail(404, 'Nothing to change.');
     if (status !== 'rejected' && e.seats !== null) {
@@ -459,8 +512,7 @@ export const eventHandlers: Record<
     let n = 0;
     if (Array.isArray(i.rows)) {
       const kind = await kindOk(c, e.id, i.kind);
-      const html = templates.get(kind);
-      need(html, 'Save that template first.');
+      const html = templates.get(kind) ?? DEFAULT_CERT;
       if (i.rows.length > 2000) throw new Fail(400, 'At most 2000 rows at a time.');
       const rows = i.rows.map((r: In) => {
         const out: Record<string, string> = { ...base };
@@ -468,9 +520,10 @@ export const eventHandlers: Record<
           if (/^[\w.-]{1,40}$/.test(k) && k !== 'code') out[k] = str(String(v ?? ''), 0, 500, k);
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(out.email ?? ''))
           throw new Fail(400, `Every row needs an email (got "${out.email ?? ''}").`);
+        out.headline ||= certHeadline(kind, out.role, out.place);
         return out;
       });
-      n = await issue(c, e.id, kind, html!, rows);
+      n = await issue(c, e.id, kind, html, rows);
     } else {
       const entries = (
         await c.query(
@@ -483,7 +536,6 @@ export const eventHandlers: Record<
       const byKind = new Map<string, Record<string, string>[]>();
       for (const x of entries) {
         const kind = x.role_id ? `role:${x.role_id}` : x.place ? `winner${x.place}` : 'participant';
-        if (!templates.has(kind)) continue;
         byKind.set(kind, [
           ...(byKind.get(kind) ?? []),
           {
@@ -495,11 +547,14 @@ export const eventHandlers: Record<
             phone: x.phone,
             role: x.role ?? 'Participant',
             place: ordinal(x.place),
+            headline: certHeadline(kind, x.role ?? '', ordinal(x.place)),
           },
         ]);
       }
+      if (!entries.length)
+        throw new Fail(409, 'Nobody was approved for this event, so there is no one to certify.');
       for (const [kind, rows] of byKind)
-        n += await issue(c, e.id, kind, templates.get(kind)!, rows);
+        n += await issue(c, e.id, kind, templates.get(kind) ?? DEFAULT_CERT, rows);
       // an entrant whose entry was declined, un-placed or re-roled loses the certificate they no longer earn
       const keep = [...byKind].flatMap(([kind, rows]) =>
         rows.map((r) => `${kind} ${r.email!.toLowerCase()}`),
@@ -555,13 +610,13 @@ const LOCAL = (col: string) => `to_char(${col} at time zone '${TZ}', 'YYYY-MM-DD
 const ENTRY = (
   admin: boolean,
 ) => `json_build_object('id', x.id, 'roleId', x.role_id, 'status', x.status, 'place', x.place,
-  'name', x.name, 'phone', x.phone, 'answers', x.answers, 'at', x.at${admin ? `, 'userId', x.user_id, 'email', u.email, 'batch', u.batch::text` : ''})`;
+  'name', x.name, 'phone', x.phone, 'answers', x.answers, 'at', x.at, 'reason', x.reason${admin ? `, 'userId', x.user_id, 'email', u.email, 'batch', u.batch::text` : ''})`;
 const EVENT = (
   admin: boolean,
 ) => `select e.id, e.title, e.type, e.place, e.about, e.banner, ${LOCAL('e.starts_at')} "startsAt",
   ${LOCAL('e.reg_opens')} "regOpens", ${LOCAL('e.reg_closes')} "regCloses", e.status, e.seats, e.fee, e.mode, e.form_url "formUrl",
   e.approval, e.fields, e.certs,
-  e.status = 'open' and (e.reg_opens is null or e.reg_opens <= now()) and (e.reg_closes is null or e.reg_closes > now()) "regOpen",
+  ${REG_OPEN('e.')} "regOpen",
   (select count(*)::int from event_entries x where x.event_id = e.id and x.role_id is null and x.status in ('pending','approved')) taken,
   (select coalesce(json_agg(json_build_object('id', r.id, 'title', r.title, 'about', r.about, 'mode', r.mode, 'formUrl', r.form_url,
      'approval', r.approval, 'fields', r.fields${admin ? `, 'counts', (select coalesce(json_object_agg(status, n), '{}') from (select status, count(*)::int n from event_entries x where x.role_id = r.id group by 1) s)` : ''}) order by r.id), '[]')

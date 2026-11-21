@@ -49,7 +49,7 @@ export function MilestoneRow({
           }
           aria-label={`Kudos ${milestone.kudos_count} on your milestone`}
         >
-          Kudos {milestone.kudos_count} ✓
+          Kudos{milestone.kudos_count > 0 && ` ${milestone.kudos_count}`} ✓
         </button>
       );
     }
@@ -77,7 +77,7 @@ export function MilestoneRow({
           title={isSystem ? 'Operator accounts cannot give kudos' : 'Daily limit reached'}
           aria-label={isSystem ? 'Cannot give kudos' : 'Daily limit reached'}
         >
-          Kudos {milestone.kudos_count}
+          Kudos{milestone.kudos_count > 0 && ` ${milestone.kudos_count}`}
         </button>
       );
     }
@@ -90,7 +90,7 @@ export function MilestoneRow({
         onClick={() => onGiveKudos(milestone.id)}
         aria-label={`Give kudos to ${milestone.member_name} for reaching ${targetText}`}
       >
-        Kudos {milestone.kudos_count}
+        Kudos{milestone.kudos_count > 0 && ` ${milestone.kudos_count}`}
       </button>
     );
   };

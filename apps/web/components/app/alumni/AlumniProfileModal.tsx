@@ -174,12 +174,12 @@ export function AlumniProfileModal({
     if (pingBusy) return;
     setPingBusy(true);
     try {
-      await act('ping', { to: userId, kind: 'invite', ref: pingNote.trim() || undefined });
-      setPinged(true);
-      setPingOpen(false);
-      setPingNote('');
-    } catch (err: any) {
-      alert(err?.message || 'Could not ping member.');
+      // act() shows the server's reason itself when it refuses.
+      if (await act('ping', { to: userId, kind: 'invite', ref: pingNote.trim() || undefined })) {
+        setPinged(true);
+        setPingOpen(false);
+        setPingNote('');
+      }
     } finally {
       setPingBusy(false);
     }
@@ -323,7 +323,7 @@ export function AlumniProfileModal({
         inset: 0,
         background: 'rgba(11, 11, 11, 0.62)',
         display: 'flex',
-        alignItems: 'flex-start',
+        alignItems: 'safe center',
         justifyContent: 'center',
         padding: '48px 24px',
         overflowY: 'auto',
@@ -987,9 +987,12 @@ export function AlumniProfileModal({
               {/* Ping Button / Form */}
               {pingOpen ? (
                 <form onSubmit={handlePingSubmit} style={{ marginBottom: 16 }}>
-                  <textarea
-                    rows={3}
-                    placeholder={`Write a quick message to ${firstName}…`}
+                  <input
+                    placeholder={`Short topic for ${firstName} (optional)`}
+                    aria-label="Ping topic"
+                    maxLength={80}
+                    pattern="[\w:.&' \/+#\-]*"
+                    title="Letters, digits, spaces and : . & ' / + # - only"
                     value={pingNote}
                     onChange={(e) => setPingNote(e.target.value)}
                     style={{

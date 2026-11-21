@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { SaveForm } from '@/components/app/SaveBar';
 import { MarkdownEditor } from '@/components/app/shared/MarkdownEditor';
 import type { IdeaType } from '@fecpc/contracts';
 
@@ -32,7 +33,6 @@ export function NewIdeaModal({
   const [bodyMd, setBodyMd] = useState('');
   const [roles, setRoles] = useState<string[]>(['']);
   const [wantsRoles, setWantsRoles] = useState(false);
-  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -57,10 +57,15 @@ export function NewIdeaModal({
     setRoles((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== index) : ['']));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (busy) return;
-    setBusy(true);
+  const clear = () => {
+    setTitle('');
+    setType('idea');
+    setBodyMd('');
+    setRoles(['']);
+    setWantsRoles(false);
+  };
+
+  const handleSubmit = async () => {
     const cleanRoles = wantsRoles
       ? roles
           .map((r) => r.trim())
@@ -73,15 +78,11 @@ export function NewIdeaModal({
       type,
       roles: cleanRoles,
     });
-    setBusy(false);
     if (ok) {
-      setTitle('');
-      setType('idea');
-      setBodyMd('');
-      setRoles(['']);
-      setWantsRoles(false);
+      clear();
       onClose();
     }
+    return ok;
   };
 
   return (
@@ -92,7 +93,17 @@ export function NewIdeaModal({
       aria-label="Submit idea"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <form className="cm-modal" style={{ maxWidth: 700 }} onSubmit={handleSubmit}>
+      <SaveForm
+        className="cm-modal"
+        style={{ maxWidth: 700 }}
+        label="Unsubmitted idea"
+        saveLabel="Submit idea"
+        onDiscard={() => {
+          clear();
+          onClose();
+        }}
+        onSubmit={handleSubmit}
+      >
         <div className="cm-modal-head">
           <h2 className="h3">Submit idea</h2>
           <button type="button" className="cm-modal-close" aria-label="Close" onClick={onClose}>
@@ -214,19 +225,7 @@ export function NewIdeaModal({
             </div>
           )}
         </div>
-
-        <div
-          className="row"
-          style={{ justifyContent: 'flex-end', '--g': '8px' } as React.CSSProperties}
-        >
-          <button type="button" className="btn sm line" onClick={onClose}>
-            Cancel
-          </button>
-          <button type="submit" className="btn sm" disabled={busy}>
-            {busy ? 'Submitting…' : 'Submit'}
-          </button>
-        </div>
-      </form>
+      </SaveForm>
     </div>
   );
 }

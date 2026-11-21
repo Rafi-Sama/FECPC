@@ -1,4 +1,5 @@
 'use client';
+import { SaveForm } from '@/components/app/SaveBar';
 import { useState } from 'react';
 import { Page } from '@/components/app/Shell';
 import { useStore } from '@/components/app/Store';
@@ -144,13 +145,13 @@ export default function Courses() {
               </button>
             </p>
           ) : (
-            <form
+            <SaveForm
               className="grid"
               style={{ '--min': '280px', '--g': '24px' } as React.CSSProperties}
-              onSubmit={(e) => {
-                e.preventDefault();
-                act('quiz', { course: c.id, picks: quiz.map((_, i) => pick[i]) });
-              }}
+              label="Quiz not submitted"
+              saveLabel="Submit quiz"
+              onDiscard={() => setPick({})}
+              onSubmit={() => act('quiz', { course: c.id, picks: quiz.map((_, i) => pick[i]) })}
             >
               {quiz.map((q, i) => (
                 <fieldset key={q.q} className="quiz">
@@ -171,10 +172,7 @@ export default function Courses() {
                   ))}
                 </fieldset>
               ))}
-              <button className="btn sm" style={{ alignSelf: 'end', justifySelf: 'start' }}>
-                Submit quiz
-              </button>
-            </form>
+            </SaveForm>
           )}
         </section>
         <section className="panel" style={{ gridColumn: '1 / -1' }}>

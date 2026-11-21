@@ -1,13 +1,15 @@
 'use client';
 
+import { SaveForm } from '@/components/app/SaveBar';
 import Link from 'next/link';
 import { notFound, useParams } from 'next/navigation';
 import { useState } from 'react';
 import { EventAdmin } from '@/components/app/events/EventAdmin';
 import { SignUp } from '@/components/app/events/SignUp';
+import { CertPreview } from '@/components/app/events/CertPreview';
 import { useStore } from '@/components/app/Store';
 import { EVENT_STATUS_LABEL, type EventDetail } from '@fecpc/contracts';
-import { bannerStyle, fmtWhen, renderCertificate, useEventsQuery } from '@/lib/events';
+import { bannerStyle, fmtWhen, liveStatus, renderCertificate, useEventsQuery } from '@/lib/events';
 
 const CERT_NAME: Record<string, string> = {
   participant: 'Participation',
@@ -45,7 +47,7 @@ export default function EventDetailPage() {
             <span className="tag">{fmtWhen(e.startsAt)}</span>
             {e.place && <span className="tag">{e.place}</span>}
             {e.fee > 0 && <span className="tag">৳{e.fee}</span>}
-            <span className="tag k">{EVENT_STATUS_LABEL[e.status]}</span>
+            <span className="tag k">{liveStatus(e) ?? EVENT_STATUS_LABEL[e.status]}</span>
           </div>
           <h1 className="h2">{e.title}</h1>
           {e.about && (
@@ -55,7 +57,6 @@ export default function EventDetailPage() {
               </p>
             </section>
           )}
-          {e.admin && <EventAdmin e={e} reload={reload} />}
         </div>
 
         <aside className="stack ev-aside">
@@ -67,7 +68,9 @@ export default function EventDetailPage() {
                   <span>
                     {certName(c.kind)} <span className="label mono">{c.code}</span>
                   </span>
+                  <CertPreview html={c.html} title={`${certName(c.kind)} certificate preview`} />
                   <div className="row">
+                    <span className="label">Download</span>
                     {(['png', 'jpeg'] as const).map((t) => (
                       <button
                         key={t}
@@ -134,6 +137,7 @@ export default function EventDetailPage() {
             ))}
         </aside>
       </div>
+      {e.admin && <EventAdmin e={e} reload={reload} />}
     </div>
   );
 }
@@ -183,7 +187,7 @@ function CheckIn({ e }: { e: EventDetail }) {
 
 function FeedbackForm({ e, done }: { e: EventDetail; done: () => void }) {
   const { act } = useStore();
-  const [rating, setRating] = useState(5);
+  const [rating, setRating] = useState(0); // 0 = not rated yet
   const [body, setBody] = useState('');
   if (e.feedback)
     return (
@@ -192,11 +196,23 @@ function FeedbackForm({ e, done }: { e: EventDetail; done: () => void }) {
       </section>
     );
   return (
-    <form
+    <SaveForm
       className="panel stack ev-card"
-      onSubmit={async (x) => {
-        x.preventDefault();
-        if (await act('eventFeedback', { eventId: e.id, rating, body })) done();
+      label="Feedback not sent"
+      saveLabel="Send feedback"
+      extraDirty={rating > 0}
+      onDiscard={() => {
+        setRating(0);
+        setBody('');
+      }}
+      onSubmit={async () => {
+        if (!rating) {
+          alert('Pick a rating from 1 to 5 first.');
+          return false;
+        }
+        const ok = await act('eventFeedback', { eventId: e.id, rating, body: body.trim() });
+        if (ok) done();
+        return ok;
       }}
     >
       <b>How was it?</b>
@@ -223,7 +239,6 @@ function FeedbackForm({ e, done }: { e: EventDetail; done: () => void }) {
         value={body}
         onChange={(x) => setBody(x.target.value)}
       />
-      <button className="btn sm">Send feedback</button>
-    </form>
+    </SaveForm>
   );
 }

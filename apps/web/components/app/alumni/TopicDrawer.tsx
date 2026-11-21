@@ -1,4 +1,5 @@
 'use client';
+import { SaveForm } from '@/components/app/SaveBar';
 import React, { useState } from 'react';
 import type { InterviewTopic, InterviewProblem } from '@fecpc/contracts';
 
@@ -19,33 +20,29 @@ export function TopicDrawer({
   onClose: () => void;
   onToggleProblem: (problemId: number, currentlySolved: boolean) => void;
   onDeleteProblem: (problemId: number) => void;
-  onAddProblem: (data: { title: string; url?: string; difficulty: string }) => Promise<void>;
+  onAddProblem: (data: { title: string; url: string; difficulty: string }) => Promise<boolean>;
 }) {
   const [newTitle, setNewTitle] = useState('');
   const [newUrl, setNewUrl] = useState('');
-  const [newDiff, setNewDiff] = useState('Easy');
-  const [submitting, setSubmitting] = useState(false);
+  const [newDiff, setNewDiff] = useState('easy');
 
   const total = problems.length;
   const solvedCount = problems.filter((p) => p.solved).length;
   const pct = total > 0 ? Math.round((solvedCount / total) * 100) : 0;
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTitle.trim() || submitting) return;
-    setSubmitting(true);
-    try {
-      await onAddProblem({
-        title: newTitle.trim(),
-        url: newUrl.trim() || undefined,
-        difficulty: newDiff,
-      });
-      setNewTitle('');
-      setNewUrl('');
-      setNewDiff('Easy');
-    } finally {
-      setSubmitting(false);
-    }
+  const clearNew = () => {
+    setNewTitle('');
+    setNewUrl('');
+    setNewDiff('easy');
+  };
+  const handleCreate = async () => {
+    const ok = await onAddProblem({
+      title: newTitle.trim(),
+      url: newUrl.trim(),
+      difficulty: newDiff,
+    });
+    if (ok) clearNew();
+    return ok;
   };
 
   return (
@@ -133,6 +130,11 @@ export function TopicDrawer({
         >
           {topic.name}
         </h2>
+        {topic.description && (
+          <p style={{ margin: '0 0 12px', fontSize: 14, color: 'var(--mut, #3B3A35)' }}>
+            {topic.description}
+          </p>
+        )}
 
         {/* Progress Stats */}
         <div
@@ -162,29 +164,31 @@ export function TopicDrawer({
           />
         </div>
 
-        {/* Editorial Playlist Link */}
-        <a
-          href="https://neetcode.io/practice"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mo"
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            border: '2px solid var(--line2, #0B0B0B)',
-            padding: '12px 16px',
-            marginBottom: 32,
-            color: 'var(--ink, #0B0B0B)',
-            textDecoration: 'none',
-            background: 'var(--bg, #FFFFFF)',
-            font: '13px ui-monospace, Menlo, monospace',
-            fontWeight: 600,
-          }}
-        >
-          <span>Editorial playlist</span>
-          <span>↗</span>
-        </a>
+        {/* Editorial / playlist link, when the roadmap editors set one */}
+        {topic.link && (
+          <a
+            href={topic.link}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mo"
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              border: '2px solid var(--line2, #0B0B0B)',
+              padding: '12px 16px',
+              marginBottom: 32,
+              color: 'var(--ink, #0B0B0B)',
+              textDecoration: 'none',
+              background: 'var(--bg, #FFFFFF)',
+              font: '13px ui-monospace, Menlo, monospace',
+              fontWeight: 600,
+            }}
+          >
+            <span>Editorial playlist</span>
+            <span>↗</span>
+          </a>
+        )}
 
         {/* Problems List */}
         <section className="sc" style={{ marginBottom: 32 }}>
@@ -337,10 +341,13 @@ export function TopicDrawer({
           </div>
         </section>
 
-        {/* Add problem inline form (alumni and admin) */}
+        {/* Add problem inline form (CP head and president) */}
         {canManage && (
-          <form
+          <SaveForm
             onSubmit={handleCreate}
+            onDiscard={clearNew}
+            label="Unsaved problem"
+            saveLabel="Add problem"
             className="in"
             style={{
               marginTop: 24,
@@ -379,6 +386,8 @@ export function TopicDrawer({
               <input
                 id="p-title"
                 required
+                minLength={2}
+                maxLength={120}
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
                 placeholder="e.g. Valid Anagram"
@@ -410,6 +419,8 @@ export function TopicDrawer({
               <input
                 id="p-url"
                 type="url"
+                required
+                maxLength={500}
                 value={newUrl}
                 onChange={(e) => setNewUrl(e.target.value)}
                 placeholder="https://leetcode.com/problems/..."
@@ -452,51 +463,12 @@ export function TopicDrawer({
                   cursor: 'pointer',
                 }}
               >
-                <option value="Easy">Easy</option>
-                <option value="Medium">Medium</option>
-                <option value="Hard">Hard</option>
+                <option value="easy">Easy</option>
+                <option value="medium">Medium</option>
+                <option value="hard">Hard</option>
               </select>
             </div>
-
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button
-                type="button"
-                onClick={() => {
-                  setNewTitle('');
-                  setNewUrl('');
-                }}
-                style={{
-                  border: '2px solid var(--line2, #0B0B0B)',
-                  background: 'var(--panel, #F6F4EE)',
-                  color: 'var(--ink, #0B0B0B)',
-                  padding: '0 16px',
-                  minHeight: 40,
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={submitting}
-                className="k"
-                style={{
-                  border: '2px solid var(--line2, #0B0B0B)',
-                  background: 'var(--ink, #0B0B0B)',
-                  color: 'var(--on, #FFFFFF)',
-                  padding: '0 18px',
-                  minHeight: 40,
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                {submitting ? 'Adding…' : 'Add problem'}
-              </button>
-            </div>
-          </form>
+          </SaveForm>
         )}
       </aside>
     </div>

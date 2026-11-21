@@ -678,7 +678,7 @@
   z-index: 50;
   display: flex;
   justify-content: center;
-  align-items: flex-start;
+  align-items: safe center;
   overflow-y: auto;
   padding: 4vh 20px;
   background: rgba(0, 0, 0, 0.62);
@@ -3226,8 +3226,8 @@ kbd {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  width: 38px;
+  gap: 4px;
+  width: 48px;
   flex: none;
   font-family: var(--mono), monospace;
 }
@@ -3235,9 +3235,14 @@ kbd {
 .cm-vote-btn {
   background: none;
   border: 1px solid transparent;
-  padding: 2px 6px;
+  /* A 40px target: the arrows were too small to hit reliably. */
+  width: 40px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  padding: 0;
   line-height: 1;
-  font-size: 12px;
+  font-size: 18px;
   color: var(--dim);
   cursor: pointer;
 }
@@ -3257,7 +3262,7 @@ kbd {
 }
 
 .cm-vote-score {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--hi);
   font-variant-numeric: tabular-nums;
@@ -3379,7 +3384,7 @@ kbd {
   z-index: 80;
   background: rgba(13, 13, 11, 0.62);
   display: flex;
-  align-items: flex-start;
+  align-items: safe center;
   justify-content: center;
   padding: clamp(16px, 4vh, 48px) 16px;
   overflow-y: auto;
@@ -6015,4 +6020,232 @@ textarea.tm-code {
   background: var(--acc);
   color: var(--bg);
   font-weight: 700;
+}
+
+/* Contextual save bar (components/app/SaveBar.tsx): sits above everything, modals included. */
+.savebar {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(720px, calc(100vw - 32px));
+  z-index: 10001;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px 10px 16px;
+  background: var(--ink);
+  color: var(--bg);
+  border: 2px solid var(--ink);
+  box-shadow: 4px 4px 0 var(--acc);
+}
+.savebar .btn.line {
+  background: transparent;
+  color: var(--bg);
+  border-color: var(--bg);
+}
+.savebar .btn:not(.line) {
+  background: var(--acc);
+  color: var(--on);
+  border-color: var(--acc);
+}
+.savebar-label {
+  font: 500 14px var(--f-label, monospace);
+}
+.savebar-label [aria-hidden] {
+  color: var(--acc);
+}
+.savebar.shake {
+  animation: savebar-shake 0.4s;
+}
+@keyframes savebar-shake {
+  0%,
+  100% {
+    transform: translateX(-50%);
+  }
+  20%,
+  60% {
+    transform: translateX(calc(-50% - 10px));
+  }
+  40%,
+  80% {
+    transform: translateX(calc(-50% + 10px));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .savebar.shake {
+    animation: none;
+    outline: 3px solid var(--bad);
+  }
+}
+
+/* Event form: sections left, publishing (status) right; one column on narrow screens. */
+.ev-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 32px;
+  align-items: start;
+}
+.ev-form-side {
+  position: sticky;
+  top: 80px;
+}
+@media (max-width: 1100px) {
+  .ev-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ev-form-side {
+    position: static;
+    order: -1;
+  }
+}
+.ev-pair {
+  align-items: flex-start;
+}
+/* Date buttons line up with the text inputs beside them. */
+.field .datepick__btn {
+  min-height: 48px;
+  padding: 0 14px;
+}
+.datepick__grid button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.ev-place {
+  min-width: 104px;
+  min-height: 36px;
+  padding: 4px 30px 4px 10px;
+}
+
+/* Events header: primary "New event" button; phones fold sections and filters into one line each. */
+.ev-head-actions {
+  --g: 8px;
+  align-items: center;
+}
+.ev-new[aria-pressed='true'] {
+  outline: 3px solid var(--acc);
+  outline-offset: 2px;
+}
+.ev-mob-only {
+  display: none;
+}
+@media (max-width: 640px) {
+  .ev-desk-only {
+    display: none;
+  }
+  .ev-mob-only {
+    display: block;
+  }
+  .page:has(.ev-head-actions) > .head {
+    align-items: center !important;
+    gap: 8px;
+  }
+  .page:has(.ev-head-actions) > .head .h2 {
+    font-size: 30px;
+  }
+  .ev-head-actions .input.sm,
+  .ev-head-actions .btn {
+    min-height: 36px;
+    font-size: 14px;
+    padding: 0 10px;
+  }
+  .ev-filter {
+    flex-wrap: nowrap;
+    --g: 8px;
+  }
+  .ev-filter .input {
+    min-height: 40px;
+    font-size: 14px;
+    padding: 6px 10px;
+  }
+  .ev-filter .input {
+    min-width: 0;
+  }
+  .ev-filter input[type='search'] {
+    flex: 1 1 0;
+  }
+  .ev-filter .input.sm {
+    width: 104px;
+    flex: none;
+  }
+  .ev-head-actions select.input.sm,
+  .ev-filter select.input.sm {
+    padding-right: 28px;
+  }
+}
+
+/* Events calendar: Monday-first month grid; days with events are buttons. */
+.cal2 {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+  margin: 12px 0;
+}
+.cal2 > * {
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  position: relative;
+  font: 14px var(--f-num, monospace);
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  padding: 0;
+}
+.cal2 > .cal2-dow,
+.cal2 > span:empty {
+  border: 0;
+  aspect-ratio: auto;
+  color: var(--dim);
+}
+.cal2 > .has {
+  background: var(--acc);
+  color: var(--on);
+  border-color: var(--acc);
+  cursor: pointer;
+  font-weight: 700;
+}
+.cal2 > .has.past {
+  background: var(--line);
+  color: var(--ink);
+  border-color: var(--line2);
+}
+.cal2 > .today {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
+}
+.cal2 > .sel {
+  box-shadow: 0 0 0 3px var(--ink);
+}
+.cal2 > .has i {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  font: 600 14px var(--f-num, monospace);
+  font-style: normal;
+}
+.cal2-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  color: inherit;
+  text-decoration: none;
+}
+.cal2-item + .cal2-item {
+  border-top: 1px solid var(--line);
+}
+.cal2-item:hover strong {
+  text-decoration: underline;
+}
+
+.ev-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 20px;
+  margin: 0;
+}
+.ev-facts dd {
+  margin: 0;
 }

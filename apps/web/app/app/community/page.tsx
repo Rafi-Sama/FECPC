@@ -1,4 +1,5 @@
 'use client';
+import { SaveForm } from '@/components/app/SaveBar';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Page, Tabs } from '@/components/app/Shell';
@@ -305,8 +306,14 @@ function CommunityContent() {
     [act],
   );
 
-  const handlePublishAnnouncement = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const resetAnnouncement = () => {
+    setAnnTitle('');
+    setAnnBody('');
+    setAnnAudience('all');
+    setAnnPinned(false);
+    setAnnRequiresAck(false);
+  };
+  const handlePublishAnnouncement = async () => {
     const ok = await act('announce', {
       title: annTitle.trim(),
       body_md: annBody.trim(),
@@ -314,12 +321,8 @@ function CommunityContent() {
       pinned: annPinned,
       requires_ack: annRequiresAck,
     });
-    if (ok) {
-      setAnnTitle('');
-      setAnnBody('');
-      setAnnPinned(false);
-      setAnnRequiresAck(false);
-    }
+    if (ok) resetAnnouncement();
+    return ok;
   };
 
   /* ────────── IDEAS STATE ────────── */
@@ -581,9 +584,12 @@ function CommunityContent() {
       {tab === 'Announcements' && (
         <div className="stack">
           {can(s.roles, 'announce.post') && (
-            <form
+            <SaveForm
               className="panel stack"
               style={{ '--g': '14px' } as React.CSSProperties}
+              label="Unpublished announcement"
+              saveLabel="Publish"
+              onDiscard={resetAnnouncement}
               onSubmit={handlePublishAnnouncement}
             >
               <p className="label">
@@ -654,11 +660,8 @@ function CommunityContent() {
                     <span className="label">Require acknowledgement</span>
                   </label>
                 </div>
-                <button className="btn sm" type="submit">
-                  Publish
-                </button>
               </div>
-            </form>
+            </SaveForm>
           )}
 
           <div className="cm-chips" role="group" aria-label="Filter announcements">

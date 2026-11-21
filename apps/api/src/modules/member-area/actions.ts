@@ -38,6 +38,7 @@ import type {
   IdeaType,
   InterviewProblem,
   InterviewTip,
+  InterviewRoadmap,
   InterviewTopic,
   MemberActivityItem,
   MemberContestRow,
@@ -706,25 +707,19 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
   async expressInterest(c, a, _p, i) {
     person(a);
     const ideaId = posInt(i.ideaId, 'idea');
-    const idea = (await c.query(`select user_id, status from ideas where id = $1`, [ideaId]))
+    const idea = (await c.query(`select user_id, status, roles from ideas where id = $1`, [ideaId]))
       .rows[0];
     if (!idea) throw new Fail(404, 'That idea does not exist.');
     need(idea.user_id !== a.id, 'You cannot express interest in your own post.');
     if (idea.status === 'closed') throw new Fail(409, 'This post is closed.');
+    // Only the poster's own questions are stored, and each one must be answered.
+    const given =
+      i.response && typeof i.response === 'object' && !Array.isArray(i.response)
+        ? (i.response as Record<string, unknown>)
+        : {};
     const cleanResp: Record<string, string> = {};
-    if (i.response && typeof i.response === 'object' && !Array.isArray(i.response)) {
-      for (const [k, v] of Object.entries(i.response as Record<string, unknown>).slice(0, 5)) {
-        const ck = String(k)
-          .replace(/[\u0000-\u001f\u007f]/g, ' ')
-          .trim()
-          .slice(0, 140);
-        const cv = String(v ?? '')
-          .replace(/[\u0000-\u001f\u007f]/g, ' ')
-          .trim()
-          .slice(0, 500);
-        if (ck && cv) cleanResp[ck] = cv;
-      }
-    }
+    for (const prompt of (idea.roles ?? []) as string[])
+      cleanResp[prompt] = text(given[prompt], 1, 500, `Your answer to “${prompt}”`);
     await c.query(
       `insert into idea_interests (idea_id, user_id, response, status) values ($1, $2, $3::jsonb, 'pending')
        on conflict (idea_id, user_id) do update set response = excluded.response`,
@@ -767,7 +762,12 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
   async ping(c, a, _p, i) {
     const kind = pick(i.kind, ['invite', 'duel', 'nudge', 'team'] as const, 'request'),
       to = key(i.to),
-      ref = typeof i.ref === 'string' && KEY.test(i.ref) ? i.ref : '';
+      ref = typeof i.ref === 'string' ? i.ref.trim() : '';
+    if (ref && !KEY.test(ref))
+      throw new Fail(
+        400,
+        "A note can use letters, digits, spaces and : . & ' / + # - only, up to 80 characters.",
+      );
     need(to !== a.id, 'You cannot send that to yourself.');
     const t = (
       await c.query(`select mentor_id from users where id = $1 and not suspended and not system`, [
@@ -1417,26 +1417,10 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
       );
     }
   },
-  async createInterviewTopic(c, a, _p, i) {
-    need(
-      canFully(a.roles, 'interview.topic.create'),
-      'Only alumni or admins can create interview topics.',
-    );
-    const name = text(i.name, 2, 80, 'Topic name');
-    const desc = i.description ? text(i.description, 1, 300, 'Description') : null;
-    const maxOrder =
-      (await c.query(`select coalesce(max(order_index), 0) as max_ord from interview_topics`))
-        .rows[0]?.max_ord ?? 0;
-    await c.query(
-      `insert into interview_topics (name, description, created_by, order_index) values ($1, $2, $3, $4)`,
-      [name, desc, a.id, maxOrder + 1],
-    );
-    await audit(c, a, `created interview topic: ${name}`);
-  },
   async createInterviewProblem(c, a, _p, i) {
     need(
       canFully(a.roles, 'interview.problem.create'),
-      'Only alumni or admins can add interview problems.',
+      'Only the CP head or president can add interview problems.',
     );
     const topicId = posInt(i.topicId, 'topic');
     const title = text(i.title, 2, 120, 'Title');
@@ -2094,7 +2078,7 @@ export async function listMembers(
   batches: number[];
 }> {
   const pageSize = Math.min(48, Math.max(1, Number(input.pageSize) || 16));
-  const page = Math.max(0, Math.floor(Number(input.page) || 0));
+  const page = Math.min(10_000, Math.max(0, Math.floor(Number(input.page) || 0)));
   const q = typeof input.q === 'string' ? input.q.trim() : '';
   const rating = typeof input.rating === 'string' ? input.rating.trim() : '';
   const skill = typeof input.skill === 'string' ? input.skill.trim() : '';
@@ -2663,7 +2647,7 @@ export async function listAlumni(
   batchOptions: number[];
   locationOptions: string[];
 }> {
-  const page = Math.max(0, Math.floor(Number(input.page) || 0));
+  const page = Math.min(10_000, Math.max(0, Math.floor(Number(input.page) || 0)));
   const pageSize = Math.max(1, Math.min(100, Math.floor(Number(input.pageSize) || 16)));
   const offset = page * pageSize;
 
@@ -3043,13 +3027,268 @@ export async function deleteAlumniJob(
 /*                             INTERVIEW PREP                                 */
 /* ========================================================================== */
 
+export async function listInterviewRoadmaps(
+  db: Db,
+  viewerId: string,
+): Promise<{ roadmaps: InterviewRoadmap[] }> {
+  const rows = (
+    await db.query(
+      `select r.id, r.name, r.description, r.created_at,
+         (select count(*)::int from interview_topics t where t.roadmap_id = r.id) as "topicCount",
+         (select count(*)::int from interview_problems p
+          join interview_topics t on t.id = p.topic_id where t.roadmap_id = r.id) as "totalCount",
+         (select count(*)::int from interview_user_progress up
+          join interview_problems p on p.id = up.problem_id
+          join interview_topics t on t.id = p.topic_id
+          where t.roadmap_id = r.id and up.user_id = $1) as "solvedCount",
+         coalesce((select array_agg(t.name order by t.order_index)
+           from interview_topics t where t.roadmap_id = r.id), '{}') as "topicNames"
+       from interview_roadmaps r
+       order by r.id asc`,
+      [viewerId],
+    )
+  ).rows;
+  return { roadmaps: rows as InterviewRoadmap[] };
+}
+
+type RoadmapNodeIn = {
+  key?: unknown;
+  id?: unknown;
+  parentKey?: unknown;
+  name?: unknown;
+  description?: unknown;
+  link?: unknown;
+  x?: unknown;
+  y?: unknown;
+  problems?: unknown;
+};
+type ProblemIn = { id?: unknown; title?: unknown; url?: unknown; difficulty?: unknown };
+const DIFFICULTIES = ['easy', 'medium', 'hard'] as const;
+
+// Loads the actor inside the transaction and requires full `interview.roadmap.manage`.
+async function roadmapManager(conn: Db, userId: string): Promise<Actor> {
+  const u = (
+    await conn.query(
+      `select id, role, ${ROLES}, name, system from users where id = $1 and not suspended`,
+      [userId],
+    )
+  ).rows[0];
+  if (!u) throw new Fail(401, 'Sign in again.');
+  const actor: Actor = { id: u.id, role: u.role, roles: u.roles, name: u.name, system: u.system };
+  person(actor);
+  need(
+    canFully(actor.roles, 'interview.roadmap.manage'),
+    'Only the CP head or president can manage roadmaps.',
+  );
+  return actor;
+}
+
+/**
+ * Creates (no roadmapId) or replaces a roadmap and its whole topic tree in one go. Nodes carry a
+ * client `key` and `parentKey`; existing topics also send their `id`. Topics left out are deleted
+ * with their problems. A topic that sends `problems` gets exactly that list: rows with an `id` are
+ * edited in place (keeping members' progress), rows without one are added, missing ones deleted.
+ */
+export async function saveInterviewRoadmap(
+  actorId: string,
+  input: { roadmapId?: unknown; name?: unknown; description?: unknown; topics?: unknown },
+): Promise<{ roadmapId: number }> {
+  return tx(async (conn) => {
+    const actor = await roadmapManager(conn, actorId);
+    const name = text(input.name, 2, 80, 'Roadmap name');
+    const desc = input.description ? text(input.description, 0, 300, 'Description') || null : null;
+    if (!Array.isArray(input.topics) || input.topics.length < 1 || input.topics.length > 200)
+      throw new Fail(400, 'A roadmap needs 1 to 200 topics.');
+
+    const nodes = (input.topics as RoadmapNodeIn[]).map((n) => ({
+      key: text(n.key, 1, 64, 'Topic key'),
+      id: n.id == null ? null : posInt(n.id, 'topic'),
+      parentKey: n.parentKey == null ? null : text(n.parentKey, 1, 64, 'Parent key'),
+      name: text(n.name, 2, 80, 'Topic name'),
+      description: n.description ? text(n.description, 0, 300, 'Description') || null : null,
+      link: optionalUrl(n.link, 'Topic link'),
+      x: Math.min(5000, Math.max(0, Math.round(Number(n.x) || 0))),
+      y: Math.min(5000, Math.max(0, Math.round(Number(n.y) || 0))),
+      problems:
+        n.problems === undefined
+          ? null
+          : (() => {
+              if (!Array.isArray(n.problems) || n.problems.length > 200)
+                throw new Fail(400, 'A topic can have at most 200 problems.');
+              return (n.problems as ProblemIn[]).map((q) => {
+                const title = text(q.title, 2, 120, 'Problem title');
+                const url = optionalUrl(q.url, `Link for “${title}”`);
+                if (!url) throw new Fail(400, `“${title}” needs a link.`);
+                return {
+                  id: q.id == null ? null : posInt(q.id, 'problem'),
+                  title,
+                  url,
+                  difficulty: pick(q.difficulty, DIFFICULTIES, `difficulty for “${title}”`),
+                };
+              });
+            })(),
+    }));
+    if (nodes.reduce((t, n) => t + (n.problems?.length ?? 0), 0) > 3000)
+      throw new Fail(400, 'A roadmap can have at most 3000 problems.');
+    const byKey = new Map(nodes.map((n) => [n.key, n]));
+    if (byKey.size !== nodes.length) throw new Fail(400, 'Topic keys must be unique.');
+    for (const n of nodes)
+      if (n.parentKey !== null && !byKey.has(n.parentKey))
+        throw new Fail(400, `"${n.name}" points at a missing parent.`);
+
+    // Parents first; anything never reached sits on a cycle.
+    const order: typeof nodes = [];
+    const queue = nodes.filter((n) => n.parentKey === null);
+    while (queue.length) {
+      const n = queue.shift()!;
+      order.push(n);
+      queue.push(...nodes.filter((c) => c.parentKey === n.key));
+    }
+    if (order.length !== nodes.length) throw new Fail(400, 'Topics cannot form a cycle.');
+
+    let roadmapId: number;
+    if (input.roadmapId == null) {
+      roadmapId = Number(
+        (
+          await conn.query(
+            `insert into interview_roadmaps (name, description, created_by) values ($1, $2, $3) returning id`,
+            [name, desc, actor.id],
+          )
+        ).rows[0].id,
+      );
+    } else {
+      roadmapId = posInt(input.roadmapId, 'roadmap');
+      const r = await conn.query(
+        `update interview_roadmaps set name = $2, description = $3 where id = $1 returning id`,
+        [roadmapId, name, desc],
+      );
+      if (!r.rowCount) throw new Fail(404, 'That roadmap does not exist.');
+    }
+
+    const owned = new Set(
+      (
+        await conn.query(`select id from interview_topics where roadmap_id = $1 for update`, [
+          roadmapId,
+        ])
+      ).rows.map((r) => Number(r.id)),
+    );
+    const dbId = new Map<string, number>();
+    for (const [i, n] of order.entries()) {
+      const parentId = n.parentKey === null ? null : dbId.get(n.parentKey)!;
+      if (n.id !== null) {
+        if (!owned.has(n.id)) throw new Fail(400, `"${n.name}" is not in this roadmap.`);
+        await conn.query(
+          `update interview_topics set name = $2, description = $3, parent_id = $4, x = $5, y = $6, order_index = $7, link = $8 where id = $1`,
+          [n.id, n.name, n.description, parentId, n.x, n.y, i, n.link],
+        );
+        dbId.set(n.key, n.id);
+      } else {
+        const ins = await conn.query(
+          `insert into interview_topics (roadmap_id, name, description, parent_id, x, y, order_index, created_by, link)
+           values ($1, $2, $3, $4, $5, $6, $7, $8, $9) returning id`,
+          [roadmapId, n.name, n.description, parentId, n.x, n.y, i, actor.id, n.link],
+        );
+        dbId.set(n.key, Number(ins.rows[0].id));
+      }
+    }
+    // Problems: only topics that sent a list are touched, and only rows that changed are written.
+    const existing = new Map(
+      (
+        await conn.query(
+          `select p.id, p.topic_id, p.title, p.url, p.difficulty from interview_problems p
+           join interview_topics t on t.id = p.topic_id where t.roadmap_id = $1 for update of p`,
+          [roadmapId],
+        )
+      ).rows.map((r) => [Number(r.id), r]),
+    );
+    const kept = new Set<number>();
+    for (const n of nodes) {
+      if (!n.problems) continue;
+      const topicId = dbId.get(n.key)!;
+      for (const q of n.problems) {
+        if (q.id === null) {
+          await conn.query(
+            `insert into interview_problems (topic_id, title, url, difficulty, created_by) values ($1, $2, $3, $4, $5)`,
+            [topicId, q.title, q.url, q.difficulty, actor.id],
+          );
+          continue;
+        }
+        const old = existing.get(q.id);
+        if (!old || kept.has(q.id)) throw new Fail(400, `“${q.title}” is not in this roadmap.`);
+        kept.add(q.id);
+        if (
+          Number(old.topic_id) !== topicId ||
+          old.title !== q.title ||
+          old.url !== q.url ||
+          old.difficulty !== q.difficulty
+        )
+          await conn.query(
+            `update interview_problems set topic_id = $2, title = $3, url = $4, difficulty = $5 where id = $1`,
+            [q.id, topicId, q.title, q.url, q.difficulty],
+          );
+      }
+    }
+    const listed = new Set(nodes.filter((n) => n.problems).map((n) => n.id));
+    const dropped = [...existing.values()]
+      .filter((r) => listed.has(Number(r.topic_id)) && !kept.has(Number(r.id)))
+      .map((r) => Number(r.id));
+    if (dropped.length)
+      await conn.query(`delete from interview_problems where id = any($1::int[])`, [dropped]);
+    // After the problem moves above. Every kept topic hangs off a kept parent, so this only removes
+    // dropped subtrees (and the problems still in them).
+    await conn.query(
+      `delete from interview_topics where roadmap_id = $1 and id <> all($2::int[])`,
+      [roadmapId, [...dbId.values()]],
+    );
+    await audit(conn, actor, `saved interview roadmap #${roadmapId}: ${name}`);
+    return { roadmapId };
+  });
+}
+
+/** Every problem in a roadmap, for the editor. */
+export async function listInterviewProblems(
+  db: Db,
+  input: { roadmapId?: unknown },
+): Promise<{
+  problems: Pick<InterviewProblem, 'id' | 'topic_id' | 'title' | 'url' | 'difficulty'>[];
+}> {
+  const roadmapId = posInt(input.roadmapId, 'roadmap');
+  const rows = (
+    await db.query(
+      `select p.id, p.topic_id, p.title, p.url, p.difficulty from interview_problems p
+       join interview_topics t on t.id = p.topic_id where t.roadmap_id = $1 order by p.id`,
+      [roadmapId],
+    )
+  ).rows;
+  return { problems: rows as InterviewProblem[] };
+}
+
+export async function deleteInterviewRoadmap(
+  actorId: string,
+  input: { roadmapId?: unknown },
+): Promise<{ deleted: boolean }> {
+  return tx(async (conn) => {
+    const actor = await roadmapManager(conn, actorId);
+    const roadmapId = posInt(input.roadmapId, 'roadmap');
+    const r = await conn.query(`delete from interview_roadmaps where id = $1 returning name`, [
+      roadmapId,
+    ]);
+    if (!r.rowCount) throw new Fail(404, 'That roadmap does not exist.');
+    await audit(conn, actor, `deleted interview roadmap #${roadmapId}: ${r.rows[0].name}`);
+    return { deleted: true };
+  });
+}
+
 export async function listInterviewTopics(
   db: Db,
   viewerId: string,
+  input: { roadmapId?: unknown } = {},
 ): Promise<{ topics: InterviewTopic[] }> {
+  const roadmapId = input.roadmapId == null ? null : posInt(input.roadmapId, 'roadmap');
   const rows = (
     await db.query(
-      `select t.id, t.name, t.description, t.created_by, t.order_index, t.created_at,
+      `select t.id, t.name, t.description, t.link, t.created_by, t.order_index, t.created_at,
+         t.roadmap_id, t.parent_id, t.x, t.y,
          (select count(*)::int from interview_problems p where p.topic_id = t.id) as "totalCount",
          (select count(*)::int from interview_user_progress up
           join interview_problems p on p.id = up.problem_id
@@ -3057,8 +3296,9 @@ export async function listInterviewTopics(
          coalesce((select array_agg(p.title order by p.id)
            from interview_problems p where p.topic_id = t.id), '{}') as "problemTitles"
        from interview_topics t
+       where $2::int is null or t.roadmap_id = $2
        order by t.order_index asc, t.name asc`,
-      [viewerId],
+      [viewerId, roadmapId],
     )
   ).rows;
 
@@ -3080,7 +3320,7 @@ export async function getInterviewTopicDetail(
   const topicId = posInt(input.topicId, 'topic');
   const topicRow = (
     await db.query(
-      `select t.id, t.name, t.description, t.created_by, t.order_index, t.created_at,
+      `select t.id, t.name, t.description, t.link, t.created_by, t.order_index, t.created_at,
          (select count(*)::int from interview_problems p where p.topic_id = t.id) as "totalCount",
          (select count(*)::int from interview_user_progress up
           join interview_problems p on p.id = up.problem_id
@@ -3180,8 +3420,8 @@ export async function toggleInterviewProblem(
 
 export async function createInterviewTopic(
   a: Db | string,
-  b: string | { name: string; description?: string },
-  c?: { name: string; description?: string },
+  b: string | { name: string; description?: string; roadmapId?: unknown; parentId?: unknown },
+  c?: { name: string; description?: string; roadmapId?: unknown; parentId?: unknown },
 ): Promise<{ success: boolean; topicId: number }> {
   const { actorId: userId, input } = parseActorAndInput(a, b, c);
   return tx(async (conn) => {
@@ -3196,17 +3436,33 @@ export async function createInterviewTopic(
     person(actor);
     need(
       canFully(actor.roles, 'interview.topic.create'),
-      'Only alumni or admins can create interview topics.',
+      'Only the CP head or president can create interview topics.',
     );
 
     const name = text(input.name, 2, 80, 'Topic name');
     const desc = input.description ? text(input.description, 1, 300, 'Description') : null;
+    const roadmapId = posInt(input.roadmapId, 'roadmap');
+    const parentId = input.parentId == null ? null : posInt(input.parentId, 'parent topic');
+    if (parentId !== null) {
+      const p = await conn.query(
+        `select 1 from interview_topics where id = $1 and roadmap_id = $2`,
+        [parentId, roadmapId],
+      );
+      if (!p.rowCount) throw new Fail(404, 'That parent topic is not in this roadmap.');
+    } else {
+      const r = await conn.query(`select 1 from interview_roadmaps where id = $1`, [roadmapId]);
+      if (!r.rowCount) throw new Fail(404, 'That roadmap does not exist.');
+    }
     const maxOrder =
-      (await conn.query(`select coalesce(max(order_index), 0) as max_ord from interview_topics`))
-        .rows[0]?.max_ord ?? 0;
+      (
+        await conn.query(
+          `select coalesce(max(order_index), 0) as max_ord from interview_topics where roadmap_id = $1`,
+          [roadmapId],
+        )
+      ).rows[0]?.max_ord ?? 0;
     const ins = await conn.query(
-      `insert into interview_topics (name, description, created_by, order_index) values ($1, $2, $3, $4) returning id`,
-      [name, desc, userId, maxOrder + 1],
+      `insert into interview_topics (name, description, created_by, order_index, roadmap_id, parent_id) values ($1, $2, $3, $4, $5, $6) returning id`,
+      [name, desc, userId, maxOrder + 1, roadmapId, parentId],
     );
     await audit(conn, actor, `created interview topic: ${name}`);
     return { success: true, topicId: Number(ins.rows[0].id) };
@@ -3291,8 +3547,8 @@ export async function deleteInterviewProblem(
     ).rows[0];
     if (!p) throw new Fail(404, 'That problem does not exist.');
     need(
-      p.created_by === userId || isAdmin(actor.roles),
-      'Only the creator or an admin can delete this problem.',
+      canFully(actor.roles, 'interview.roadmap.manage') || isAdmin(actor.roles),
+      'Only the CP head or president can delete problems.',
     );
     await conn.query(`delete from interview_problems where id = $1`, [problemId]);
     await audit(conn, actor, `deleted interview problem #${problemId}: ${p.title}`);
@@ -3432,7 +3688,7 @@ export async function listBlogPosts(
     pageSize?: number;
   } = {},
 ): Promise<{ posts: BlogPost[]; total: number; tags: string[] }> {
-  const page = Math.max(0, Math.floor(Number(input.page) || 0));
+  const page = Math.min(10_000, Math.max(0, Math.floor(Number(input.page) || 0)));
   const pageSize = Math.max(1, Math.min(100, Math.floor(Number(input.pageSize) || 12)));
   const offset = page * pageSize;
 

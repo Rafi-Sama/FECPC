@@ -1,4 +1,5 @@
 'use client';
+import { SaveForm } from '@/components/app/SaveBar';
 import Link from 'next/link';
 import { useState } from 'react';
 import { useStore } from '@/components/app/Store';
@@ -32,7 +33,6 @@ export function AlumniSection({
   const [role, setRole] = useState('');
   const [location, setLocation] = useState('');
   const [url, setUrl] = useState('');
-  const [saving, setSaving] = useState(false);
 
   if (!profile.is_alumni) return null;
 
@@ -46,28 +46,26 @@ export function AlumniSection({
   const tips = profile.interview_tips ?? [];
   const blogs = profile.blogs ?? [];
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      const ok = await act('createAlumniJob', {
-        company,
-        role,
-        location,
-        url,
-        ...(admin && !isOwner ? { alumniId: profile.id } : {}),
-      });
-      if (ok) {
-        setCompany('');
-        setRole('');
-        setLocation('');
-        setUrl('');
-        setAdding(false);
-        await onReload();
-      }
-    } finally {
-      setSaving(false);
+  const clearJob = () => {
+    setCompany('');
+    setRole('');
+    setLocation('');
+    setUrl('');
+    setAdding(false);
+  };
+  const handleCreate = async () => {
+    const ok = await act('createAlumniJob', {
+      company: company.trim(),
+      role: role.trim(),
+      location: location.trim(),
+      url: url.trim(),
+      ...(admin && !isOwner ? { alumniId: profile.id } : {}),
+    });
+    if (ok) {
+      clearJob();
+      await onReload();
     }
+    return ok;
   };
 
   const handleDelete = async (jobId: number) => {
@@ -136,7 +134,7 @@ export function AlumniSection({
                 <span className="label" style={{ fontSize: 12 }}>
                   {fmtShortDate(t.created_at)}
                 </span>
-                <Link href={`/app/career?tab=prep`} className="profile-modal__link">
+                <Link href="/app/prep" className="profile-modal__link">
                   View in Prep ↗
                 </Link>
               </li>
@@ -191,7 +189,12 @@ export function AlumniSection({
               <button type="button" className="btn xs line" disabled={syncing} onClick={handleSync}>
                 {syncing ? 'Syncing…' : 'Sync boards'}
               </button>
-              <button type="button" className="btn xs line" onClick={() => setAdding((v) => !v)}>
+              <button
+                type="button"
+                className="btn xs line"
+                data-close={adding || undefined}
+                onClick={() => setAdding((v) => !v)}
+              >
                 {adding ? 'Close' : '+ Post job'}
               </button>
             </div>
@@ -205,7 +208,13 @@ export function AlumniSection({
         )}
 
         {adding && canPost && (
-          <form className="profile-edit-job-form" onSubmit={handleCreate}>
+          <SaveForm
+            className="profile-edit-job-form"
+            label="Unpublished job"
+            saveLabel="Publish job"
+            onDiscard={clearJob}
+            onSubmit={handleCreate}
+          >
             <label className="profile-edit-field">
               <span className="label" style={{ fontSize: 11 }}>
                 Company
@@ -254,22 +263,13 @@ export function AlumniSection({
                 className="member-filter-ctrl"
                 type="url"
                 required
+                maxLength={500}
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 placeholder="https://..."
               />
             </label>
-            <div
-              style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', gap: 8 }}
-            >
-              <button type="button" className="btn xs line" onClick={() => setAdding(false)}>
-                Cancel
-              </button>
-              <button type="submit" className="btn xs" disabled={saving}>
-                {saving ? 'Saving…' : 'Publish job'}
-              </button>
-            </div>
-          </form>
+          </SaveForm>
         )}
 
         {fetched.length > 0 && (

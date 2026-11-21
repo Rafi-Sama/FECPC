@@ -9,6 +9,7 @@ import { can, canFully, isAdmin } from '@fecpc/contracts';
 import { Avatar } from '@/components/pixel/Sprites';
 import { DatePicker } from '@/components/app/shared/DatePicker';
 import { PersonPicker } from '@/components/app/shared/PersonPicker';
+import { SaveForm } from '@/components/app/SaveBar';
 
 const allTabs = [
   'Board',
@@ -79,20 +80,20 @@ export default function Ops() {
       <Tabs tabs={tabs} value={tab} onChange={setTab} />
       {tab === 'Board' && (
         <>
-          <form
+          <SaveForm
             className="row ops-add"
+            label="New task"
+            saveLabel="Add task"
             onSubmit={async (e) => {
-              e.preventDefault();
               const f = e.currentTarget,
                 d = new FormData(f);
-              if (
-                await act('saveTask', {
-                  title: d.get('title'),
-                  who: d.get('who') || null,
-                  due: d.get('due') || null,
-                })
-              )
-                f.reset();
+              const ok = await act('saveTask', {
+                title: String(d.get('title')).trim(),
+                who: d.get('who') || null,
+                due: d.get('due') || null,
+              });
+              if (ok) f.reset();
+              return ok;
             }}
           >
             <input
@@ -105,8 +106,7 @@ export default function Ops() {
             />
             <PersonPicker name="who" people={people} label="Assign to" />
             <DatePicker name="due" label="Due" placeholder="Due date" />
-            <button className="btn sm">Add</button>
-          </form>
+          </SaveForm>
           <div className="kanban">
             {cols.map((c) => {
               const colOf = (t: (typeof tasks)[number]) =>
@@ -152,18 +152,24 @@ export default function Ops() {
       )}
       {tab === 'Meetings' && (
         <div className="stack">
-          <form
+          <SaveForm
             className="row ops-add"
+            label="New meeting"
+            saveLabel="Add meeting"
             onSubmit={async (e) => {
-              e.preventDefault();
               const f = e.currentTarget,
                 d = new FormData(f);
               const agenda = String(d.get('agenda'))
                 .split('\n')
                 .map((x) => x.trim())
                 .filter(Boolean);
-              if (await act('saveMeeting', { date: d.get('date'), title: d.get('title'), agenda }))
-                f.reset();
+              const ok = await act('saveMeeting', {
+                date: d.get('date'),
+                title: String(d.get('title')).trim(),
+                agenda,
+              });
+              if (ok) f.reset();
+              return ok;
             }}
           >
             <DatePicker name="date" label="Date" required />
@@ -182,8 +188,7 @@ export default function Ops() {
               placeholder="Agenda, one item per line"
               aria-label="Agenda"
             />
-            <button className="btn sm">Add</button>
-          </form>
+          </SaveForm>
           {meetings.length === 0 && <p className="body">No meetings yet.</p>}
           <div className="bento">
             {meetings.map((m) => (
@@ -244,21 +249,21 @@ export default function Ops() {
                     </div>
                   ))}
                 </div>
-                <form
+                <SaveForm
                   className="row"
                   style={{ '--g': '8px' } as React.CSSProperties}
+                  label="New action item"
+                  saveLabel="Add item"
                   onSubmit={async (e) => {
-                    e.preventDefault();
                     const f = e.currentTarget,
                       d = new FormData(f);
-                    if (
-                      await act('saveMeetingAction', {
-                        meeting: m.id,
-                        what: d.get('what'),
-                        who: d.get('who') || null,
-                      })
-                    )
-                      f.reset();
+                    const ok = await act('saveMeetingAction', {
+                      meeting: m.id,
+                      what: String(d.get('what')).trim(),
+                      who: d.get('who') || null,
+                    });
+                    if (ok) f.reset();
+                    return ok;
                   }}
                 >
                   <input
@@ -271,8 +276,7 @@ export default function Ops() {
                     minLength={3}
                   />
                   <PersonPicker name="who" people={people} label="Owner" />
-                  <button className="btn xs">Add</button>
-                </form>
+                </SaveForm>
               </section>
             ))}
           </div>
@@ -305,12 +309,17 @@ export default function Ops() {
       )}
       {tab === 'Inventory' && (
         <div className="stack">
-          <form
+          <SaveForm
             className="row ops-add"
+            label="New item"
+            saveLabel="Add item"
             onSubmit={async (e) => {
-              e.preventDefault();
               const f = e.currentTarget;
-              if (await act('saveItem', { name: new FormData(f).get('name') })) f.reset();
+              const ok = await act('saveItem', {
+                name: String(new FormData(f).get('name')).trim(),
+              });
+              if (ok) f.reset();
+              return ok;
             }}
           >
             <input
@@ -321,8 +330,7 @@ export default function Ops() {
               required
               minLength={2}
             />
-            <button className="btn sm">Add</button>
-          </form>
+          </SaveForm>
           <div className="list">
             {inventory.map((it) => (
               <div key={it.id}>
@@ -534,15 +542,16 @@ function TaskCard({
       </article>
     );
   return (
-    <form
+    <SaveForm
       className="panel box task editing"
+      label={`Unsaved changes to “${t.title}”`}
+      onDiscard={close}
+      extraDirty={JSON.stringify(draft) !== JSON.stringify(t)}
       onKeyDown={(e) => e.key === 'Escape' && close()}
-      onSubmit={async (e) => {
-        e.preventDefault();
-        setBusy(true);
-        const ok = await act('saveTask', draft);
-        setBusy(false);
+      onSubmit={async () => {
+        const ok = await act('saveTask', { ...draft, title: draft.title.trim() });
         if (ok) close();
+        return ok;
       }}
     >
       <label className="field">
@@ -608,15 +617,12 @@ function TaskCard({
             Delete
           </button>
           <span className="row" style={{ '--g': '6px' } as React.CSSProperties}>
-            <button type="button" className="btn xs line" onClick={close}>
-              Cancel
-            </button>
-            <button className="btn xs" disabled={busy || draft.title.trim().length < 3}>
-              Save
+            <button type="button" className="btn xs line" data-close onClick={close}>
+              Close
             </button>
           </span>
         </span>
       )}
-    </form>
+    </SaveForm>
   );
 }

@@ -9,6 +9,7 @@ import {
   deleteAlumniJob,
   deleteBlogPost,
   deleteInterviewProblem,
+  deleteInterviewRoadmap,
   deleteInterviewTip,
   fetchAlumniJobs,
   getBlogPost,
@@ -25,10 +26,13 @@ import {
   listFeedReports,
   listIdeas,
   listInterviewExperiences,
+  listInterviewProblems,
+  listInterviewRoadmaps,
   listInterviewTopics,
   listMembers,
   listRecentMilestones,
   saveAlumni,
+  saveInterviewRoadmap,
   setAvailableForQuestions,
   toggleInterviewProblem,
   updateBlogPost,
@@ -104,8 +108,24 @@ export async function alumni(db: Db, id: string, b: In): Promise<unknown> {
   }
 
   // --- INTERVIEW PREP ---
+  if (action === 'listInterviewRoadmaps') {
+    return listInterviewRoadmaps(db, id);
+  }
+
+  if (action === 'saveInterviewRoadmap') {
+    return saveInterviewRoadmap(id, b);
+  }
+
+  if (action === 'deleteInterviewRoadmap') {
+    return deleteInterviewRoadmap(id, b);
+  }
+
+  if (action === 'listInterviewProblems') {
+    return listInterviewProblems(db, { roadmapId: b.roadmapId });
+  }
+
   if (action === 'listInterviewTopics') {
-    return listInterviewTopics(db, id);
+    return listInterviewTopics(db, id, { roadmapId: b.roadmapId });
   }
 
   if (action === 'getInterviewTopicDetail') {
@@ -120,6 +140,8 @@ export async function alumni(db: Db, id: string, b: In): Promise<unknown> {
     return createInterviewTopic(db, id, {
       name: String(b.name ?? ''),
       description: typeof b.description === 'string' ? b.description : undefined,
+      roadmapId: b.roadmapId,
+      parentId: b.parentId,
     });
   }
 

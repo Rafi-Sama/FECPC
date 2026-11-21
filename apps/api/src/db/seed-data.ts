@@ -828,141 +828,160 @@ export async function setup(db: Db, password: string) {
       );
     }
 
-    // Seed interview topics and problems (ensure all 10 NeetCode/Blind75 topics are filled)
-    await db.query(`
-      insert into interview_topics (id, name, description, created_by, order_index) values
-      (1, 'Arrays & Hashing', 'Core frequency counting, prefix sums, and two-pass techniques', 'shahriar', 1),
-      (2, 'Two Pointers', 'Shrinking windows, meeting in the middle, and palindromes', 'fariha', 2),
-      (3, 'Sliding Window', 'Dynamic length windows and maximum sum subarrays', 'shahriar', 3),
-      (4, 'Stack', 'Monotonic stacks, parentheses matching, and evaluation', 'tahmina', 4),
-      (5, 'Binary Search', 'Search space reduction, lower/upper bounds, and answer bisection', 'shahriar', 5),
-      (6, 'Linked List', 'Fast and slow pointers, reversals, and cycle detection', 'tahmina', 6),
-      (7, 'Trees', 'DFS/BFS traversals, BST properties, and lowest common ancestor', 'shahriar', 7),
-      (8, 'Tries', 'Prefix trees, autocomplete, and XOR maximizes', 'fariha', 8),
-      (9, 'Graphs', 'Topological sort, Dijkstra, and connected components', 'shahriar', 9),
-      (10, 'Dynamic Programming', 'State transition equations, knapsack, and sequence matching', 'tahmina', 10)
-      on conflict (name) do nothing
-    `);
-    // Update sequence
-    await db.query(
-      `select setval('interview_topics_id_seq', (select max(id) from interview_topics))`,
-    );
-
-    const problemsCount = Number(
-      (await db.query(`select count(*)::int as c from interview_problems`)).rows[0]?.c ?? 0,
-    );
-    if (problemsCount < 40) {
-      await db.query(`delete from interview_user_progress`);
-      await db.query(`delete from interview_problems`);
+    // Seed interview prep once; after that the CP head and president own it through the roadmap editor.
+    if ((await db.query(`select 1 from interview_roadmaps limit 1`)).rowCount === 0) {
       await db.query(`
-        insert into interview_problems (topic_id, title, url, difficulty, created_by) values
-        -- 1. Arrays & Hashing
-        (1, 'Two Sum', 'https://leetcode.com/problems/two-sum/', 'easy', 'shahriar'),
-        (1, 'Valid Anagram', 'https://leetcode.com/problems/valid-anagram/', 'easy', 'shahriar'),
-        (1, 'Group Anagrams', 'https://leetcode.com/problems/group-anagrams/', 'medium', 'shahriar'),
-        (1, 'Top K Frequent Elements', 'https://leetcode.com/problems/top-k-frequent-elements/', 'medium', 'tahmina'),
-        (1, 'Product of Array Except Self', 'https://leetcode.com/problems/product-of-array-except-self/', 'medium', 'shahriar'),
-        (1, 'Valid Sudoku', 'https://leetcode.com/problems/valid-sudoku/', 'medium', 'tahmina'),
-        (1, 'Longest Consecutive Sequence', 'https://leetcode.com/problems/longest-consecutive-sequence/', 'medium', 'asif'),
-
-        -- 2. Two Pointers
-        (2, 'Valid Palindrome', 'https://leetcode.com/problems/valid-palindrome/', 'easy', 'fariha'),
-        (2, 'Two Sum II - Input Array Is Sorted', 'https://leetcode.com/problems/two-sum-ii-input-array-is-sorted/', 'medium', 'fariha'),
-        (2, '3Sum', 'https://leetcode.com/problems/3sum/', 'medium', 'shahriar'),
-        (2, 'Container With Most Water', 'https://leetcode.com/problems/container-with-most-water/', 'medium', 'shahriar'),
-        (2, 'Trapping Rain Water', 'https://leetcode.com/problems/trapping-rain-water/', 'hard', 'asif'),
-
-        -- 3. Sliding Window
-        (3, 'Best Time to Buy and Sell Stock', 'https://leetcode.com/problems/best-time-to-buy-and-sell-stock/', 'easy', 'rifat'),
-        (3, 'Longest Substring Without Repeating Characters', 'https://leetcode.com/problems/longest-substring-without-repeating-characters/', 'medium', 'shahriar'),
-        (3, 'Longest Repeating Character Replacement', 'https://leetcode.com/problems/longest-repeating-character-replacement/', 'medium', 'asif'),
-        (3, 'Permutation in String', 'https://leetcode.com/problems/permutation-in-string/', 'medium', 'tahmina'),
-        (3, 'Minimum Window Substring', 'https://leetcode.com/problems/minimum-window-substring/', 'hard', 'fariha'),
-
-        -- 4. Stack
-        (4, 'Valid Parentheses', 'https://leetcode.com/problems/valid-parentheses/', 'easy', 'tahmina'),
-        (4, 'Min Stack', 'https://leetcode.com/problems/min-stack/', 'medium', 'shahriar'),
-        (4, 'Evaluate Reverse Polish Notation', 'https://leetcode.com/problems/evaluate-reverse-polish-notation/', 'medium', 'rifat'),
-        (4, 'Daily Temperatures', 'https://leetcode.com/problems/daily-temperatures/', 'medium', 'nabila'),
-        (4, 'Car Fleet', 'https://leetcode.com/problems/car-fleet/', 'medium', 'asif'),
-        (4, 'Largest Rectangle in Histogram', 'https://leetcode.com/problems/largest-rectangle-in-histogram/', 'hard', 'fariha'),
-
-        -- 5. Binary Search
-        (5, 'Binary Search', 'https://leetcode.com/problems/binary-search/', 'easy', 'shahriar'),
-        (5, 'Search a 2D Matrix', 'https://leetcode.com/problems/search-a-2d-matrix/', 'medium', 'asif'),
-        (5, 'Koko Eating Bananas', 'https://leetcode.com/problems/koko-eating-bananas/', 'medium', 'tahmina'),
-        (5, 'Find Minimum in Rotated Sorted Array', 'https://leetcode.com/problems/find-minimum-in-rotated-sorted-array/', 'medium', 'nabila'),
-        (5, 'Search in Rotated Sorted Array', 'https://leetcode.com/problems/search-in-rotated-sorted-array/', 'medium', 'shahriar'),
-        (5, 'Median of Two Sorted Arrays', 'https://leetcode.com/problems/median-of-two-sorted-arrays/', 'hard', 'fariha'),
-
-        -- 6. Linked List
-        (6, 'Reverse Linked List', 'https://leetcode.com/problems/reverse-linked-list/', 'easy', 'tahmina'),
-        (6, 'Merge Two Sorted Lists', 'https://leetcode.com/problems/merge-two-sorted-lists/', 'easy', 'shahriar'),
-        (6, 'Reorder List', 'https://leetcode.com/problems/reorder-list/', 'medium', 'rifat'),
-        (6, 'Remove Nth Node From End of List', 'https://leetcode.com/problems/remove-nth-node-from-end-of-list/', 'medium', 'asif'),
-        (6, 'Linked List Cycle', 'https://leetcode.com/problems/linked-list-cycle/', 'easy', 'tahmina'),
-        (6, 'LRU Cache', 'https://leetcode.com/problems/lru-cache/', 'medium', 'nabila'),
-
-        -- 7. Trees
-        (7, 'Invert Binary Tree', 'https://leetcode.com/problems/invert-binary-tree/', 'easy', 'shahriar'),
-        (7, 'Maximum Depth of Binary Tree', 'https://leetcode.com/problems/maximum-depth-of-binary-tree/', 'easy', 'rifat'),
-        (7, 'Diameter of Binary Tree', 'https://leetcode.com/problems/diameter-of-binary-tree/', 'easy', 'asif'),
-        (7, 'Balanced Binary Tree', 'https://leetcode.com/problems/balanced-binary-tree/', 'easy', 'tahmina'),
-        (7, 'Same Tree', 'https://leetcode.com/problems/same-tree/', 'easy', 'shahriar'),
-        (7, 'Subtree of Another Tree', 'https://leetcode.com/problems/subtree-of-another-tree/', 'easy', 'nabila'),
-        (7, 'Lowest Common Ancestor of BST', 'https://leetcode.com/problems/lowest-common-ancestor-of-a-binary-search-tree/', 'medium', 'shahriar'),
-        (7, 'Binary Tree Level Order Traversal', 'https://leetcode.com/problems/binary-tree-level-order-traversal/', 'medium', 'tahmina'),
-        (7, 'Validate BST', 'https://leetcode.com/problems/validate-binary-search-tree/', 'medium', 'fariha'),
-        (7, 'Kth Smallest Element in BST', 'https://leetcode.com/problems/kth-smallest-element-in-a-bst/', 'medium', 'asif'),
-
-        -- 8. Tries
-        (8, 'Implement Trie (Prefix Tree)', 'https://leetcode.com/problems/implement-trie-prefix-tree/', 'medium', 'fariha'),
-        (8, 'Design Add and Search Words Data Structure', 'https://leetcode.com/problems/design-add-and-search-words-data-structure/', 'medium', 'fariha'),
-        (8, 'Word Search II', 'https://leetcode.com/problems/word-search-ii/', 'hard', 'fariha'),
-
-        -- 9. Graphs
-        (9, 'Number of Islands', 'https://leetcode.com/problems/number-of-islands/', 'medium', 'shahriar'),
-        (9, 'Clone Graph', 'https://leetcode.com/problems/clone-graph/', 'medium', 'asif'),
-        (9, 'Max Area of Island', 'https://leetcode.com/problems/max-area-of-island/', 'medium', 'rifat'),
-        (9, 'Pacific Atlantic Water Flow', 'https://leetcode.com/problems/pacific-atlantic-water-flow/', 'medium', 'nabila'),
-        (9, 'Rotting Oranges', 'https://leetcode.com/problems/rotting-oranges/', 'medium', 'tahmina'),
-        (9, 'Course Schedule', 'https://leetcode.com/problems/course-schedule/', 'medium', 'shahriar'),
-        (9, 'Course Schedule II', 'https://leetcode.com/problems/course-schedule-ii/', 'medium', 'asif'),
-        (9, 'Redundant Connection', 'https://leetcode.com/problems/redundant-connection/', 'medium', 'fariha'),
-
-        -- 10. Dynamic Programming
-        (10, 'Climbing Stairs', 'https://leetcode.com/problems/climbing-stairs/', 'easy', 'tahmina'),
-        (10, 'Min Cost Climbing Stairs', 'https://leetcode.com/problems/min-cost-climbing-stairs/', 'easy', 'rifat'),
-        (10, 'House Robber', 'https://leetcode.com/problems/house-robber/', 'medium', 'shahriar'),
-        (10, 'House Robber II', 'https://leetcode.com/problems/house-robber-ii/', 'medium', 'asif'),
-        (10, 'Coin Change', 'https://leetcode.com/problems/coin-change/', 'medium', 'tahmina'),
-        (10, 'Longest Increasing Subsequence', 'https://leetcode.com/problems/longest-increasing-subsequence/', 'medium', 'fariha'),
-        (10, 'Word Break', 'https://leetcode.com/problems/word-break/', 'medium', 'nabila'),
-        (10, 'Unique Paths', 'https://leetcode.com/problems/unique-paths/', 'medium', 'shahriar')
-      `);
-    }
-
-    const tipsCount = Number(
-      (await db.query(`select count(*)::int as c from interview_tips`)).rows[0]?.c ?? 0,
-    );
-    if (tipsCount < 10) {
-      await db.query(`delete from interview_tips`);
+          insert into interview_roadmaps (id, name, description, created_by) values
+          (1, 'Data structures & algorithms', 'NeetCode 150 and Blind 75 topics.', 'nadia')
+          on conflict (id) do nothing
+        `);
+      await db.query(
+        `select setval('interview_roadmaps_id_seq', (select max(id) from interview_roadmaps))`,
+      );
       await db.query(`
-        insert into interview_tips (author_id, topic_id, title, body_md) values
-        ('shahriar', 1, 'Hash tables vs arrays in competitive interviews', 'When problem constraints have numbers up to 10^5, direct index arrays are 10x faster than unordered_map and guarantee O(1) without hash collision edge cases in C++.'),
-        ('fariha', 2, 'Two-pointer invariant proofs in whiteboard interviews', 'Always state your invariant aloud before writing code: "left points to smallest remaining candidate, right points to largest". This builds immense confidence with your interviewer.'),
-        ('asif', 3, 'Sliding window template: dynamic vs fixed windows', 'Always establish whether your window expands unconditionally and shrinks on invalidation, or stays fixed size. Write down what count/frequency data structure maintains validity in O(1).'),
-        ('tahmina', 4, 'The 3 rules of monotonic stacks', 'When you see "next greater element" or "largest rectangle under histogram", think monotonic stack immediately. Decide whether elements in the stack are strictly increasing or non-decreasing.'),
-        ('nabila', 5, 'Binary search predicate functions: never write off-by-one errors again', 'Instead of testing nums[mid] == target, design a monotonic predicate ok(x) returning true/false. Set lo to lowest possible, hi to highest possible, and shrink using mid = lo + (hi - lo) / 2.'),
-        ('shahriar', 7, 'Tree traversals without recursion using explicit stacks', 'Interviewers frequently follow up with: "Can you do this iteratively without consuming the call stack?" Knowing DFS with std::stack<TreeNode*> and level-order with std::queue<TreeNode*> is mandatory.'),
-        ('rifat', 9, 'BFS vs Dijkstra: when edge weights are uniform', 'If all edges have weight 1 (like unweighted grid problems), standard queue BFS runs in O(V + E) and is 5x faster than Dijkstra heap overhead. Reserve Dijkstra strictly for weighted graphs.'),
-        ('tahmina', 10, 'Identifying the 4 standard DP transition recurrence structures', 'Most interview DP falls into 4 buckets: (1) 1D linear prefix, (2) 2D grid walk, (3) 0/1 knapsack choice, (4) string interval matching (LCS/edit distance). Learn the shape of each table.'),
-        ('shahriar', null, 'How I structured 6 weeks of SWE interview prep after ICPC', 'Transitioning from 2000+ Codeforces rating to backend SWE loops: coding rounds were easy, but communication, testing, and clean architecture were where I needed deliberate practice.'),
-        ('tahmina', null, 'Machine learning coding & probability checklist for new grads', 'Here are the exact probability, matrix manipulation, and PyTorch debugging patterns asked across Grab, Stripe and Shopee APAC rounds.'),
-        ('fariha', null, 'Grad school SOPs: highlighting ICPC achievements without sounding one-dimensional', 'Admissions committees value research curiosity over sheer contest badges. Here is how I reframed my algorithmic contest training into evidence of mathematical maturity.'),
-        ('asif', null, 'Navigating the London tech market from Bangladesh: visas and interviews', 'How Skilled Worker sponsorship works in the UK, what engineering hiring committees look for in remote applicants, and how to negotiate base salary and equity.'),
-        ('rifat', null, 'System design round survival guide: pacing the 45-minute whiteboard', 'Step 1: 5 mins functional & non-functional requirements. Step 2: 5 mins back-of-the-envelope math. Step 3: 15 mins high-level diagram. Step 4: 15 mins deep-dive bottlenecks. Step 5: 5 mins recap.')
-      `);
+          insert into interview_topics (id, name, description, created_by, order_index) values
+          (1, 'Arrays & Hashing', 'Core frequency counting, prefix sums, and two-pass techniques', 'shahriar', 1),
+          (2, 'Two Pointers', 'Shrinking windows, meeting in the middle, and palindromes', 'fariha', 2),
+          (3, 'Sliding Window', 'Dynamic length windows and maximum sum subarrays', 'shahriar', 3),
+          (4, 'Stack', 'Monotonic stacks, parentheses matching, and evaluation', 'tahmina', 4),
+          (5, 'Binary Search', 'Search space reduction, lower/upper bounds, and answer bisection', 'shahriar', 5),
+          (6, 'Linked List', 'Fast and slow pointers, reversals, and cycle detection', 'tahmina', 6),
+          (7, 'Trees', 'DFS/BFS traversals, BST properties, and lowest common ancestor', 'shahriar', 7),
+          (8, 'Tries', 'Prefix trees, autocomplete, and XOR maximizes', 'fariha', 8),
+          (9, 'Graphs', 'Topological sort, Dijkstra, and connected components', 'shahriar', 9),
+          (10, 'Dynamic Programming', 'State transition equations, knapsack, and sequence matching', 'tahmina', 10)
+          on conflict (id) do nothing
+        `);
+      // Lay the seeded topics out as a tree in roadmap 1 (ids above).
+      await db.query(`
+          update interview_topics t set roadmap_id = 1, parent_id = v.parent, x = v.x, y = v.y
+          from (values (1, null::int, 400, 40), (2, 1, 160, 180), (4, 1, 640, 180), (3, 2, 40, 320),
+                       (6, 2, 280, 320), (5, 4, 640, 320), (7, 6, 280, 460), (8, 7, 160, 600),
+                       (9, 7, 400, 600), (10, 9, 400, 740)) v(id, parent, x, y)
+          where t.id = v.id
+        `);
+      await db.query(`update interview_topics set roadmap_id = 1 where roadmap_id is null`);
+      // Update sequence
+      await db.query(
+        `select setval('interview_topics_id_seq', (select max(id) from interview_topics))`,
+      );
+
+      const problemsCount = Number(
+        (await db.query(`select count(*)::int as c from interview_problems`)).rows[0]?.c ?? 0,
+      );
+      if (problemsCount < 40) {
+        await db.query(`delete from interview_user_progress`);
+        await db.query(`delete from interview_problems`);
+        await db.query(`
+            insert into interview_problems (topic_id, title, url, difficulty, created_by) values
+            -- 1. Arrays & Hashing
+            (1, 'Two Sum', 'https://leetcode.com/problems/two-sum/', 'easy', 'shahriar'),
+            (1, 'Valid Anagram', 'https://leetcode.com/problems/valid-anagram/', 'easy', 'shahriar'),
+            (1, 'Group Anagrams', 'https://leetcode.com/problems/group-anagrams/', 'medium', 'shahriar'),
+            (1, 'Top K Frequent Elements', 'https://leetcode.com/problems/top-k-frequent-elements/', 'medium', 'tahmina'),
+            (1, 'Product of Array Except Self', 'https://leetcode.com/problems/product-of-array-except-self/', 'medium', 'shahriar'),
+            (1, 'Valid Sudoku', 'https://leetcode.com/problems/valid-sudoku/', 'medium', 'tahmina'),
+            (1, 'Longest Consecutive Sequence', 'https://leetcode.com/problems/longest-consecutive-sequence/', 'medium', 'asif'),
+
+            -- 2. Two Pointers
+            (2, 'Valid Palindrome', 'https://leetcode.com/problems/valid-palindrome/', 'easy', 'fariha'),
+            (2, 'Two Sum II - Input Array Is Sorted', 'https://leetcode.com/problems/two-sum-ii-input-array-is-sorted/', 'medium', 'fariha'),
+            (2, '3Sum', 'https://leetcode.com/problems/3sum/', 'medium', 'shahriar'),
+            (2, 'Container With Most Water', 'https://leetcode.com/problems/container-with-most-water/', 'medium', 'shahriar'),
+            (2, 'Trapping Rain Water', 'https://leetcode.com/problems/trapping-rain-water/', 'hard', 'asif'),
+
+            -- 3. Sliding Window
+            (3, 'Best Time to Buy and Sell Stock', 'https://leetcode.com/problems/best-time-to-buy-and-sell-stock/', 'easy', 'rifat'),
+            (3, 'Longest Substring Without Repeating Characters', 'https://leetcode.com/problems/longest-substring-without-repeating-characters/', 'medium', 'shahriar'),
+            (3, 'Longest Repeating Character Replacement', 'https://leetcode.com/problems/longest-repeating-character-replacement/', 'medium', 'asif'),
+            (3, 'Permutation in String', 'https://leetcode.com/problems/permutation-in-string/', 'medium', 'tahmina'),
+            (3, 'Minimum Window Substring', 'https://leetcode.com/problems/minimum-window-substring/', 'hard', 'fariha'),
+
+            -- 4. Stack
+            (4, 'Valid Parentheses', 'https://leetcode.com/problems/valid-parentheses/', 'easy', 'tahmina'),
+            (4, 'Min Stack', 'https://leetcode.com/problems/min-stack/', 'medium', 'shahriar'),
+            (4, 'Evaluate Reverse Polish Notation', 'https://leetcode.com/problems/evaluate-reverse-polish-notation/', 'medium', 'rifat'),
+            (4, 'Daily Temperatures', 'https://leetcode.com/problems/daily-temperatures/', 'medium', 'nabila'),
+            (4, 'Car Fleet', 'https://leetcode.com/problems/car-fleet/', 'medium', 'asif'),
+            (4, 'Largest Rectangle in Histogram', 'https://leetcode.com/problems/largest-rectangle-in-histogram/', 'hard', 'fariha'),
+
+            -- 5. Binary Search
+            (5, 'Binary Search', 'https://leetcode.com/problems/binary-search/', 'easy', 'shahriar'),
+            (5, 'Search a 2D Matrix', 'https://leetcode.com/problems/search-a-2d-matrix/', 'medium', 'asif'),
+            (5, 'Koko Eating Bananas', 'https://leetcode.com/problems/koko-eating-bananas/', 'medium', 'tahmina'),
+            (5, 'Find Minimum in Rotated Sorted Array', 'https://leetcode.com/problems/find-minimum-in-rotated-sorted-array/', 'medium', 'nabila'),
+            (5, 'Search in Rotated Sorted Array', 'https://leetcode.com/problems/search-in-rotated-sorted-array/', 'medium', 'shahriar'),
+            (5, 'Median of Two Sorted Arrays', 'https://leetcode.com/problems/median-of-two-sorted-arrays/', 'hard', 'fariha'),
+
+            -- 6. Linked List
+            (6, 'Reverse Linked List', 'https://leetcode.com/problems/reverse-linked-list/', 'easy', 'tahmina'),
+            (6, 'Merge Two Sorted Lists', 'https://leetcode.com/problems/merge-two-sorted-lists/', 'easy', 'shahriar'),
+            (6, 'Reorder List', 'https://leetcode.com/problems/reorder-list/', 'medium', 'rifat'),
+            (6, 'Remove Nth Node From End of List', 'https://leetcode.com/problems/remove-nth-node-from-end-of-list/', 'medium', 'asif'),
+            (6, 'Linked List Cycle', 'https://leetcode.com/problems/linked-list-cycle/', 'easy', 'tahmina'),
+            (6, 'LRU Cache', 'https://leetcode.com/problems/lru-cache/', 'medium', 'nabila'),
+
+            -- 7. Trees
+            (7, 'Invert Binary Tree', 'https://leetcode.com/problems/invert-binary-tree/', 'easy', 'shahriar'),
+            (7, 'Maximum Depth of Binary Tree', 'https://leetcode.com/problems/maximum-depth-of-binary-tree/', 'easy', 'rifat'),
+            (7, 'Diameter of Binary Tree', 'https://leetcode.com/problems/diameter-of-binary-tree/', 'easy', 'asif'),
+            (7, 'Balanced Binary Tree', 'https://leetcode.com/problems/balanced-binary-tree/', 'easy', 'tahmina'),
+            (7, 'Same Tree', 'https://leetcode.com/problems/same-tree/', 'easy', 'shahriar'),
+            (7, 'Subtree of Another Tree', 'https://leetcode.com/problems/subtree-of-another-tree/', 'easy', 'nabila'),
+            (7, 'Lowest Common Ancestor of BST', 'https://leetcode.com/problems/lowest-common-ancestor-of-a-binary-search-tree/', 'medium', 'shahriar'),
+            (7, 'Binary Tree Level Order Traversal', 'https://leetcode.com/problems/binary-tree-level-order-traversal/', 'medium', 'tahmina'),
+            (7, 'Validate BST', 'https://leetcode.com/problems/validate-binary-search-tree/', 'medium', 'fariha'),
+            (7, 'Kth Smallest Element in BST', 'https://leetcode.com/problems/kth-smallest-element-in-a-bst/', 'medium', 'asif'),
+
+            -- 8. Tries
+            (8, 'Implement Trie (Prefix Tree)', 'https://leetcode.com/problems/implement-trie-prefix-tree/', 'medium', 'fariha'),
+            (8, 'Design Add and Search Words Data Structure', 'https://leetcode.com/problems/design-add-and-search-words-data-structure/', 'medium', 'fariha'),
+            (8, 'Word Search II', 'https://leetcode.com/problems/word-search-ii/', 'hard', 'fariha'),
+
+            -- 9. Graphs
+            (9, 'Number of Islands', 'https://leetcode.com/problems/number-of-islands/', 'medium', 'shahriar'),
+            (9, 'Clone Graph', 'https://leetcode.com/problems/clone-graph/', 'medium', 'asif'),
+            (9, 'Max Area of Island', 'https://leetcode.com/problems/max-area-of-island/', 'medium', 'rifat'),
+            (9, 'Pacific Atlantic Water Flow', 'https://leetcode.com/problems/pacific-atlantic-water-flow/', 'medium', 'nabila'),
+            (9, 'Rotting Oranges', 'https://leetcode.com/problems/rotting-oranges/', 'medium', 'tahmina'),
+            (9, 'Course Schedule', 'https://leetcode.com/problems/course-schedule/', 'medium', 'shahriar'),
+            (9, 'Course Schedule II', 'https://leetcode.com/problems/course-schedule-ii/', 'medium', 'asif'),
+            (9, 'Redundant Connection', 'https://leetcode.com/problems/redundant-connection/', 'medium', 'fariha'),
+
+            -- 10. Dynamic Programming
+            (10, 'Climbing Stairs', 'https://leetcode.com/problems/climbing-stairs/', 'easy', 'tahmina'),
+            (10, 'Min Cost Climbing Stairs', 'https://leetcode.com/problems/min-cost-climbing-stairs/', 'easy', 'rifat'),
+            (10, 'House Robber', 'https://leetcode.com/problems/house-robber/', 'medium', 'shahriar'),
+            (10, 'House Robber II', 'https://leetcode.com/problems/house-robber-ii/', 'medium', 'asif'),
+            (10, 'Coin Change', 'https://leetcode.com/problems/coin-change/', 'medium', 'tahmina'),
+            (10, 'Longest Increasing Subsequence', 'https://leetcode.com/problems/longest-increasing-subsequence/', 'medium', 'fariha'),
+            (10, 'Word Break', 'https://leetcode.com/problems/word-break/', 'medium', 'nabila'),
+            (10, 'Unique Paths', 'https://leetcode.com/problems/unique-paths/', 'medium', 'shahriar')
+          `);
+      }
+
+      const tipsCount = Number(
+        (await db.query(`select count(*)::int as c from interview_tips`)).rows[0]?.c ?? 0,
+      );
+      if (tipsCount < 10) {
+        await db.query(`delete from interview_tips`);
+        await db.query(`
+            insert into interview_tips (author_id, topic_id, title, body_md) values
+            ('shahriar', 1, 'Hash tables vs arrays in competitive interviews', 'When problem constraints have numbers up to 10^5, direct index arrays are 10x faster than unordered_map and guarantee O(1) without hash collision edge cases in C++.'),
+            ('fariha', 2, 'Two-pointer invariant proofs in whiteboard interviews', 'Always state your invariant aloud before writing code: "left points to smallest remaining candidate, right points to largest". This builds immense confidence with your interviewer.'),
+            ('asif', 3, 'Sliding window template: dynamic vs fixed windows', 'Always establish whether your window expands unconditionally and shrinks on invalidation, or stays fixed size. Write down what count/frequency data structure maintains validity in O(1).'),
+            ('tahmina', 4, 'The 3 rules of monotonic stacks', 'When you see "next greater element" or "largest rectangle under histogram", think monotonic stack immediately. Decide whether elements in the stack are strictly increasing or non-decreasing.'),
+            ('nabila', 5, 'Binary search predicate functions: never write off-by-one errors again', 'Instead of testing nums[mid] == target, design a monotonic predicate ok(x) returning true/false. Set lo to lowest possible, hi to highest possible, and shrink using mid = lo + (hi - lo) / 2.'),
+            ('shahriar', 7, 'Tree traversals without recursion using explicit stacks', 'Interviewers frequently follow up with: "Can you do this iteratively without consuming the call stack?" Knowing DFS with std::stack<TreeNode*> and level-order with std::queue<TreeNode*> is mandatory.'),
+            ('rifat', 9, 'BFS vs Dijkstra: when edge weights are uniform', 'If all edges have weight 1 (like unweighted grid problems), standard queue BFS runs in O(V + E) and is 5x faster than Dijkstra heap overhead. Reserve Dijkstra strictly for weighted graphs.'),
+            ('tahmina', 10, 'Identifying the 4 standard DP transition recurrence structures', 'Most interview DP falls into 4 buckets: (1) 1D linear prefix, (2) 2D grid walk, (3) 0/1 knapsack choice, (4) string interval matching (LCS/edit distance). Learn the shape of each table.'),
+            ('shahriar', null, 'How I structured 6 weeks of SWE interview prep after ICPC', 'Transitioning from 2000+ Codeforces rating to backend SWE loops: coding rounds were easy, but communication, testing, and clean architecture were where I needed deliberate practice.'),
+            ('tahmina', null, 'Machine learning coding & probability checklist for new grads', 'Here are the exact probability, matrix manipulation, and PyTorch debugging patterns asked across Grab, Stripe and Shopee APAC rounds.'),
+            ('fariha', null, 'Grad school SOPs: highlighting ICPC achievements without sounding one-dimensional', 'Admissions committees value research curiosity over sheer contest badges. Here is how I reframed my algorithmic contest training into evidence of mathematical maturity.'),
+            ('asif', null, 'Navigating the London tech market from Bangladesh: visas and interviews', 'How Skilled Worker sponsorship works in the UK, what engineering hiring committees look for in remote applicants, and how to negotiate base salary and equity.'),
+            ('rifat', null, 'System design round survival guide: pacing the 45-minute whiteboard', 'Step 1: 5 mins functional & non-functional requirements. Step 2: 5 mins back-of-the-envelope math. Step 3: 15 mins high-level diagram. Step 4: 15 mins deep-dive bottlenecks. Step 5: 5 mins recap.')
+          `);
+      }
     }
 
     // Seed blog posts (ensure rich selection of published articles across topics + 1 draft)

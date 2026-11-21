@@ -55,7 +55,7 @@ export async function proxy(req: Request, path: string): Promise<Response> {
     const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     out.set('content-type', 'application/json');
     return Response.json(
-      { ...body, error: body.detail ?? body.error ?? body.message ?? 'That did not work.' },
+      { ...body, error: body.error ?? body.detail ?? body.message ?? 'That did not work.' },
       { status: res.status, headers: out },
     );
   }

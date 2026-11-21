@@ -2,6 +2,7 @@
 import { useRef, useState } from 'react';
 import { AvatarRing } from '@/components/app/shared/RatingBadge';
 import { useStore } from '@/components/app/Store';
+import { SaveForm } from '@/components/app/SaveBar';
 import { rankFor } from '@fecpc/contracts';
 import type { MemberProfile } from '@fecpc/contracts';
 
@@ -67,7 +68,6 @@ export function ProfileEditMode({
   const [cfStatus, setCfStatus] = useState('');
   const [cfSynced, setCfSynced] = useState<{ rating: number; solved: number } | null>(null);
   const [avatarErr, setAvatarErr] = useState('');
-  const [saving, setSaving] = useState(false);
 
   const allSkillOptions = Array.from(new Set([...SKILL_CHOICES, ...profile.skills]));
   const previewSolved = cfSynced ? cfSynced.solved : profile.problems_solved;
@@ -133,13 +133,12 @@ export function ProfileEditMode({
     setSkills((prev) => (prev.includes(sk) ? prev.filter((x) => x !== sk) : [...prev, sk]));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
+  const handleSubmit = async () => {
+    if (cfStatus.startsWith('Handle must')) return false;
     onBusyChange?.(true);
     try {
       const payload: Record<string, unknown> = {
-        bio,
+        bio: bio.trim(),
         cf_handle: cfHandle.trim(),
         github_url: githubUrl.trim(),
         linkedin_url: linkedinUrl.trim(),
@@ -156,17 +155,23 @@ export function ProfileEditMode({
         }).catch(() => {});
         await onSaved();
       }
+      return ok;
     } finally {
-      setSaving(false);
       onBusyChange?.(false);
     }
   };
 
   return (
-    <form
+    <SaveForm
       id={formId}
       className="stack"
       style={{ '--g': '16px' } as React.CSSProperties}
+      label="Unsaved profile changes"
+      onDiscard={onCancel}
+      extraDirty={
+        avatarUrl !== profile.avatar_url ||
+        [...skills].sort().join() !== [...profile.skills].sort().join()
+      }
       onSubmit={handleSubmit}
     >
       <div className="avatar-upload-zone">
@@ -306,15 +311,7 @@ export function ProfileEditMode({
       <p className="label" style={{ fontSize: 11 }}>
         {roleLabel} · {profile.dept} · Batch {profile.batch} · readonly
       </p>
-
-      {/* Hidden submit hook in case user presses Enter inside an input */}
-      <button type="submit" className="sr" disabled={saving} tabIndex={-1} aria-hidden>
-        Save
-      </button>
-      <button type="button" className="sr" onClick={onCancel} tabIndex={-1} aria-hidden>
-        Cancel
-      </button>
-    </form>
+    </SaveForm>
   );
 }
 

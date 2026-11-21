@@ -248,7 +248,7 @@ export function JobDetailModal({
         maxHeight: 'none',
         background: 'rgba(11, 11, 11, 0.62)',
         display: 'flex',
-        alignItems: 'flex-start',
+        alignItems: 'safe center',
         justifyContent: 'center',
         padding: '4vh 20px',
         overflowY: 'auto',

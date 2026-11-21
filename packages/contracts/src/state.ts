@@ -153,12 +153,28 @@ export type AlumniSummary = {
   saved?: boolean;
 };
 
+export type InterviewRoadmap = {
+  id: number;
+  name: string;
+  description: string | null;
+  created_at: string;
+  topicCount: number;
+  solvedCount: number;
+  totalCount: number;
+  topicNames: string[];
+};
+
 export type InterviewTopic = {
   id: number;
   name: string;
   description: string | null;
   created_by: string | null;
   order_index: number;
+  link?: string | null;
+  roadmap_id: number | null;
+  parent_id: number | null;
+  x: number;
+  y: number;
   created_at: string;
   solvedCount: number;
   totalCount: number;

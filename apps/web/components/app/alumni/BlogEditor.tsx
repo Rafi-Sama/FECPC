@@ -2,6 +2,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { BlogPost } from '@fecpc/contracts';
 import { useStore } from '@/components/app/Store';
+import { SaveForm } from '@/components/app/SaveBar';
 import { MarkdownBody } from '@/components/app/shared/MarkdownEditor';
 
 const TOPICS = ['Career', 'Interviews', 'Engineering', 'Stories', 'Grad school', 'Life abroad'];
@@ -114,15 +115,16 @@ export function BlogEditor({
     }, 0);
   };
 
+  const isPublished = post?.status === 'published';
   const handleSave = async (published: boolean) => {
     if (!title.trim()) {
       setError('Title is required.');
       titleInputRef.current?.focus();
-      return;
+      return false;
     }
     if (!bodyMd.trim()) {
       setError('Story content cannot be empty.');
-      return;
+      return false;
     }
     setError(null);
     setSubmitting(true);
@@ -158,8 +160,10 @@ export function BlogEditor({
 
       const resData = await res.json();
       onSaved(resData.post);
+      return true;
     } catch (err: any) {
       setError(err.message || 'An error occurred.');
+      return false;
     } finally {
       setSubmitting(false);
     }
@@ -181,7 +185,7 @@ export function BlogEditor({
         background: 'rgba(11, 11, 11, 0.6)',
         zIndex: 9999,
         display: 'flex',
-        alignItems: 'flex-start',
+        alignItems: 'safe center',
         justifyContent: 'center',
         padding: '48px 24px',
         overflowY: 'auto',
@@ -206,433 +210,426 @@ export function BlogEditor({
           animation: 'rise 0.2s ease-out',
         }}
       >
-        {/* Close button */}
-        <button
-          type="button"
-          aria-label="Close"
-          onClick={onClose}
-          style={{
-            minWidth: 44,
-            height: 44,
-            position: 'absolute',
-            right: 16,
-            top: 16,
-            background: 'var(--panel, #F6F4EE)',
-            border: '2px solid var(--line2, #0B0B0B)',
-            color: 'var(--ink, #0B0B0B)',
-            cursor: 'pointer',
-            fontSize: 22,
-            lineHeight: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontWeight: 700,
-          }}
+        <SaveForm
+          label={post ? 'Unsaved changes to this post' : 'Unsaved new post'}
+          saveLabel={isPublished ? 'Save changes' : 'Save draft'}
+          onDiscard={onClose}
+          onSubmit={() => handleSave(isPublished)}
         >
-          ×
-        </button>
-
-        {/* Draft byline */}
-        <div
-          className="m"
-          style={{
-            marginBottom: 24,
-            paddingRight: 56,
-            font: '11px ui-monospace, Menlo, monospace',
-            letterSpacing: '.06em',
-            textTransform: 'uppercase',
-            color: 'var(--dim, #5F5F5F)',
-          }}
-        >
-          Draft by {me?.name || 'You'} ·{' '}
-          {post ? (post.published_at ? 'Published' : 'Saved draft') : 'Draft'}
-        </div>
-
-        {error && (
-          <div
-            style={{
-              padding: '10px 14px',
-              background: 'rgba(255, 90, 31, 0.12)',
-              border: '1px solid var(--acc, #FF5A1F)',
-              color: 'var(--acc, #FF5A1F)',
-              fontSize: 13,
-              fontFamily: 'var(--mono)',
-              marginBottom: 16,
-            }}
-          >
-            {error}
-          </div>
-        )}
-
-        {/* 36px Title Input matching BlogWrite.dc.html */}
-        <input
-          ref={titleInputRef}
-          aria-label="Title"
-          placeholder="Title"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          style={{
-            font: '700 36px Inter, Arial, sans-serif',
-            borderWidth: '0 0 2px',
-            borderStyle: 'solid',
-            borderColor: 'var(--line2, #0B0B0B)',
-            background: 'transparent',
-            padding: '8px 0',
-            marginBottom: 12,
-            width: '100%',
-            color: 'var(--ink, #0B0B0B)',
-            outline: 'none',
-            borderRadius: 0,
-          }}
-        />
-
-        {/* 20px Subtitle Input matching BlogWrite.dc.html */}
-        <input
-          aria-label="Subtitle"
-          placeholder="Subtitle (optional)"
-          value={subtitle}
-          onChange={(e) => setSubtitle(e.target.value)}
-          style={{
-            font: '20px Inter, Arial, sans-serif',
-            borderWidth: '0 0 1px',
-            borderStyle: 'solid',
-            borderColor: 'var(--line, #0B0B0B)',
-            background: 'transparent',
-            padding: '8px 0',
-            marginBottom: 24,
-            width: '100%',
-            color: 'var(--ink, #0B0B0B)',
-            outline: 'none',
-            borderRadius: 0,
-          }}
-        />
-
-        {/* Markdown toolstrip matching BlogWrite.dc.html */}
-        <div
-          style={{
-            display: 'flex',
-            gap: 8,
-            flexWrap: 'wrap',
-            alignItems: 'center',
-            marginBottom: 12,
-          }}
-        >
+          {/* Close button */}
           <button
             type="button"
-            className="sm"
-            aria-label="Bold"
-            onClick={() => insertFormat('**', '**')}
+            aria-label="Close"
+            onClick={onClose}
             style={{
-              minWidth: 40,
-              height: 36,
-              padding: '0 12px',
+              minWidth: 44,
+              height: 44,
+              position: 'absolute',
+              right: 16,
+              top: 16,
               background: 'var(--panel, #F6F4EE)',
               border: '2px solid var(--line2, #0B0B0B)',
               color: 'var(--ink, #0B0B0B)',
               cursor: 'pointer',
+              fontSize: 22,
+              lineHeight: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
               fontWeight: 700,
             }}
           >
-            B
-          </button>
-          <button
-            type="button"
-            className="sm"
-            aria-label="Italic"
-            onClick={() => insertFormat('*', '*')}
-            style={{
-              minWidth: 40,
-              height: 36,
-              padding: '0 12px',
-              background: 'var(--panel, #F6F4EE)',
-              border: '2px solid var(--line2, #0B0B0B)',
-              color: 'var(--ink, #0B0B0B)',
-              cursor: 'pointer',
-              fontStyle: 'italic',
-            }}
-          >
-            I
-          </button>
-          <button
-            type="button"
-            className="sm"
-            aria-label="Heading"
-            onClick={() => insertFormat('### ', '')}
-            style={{
-              minWidth: 40,
-              height: 36,
-              padding: '0 12px',
-              background: 'var(--panel, #F6F4EE)',
-              border: '2px solid var(--line2, #0B0B0B)',
-              color: 'var(--ink, #0B0B0B)',
-              cursor: 'pointer',
-              fontWeight: 700,
-            }}
-          >
-            H
-          </button>
-          <button
-            type="button"
-            className="sm"
-            aria-label="Quote"
-            onClick={() => insertFormat('> ', '')}
-            style={{
-              minWidth: 40,
-              height: 36,
-              padding: '0 12px',
-              background: 'var(--panel, #F6F4EE)',
-              border: '2px solid var(--line2, #0B0B0B)',
-              color: 'var(--ink, #0B0B0B)',
-              cursor: 'pointer',
-            }}
-          >
-            ❝
-          </button>
-          <button
-            type="button"
-            className="sm"
-            aria-label="Code"
-            onClick={() => insertFormat('```\n', '\n```')}
-            style={{
-              minWidth: 40,
-              height: 36,
-              padding: '0 12px',
-              background: 'var(--panel, #F6F4EE)',
-              border: '2px solid var(--line2, #0B0B0B)',
-              color: 'var(--ink, #0B0B0B)',
-              cursor: 'pointer',
-              fontFamily: 'var(--mono)',
-            }}
-          >
-            &lt;/&gt;
-          </button>
-          <button
-            type="button"
-            className="sm"
-            aria-label="Link"
-            onClick={() => insertFormat('[', '](https://)')}
-            style={{
-              minWidth: 40,
-              height: 36,
-              padding: '0 12px',
-              background: 'var(--panel, #F6F4EE)',
-              border: '2px solid var(--line2, #0B0B0B)',
-              color: 'var(--ink, #0B0B0B)',
-              cursor: 'pointer',
-            }}
-          >
-            ↗
+            ×
           </button>
 
-          {/* Write · Preview toggle on the right */}
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
-            <button
-              type="button"
-              className={`ch sm ${!isPreview ? 'on' : ''}`}
-              onClick={() => setIsPreview(false)}
-              style={{
-                font: '11px ui-monospace, Menlo, monospace',
-                letterSpacing: '.06em',
-                textTransform: 'uppercase',
-                border: '2px solid var(--line2, #0B0B0B)',
-                padding: '0 10px',
-                minHeight: 36,
-                background: !isPreview ? 'var(--acc, #1F3BFF)' : 'var(--panel, #F6F4EE)',
-                color: !isPreview ? 'var(--on, #FFFFFF)' : 'var(--ink, #0B0B0B)',
-                cursor: 'pointer',
-              }}
-            >
-              Write
-            </button>
-            <button
-              type="button"
-              className={`ch sm ${isPreview ? 'on' : ''}`}
-              onClick={() => setIsPreview(true)}
-              style={{
-                font: '11px ui-monospace, Menlo, monospace',
-                letterSpacing: '.06em',
-                textTransform: 'uppercase',
-                border: '2px solid var(--line2, #0B0B0B)',
-                padding: '0 10px',
-                minHeight: 36,
-                background: isPreview ? 'var(--acc, #1F3BFF)' : 'var(--panel, #F6F4EE)',
-                color: isPreview ? 'var(--on, #FFFFFF)' : 'var(--ink, #0B0B0B)',
-                cursor: 'pointer',
-              }}
-            >
-              Preview
-            </button>
-          </div>
-        </div>
-
-        {/* Textarea or Preview */}
-        {isPreview ? (
+          {/* Draft byline */}
           <div
-            style={{
-              minHeight: 280,
-              padding: 20,
-              border: '2px solid var(--line2, #0B0B0B)',
-              background: 'var(--bg, #FFFFFF)',
-              color: 'var(--ink, #0B0B0B)',
-              overflowY: 'auto',
-              marginBottom: 16,
-            }}
-          >
-            <MarkdownBody markdown={bodyMd || '*No content to preview yet.*'} />
-          </div>
-        ) : (
-          <textarea
-            ref={textareaRef}
-            aria-label="Story"
-            rows={12}
-            placeholder="Tell your story in Markdown…"
-            value={bodyMd}
-            onChange={(e) => setBodyMd(e.target.value)}
-            style={{
-              width: '100%',
-              border: '2px solid var(--line2, #0B0B0B)',
-              background: 'var(--panel, #F6F4EE)',
-              padding: '14px',
-              font: '14px Inter, Arial, sans-serif',
-              lineHeight: 1.6,
-              color: 'var(--ink, #0B0B0B)',
-              borderRadius: 0,
-              resize: 'vertical',
-              minHeight: 240,
-            }}
-          />
-        )}
-
-        {/* Topic and Tags row matching BlogWrite.dc.html */}
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', margin: '20px 0' }}>
-          <div className="f" style={{ flex: '1 1 200px', margin: 0 }}>
-            <label
-              className="m"
-              htmlFor="tp"
-              style={{
-                display: 'block',
-                marginBottom: 8,
-                font: '11px ui-monospace, Menlo, monospace',
-                letterSpacing: '.06em',
-                textTransform: 'uppercase',
-                color: 'var(--dim, #5F5F5F)',
-              }}
-            >
-              Topic
-            </label>
-            <select
-              id="tp"
-              value={topic}
-              onChange={(e) => setTopic(e.target.value)}
-              style={{
-                border: '2px solid var(--line2, #0B0B0B)',
-                background: 'var(--panel, #F6F4EE)',
-                padding: '12px 14px',
-                font: '14px Inter, Arial, sans-serif',
-                minHeight: 44,
-                color: 'var(--ink, #0B0B0B)',
-                width: '100%',
-                cursor: 'pointer',
-              }}
-            >
-              {TOPICS.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="f" style={{ flex: '2 1 280px', margin: 0 }}>
-            <label
-              className="m"
-              htmlFor="tg"
-              style={{
-                display: 'block',
-                marginBottom: 8,
-                font: '11px ui-monospace, Menlo, monospace',
-                letterSpacing: '.06em',
-                textTransform: 'uppercase',
-                color: 'var(--dim, #5F5F5F)',
-              }}
-            >
-              Tags (comma separated, up to 3)
-            </label>
-            <input
-              id="tg"
-              placeholder="e.g. System design, Mock interviews"
-              value={tagsInput}
-              onChange={(e) => setTagsInput(e.target.value)}
-              style={{
-                border: '2px solid var(--line2, #0B0B0B)',
-                background: 'var(--panel, #F6F4EE)',
-                padding: '12px 14px',
-                font: '14px Inter, Arial, sans-serif',
-                minHeight: 44,
-                color: 'var(--ink, #0B0B0B)',
-                width: '100%',
-              }}
-            />
-          </div>
-        </div>
-
-        {/* Footer Action Bar matching BlogWrite.dc.html */}
-        <div
-          style={{
-            display: 'flex',
-            gap: 8,
-            alignItems: 'center',
-            borderTop: '1px solid var(--line, #CFCBBF)',
-            paddingTop: 20,
-          }}
-        >
-          <span
             className="m"
             style={{
+              marginBottom: 24,
+              paddingRight: 56,
               font: '11px ui-monospace, Menlo, monospace',
               letterSpacing: '.06em',
               textTransform: 'uppercase',
               color: 'var(--dim, #5F5F5F)',
             }}
           >
-            Read time · {readTimeMin} min read
-          </span>
-          <span style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+            Draft by {me?.name || 'You'} ·{' '}
+            {post ? (post.published_at ? 'Published' : 'Saved draft') : 'Draft'}
+          </div>
+
+          {error && (
+            <div
+              style={{
+                padding: '10px 14px',
+                background: 'rgba(255, 90, 31, 0.12)',
+                border: '1px solid var(--acc, #FF5A1F)',
+                color: 'var(--acc, #FF5A1F)',
+                fontSize: 13,
+                fontFamily: 'var(--mono)',
+                marginBottom: 16,
+              }}
+            >
+              {error}
+            </div>
+          )}
+
+          {/* 36px Title Input matching BlogWrite.dc.html */}
+          <input
+            ref={titleInputRef}
+            aria-label="Title"
+            placeholder="Title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            style={{
+              font: '700 36px Inter, Arial, sans-serif',
+              borderWidth: '0 0 2px',
+              borderStyle: 'solid',
+              borderColor: 'var(--line2, #0B0B0B)',
+              background: 'transparent',
+              padding: '8px 0',
+              marginBottom: 12,
+              width: '100%',
+              color: 'var(--ink, #0B0B0B)',
+              outline: 'none',
+              borderRadius: 0,
+            }}
+          />
+
+          {/* 20px Subtitle Input matching BlogWrite.dc.html */}
+          <input
+            aria-label="Subtitle"
+            placeholder="Subtitle (optional)"
+            value={subtitle}
+            onChange={(e) => setSubtitle(e.target.value)}
+            style={{
+              font: '20px Inter, Arial, sans-serif',
+              borderWidth: '0 0 1px',
+              borderStyle: 'solid',
+              borderColor: 'var(--line, #0B0B0B)',
+              background: 'transparent',
+              padding: '8px 0',
+              marginBottom: 24,
+              width: '100%',
+              color: 'var(--ink, #0B0B0B)',
+              outline: 'none',
+              borderRadius: 0,
+            }}
+          />
+
+          {/* Markdown toolstrip matching BlogWrite.dc.html */}
+          <div
+            style={{
+              display: 'flex',
+              gap: 8,
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              marginBottom: 12,
+            }}
+          >
             <button
               type="button"
-              onClick={() => handleSave(false)}
-              disabled={submitting}
+              className="sm"
+              aria-label="Bold"
+              onClick={() => insertFormat('**', '**')}
               style={{
-                font: '500 13px Inter, Arial, sans-serif',
-                border: '2px solid var(--line2, #0B0B0B)',
-                padding: '0 16px',
+                minWidth: 40,
+                height: 36,
+                padding: '0 12px',
                 background: 'var(--panel, #F6F4EE)',
-                minHeight: 44,
+                border: '2px solid var(--line2, #0B0B0B)',
+                color: 'var(--ink, #0B0B0B)',
+                cursor: 'pointer',
+                fontWeight: 700,
+              }}
+            >
+              B
+            </button>
+            <button
+              type="button"
+              className="sm"
+              aria-label="Italic"
+              onClick={() => insertFormat('*', '*')}
+              style={{
+                minWidth: 40,
+                height: 36,
+                padding: '0 12px',
+                background: 'var(--panel, #F6F4EE)',
+                border: '2px solid var(--line2, #0B0B0B)',
+                color: 'var(--ink, #0B0B0B)',
+                cursor: 'pointer',
+                fontStyle: 'italic',
+              }}
+            >
+              I
+            </button>
+            <button
+              type="button"
+              className="sm"
+              aria-label="Heading"
+              onClick={() => insertFormat('### ', '')}
+              style={{
+                minWidth: 40,
+                height: 36,
+                padding: '0 12px',
+                background: 'var(--panel, #F6F4EE)',
+                border: '2px solid var(--line2, #0B0B0B)',
+                color: 'var(--ink, #0B0B0B)',
+                cursor: 'pointer',
+                fontWeight: 700,
+              }}
+            >
+              H
+            </button>
+            <button
+              type="button"
+              className="sm"
+              aria-label="Quote"
+              onClick={() => insertFormat('> ', '')}
+              style={{
+                minWidth: 40,
+                height: 36,
+                padding: '0 12px',
+                background: 'var(--panel, #F6F4EE)',
+                border: '2px solid var(--line2, #0B0B0B)',
                 color: 'var(--ink, #0B0B0B)',
                 cursor: 'pointer',
               }}
             >
-              {submitting ? 'Saving…' : 'Save draft'}
+              ❝
             </button>
             <button
               type="button"
-              className="k"
-              onClick={() => handleSave(true)}
-              disabled={submitting}
+              className="sm"
+              aria-label="Code"
+              onClick={() => insertFormat('```\n', '\n```')}
               style={{
-                font: '500 13px Inter, Arial, sans-serif',
+                minWidth: 40,
+                height: 36,
+                padding: '0 12px',
+                background: 'var(--panel, #F6F4EE)',
                 border: '2px solid var(--line2, #0B0B0B)',
-                padding: '0 16px',
-                background: 'var(--ink, #0B0B0B)',
-                color: 'var(--on, #FFFFFF)',
-                minHeight: 44,
+                color: 'var(--ink, #0B0B0B)',
+                cursor: 'pointer',
+                fontFamily: 'var(--mono)',
+              }}
+            >
+              &lt;/&gt;
+            </button>
+            <button
+              type="button"
+              className="sm"
+              aria-label="Link"
+              onClick={() => insertFormat('[', '](https://)')}
+              style={{
+                minWidth: 40,
+                height: 36,
+                padding: '0 12px',
+                background: 'var(--panel, #F6F4EE)',
+                border: '2px solid var(--line2, #0B0B0B)',
+                color: 'var(--ink, #0B0B0B)',
                 cursor: 'pointer',
               }}
             >
-              {submitting ? 'Publishing…' : 'Publish'}
+              ↗
             </button>
-          </span>
-        </div>
+
+            {/* Write · Preview toggle on the right */}
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
+              <button
+                type="button"
+                className={`ch sm ${!isPreview ? 'on' : ''}`}
+                onClick={() => setIsPreview(false)}
+                style={{
+                  font: '11px ui-monospace, Menlo, monospace',
+                  letterSpacing: '.06em',
+                  textTransform: 'uppercase',
+                  border: '2px solid var(--line2, #0B0B0B)',
+                  padding: '0 10px',
+                  minHeight: 36,
+                  background: !isPreview ? 'var(--acc, #1F3BFF)' : 'var(--panel, #F6F4EE)',
+                  color: !isPreview ? 'var(--on, #FFFFFF)' : 'var(--ink, #0B0B0B)',
+                  cursor: 'pointer',
+                }}
+              >
+                Write
+              </button>
+              <button
+                type="button"
+                className={`ch sm ${isPreview ? 'on' : ''}`}
+                onClick={() => setIsPreview(true)}
+                style={{
+                  font: '11px ui-monospace, Menlo, monospace',
+                  letterSpacing: '.06em',
+                  textTransform: 'uppercase',
+                  border: '2px solid var(--line2, #0B0B0B)',
+                  padding: '0 10px',
+                  minHeight: 36,
+                  background: isPreview ? 'var(--acc, #1F3BFF)' : 'var(--panel, #F6F4EE)',
+                  color: isPreview ? 'var(--on, #FFFFFF)' : 'var(--ink, #0B0B0B)',
+                  cursor: 'pointer',
+                }}
+              >
+                Preview
+              </button>
+            </div>
+          </div>
+
+          {/* Textarea or Preview */}
+          {isPreview ? (
+            <div
+              style={{
+                minHeight: 280,
+                padding: 20,
+                border: '2px solid var(--line2, #0B0B0B)',
+                background: 'var(--bg, #FFFFFF)',
+                color: 'var(--ink, #0B0B0B)',
+                overflowY: 'auto',
+                marginBottom: 16,
+              }}
+            >
+              <MarkdownBody markdown={bodyMd || '*No content to preview yet.*'} />
+            </div>
+          ) : (
+            <textarea
+              ref={textareaRef}
+              aria-label="Story"
+              rows={12}
+              placeholder="Tell your story in Markdown…"
+              value={bodyMd}
+              onChange={(e) => setBodyMd(e.target.value)}
+              style={{
+                width: '100%',
+                border: '2px solid var(--line2, #0B0B0B)',
+                background: 'var(--panel, #F6F4EE)',
+                padding: '14px',
+                font: '14px Inter, Arial, sans-serif',
+                lineHeight: 1.6,
+                color: 'var(--ink, #0B0B0B)',
+                borderRadius: 0,
+                resize: 'vertical',
+                minHeight: 240,
+              }}
+            />
+          )}
+
+          {/* Topic and Tags row matching BlogWrite.dc.html */}
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', margin: '20px 0' }}>
+            <div className="f" style={{ flex: '1 1 200px', margin: 0 }}>
+              <label
+                className="m"
+                htmlFor="tp"
+                style={{
+                  display: 'block',
+                  marginBottom: 8,
+                  font: '11px ui-monospace, Menlo, monospace',
+                  letterSpacing: '.06em',
+                  textTransform: 'uppercase',
+                  color: 'var(--dim, #5F5F5F)',
+                }}
+              >
+                Topic
+              </label>
+              <select
+                id="tp"
+                value={topic}
+                onChange={(e) => setTopic(e.target.value)}
+                style={{
+                  border: '2px solid var(--line2, #0B0B0B)',
+                  background: 'var(--panel, #F6F4EE)',
+                  padding: '12px 14px',
+                  font: '14px Inter, Arial, sans-serif',
+                  minHeight: 44,
+                  color: 'var(--ink, #0B0B0B)',
+                  width: '100%',
+                  cursor: 'pointer',
+                }}
+              >
+                {TOPICS.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="f" style={{ flex: '2 1 280px', margin: 0 }}>
+              <label
+                className="m"
+                htmlFor="tg"
+                style={{
+                  display: 'block',
+                  marginBottom: 8,
+                  font: '11px ui-monospace, Menlo, monospace',
+                  letterSpacing: '.06em',
+                  textTransform: 'uppercase',
+                  color: 'var(--dim, #5F5F5F)',
+                }}
+              >
+                Tags (comma separated, up to 3)
+              </label>
+              <input
+                id="tg"
+                placeholder="e.g. System design, Mock interviews"
+                value={tagsInput}
+                onChange={(e) => setTagsInput(e.target.value)}
+                style={{
+                  border: '2px solid var(--line2, #0B0B0B)',
+                  background: 'var(--panel, #F6F4EE)',
+                  padding: '12px 14px',
+                  font: '14px Inter, Arial, sans-serif',
+                  minHeight: 44,
+                  color: 'var(--ink, #0B0B0B)',
+                  width: '100%',
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Footer Action Bar matching BlogWrite.dc.html */}
+          <div
+            style={{
+              display: 'flex',
+              gap: 8,
+              alignItems: 'center',
+              borderTop: '1px solid var(--line, #CFCBBF)',
+              paddingTop: 20,
+            }}
+          >
+            <span
+              className="m"
+              style={{
+                font: '11px ui-monospace, Menlo, monospace',
+                letterSpacing: '.06em',
+                textTransform: 'uppercase',
+                color: 'var(--dim, #5F5F5F)',
+              }}
+            >
+              Read time · {readTimeMin} min read
+            </span>
+            <span style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+              {!isPublished && (
+                <button
+                  type="button"
+                  className="k"
+                  onClick={() => handleSave(true)}
+                  disabled={submitting}
+                  style={{
+                    font: '500 13px Inter, Arial, sans-serif',
+                    border: '2px solid var(--line2, #0B0B0B)',
+                    padding: '0 16px',
+                    background: 'var(--ink, #0B0B0B)',
+                    color: 'var(--on, #FFFFFF)',
+                    minHeight: 44,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {submitting ? 'Publishing…' : 'Publish'}
+                </button>
+              )}
+            </span>
+          </div>
+        </SaveForm>
       </div>
     </div>
   );

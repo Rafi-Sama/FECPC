@@ -1,4 +1,6 @@
 'use client';
+import { SaveBarProvider } from './SaveBar';
+import { PromptProvider } from './shared/PromptDialog';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -48,6 +50,7 @@ const subs: Record<string, { self: string; items: Item[] }> = {
     items: [
       ['/app/courses', 'Courses'],
       ['/app/blog', 'Editorials'],
+      ['/app/prep', 'Interview prep'],
     ],
   },
   '/app/contests': { self: 'Contests', items: [['/app/contest-day', 'Contest day']] },
@@ -418,7 +421,9 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               ))}
             </nav>
           )}
-          {children}
+          <SaveBarProvider>
+            <PromptProvider>{children}</PromptProvider>
+          </SaveBarProvider>
         </div>
       </div>
       <nav className="tabbar t-d" aria-label="Quick navigation">

@@ -1,5 +1,6 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
+import { SaveForm } from '@/components/app/SaveBar';
 import { useStore } from '@/components/app/Store';
 import { MarkdownBody, MarkdownEditor, relTime } from '@/components/app/shared/MarkdownEditor';
 import { TierAvatar, TierName } from '@/components/app/shared/SolvedTier';
@@ -102,18 +103,17 @@ export function IdeaModal({
     }
   };
 
-  const handleApplySubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!detail || busy) return;
-    setBusy(true);
-    const ok = await act('expressInterest', { ideaId: detail.id, response: answers });
-    setBusy(false);
+  const handleApplySubmit = async () => {
+    if (!detail) return false;
+    const response = Object.fromEntries(Object.entries(answers).map(([k, v]) => [k, v.trim()]));
+    const ok = await act('expressInterest', { ideaId: detail.id, response });
     if (ok) {
       setShowApplySheet(false);
       setAnswers({});
       await load(detail.id);
       onMutated();
     }
+    return ok;
   };
 
   const handleDecision = async (userId: string, decision: 'accepted' | 'declined') => {
@@ -127,22 +127,20 @@ export function IdeaModal({
     }
   };
 
-  const handleSaveEdit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!detail || busy) return;
-    setBusy(true);
+  const handleSaveEdit = async () => {
+    if (!detail) return false;
     const ok = await act('updateIdea', {
       ideaId: detail.id,
       title: editTitle.trim(),
       body_md: editBody.trim(),
       status: editStatus,
     });
-    setBusy(false);
     if (ok) {
       setEditing(false);
       await load(detail.id);
       onMutated();
     }
+    return ok;
   };
 
   const handleClosePost = async () => {
@@ -198,9 +196,16 @@ export function IdeaModal({
             </header>
 
             {editing ? (
-              <form
+              <SaveForm
                 className="stack"
                 style={{ '--g': '14px' } as React.CSSProperties}
+                label="Unsaved changes to this idea"
+                onDiscard={() => {
+                  setEditTitle(detail.title);
+                  setEditBody(detail.body_md);
+                  setEditStatus(detail.status);
+                  setEditing(false);
+                }}
                 onSubmit={handleSaveEdit}
               >
                 <label className="field">
@@ -238,14 +243,16 @@ export function IdeaModal({
                   </select>
                 </label>
                 <div className="row" style={{ '--g': '8px' } as React.CSSProperties}>
-                  <button type="submit" className="btn sm" disabled={busy}>
-                    {busy ? 'Saving…' : 'Save'}
-                  </button>
-                  <button type="button" className="btn sm line" onClick={() => setEditing(false)}>
-                    Cancel
+                  <button
+                    type="button"
+                    className="btn sm line"
+                    data-close
+                    onClick={() => setEditing(false)}
+                  >
+                    Close editor
                   </button>
                 </div>
-              </form>
+              </SaveForm>
             ) : (
               <>
                 <h2 className="h2" style={{ fontSize: 'clamp(22px, 2.5vw, 30px)' }}>
@@ -353,7 +360,16 @@ export function IdeaModal({
 
             {/* Inline application sheet when poster configured open roles */}
             {!isPoster && showApplySheet && detail.roles.length > 0 && (
-              <form className="cm-interest-panel" onSubmit={handleApplySubmit}>
+              <SaveForm
+                className="cm-interest-panel"
+                label="Unsent answers"
+                saveLabel="Send I'm in"
+                onDiscard={() => {
+                  setAnswers({});
+                  setShowApplySheet(false);
+                }}
+                onSubmit={handleApplySubmit}
+              >
                 <p className="label">
                   Answer before joining · visible only to {detail.author_name}
                 </p>
@@ -379,15 +395,13 @@ export function IdeaModal({
                   <button
                     type="button"
                     className="btn xs line"
+                    data-close
                     onClick={() => setShowApplySheet(false)}
                   >
                     Cancel
                   </button>
-                  <button type="submit" className="btn xs" disabled={busy}>
-                    {busy ? 'Sending…' : "Send I'm in"}
-                  </button>
                 </div>
-              </form>
+              </SaveForm>
             )}
 
             {/* POSTER-ONLY Interested panel: absent from server payload AND absent from DOM for non-posters */}

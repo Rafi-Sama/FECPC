@@ -1,5 +1,6 @@
 'use client';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { useSaveBar } from '@/components/app/SaveBar';
 import { Page } from '@/components/app/Shell';
 import { useStore } from '@/components/app/Store';
 import { HandleBox, useJudge, VjudgeBox } from '@/components/app/Judge';
@@ -88,6 +89,8 @@ export default function Profile() {
         t.toLowerCase(),
         sheet.filter((x) => x.topic === t && s.solved.includes(x.id)).length,
       ]);
+  const details = useRef<HTMLFormElement>(null);
+  const { markSaved } = useSaveBar(details, { label: 'Unsaved profile details' });
   const rating = data?.rating ?? me.rating,
     solved = data?.solved.length ?? me.solved;
   return (
@@ -180,15 +183,16 @@ export default function Profile() {
           <Radar data={tags} />
         </section>
         <form
+          ref={details}
           className="panel c6"
           onSubmit={(e) => {
             e.preventDefault();
             const d = new FormData(e.currentTarget);
             act('profile', {
-              name: d.get('name'),
-              dept: d.get('dept'),
+              name: String(d.get('name')).trim(),
+              dept: String(d.get('dept')).trim(),
               batch: Number(d.get('batch')),
-            });
+            }).then((ok) => ok && markSaved());
           }}
         >
           <p className="label">Your details</p>
@@ -232,9 +236,6 @@ export default function Profile() {
           <p className="label">
             {me.email} · {me.role || roleName[s.role]}
           </p>
-          <button className="btn sm" style={{ alignSelf: 'flex-start' }}>
-            Save details
-          </button>
         </form>
         <Password />
       </div>

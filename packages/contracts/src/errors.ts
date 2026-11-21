@@ -56,6 +56,8 @@ export interface ProblemDetails {
   status: number;
   code: ErrorCode;
   detail: string;
+  /** The message to show a person: the first field error, else `detail`. Clients read this. */
+  error: string;
   requestId: string;
   errors?: Record<string, string[]>;
 }

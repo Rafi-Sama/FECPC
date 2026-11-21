@@ -10,6 +10,7 @@ import {
   createInterviewTopic,
   deleteAlumniJob,
   deleteBlogPost,
+  deleteInterviewRoadmap,
   deleteInterviewTip,
   getBlogPost,
   getInterviewTopicDetail,
@@ -17,8 +18,10 @@ import {
   listAlumniJobs,
   listBlogPosts,
   listInterviewExperiences,
+  listInterviewProblems,
   listInterviewTopics,
   saveAlumni,
+  saveInterviewRoadmap,
   setAvailableForQuestions,
   toggleInterviewProblem,
   updateBlogPost,
@@ -201,6 +204,146 @@ test('interview prep: topics, tree progress, problems, tips & experiences', asyn
   // List interview experiences
   const exps = await listInterviewExperiences(db());
   assert.ok(exps.experiences.length >= 1, 'seeded experiences exist');
+});
+
+test('interview roadmaps: CP head and president CRUD a topic tree', async () => {
+  const tree = [
+    { key: 'r', parentKey: null, name: 'Basics', x: 200, y: 40 },
+    { key: 'a', parentKey: 'r', name: 'Arrays', x: 0, y: 180 },
+    { key: 'b', parentKey: 'r', name: 'Strings', x: 400, y: 180 },
+  ];
+  await refused(403, saveInterviewRoadmap('tasnim', { name: 'Mine', topics: tree }));
+  await refused(
+    400,
+    saveInterviewRoadmap('nadia', {
+      name: 'Loop',
+      topics: [
+        { key: 'x', parentKey: 'y', name: 'One' },
+        { key: 'y', parentKey: 'x', name: 'Two' },
+      ],
+    }),
+  );
+
+  // Two children under one root.
+  const { roadmapId } = await saveInterviewRoadmap('nadia', { name: 'Warm-up', topics: tree });
+  const first = (await listInterviewTopics(db(), 'tasnim', { roadmapId })).topics;
+  const id = (n: string) => first.find((t) => t.name === n)!.id;
+  assert.equal(first.length, 3);
+  assert.equal(first.filter((t) => t.parent_id === id('Basics')).length, 2);
+
+  // President edits: rename root, drop Arrays, hang a new topic under Strings.
+  await saveInterviewRoadmap('tanvir', {
+    roadmapId,
+    name: 'Warm-up',
+    topics: [
+      { key: 'r', id: id('Basics'), parentKey: null, name: 'Fundamentals', x: 200, y: 40 },
+      { key: 'b', id: id('Strings'), parentKey: 'r', name: 'Strings', x: 400, y: 180 },
+      { key: 'n', parentKey: 'b', name: 'Tries', x: 400, y: 320 },
+    ],
+  });
+  const second = (await listInterviewTopics(db(), 'tasnim', { roadmapId })).topics;
+  assert.deepEqual(second.map((t) => t.name).sort(), ['Fundamentals', 'Strings', 'Tries']);
+  assert.equal(second.find((t) => t.name === 'Tries')!.parent_id, id('Strings'));
+
+  // Topic ids from another roadmap are refused.
+  await refused(
+    400,
+    saveInterviewRoadmap('nadia', {
+      roadmapId,
+      name: 'Warm-up',
+      topics: [{ key: 'z', id: 1, parentKey: null, name: 'Stolen' }],
+    }),
+  );
+
+  // Problems and links ride along with the tree.
+  const T = (n: string) => second.find((t) => t.name === n)!.id;
+  const tree3 = (problems: { s: unknown[]; t: unknown[] }) => [
+    { key: 'r', id: T('Fundamentals'), parentKey: null, name: 'Fundamentals' },
+    {
+      key: 'b',
+      id: T('Strings'),
+      parentKey: 'r',
+      name: 'Strings',
+      link: 'https://youtube.com/playlist?list=x',
+      problems: problems.s,
+    },
+    { key: 'n', id: T('Tries'), parentKey: 'b', name: 'Tries', problems: problems.t },
+  ];
+  await refused(
+    400,
+    saveInterviewRoadmap('nadia', {
+      roadmapId,
+      name: 'Warm-up',
+      topics: tree3({
+        s: [{ title: 'Bad', url: 'javascript:alert(1)', difficulty: 'easy' }],
+        t: [],
+      }),
+    }),
+  );
+  await saveInterviewRoadmap('nadia', {
+    roadmapId,
+    name: 'Warm-up',
+    topics: tree3({
+      s: [
+        {
+          title: 'Valid Anagram',
+          url: 'https://leetcode.com/problems/valid-anagram/',
+          difficulty: 'easy',
+        },
+        {
+          title: 'Group Anagrams',
+          url: 'https://leetcode.com/problems/group-anagrams/',
+          difficulty: 'medium',
+        },
+      ],
+      t: [],
+    }),
+  });
+  let probs = (await listInterviewProblems(db(), { roadmapId })).problems;
+  assert.equal(probs.length, 2);
+  const anagram = probs.find((q) => q.title === 'Valid Anagram')!;
+  await toggleInterviewProblem(db(), 'tasnim', { problemId: anagram.id });
+  const topics3 = (await listInterviewTopics(db(), 'tasnim', { roadmapId })).topics;
+  assert.equal(
+    topics3.find((t) => t.name === 'Strings')!.link,
+    'https://youtube.com/playlist?list=x',
+  );
+
+  // Edit one in place and move it to Tries, drop the other: progress survives the edit.
+  await saveInterviewRoadmap('tanvir', {
+    roadmapId,
+    name: 'Warm-up',
+    topics: tree3({
+      s: [],
+      t: [{ id: anagram.id, title: 'Valid Anagram II', url: anagram.url, difficulty: 'hard' }],
+    }),
+  });
+  probs = (await listInterviewProblems(db(), { roadmapId })).problems;
+  assert.deepEqual(
+    probs.map((q) => [q.id, q.title, q.difficulty, q.topic_id]),
+    [[anagram.id, 'Valid Anagram II', 'hard', T('Tries')]],
+  );
+  const tries = (await listInterviewTopics(db(), 'tasnim', { roadmapId })).topics.find(
+    (t) => t.name === 'Tries',
+  )!;
+  assert.equal(tries.solvedCount, 1);
+
+  // Someone else's problem id is refused.
+  await refused(
+    400,
+    saveInterviewRoadmap('nadia', {
+      roadmapId,
+      name: 'Warm-up',
+      topics: tree3({
+        s: [{ id: 1, title: 'Two Sum', url: 'https://x.io', difficulty: 'easy' }],
+        t: [],
+      }),
+    }),
+  );
+
+  await refused(403, deleteInterviewRoadmap('tasnim', { roadmapId }));
+  await deleteInterviewRoadmap('nadia', { roadmapId });
+  assert.equal((await listInterviewTopics(db(), 'tasnim', { roadmapId })).topics.length, 0);
 });
 
 test('blog posts: create, read, update, tags filter, delete & permissions', async () => {

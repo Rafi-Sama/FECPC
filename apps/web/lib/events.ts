@@ -87,3 +87,21 @@ export async function renderCertificate(html: string, type: 'png' | 'jpeg', name
     0.95,
   );
 }
+
+/** What sign-up looks like right now, rather than the bare status: the window can open or close it. */
+export function liveStatus(e: {
+  status: string;
+  regOpen: boolean;
+  regOpens: string | null;
+  regCloses: string | null;
+}): string | null {
+  if (e.status !== 'open' && e.status !== 'published') return null;
+  if (e.regOpen) return e.regCloses ? `Sign-up open until ${fmtWhen(e.regCloses)}` : 'Sign-up open';
+  const now = clubNow();
+  if (e.regOpens && e.regOpens > now) return `Sign-up opens ${fmtWhen(e.regOpens)}`;
+  return e.status === 'open' ? 'Sign-up closed' : null;
+}
+
+/** Now as a club-local (Dhaka) `YYYY-MM-DDTHH:MM`, comparable with event times as text. */
+export const clubNow = () =>
+  new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Dhaka' }).replace(' ', 'T').slice(0, 16);

@@ -1,4 +1,5 @@
 'use client';
+import { SaveForm } from '@/components/app/SaveBar';
 import { useEffect, useState } from 'react';
 import { useStore } from './Store';
 
@@ -76,12 +77,16 @@ export function HandleBox() {
       </p>
     );
   return (
-    <form
+    <SaveForm
       className="row"
       style={{ '--g': '10px', alignItems: 'flex-end' } as React.CSSProperties}
-      onSubmit={(e) => {
-        e.preventDefault();
-        act('handle', { value: v.trim() });
+      label="Codeforces handle not linked yet"
+      saveLabel="Link handle"
+      onDiscard={() => setV('')}
+      onSubmit={async () => {
+        const ok = await act('handle', { value: v.trim() });
+        if (ok) setV('');
+        return ok;
       }}
     >
       <label className="field" style={{ flex: '0 1 260px' }}>
@@ -92,10 +97,10 @@ export function HandleBox() {
           onChange={(e) => setV(e.target.value)}
           placeholder="your_handle"
           pattern="[\w.\-]{3,24}"
+          title="3 to 24 letters, digits, _ . or -"
           required
         />
       </label>
-      <button className="btn sm">Sync</button>
       {err && (
         <p className="body bad" role="alert" style={{ flexBasis: '100%' }}>
           {err}{' '}
@@ -108,7 +113,7 @@ export function HandleBox() {
           </button>
         </p>
       )}
-    </form>
+    </SaveForm>
   );
 }
 
@@ -126,13 +131,20 @@ export function VjudgeBox() {
       </p>
     );
   return (
-    <form
+    <SaveForm
       className="row"
       style={{ '--g': '10px', alignItems: 'flex-end' } as React.CSSProperties}
-      onSubmit={async (e) => {
-        e.preventDefault();
+      label="VJudge username not linked yet"
+      saveLabel="Link username"
+      onDiscard={() => setV('')}
+      onSubmit={async () => {
         // Link, then let the server fetch the solves; syncJudges reloads state so the count and XP show.
-        if (await act('vjudge', { value: v.trim() })) await syncJudges();
+        const ok = await act('vjudge', { value: v.trim() });
+        if (ok) {
+          setV('');
+          await syncJudges();
+        }
+        return ok;
       }}
     >
       <label className="field" style={{ flex: '0 1 260px' }}>
@@ -143,10 +155,10 @@ export function VjudgeBox() {
           onChange={(e) => setV(e.target.value)}
           placeholder="your_username"
           pattern="[\w.\-]{2,30}"
+          title="2 to 30 letters, digits, _ . or -"
           required
         />
       </label>
-      <button className="btn sm">Sync</button>
-    </form>
+    </SaveForm>
   );
 }

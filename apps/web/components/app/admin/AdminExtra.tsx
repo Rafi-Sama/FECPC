@@ -1,4 +1,6 @@
 'use client';
+import { usePrompt } from '@/components/app/shared/PromptDialog';
+import { SaveForm } from '@/components/app/SaveBar';
 import { useState } from 'react';
 import { useStore } from '../Store';
 import { Avatar } from '@/components/pixel/Sprites';
@@ -19,6 +21,7 @@ const statuses = ['All', 'Active', 'Invited', 'Suspended'] as const;
 // Every account and what this officer may do to it. The same rank rules are enforced by the API.
 function Accounts() {
   const { s, me, act, members, postRoles } = useStore();
+  const ask = usePrompt();
   const [q, setQ] = useState('');
   const [st, setSt] = useState<(typeof statuses)[number]>('All');
   const sa = s.role === 'super_admin',
@@ -104,11 +107,15 @@ function Accounts() {
                           className="input sm"
                           aria-label={`Role of ${m.name}`}
                           value={role}
-                          onChange={(e) => {
-                            const reason = prompt(
-                              `Why is ${m.name} becoming ${roleName[e.target.value as Role]}? This goes in the audit log.`,
-                            );
-                            if (reason) act('role', { user: m.id, role: e.target.value, reason });
+                          onChange={async (e) => {
+                            const to = e.target.value as Role;
+                            const reason = await ask({
+                              title: `Make ${m.name} ${roleName[to]}`,
+                              label: 'Why? This goes in the audit log.',
+                              minLength: 3,
+                              confirmLabel: 'Change role',
+                            });
+                            if (reason) act('role', { user: m.id, role: to, reason });
                           }}
                         >
                           {roles.map((r) => (
@@ -207,20 +214,21 @@ function Permissions({ tab }: { tab: string }) {
     return (
       <div className="stack">
         {superAdmin && (
-          <form
+          <SaveForm
             className="row"
             style={{ '--g': '10px', alignItems: 'flex-end' } as React.CSSProperties}
-            onSubmit={async (e) => {
-              e.preventDefault();
-              if (
-                match &&
+            label="President not appointed yet"
+            saveLabel="Appoint"
+            onDiscard={() => setEmail('')}
+            onSubmit={async () => {
+              if (!match) return false; // the status line already says no member has that email
+              const ok =
                 confirm(
                   `Make ${match.name} (${match.email}) President?` +
                     (president.length ? ` ${president.join(', ')} becomes a Member.` : ''),
-                ) &&
-                (await act('appointPresident', { user: match.id, email: match.email }))
-              )
-                setEmail('');
+                ) && (await act('appointPresident', { user: match.id, email: match.email }));
+              if (ok) setEmail('');
+              return ok;
             }}
           >
             <label className="field" style={{ flex: '0 1 320px' }}>
@@ -242,15 +250,12 @@ function Permissions({ tab }: { tab: string }) {
                 )}
               </datalist>
             </label>
-            <button className="btn sm" disabled={!match}>
-              Appoint
-            </button>
             <span className="body" role="status">
               {match
                 ? `${match.name} · ${roleName[match.roleKey ?? 'member']}`
                 : email && 'No member with that email'}
             </span>
-          </form>
+          </SaveForm>
         )}
         <h2 className="h3">Posts</h2>
         <p className="body" style={{ maxWidth: '70ch' }}>

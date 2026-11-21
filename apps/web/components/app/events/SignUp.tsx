@@ -1,4 +1,5 @@
 'use client';
+import { SaveForm } from '../SaveBar';
 import { useState } from 'react';
 import QR from '../QR';
 import { useStore } from '../Store';
@@ -44,8 +45,8 @@ export function SignUp({
 
   if (mode === 'form')
     return formUrl ? (
-      <div className="dash">
-        <QR text={formUrl} size={72} />
+      <div className="dash" style={{ flexWrap: 'wrap' }}>
+        <QR text={formUrl} size={160} />
         <span className="grow">
           <a className="btn sm b" href={formUrl} target="_blank" rel="noopener noreferrer">
             Open the form
@@ -64,6 +65,13 @@ export function SignUp({
         >
           {STATUS[entry.status]}
         </p>
+        {entry.status === 'rejected' && entry.reason && (
+          <p className="body">
+            <span className="label">Reason</span>
+            <br />
+            {entry.reason}
+          </p>
+        )}
         {entry.status !== 'rejected' && (
           <button
             className="btn sm line"
@@ -89,14 +97,26 @@ export function SignUp({
     );
 
   return (
-    <form
+    // Opening the form is the intent to register, so the bar shows right away.
+    <SaveForm
       className="stack"
-      onSubmit={async (e) => {
-        e.preventDefault();
-        if (await act('register', { eventId, roleId, name, phone, answers })) {
+      label={roleId ? 'Application not sent' : 'Registration not sent'}
+      saveLabel={roleId ? 'Send application' : 'Register'}
+      extraDirty
+      onDiscard={() => setEditing(false)}
+      onSubmit={async () => {
+        const ok = await act('register', {
+          eventId,
+          roleId,
+          name: name.trim(),
+          phone: phone.trim(),
+          answers: Object.fromEntries(Object.entries(answers).map(([k, a]) => [k, a.trim()])),
+        });
+        if (ok) {
           setEditing(false);
           done();
         }
+        return ok;
       }}
     >
       <label className="field">
@@ -115,7 +135,11 @@ export function SignUp({
           className="input"
           type="tel"
           required
+          minLength={6}
           maxLength={20}
+          pattern="[0-9+ \-]{6,20}"
+          title="Digits, spaces, + and - only"
+          autoComplete="tel"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
         />
@@ -150,11 +174,10 @@ export function SignUp({
         </label>
       ))}
       <div className="row">
-        <button className="btn sm b">Send</button>
-        <button className="btn sm line" type="button" onClick={() => setEditing(false)}>
+        <button className="btn sm line" type="button" data-close onClick={() => setEditing(false)}>
           Back
         </button>
       </div>
-    </form>
+    </SaveForm>
   );
 }

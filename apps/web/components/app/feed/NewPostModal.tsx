@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { SaveForm } from '@/components/app/SaveBar';
 import { MarkdownEditor } from '@/components/app/shared/MarkdownEditor';
 import type { FeedCategory } from '@fecpc/contracts';
 
@@ -25,7 +26,6 @@ export function NewPostModal({
   const [title, setTitle] = useState('');
   const [bodyMd, setBodyMd] = useState('');
   const [category, setCategory] = useState<FeedCategory>('problem-solving');
-  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -38,18 +38,18 @@ export function NewPostModal({
 
   if (!open) return null;
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (busy) return;
-    setBusy(true);
+  const clear = () => {
+    setTitle('');
+    setBodyMd('');
+    setCategory('problem-solving');
+  };
+  const submit = async () => {
     const ok = await onPublish({ title: title.trim(), body_md: bodyMd.trim(), category });
-    setBusy(false);
     if (ok) {
-      setTitle('');
-      setBodyMd('');
-      setCategory('problem-solving');
+      clear();
       onClose();
     }
+    return ok;
   };
 
   return (
@@ -60,7 +60,17 @@ export function NewPostModal({
       aria-label="New post"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <form className="cm-modal" style={{ maxWidth: 640 }} onSubmit={submit}>
+      <SaveForm
+        className="cm-modal"
+        style={{ maxWidth: 640 }}
+        label="Unpublished post"
+        saveLabel="Publish"
+        onDiscard={() => {
+          clear();
+          onClose();
+        }}
+        onSubmit={submit}
+      >
         <div className="cm-modal-head">
           <h2 className="h3">New post</h2>
           <button type="button" className="cm-modal-close" aria-label="Close" onClick={onClose}>
@@ -108,19 +118,7 @@ export function NewPostModal({
             ))}
           </select>
         </label>
-
-        <div
-          className="row"
-          style={{ justifyContent: 'flex-end', '--g': '8px' } as React.CSSProperties}
-        >
-          <button type="button" className="btn sm line" onClick={onClose}>
-            Cancel
-          </button>
-          <button type="submit" className="btn sm" disabled={busy}>
-            {busy ? 'Publishing…' : 'Publish'}
-          </button>
-        </div>
-      </form>
+      </SaveForm>
     </div>
   );
 }

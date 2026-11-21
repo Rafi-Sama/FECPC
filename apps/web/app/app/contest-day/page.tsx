@@ -1,4 +1,5 @@
 'use client';
+import { SaveForm } from '@/components/app/SaveBar';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Page, Tabs } from '@/components/app/Shell';
 import { useStore } from '@/components/app/Store';
@@ -46,7 +47,7 @@ export default function ContestDay() {
     return DEFAULT_CONTESTS;
   }, [s.kv.contests]);
   const setRegistry = (next: (prev: ConfiguredContest[]) => ConfiguredContest[]) =>
-    void act('contestDay', { contests: next(registry) });
+    act('contestDay', { contests: next(registry) });
 
   const runningConfig = registry.find((c) => c.type === 'running') || registry[0];
   const previousConfigs = registry.filter((c) => c.type === 'previous');
@@ -122,25 +123,27 @@ export default function ContestDay() {
   };
 
   // Admin: Add or update contest ID
-  const handleAddContest = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAddContest = async () => {
     if (!adminInputId.trim()) {
       setAdminMsg({ text: 'Please enter a VJudge Contest ID or URL', error: true });
-      return;
+      return false;
     }
 
     // Extract ID from full URL (e.g. https://vjudge.net/contest/612840#rank)
     const match = adminInputId.match(/contest\/(?:rank\/single\/)?(\d+)/i);
     const cleanId = match ? match[1] : adminInputId.trim().replace(/\D/g, '');
 
-    if (!cleanId) {
-      setAdminMsg({ text: 'Invalid Contest ID format', error: true });
-      return;
+    if (!cleanId || cleanId.length > 12) {
+      setAdminMsg({
+        text: 'Use a VJudge contest number (e.g. 612840) or its link.',
+        error: true,
+      });
+      return false;
     }
 
-    const title = adminInputName.trim() || `Contest #${cleanId}`;
+    const title = adminInputName.trim().slice(0, 120) || `Contest #${cleanId}`;
 
-    setRegistry((prev) => {
+    const ok = await setRegistry((prev) => {
       let updated = [...prev];
       if (adminInputType === 'running') {
         // Demote previous running to previous
@@ -163,8 +166,9 @@ export default function ContestDay() {
       }
       return updated;
     });
+    if (!ok) return false;
 
-    setAdminMsg({ text: `Successfully configured VJudge contest #${cleanId}!`, error: false });
+    setAdminMsg({ text: `Added VJudge contest #${cleanId}.`, error: false });
     setAdminInputId('');
     setAdminInputName('');
 
@@ -174,6 +178,7 @@ export default function ContestDay() {
       setSelectedPrevId(cleanId);
       setTab('PREVIOUS CONTESTS');
     }
+    return true;
   };
 
   const handleSetAsRunning = (contestId: string) => {
@@ -669,8 +674,14 @@ export default function ContestDay() {
               <code>https://vjudge.net/contest/rank/single/&lt;id&gt;</code>.
             </p>
 
-            <form
+            <SaveForm
               onSubmit={handleAddContest}
+              label="Contest not added"
+              saveLabel="Add contest to board"
+              onDiscard={() => {
+                setAdminInputId('');
+                setAdminInputName('');
+              }}
               style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
             >
               <div className="grid" style={{ '--min': '260px', gap: 16 } as React.CSSProperties}>
@@ -682,6 +693,7 @@ export default function ContestDay() {
                     value={adminInputId}
                     onChange={(e) => setAdminInputId(e.target.value)}
                     required
+                    maxLength={200}
                   />
                 </div>
 
@@ -692,6 +704,7 @@ export default function ContestDay() {
                     placeholder="e.g. FECPC ICPC Selection Mock 2026"
                     value={adminInputName}
                     onChange={(e) => setAdminInputName(e.target.value)}
+                    maxLength={120}
                   />
                 </div>
               </div>
@@ -743,13 +756,7 @@ export default function ContestDay() {
                   {adminMsg.text}
                 </div>
               )}
-
-              <div>
-                <button type="submit" className="btn sm">
-                  + Fetch &amp; Add Contest to Board
-                </button>
-              </div>
-            </form>
+            </SaveForm>
           </div>
 
           {/* Configured Contests List */}

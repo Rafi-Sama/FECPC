@@ -781,3 +781,40 @@ alter table club_events add column if not exists checkin text not null default u
 delete from event_certificates c where email <> lower(email)
   and exists (select 1 from event_certificates d where d.event_id = c.event_id and d.kind = c.kind and d.email = lower(c.email));
 update event_certificates set email = lower(email) where email <> lower(email);
+
+-- Interview prep roadmaps: each topic belongs to one roadmap and hangs off a parent topic (null = root).
+create table if not exists interview_roadmaps (
+  id          serial primary key,
+  name        text not null,
+  description text,
+  created_by  text references users(id) on delete set null,
+  created_at  timestamptz not null default now()
+);
+alter table interview_topics add column if not exists roadmap_id integer references interview_roadmaps(id) on delete cascade;
+alter table interview_topics add column if not exists parent_id  integer references interview_topics(id) on delete cascade;
+alter table interview_topics add column if not exists x          integer not null default 0;
+alter table interview_topics add column if not exists y          integer not null default 0;
+-- Topic names only need to be unique inside a roadmap.
+alter table interview_topics drop constraint if exists interview_topics_name_key;
+create index if not exists interview_topics_roadmap on interview_topics (roadmap_id);
+-- Topics from before roadmaps existed go into one roadmap: the first is the root, the rest hang under it.
+insert into interview_roadmaps (name, description)
+  select 'Data structures & algorithms', 'NeetCode 150 and Blind 75 topics.'
+  where exists (select 1 from interview_topics where roadmap_id is null);
+with o as (
+  select id, row_number() over (order by order_index, id) - 1 as i,
+         first_value(id) over (order by order_index, id) as root
+  from interview_topics where roadmap_id is null
+)
+update interview_topics t
+   set roadmap_id = (select max(id) from interview_roadmaps),
+       parent_id = nullif(o.root, o.id),
+       x = case when o.i = 0 then 40 else 40 + ((o.i - 1) % 4) * 240 end,
+       y = case when o.i = 0 then 40 else 180 + ((o.i - 1) / 4) * 140 end
+  from o where t.id = o.id;
+
+-- Optional editorial / playlist link per interview topic.
+alter table interview_topics add column if not exists link text;
+
+-- Why an organiser declined an entry; shown to the member.
+alter table event_entries add column if not exists reason text;

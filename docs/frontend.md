@@ -82,3 +82,21 @@ components/
 - Buttons that change money or accounts ask for confirmation (`confirm(...)`) and say what will happen.
 - Accessibility: tabs use `role="tab"` and `aria-selected`; icon buttons have `aria-label`; modals trap
   focus.
+
+## Create and edit forms: the save bar
+
+Every form that creates or changes something is a `<SaveForm>` (`components/app/SaveBar.tsx`), not a
+`<form>` with its own Save button.
+
+- The form has no submit button. While it differs from its starting values, a bar at the top shows
+  **Discard** and **Save** (`saveLabel`). Save calls `requestSubmit()`, so `required`, `minLength`,
+  `pattern` and the rest still run in the browser before `onSubmit`.
+- `onSubmit` returns `true` once saved. Anything else keeps the bar, so a refused save never loses input.
+- Changes are read from the form's fields. State that has no field (chips, tree nodes, uploaded images)
+  goes in `extraDirty`. Fields that only mirror a selection take `data-save-ignore`.
+- Controlled forms pass `onDiscard` to restore their state; uncontrolled forms are reset.
+- While the bar shows, leaving is refused with a shake (and a vibration on phones): links, `role="tab"`,
+  `[data-nav]`, close buttons (`aria-label="Close…"` or `[data-close]`), modal backdrops, Escape and page
+  reload. Mark any other section switcher `data-nav`.
+- One-shot actions (search, sign-in, check-in codes, pings, password change) keep their own button.
+- Trim text before sending; the API validates every field again and its message is shown as is.

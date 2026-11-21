@@ -1,6 +1,8 @@
 'use client';
+import { usePrompt } from '@/components/app/shared/PromptDialog';
 import { useCallback, useEffect, useState } from 'react';
 import { useStore } from '@/components/app/Store';
+import { SaveForm } from '@/components/app/SaveBar';
 import { MarkdownBody, MarkdownEditor, relTime } from '@/components/app/shared/MarkdownEditor';
 import { solvedTier, TierAvatar, TierName } from '@/components/app/shared/SolvedTier';
 import { feedCategoryChip } from '@/components/app/feed/NewPostModal';
@@ -21,6 +23,7 @@ export function PostModal({
   onMutated: () => void;
 }) {
   const { me, act } = useStore();
+  const ask = usePrompt();
   const [detail, setDetail] = useState<FeedPostDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -74,21 +77,19 @@ export function PostModal({
     : false;
   const tier = detail ? solvedTier(detail.author_solved) : null;
 
-  const handleSaveEdit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!detail || busy) return;
-    setBusy(true);
+  const handleSaveEdit = async () => {
+    if (!detail) return false;
     const ok = await act('updateFeedPost', {
       postId: detail.id,
       title: editTitle.trim(),
       body_md: editBody.trim(),
     });
-    setBusy(false);
     if (ok) {
       setEditing(false);
       await load(detail.id);
       onMutated();
     }
+    return ok;
   };
 
   const handleDelete = async () => {
@@ -105,7 +106,14 @@ export function PostModal({
 
   const handleReport = async () => {
     if (!detail || busy || detail.reported_by_me) return;
-    const reason = prompt('Why are you reporting this post? (optional)') ?? 'Flagged by member';
+    const reason = await ask({
+      title: 'Report this post',
+      label: 'What is wrong with it? Moderators see this.',
+      placeholder: 'Spam, abuse, off-topic… (optional)',
+      confirmLabel: 'Report post',
+      danger: true,
+    });
+    if (reason === null) return;
     setBusy(true);
     const ok = await act('reportFeedPost', {
       postId: detail.id,
@@ -148,9 +156,15 @@ export function PostModal({
               </div>
 
               {editing ? (
-                <form
+                <SaveForm
                   className="stack"
                   style={{ '--g': '14px' } as React.CSSProperties}
+                  label="Unsaved changes to this post"
+                  onDiscard={() => {
+                    setEditTitle(detail.title);
+                    setEditBody(detail.body_md);
+                    setEditing(false);
+                  }}
                   onSubmit={handleSaveEdit}
                 >
                   <label className="field">
@@ -175,22 +189,20 @@ export function PostModal({
                     rows={8}
                   />
                   <div className="row" style={{ '--g': '8px' } as React.CSSProperties}>
-                    <button type="submit" className="btn sm" disabled={busy}>
-                      {busy ? 'Saving…' : 'Save'}
-                    </button>
                     <button
                       type="button"
                       className="btn sm line"
+                      data-close
                       onClick={() => {
                         setEditTitle(detail.title);
                         setEditBody(detail.body_md);
                         setEditing(false);
                       }}
                     >
-                      Cancel
+                      Close editor
                     </button>
                   </div>
-                </form>
+                </SaveForm>
               ) : (
                 <>
                   <h2 className="h2" style={{ fontSize: 'clamp(22px, 2.5vw, 30px)' }}>

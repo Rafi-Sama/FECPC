@@ -21,7 +21,7 @@ export function ProfileModal({
   onClose: () => void;
   onMutated: () => Promise<void> | void;
 }) {
-  const { s, me, act } = useStore();
+  const { s, me, act, counts } = useStore();
   const [profile, setProfile] = useState<MemberProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -117,6 +117,7 @@ export function ProfileModal({
   const isOwner = me.id === userId;
   const kudosId = `member:${userId}`;
   const hasKudos = s.kudos.includes(kudosId);
+  const kudosTotal = counts.kudos?.[kudosId] ?? 0;
   const alreadyPinged = s.sent.some((x) => x.startsWith(`${userId}:team:`));
 
   const rank = profile ? rankFor(profile.problems_solved, profile.cf_handle) : rankFor(null);
@@ -137,11 +138,7 @@ export function ProfileModal({
     e.preventDefault();
     setPingBusy(true);
     try {
-      const refSlug = pingNote
-        .trim()
-        .replace(/[^a-zA-Z0-9:.&' /+#-]/g, '')
-        .slice(0, 60);
-      const ok = await act('ping', { kind: 'team', to: userId, ref: refSlug || 'profile' });
+      const ok = await act('ping', { kind: 'team', to: userId, ref: pingNote.trim() || 'profile' });
       if (ok) {
         setPingOpen(false);
         setPingNote('');
@@ -389,7 +386,9 @@ export function ProfileModal({
                           value={pingNote}
                           onChange={(e) => setPingNote(e.target.value)}
                           placeholder="Short topic (optional)"
-                          maxLength={60}
+                          maxLength={80}
+                          pattern="[\w:.&' \/+#\-]*"
+                          title="Letters, digits, spaces and : . & ' / + # - only"
                           aria-label="Ping note"
                         />
                         <div
@@ -599,27 +598,25 @@ export function ProfileModal({
                 <button
                   type="button"
                   className="btn sm line"
+                  data-close
                   disabled={editBusy}
                   onClick={() => setEditing(false)}
                 >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  form="profile-edit-form"
-                  className="btn sm"
-                  disabled={editBusy}
-                >
-                  {editBusy ? 'Saving…' : 'Save'}
+                  Close editor
                 </button>
               </div>
             ) : (
               <>
                 <div className="row" style={{ '--g': '8px' } as React.CSSProperties}>
                   {isOwner ? (
-                    <button type="button" className="btn sm" onClick={() => setEditing(true)}>
-                      Edit profile
-                    </button>
+                    <>
+                      <button type="button" className="btn sm" onClick={() => setEditing(true)}>
+                        Edit profile
+                      </button>
+                      <span className="label" aria-label={`${kudosTotal} kudos received`}>
+                        ♥ {kudosTotal} kudos
+                      </span>
+                    </>
                   ) : (
                     <>
                       <button
@@ -629,6 +626,7 @@ export function ProfileModal({
                         onClick={() => void act('toggle', { list: 'kudos', id: kudosId })}
                       >
                         {hasKudos ? 'Kudos ✓' : 'Kudos'}
+                        {kudosTotal > 0 && ` · ${kudosTotal}`}
                       </button>
                       <button
                         type="button"

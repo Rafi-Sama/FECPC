@@ -55,6 +55,8 @@ export type EventEntry = {
   phone: string;
   answers: Record<string, string>;
   at: string;
+  /** Why the organisers declined it, shown to the member. */
+  reason?: string | null;
   userId?: string;
   email?: string;
   batch?: string;
@@ -129,7 +131,43 @@ export const CERT_VARS = [
   'role',
   'place',
   'code',
+  'headline',
 ] as const;
+
+/** The headline each certificate kind gets, as `{{headline}}`. */
+export const certHeadline = (kind: string, role = '', place = '') =>
+  kind.startsWith('winner')
+    ? `Certificate of Achievement · ${place} place`
+    : kind.startsWith('role:')
+      ? `Certificate of Appreciation · ${role}`
+      : 'Certificate of Participation';
+
+/**
+ * The built-in design, used for any kind without a saved template. A4 landscape (1123×794), inline CSS and
+ * system fonts only, so it renders the same in the preview, the PNG/JPG export and the print.
+ */
+export const DEFAULT_CERT = `<style>
+*{box-sizing:border-box;margin:0}
+body{width:1123px;height:794px;background:#f6f4ee;font-family:Georgia,'Times New Roman',serif;color:#0d0d0b}
+.f{position:absolute;inset:28px;border:3px solid #0d0d0b;padding:56px 72px 150px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.f:before{content:'';position:absolute;inset:10px;border:1px solid #0d0d0b}
+.club{position:absolute;top:56px;left:0;right:0;font:600 18px/1 'Courier New',monospace;letter-spacing:.3em;text-transform:uppercase}
+.h{margin-top:0;font:700 22px/1.2 'Courier New',monospace;letter-spacing:.12em;text-transform:uppercase;color:#1f3bff}
+.to{margin-top:44px;font-size:22px;font-style:italic}
+.n{margin-top:14px;font-size:64px;font-weight:700;line-height:1.1;border-bottom:2px solid #0d0d0b;padding:0 40px 12px}
+.for{margin-top:28px;font-size:22px;line-height:1.5;max-width:760px}
+.ev{font-weight:700}
+.foot{position:absolute;left:72px;right:72px;bottom:56px;display:flex;justify-content:space-between;align-items:flex-end;font:15px/1.4 'Courier New',monospace}
+.sig{border-top:1px solid #0d0d0b;padding-top:8px;width:220px}
+</style>
+<div class="f">
+<div class="club">FECPC · Programming Club</div>
+<div class="h">{{headline}}</div>
+<div class="to">This is presented to</div>
+<div class="n">{{name}}</div>
+<div class="for">for taking part in <span class="ev">{{event}}</span>, held on {{date}}.</div>
+<div class="foot"><div class="sig">President</div><div>Certificate ID<br><b>{{code}}</b></div><div class="sig">Event lead</div></div>
+</div>`;
 
 const ESC: Record<string, string> = {
   '&': '&amp;',

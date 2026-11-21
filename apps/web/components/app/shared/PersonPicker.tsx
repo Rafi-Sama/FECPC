@@ -43,6 +43,11 @@ export function PersonPicker({
     return () => form.removeEventListener('reset', reset);
   }, []);
 
+  // Let the owning form (and its save bar) see the pick.
+  useEffect(() => {
+    hidden.current?.dispatchEvent(new Event('change', { bubbles: true }));
+  }, [current]);
+
   const choose = (id: string | null) => {
     setOwn(id);
     onPick?.(id);
@@ -82,6 +87,7 @@ export function PersonPicker({
           <input
             autoFocus
             className="picker__search"
+            data-save-ignore
             placeholder="Search by name or handle…"
             aria-label={`Search: ${label}`}
             value={q}

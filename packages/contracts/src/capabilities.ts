@@ -153,15 +153,21 @@ export const matrix = {
     president: Y,
     super_admin: Y,
   },
+  'interview.roadmap.manage': {
+    label: 'Create, edit and delete interview roadmaps',
+    cp_head: Y,
+    president: Y,
+    super_admin: Y,
+  },
   'interview.topic.create': {
     label: 'Create interview prep topic',
-    alumni: Y,
+    cp_head: Y,
     president: Y,
     super_admin: Y,
   },
   'interview.problem.create': {
     label: 'Add problem to topic',
-    alumni: Y,
+    cp_head: Y,
     president: Y,
     super_admin: Y,
   },

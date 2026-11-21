@@ -18,7 +18,8 @@ export function VoteWidget({
       <div className="cm-vote-horiz">
         <button
           type="button"
-          className={`btn xs ${myVote === 1 ? '' : 'line'}`}
+          className={`btn sm ${myVote === 1 ? '' : 'line'}`}
+          aria-label={`Upvote, score ${score}`}
           aria-pressed={myVote === 1}
           disabled={disabled}
           onClick={(e) => {
@@ -30,7 +31,7 @@ export function VoteWidget({
         </button>
         <button
           type="button"
-          className={`btn xs ${myVote === -1 ? '' : 'line'}`}
+          className={`btn sm ${myVote === -1 ? '' : 'line'}`}
           aria-label="Downvote"
           aria-pressed={myVote === -1}
           disabled={disabled}

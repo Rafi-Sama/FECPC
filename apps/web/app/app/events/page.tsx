@@ -3,12 +3,13 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { Page, Tabs } from '@/components/app/Shell';
+import { useCanLeave } from '@/components/app/SaveBar';
 import { EventsCalendar } from '@/components/app/events/EventsExtra';
 import { EventForm } from '@/components/app/events/EventForm';
 import { useStore } from '@/components/app/Store';
 import { HighlightMatch } from '@/components/app/alumni/HighlightMatch';
 import { can, EVENT_STATUS_LABEL, type ClubEvent } from '@fecpc/contracts';
-import { bannerStyle, fmtWhen, useEventsQuery } from '@/lib/events';
+import { bannerStyle, fmtWhen, liveStatus, useEventsQuery } from '@/lib/events';
 
 const TAGS = ['All', 'Class', 'Contest', 'Social'] as const;
 const STATUS: Record<string, string> = {
@@ -21,14 +22,10 @@ const STATUS: Record<string, string> = {
 export default function EventsPage() {
   const { s } = useStore();
   const organiser = !!can(s.roles, 'event.publish');
-  const tabs = [
-    'Upcoming',
-    'My events',
-    'Past',
-    'Calendar',
-    ...(organiser ? (['New event'] as const) : []),
-  ] as const;
-  const [tab, setTab] = useState<(typeof tabs)[number]>('Upcoming');
+  // "New event" is a separate primary button, not one of the browsing tabs.
+  const tabs = ['Upcoming', 'My events', 'Past', 'Calendar'] as const;
+  const [tab, setTab] = useState<(typeof tabs)[number] | 'New event'>('Upcoming');
+  const canLeave = useCanLeave();
   const [tag, setTag] = useState<(typeof TAGS)[number]>('All');
   const [q, setQ] = useState('');
   const { data, reload } = useEventsQuery<ClubEvent[]>({ action: 'list' });
@@ -68,8 +65,41 @@ export default function EventsPage() {
           Events<span className="acc">.</span>
         </>
       }
+      aside={
+        <div className="row ev-head-actions">
+          {/* Phones: the sections fold into one dropdown beside the title. */}
+          <select
+            className="input sm ev-mob-only"
+            aria-label="Section"
+            value={tab}
+            onChange={(e) => canLeave() && setTab(e.target.value as typeof tab)}
+          >
+            {tabs.map((t) => (
+              <option key={t}>{t}</option>
+            ))}
+            {organiser && <option>New event</option>}
+          </select>
+          {organiser && (
+            <button
+              type="button"
+              data-nav
+              className="btn sm b ev-new"
+              aria-pressed={tab === 'New event'}
+              onClick={() => setTab('New event')}
+            >
+              + New event
+            </button>
+          )}
+        </div>
+      }
     >
-      <Tabs tabs={tabs} value={tab} onChange={setTab} />
+      <div className="ev-desk-only">
+        <Tabs
+          tabs={tabs}
+          value={tab === 'New event' ? ('' as (typeof tabs)[number]) : tab}
+          onChange={setTab}
+        />
+      </div>
 
       {listed && (
         <div className="row ev-filter">
@@ -81,7 +111,17 @@ export default function EventsPage() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
-          <div className="row" role="group" aria-label="Filter by type">
+          <select
+            className="input sm ev-mob-only"
+            aria-label="Filter by type"
+            value={tag}
+            onChange={(e) => setTag(e.target.value as (typeof TAGS)[number])}
+          >
+            {TAGS.map((t) => (
+              <option key={t}>{t}</option>
+            ))}
+          </select>
+          <div className="row ev-desk-only" role="group" aria-label="Filter by type">
             {TAGS.map((t) => (
               <button
                 key={t}
@@ -97,9 +137,12 @@ export default function EventsPage() {
         </div>
       )}
 
-      {tab === 'Calendar' && <EventsCalendar events={events.filter((e) => !over(e))} />}
+      {tab === 'Calendar' && <EventsCalendar events={events} isOver={over} />}
       {tab === 'New event' && (
         <section className="panel">
+          <h2 className="h3" style={{ marginBottom: 24 }}>
+            New event
+          </h2>
           <EventForm
             saved={() => {
               void reload();
@@ -136,7 +179,7 @@ export default function EventsPage() {
                     <span className="tag b">{e.type}</span>
                     <span className="tag">{fmtWhen(e.startsAt)}</span>
                     {(organiser || e.status !== 'published') && (
-                      <span className="tag k">{EVENT_STATUS_LABEL[e.status]}</span>
+                      <span className="tag k">{liveStatus(e) ?? EVENT_STATUS_LABEL[e.status]}</span>
                     )}
                   </div>
                   <h2 className="h3">

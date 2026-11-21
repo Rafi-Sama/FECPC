@@ -1254,10 +1254,15 @@ test('community ideas: poster-only interested payload, expressInterest, decideIn
   // Non-poster expresses interest
   const xApp0 = earned((await st('priya')).s);
   await refused(403, act('farhan', { type: 'expressInterest', ideaId, response: {} })); // poster cannot apply to own
+  // Every question the poster asked needs an answer.
+  await refused(
+    400,
+    act('priya', { type: 'expressInterest', ideaId, response: { 'Rating?': '1400' } }),
+  );
   await act('priya', {
     type: 'expressInterest',
     ideaId,
-    response: { 'Rating?': '1400', 'Favorite topic?': 'Graphs' },
+    response: { 'Rating?': '1400', 'Favorite topic?': 'Graphs', 'Injected?': 'dropped' },
   });
 
   // CRITICAL: Non-poster detail payload MUST NOT contain `interested` key at all
@@ -1888,6 +1893,12 @@ test('events: organisers run them; members register, apply, rate and download ce
       ...more,
     });
   await refused(409, reg('priya')); // published, not open yet
+  // the window has to fit before the start
+  await refused(400, save({ status: 'published', regCloses: '2026-12-21T10:00' }));
+  await refused(400, save({ status: 'published', regOpens: '2026-12-21T10:00' }));
+  // a published event with an opening date that has passed opens by itself
+  await save({ status: 'published', regOpens: '2025-01-01T10:00' });
+  assert.equal((await ev(id)).regOpen, true);
   await save({ status: 'open' });
   await refused(400, reg('priya', { answers: {} })); // required question
   await refused(400, reg('priya', { answers: { 'Laptop?': 'Maybe' } }));
@@ -1929,15 +1940,33 @@ test('events: organisers run them; members register, apply, rate and download ce
   });
   // organisers cannot approve past the seat limit (priya and shuvo hold 2 seats)
   await save({ status: 'open', approval: 'auto', seats: 2 });
-  await act('nusrat', { type: 'entryStatus', id: entry('shuvo').id, status: 'rejected' });
+  // a decline needs a reason, and the member sees it
+  await refused(
+    400,
+    act('nusrat', { type: 'entryStatus', id: entry('shuvo').id, status: 'rejected' }),
+  );
+  await act('nusrat', {
+    type: 'entryStatus',
+    id: entry('shuvo').id,
+    status: 'rejected',
+    reason: 'Seats are full',
+  });
+  assert.equal((await ev(id, 'shuvo')).mine[0]!.reason, 'Seats are full');
   await reg('tasnim');
   await refused(
     409,
     act('nusrat', { type: 'entryStatus', id: entry('shuvo').id, status: 'approved' }),
   );
   const tasnim = (await ev(id)).admin!.entries.find((x) => x.userId === 'tasnim')!;
-  await act('nusrat', { type: 'entryStatus', id: tasnim.id, status: 'rejected' });
+  await act('nusrat', {
+    type: 'entryStatus',
+    id: tasnim.id,
+    status: 'rejected',
+    reason: 'Seats are full',
+  });
   await act('nusrat', { type: 'entryStatus', id: entry('shuvo').id, status: 'approved' });
+  // the seat limit cannot drop below the seats already held (priya and shuvo)
+  await refused(409, save({ status: 'open', approval: 'auto', seats: 1 }));
   await save({ status: 'open', approval: 'auto', seats: null });
   await act('nusrat', { type: 'entryPlace', id: entry('shuvo').id, place: 1 });
   await refused(
@@ -1947,9 +1976,12 @@ test('events: organisers run them; members register, apply, rate and download ce
 
   // feedback once, only after completion, only from people who took part
   await refused(409, act('priya', { type: 'eventFeedback', eventId: id, rating: 5 }));
-  await save({ status: 'completed', approval: 'auto' });
+  // completing is only for an event that has started, and it is final
+  await refused(409, save({ status: 'completed', approval: 'auto' }));
+  await save({ status: 'completed', approval: 'auto', startsAt: '2026-11-01T18:00' });
   await refused(403, act('tasnim', { type: 'eventFeedback', eventId: id, rating: 5 }));
   await refused(409, save({ status: 'open' })); // completed is final
+  await refused(409, save({ status: 'completed', title: 'Renamed' })); // and not editable
   await act('priya', { type: 'eventFeedback', eventId: id, rating: 4, body: 'Good' });
   await refused(409, act('priya', { type: 'eventFeedback', eventId: id, rating: 5 }));
   assert.deepEqual(
@@ -1987,7 +2019,12 @@ test('events: organisers run them; members register, apply, rate and download ce
   assert.equal((await verifyCertificate(db(), mine!.code.toLowerCase()))!.event, 'Graph Night');
   assert.equal(await verifyCertificate(db(), 'FEC-0000000000'), null);
   // re-issuing after a decline removes the certificate that entry no longer earns
-  await act('nusrat', { type: 'entryStatus', id: entry('priya').id, status: 'rejected' });
+  await act('nusrat', {
+    type: 'entryStatus',
+    id: entry('priya').id,
+    status: 'rejected',
+    reason: 'Seats are full',
+  });
   await act('nusrat', { type: 'certIssue', eventId: id });
   assert.deepEqual((await ev(id)).admin!.issued, { winner1: 1, [`role:${roleId}`]: 1 });
   assert.equal((await ev(id, 'shuvo')).certificates[0]!.code, mine!.code, 'codes stay stable');
@@ -2020,4 +2057,24 @@ test('events: organisers run them; members register, apply, rate and download ce
     }),
   );
   await refused(409, act('nusrat', { type: 'eventDelete', id })); // issued certificates must stay verifiable
+
+  // republishing a past event makes a new one with its roles; the past one is untouched
+  await act('nusrat', {
+    type: 'eventSave',
+    ...base,
+    title: 'Graph Night 2',
+    startsAt: '2027-01-20T18:00',
+    status: 'draft',
+    copyOf: id,
+  });
+  const copy = (await pool().query(`select id from club_events where title = 'Graph Night 2'`))
+    .rows[0].id;
+  assert.notEqual(copy, id);
+  assert.deepEqual(
+    (await ev(copy)).roles.map((r) => r.title),
+    ['Volunteer'],
+  );
+  assert.equal((await ev(copy)).admin!.entries.length, 0);
+  assert.equal((await ev(id)).status, 'completed');
+  assert.equal((await ev(id)).title, 'Graph Night');
 });

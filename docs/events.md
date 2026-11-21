@@ -10,8 +10,17 @@ register, apply for roles, leave feedback and download certificates from `/app/e
 `draft` → `published` → `open` (registration open) → `closed` → `ongoing` → `completed`, or `cancelled`. The
 organiser sets the status; nothing moves on its own, except that `completed` is final (certificates depend on
 it). An event with issued certificates cannot be deleted; cancel it instead. Drafts are visible to organisers only. Platform
-registration is accepted while the status is `open` and the time is inside the optional opening/closing
-window. Role applications are accepted while the event is `published`, `open` or `closed`.
+registration is accepted while the time is inside the optional opening/closing window and the status is `open`,
+or the status is `published` with an opening date set (so setting the dates is enough; it opens by itself).
+The window must close no later than the start, and open before it closes. Pages show the live state
+("Sign-up opens …", "Sign-up open until …") rather than the bare status. Role applications are accepted while
+the event is `published`, `open` or `closed`.
+
+An event can be marked `completed` only once its start time has passed, and the organiser confirms it, since
+it is final: the API refuses any later edit, and its Details tab shows a read-only summary. From there (or from a
+cancelled event), **Run again as a new event** opens a copy (`eventSave` with `copyOf`): the new event gets the
+same roles and participant/winner certificate designs, and the past one is unchanged. Discarding the copy
+closes it. The seat limit can never be set below the seats already held.
 
 ## Registration
 
@@ -35,24 +44,27 @@ their attendance (+XP).
 ## Responses, feedback
 
 Organisers see every entry on the event page (Organise → Responses): stats per participant/role, search,
-filters, bulk approve/decline, answers, 1st–3rd place for approved participants, CSV export of the filtered
-rows (built in the browser). Feedback (rating 1–5 and text) opens when the event is `completed`, once per
+filters, bulk approve/decline (a decline needs a reason, stored in `event_entries.reason` and shown to the
+member), the extra-question answers when there are any, 1st–3rd place for approved participants, CSV export of
+the filtered rows (built in the browser). Feedback (rating 1–5 and text) opens when the event is `completed`, once per
 member who has an approved entry; only organisers read it.
 
 ## Certificates
 
 1. Mark the event `completed`.
-2. Save a raw HTML+CSS template per kind: `participant`, `winner1`–`winner3`, `role:<id>`. Placeholders are
-   `{{name}}`, `{{email}}`, `{{batch}}`, `{{dept}}`, `{{phone}}`, `{{event}}`, `{{date}}`, `{{role}}`,
-   `{{place}}`, `{{code}}`, or any mapped CSV column. Values are HTML-escaped. The preview is a sandboxed iframe.
+2. Every kind (`participant`, `winner1`–`winner3`, `role:<id>`) uses the built-in design (`DEFAULT_CERT` in
+   `@fecpc/contracts`) unless a custom HTML+CSS template is saved for it. Placeholders are `{{name}}`,
+   `{{email}}`, `{{batch}}`, `{{dept}}`, `{{phone}}`, `{{event}}`, `{{date}}`, `{{role}}`, `{{place}}`,
+   `{{code}}`, `{{headline}}` (per kind, e.g. "Certificate of Achievement · 1st place"), or any mapped CSV
+   column. Values are HTML-escaped. The preview is a sandboxed iframe scaled to fit.
 3. Generate: from registrations (every approved entry gets the template of its kind: placed participants get
    their winner template) or from a CSV for one kind (columns mapped to placeholders, one must be `email`).
    Each issued certificate is stored in `event_certificates` (email lower-cased) with its filled HTML and a
    code that stays the same when regenerated. From registrations, `{{name}}` is the account name, not the
    name typed at sign-up, and re-running removes certificates an entrant no longer earns (declined,
    un-placed). CSV certificates for people without an entry are left alone.
-4. Turn distribution on. Members whose account email matches see their certificates in place of the
-   Participate card and download PNG or JPG, drawn in the browser (SVG `foreignObject` → canvas). External
+4. Turn distribution on. Members whose account email matches see a preview of each certificate in place of
+   the Participate card and download PNG or JPG, drawn in the browser (SVG `foreignObject` → canvas). External
    images and fonts do not load there; inline them as `data:` URLs.
 
 ## Public site

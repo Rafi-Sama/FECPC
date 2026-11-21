@@ -1,5 +1,6 @@
 'use client';
 import { DatePicker } from '@/components/app/shared/DatePicker';
+import { SaveForm } from '@/components/app/SaveBar';
 import React, { useEffect, useRef, useState } from 'react';
 import type { AlumniJob } from '@fecpc/contracts';
 import { JobCard } from './JobCard';
@@ -32,7 +33,6 @@ export function PostJobModal({
   const [companyLogoUrl, setCompanyLogoUrl] = useState('');
 
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [submitting, setSubmitting] = useState(false);
 
   // Set default deadline to 14 days from today
   useEffect(() => {
@@ -118,8 +118,7 @@ export function PostJobModal({
     created_at: new Date().toISOString(),
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async () => {
     const newErrors: Record<string, string> = {};
 
     if (!company.trim()) newErrors.company = 'Company name is required';
@@ -139,10 +138,9 @@ export function PostJobModal({
       setErrors(newErrors);
       // Focus first error
       if (newErrors.company) companyInputRef.current?.focus();
-      return;
+      return false;
     }
 
-    setSubmitting(true);
     setErrors({});
 
     try {
@@ -180,7 +178,7 @@ export function PostJobModal({
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
         setErrors({ form: j.error ?? 'Failed to post job.' });
-        return;
+        return false;
       }
 
       const created = (await res.json()) as AlumniJob;
@@ -189,10 +187,10 @@ export function PostJobModal({
         ...created,
       });
       onClose();
+      return true;
     } catch {
-      setErrors({ form: 'Network error. Please try again.' });
-    } finally {
-      setSubmitting(false);
+      setErrors({ form: 'You seem to be offline. The job was not posted.' });
+      return false;
     }
   };
 
@@ -299,8 +297,11 @@ export function PostJobModal({
           }}
         >
           {/* Form */}
-          <form
+          <SaveForm
             onSubmit={handleSubmit}
+            onDiscard={onClose}
+            label="Unpublished job"
+            saveLabel="Publish job"
             style={{
               padding: '24px 32px',
               display: 'flex',
@@ -735,35 +736,7 @@ export function PostJobModal({
                 }}
               />
             </div>
-
-            {/* Action Bar */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 12 }}>
-              <button
-                type="button"
-                className="btn line"
-                onClick={onClose}
-                disabled={submitting}
-                style={{ minHeight: 44, padding: '0 20px' }}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="btn"
-                disabled={submitting}
-                style={{
-                  minHeight: 44,
-                  padding: '0 28px',
-                  background: 'var(--acc, #1F3BFF)',
-                  color: 'var(--on, #FFFFFF)',
-                  borderColor: 'var(--line2, #0B0B0B)',
-                  fontWeight: 600,
-                }}
-              >
-                {submitting ? 'Publishing…' : 'Publish job'}
-              </button>
-            </div>
-          </form>
+          </SaveForm>
 
           {/* Right Column: Sticky Live Preview */}
           <aside

@@ -1,12 +1,17 @@
 'use client';
+import { SaveForm } from '../SaveBar';
 import { Fragment, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Tabs } from '../Shell';
 import { useStore } from '../Store';
 import { EventForm, FieldsEditor, Method, cleanFields } from './EventForm';
-import { CERT_H, CERT_W, downloadCsv, renderCertificate } from '@/lib/events';
+import { downloadCsv, fmtWhen, renderCertificate } from '@/lib/events';
+import { useConfirm, usePrompt } from '../shared/PromptDialog';
+import { CertPreview } from './CertPreview';
 import {
   CERT_VARS,
+  certHeadline,
+  DEFAULT_CERT,
   fillTemplate,
   parseCsv,
   type EventDetail,
@@ -35,23 +40,78 @@ export function EventAdmin({ e, reload }: { e: EventDetail; reload: () => void }
 function Details({ e, reload }: { e: EventDetail; reload: () => void }) {
   const { act } = useStore();
   const router = useRouter();
+  const [copying, setCopying] = useState(false);
+  const confirmIt = useConfirm();
+  const final = e.status === 'completed';
+  const del = async () => {
+    if (
+      !(await confirmIt(
+        'Delete this event?',
+        `“${e.title}” goes with all its registrations, feedback and certificates. This cannot be undone.`,
+        'Delete event',
+        true,
+      ))
+    )
+      return;
+    if (await act('eventDelete', { id: e.id })) router.push('/app/events');
+  };
+
+  if (copying)
+    return (
+      <div className="stack">
+        <p className="body">
+          <span>
+            A <b>new</b> event, starting from “{e.title}”. Pick a new date; the roles come along.
+            This event stays exactly as it is.
+          </span>
+        </p>
+        <EventForm
+          copyOf={e}
+          onCancel={() => setCopying(false)}
+          saved={() => router.push('/app/events')}
+        />
+      </div>
+    );
+
   return (
     <div className="stack">
-      <EventForm event={e} saved={reload} />
-      <button
-        className="btn sm line bad"
-        type="button"
-        style={{ alignSelf: 'flex-start' }}
-        onClick={async () => {
-          if (
-            !confirm(`Delete "${e.title}" with all its registrations, feedback and certificates?`)
-          )
-            return;
-          if (await act('eventDelete', { id: e.id })) router.push('/app/events');
-        }}
-      >
-        Delete event
-      </button>
+      {final ? (
+        // Completed is final: nothing here is editable, so there is nothing to save or discard.
+        <section className="stack">
+          <p className="body">
+            This event is completed, so its details are final. Feedback and certificates stay
+            available in their tabs.
+          </p>
+          <dl className="ev-facts">
+            <dt className="label">Title</dt>
+            <dd>{e.title}</dd>
+            <dt className="label">Type</dt>
+            <dd>{e.type}</dd>
+            <dt className="label">Started</dt>
+            <dd>{fmtWhen(e.startsAt)}</dd>
+            <dt className="label">Place</dt>
+            <dd>{e.place || '—'}</dd>
+            <dt className="label">Sign-up</dt>
+            <dd>
+              {e.mode === 'form' ? 'Google Form' : 'On this site'} ·{' '}
+              {e.seats === null ? 'no seat limit' : `${e.taken} of ${e.seats} seats taken`}
+              {e.fee > 0 ? ` · ৳${e.fee}` : ''}
+            </dd>
+          </dl>
+        </section>
+      ) : (
+        <EventForm event={e} saved={reload} />
+      )}
+      <div className="row">
+        {(final || e.status === 'cancelled') && (
+          <button className="btn sm" type="button" onClick={() => setCopying(true)}>
+            Run again as a new event
+          </button>
+        )}
+        <button className="btn sm line danger" type="button" onClick={del}>
+          Delete event
+        </button>
+      </div>
     </div>
   );
 }
@@ -74,14 +134,26 @@ function RoleForm({
     approval: role?.approval ?? 'manual',
   });
   const [fields, setFields] = useState(role?.fields ?? []);
+  const [start] = useState(() => JSON.stringify([v, fields]));
   const set = (p: Partial<typeof v>) => setV((x) => ({ ...x, ...p }));
   return (
-    <form
+    <SaveForm
       className="stack"
-      onSubmit={async (ev) => {
-        ev.preventDefault();
-        if (await act('roleSave', { eventId, id: role?.id, ...v, fields: cleanFields(fields) }))
-          done();
+      label={role ? `Unsaved changes to “${role.title}”` : 'Unsaved new role'}
+      saveLabel={role ? 'Save role' : 'Add role'}
+      extraDirty={JSON.stringify([v, fields]) !== start}
+      onDiscard={done}
+      onSubmit={async () => {
+        const ok = await act('roleSave', {
+          eventId,
+          id: role?.id,
+          ...v,
+          title: v.title.trim(),
+          about: v.about.trim(),
+          fields: cleanFields(fields),
+        });
+        if (ok) done();
+        return ok;
       }}
     >
       <div className="row">
@@ -108,15 +180,13 @@ function RoleForm({
       </div>
       <Method v={v} set={set} />
       {v.mode === 'platform' && <FieldsEditor value={fields} onChange={setFields} />}
-      <button className="btn sm b" style={{ alignSelf: 'flex-start' }}>
-        {role ? 'Save role' : 'Add role'}
-      </button>
-    </form>
+    </SaveForm>
   );
 }
 
 function Roles({ e, reload }: { e: EventDetail; reload: () => void }) {
   const { act } = useStore();
+  const confirmIt = useConfirm();
   const [open, setOpen] = useState<number | 'new' | null>(null);
   const done = () => {
     setOpen(null);
@@ -147,7 +217,12 @@ function Roles({ e, reload }: { e: EventDetail; reload: () => void }) {
                 className="btn xs line"
                 type="button"
                 onClick={async () =>
-                  confirm(`Remove ${r.title} and its applications?`) &&
+                  (await confirmIt(
+                    `Remove ${r.title}?`,
+                    'The role goes with all its applications.',
+                    'Remove role',
+                    true,
+                  )) &&
                   (await act('roleDelete', { eventId: e.id, id: r.id })) &&
                   reload()
                 }
@@ -179,6 +254,7 @@ const PLACES = ['', '1st', '2nd', '3rd'];
 
 function Responses({ e, reload }: { e: EventDetail; reload: () => void }) {
   const { act } = useStore();
+  const ask = usePrompt();
   const entries = e.admin!.entries;
   const [who, setWho] = useState('all'); // all | participants | role id
   const [status, setStatus] = useState('all');
@@ -205,7 +281,19 @@ function Responses({ e, reload }: { e: EventDetail; reload: () => void }) {
   );
   const count = (pred: (x: EventEntry) => boolean) => entries.filter(pred).length;
   const decide = async (ids: number[], s: string) => {
-    if (!(await act('entryStatus', { ids, status: s }))) return;
+    let reason: string | null = null;
+    if (s === 'rejected') {
+      reason = await ask({
+        title: ids.length > 1 ? `Decline ${ids.length} entries` : 'Decline this entry',
+        label: 'Why? The member sees this.',
+        placeholder: 'e.g. Seats went to final-year students first.',
+        minLength: 3,
+        confirmLabel: 'Decline',
+        danger: true,
+      });
+      if (!reason) return;
+    }
+    if (!(await act('entryStatus', { ids, status: s, reason }))) return;
     setPicked([]);
     reload();
   };
@@ -356,16 +444,28 @@ function Responses({ e, reload }: { e: EventDetail; reload: () => void }) {
                     {x.name}
                     <br />
                     <span className="label">
-                      {x.email} · batch {x.batch}
+                      {x.email} · batch {x.batch} · signed up{' '}
+                      {new Date(x.at).toLocaleDateString('en-GB', {
+                        day: 'numeric',
+                        month: 'short',
+                      })}
                     </span>
                   </td>
                   <td>{roleName(x)}</td>
                   <td className="mono">{x.phone}</td>
-                  <td>{x.status}</td>
+                  <td>
+                    {x.status === 'rejected' ? 'declined' : x.status}
+                    {x.status === 'rejected' && x.reason && (
+                      <>
+                        <br />
+                        <span className="label">{x.reason}</span>
+                      </>
+                    )}
+                  </td>
                   <td>
                     {x.roleId === null && x.status === 'approved' ? (
                       <select
-                        className="input"
+                        className="input ev-place"
                         aria-label={`Place for ${x.name}`}
                         value={x.place ?? ''}
                         onChange={async (c) =>
@@ -404,14 +504,19 @@ function Responses({ e, reload }: { e: EventDetail; reload: () => void }) {
                           Decline
                         </button>
                       )}
-                      <button
-                        className="btn xs line"
-                        type="button"
-                        aria-expanded={shown === x.id}
-                        onClick={() => setShown(shown === x.id ? null : x.id)}
-                      >
-                        Answers
-                      </button>
+                      {/* Only when they answered the extra questions; name and phone are already in the row. */}
+                      {Object.keys(x.answers).length > 0 && (
+                        <button
+                          className="btn xs line"
+                          type="button"
+                          aria-expanded={shown === x.id}
+                          onClick={() => setShown(shown === x.id ? null : x.id)}
+                        >
+                          {shown === x.id
+                            ? 'Hide answers'
+                            : `Answers (${Object.keys(x.answers).length})`}
+                        </button>
+                      )}
                     </span>
                   </td>
                 </tr>
@@ -426,10 +531,6 @@ function Responses({ e, reload }: { e: EventDetail; reload: () => void }) {
                             <dd>{v}</dd>
                           </div>
                         ))}
-                        <div>
-                          <dt className="label">Signed up</dt>
-                          <dd>{new Date(x.at).toLocaleString()}</dd>
-                        </div>
                       </dl>
                     </td>
                   </tr>
@@ -493,6 +594,7 @@ const SAMPLE: Record<string, string> = {
 
 function Certificates({ e, reload }: { e: EventDetail; reload: () => void }) {
   const { act } = useStore();
+  const confirmIt = useConfirm();
   const { templates, issued } = e.admin!;
   const kinds: [string, string][] = [
     ['participant', 'Participants'],
@@ -502,11 +604,28 @@ function Certificates({ e, reload }: { e: EventDetail; reload: () => void }) {
     ...e.roles.map((r): [string, string] => [`role:${r.id}`, r.title]),
   ];
   const [kind, setKind] = useState('participant');
-  const [html, setHtml] = useState(templates.participant ?? '');
+  const saved = templates[kind] ?? '';
+  // Without a saved template, a kind uses the built-in design; editing starts from it.
+  const [html, setHtml] = useState(saved || DEFAULT_CERT);
   const [csv, setCsv] = useState<string[][] | null>(null);
   const [map, setMap] = useState<string[]>([]);
   const done = e.status === 'completed';
-  const sample = { ...SAMPLE, event: e.title, date: e.startsAt.slice(0, 10) };
+  const roleTitle = kind.startsWith('role:')
+    ? (e.roles.find((r) => `role:${r.id}` === kind)?.title ?? '')
+    : SAMPLE.role!;
+  const place = kind.startsWith('winner') ? ['1st', '2nd', '3rd'][+kind.slice(6) - 1]! : '';
+  const sample = {
+    ...SAMPLE,
+    role: roleTitle,
+    place,
+    event: e.title,
+    date: new Date(`${e.startsAt.slice(0, 10)}T00:00`).toLocaleDateString('en-GB', {
+      dateStyle: 'long',
+    }),
+    headline: certHeadline(kind, roleTitle, place),
+  };
+  const custom = html.trim() !== DEFAULT_CERT.trim();
+  const unsaved = html.trim() !== (saved || DEFAULT_CERT).trim();
 
   return (
     <div className="stack">
@@ -519,70 +638,97 @@ function Certificates({ e, reload }: { e: EventDetail; reload: () => void }) {
           aria-label="Certificate"
           style={{ width: 'auto' }}
           value={kind}
-          onChange={(x) => {
-            setKind(x.target.value);
-            setHtml(templates[x.target.value] ?? '');
+          onChange={async (x) => {
+            const next = x.target.value;
+            if (
+              unsaved &&
+              !(await confirmIt(
+                'Discard design changes?',
+                'Your edits to this design are not saved.',
+                'Discard',
+                true,
+              ))
+            )
+              return;
+            setKind(next);
+            setHtml(templates[next] || DEFAULT_CERT);
           }}
         >
           {kinds.map(([k, t]) => (
             <option key={k} value={k}>
-              {t} {templates[k] ? '✓' : ''} {issued[k] ? `· ${issued[k]} issued` : ''}
+              {t} · {templates[k] ? 'custom design' : 'built-in design'}
+              {issued[k] ? ` · ${issued[k]} issued` : ''}
             </option>
           ))}
         </select>
-        <span className="label">
-          Placeholders: {CERT_VARS.map((v) => `{{${v}}}`).join(' ')}, or any CSV column you map.
-        </span>
+        <span className="label">{custom ? 'Custom design' : 'Built-in design'}</span>
       </div>
-      <textarea
-        className="input mono"
-        aria-label="Template HTML and CSS"
-        placeholder={`<style>body{margin:0;width:${CERT_W}px;height:${CERT_H}px}</style><h1>{{name}}</h1>`}
-        rows={10}
-        value={html}
-        onChange={(x) => setHtml(x.target.value)}
-      />
+
+      <CertPreview html={fillTemplate(html, sample)} title="Certificate preview" />
+      <p className="label">Preview with sample details. Real certificates use each person’s own.</p>
+
+      <details>
+        <summary className="label" style={{ cursor: 'pointer' }}>
+          Edit the design (HTML and CSS)
+        </summary>
+        <div className="stack" style={{ marginTop: 12 }}>
+          <span className="label">
+            Placeholders: {CERT_VARS.map((v) => `{{${v}}}`).join(' ')}, or any CSV column you map.
+            Images and fonts must be inline (data: links).
+          </span>
+          <textarea
+            className="input mono"
+            aria-label="Template HTML and CSS"
+            rows={12}
+            value={html}
+            onChange={(x) => setHtml(x.target.value)}
+          />
+        </div>
+      </details>
       <div className="row">
         <button
           className="btn sm"
           type="button"
+          disabled={!unsaved}
           onClick={async () =>
-            (await act('certTemplate', { eventId: e.id, kind, html })) && reload()
+            // Saving the built-in design as-is just removes the custom one.
+            (await act('certTemplate', { eventId: e.id, kind, html: custom ? html : '' })) &&
+            reload()
           }
         >
-          Save template
+          Save design
         </button>
         <button
           className="btn sm line"
           type="button"
-          disabled={!html}
+          disabled={!custom}
+          onClick={() => setHtml(DEFAULT_CERT)}
+        >
+          Use built-in design
+        </button>
+        <button
+          className="btn sm line"
+          type="button"
           onClick={() => renderCertificate(fillTemplate(html, sample), 'png', 'preview')}
         >
-          Preview as PNG
+          Download sample PNG
         </button>
       </div>
-      {html && (
-        <div style={{ overflow: 'auto', border: '2px solid var(--line2)' }}>
-          {/* sandbox: the template's scripts never run; the preview is A4 landscape at half size */}
-          <iframe
-            title="Certificate preview"
-            sandbox=""
-            srcDoc={fillTemplate(html, sample)}
-            style={{ width: CERT_W, height: CERT_H, border: 0, zoom: 0.5, background: '#fff' }}
-          />
-        </div>
-      )}
 
       <p className="label">Generate</p>
       <div className="row">
         <button
           className="btn sm"
           type="button"
-          disabled={!done}
-          title="Every kind with a saved template. Re-running removes certificates people no longer earn."
+          disabled={!done || unsaved}
+          title={
+            unsaved
+              ? 'Save the design first.'
+              : 'One per approved participant, winner and role. Re-running removes certificates people no longer earn.'
+          }
           onClick={async () => (await act('certIssue', { eventId: e.id })) && reload()}
         >
-          From registrations
+          Generate for everyone approved
         </button>
         <label className="btn sm line">
           Import CSV for this kind

@@ -111,10 +111,18 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       status,
       code,
       detail,
+      error: firstFieldError(errors) ?? detail,
       requestId,
       ...(errors ? { errors } : {}),
     };
 
     response.status(status).header('Content-Type', 'application/problem+json').send(problem);
   }
+}
+
+/** "name: Too short" reads better than "The request payload … failed validation." */
+function firstFieldError(errors?: Record<string, string[]>): string | undefined {
+  const [path, msgs] = Object.entries(errors ?? {})[0] ?? [];
+  if (!path || !msgs?.[0]) return undefined;
+  return path === 'body' ? msgs[0] : `${path}: ${msgs[0]}`;
 }
