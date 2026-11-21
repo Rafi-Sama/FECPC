@@ -103,5 +103,16 @@ export function liveStatus(e: {
 }
 
 /** Now as a club-local (Dhaka) `YYYY-MM-DDTHH:MM`, comparable with event times as text. */
-export const clubNow = () =>
-  new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Dhaka' }).replace(' ', 'T').slice(0, 16);
+export const clubNow = (agoMs = 0) =>
+  new Date(Date.now() - agoMs)
+    .toLocaleString('sv-SE', { timeZone: 'Asia/Dhaka' })
+    .replace(' ', 'T')
+    .slice(0, 16);
+
+/**
+ * Over: it started over a day ago, or it has started and is completed or cancelled. The clock wins, so an event
+ * dated in the future is never past, whatever its status says.
+ */
+export const isOver = (e: { startsAt: string; status: string }) =>
+  e.startsAt < clubNow(864e5) ||
+  (e.startsAt <= clubNow() && (e.status === 'completed' || e.status === 'cancelled'));

@@ -24,6 +24,7 @@ export function SignUp({
   fields,
   entry,
   open,
+  locked,
   closedText,
   done,
 }: {
@@ -34,6 +35,8 @@ export function SignUp({
   fields: EventField[];
   entry?: EventEntry;
   open: boolean;
+  /** The event is over: entries can no longer be withdrawn. */
+  locked?: boolean;
   closedText: string;
   done: () => void;
 }) {
@@ -72,7 +75,7 @@ export function SignUp({
             {entry.reason}
           </p>
         )}
-        {entry.status !== 'rejected' && (
+        {entry.status !== 'rejected' && !locked && (
           <button
             className="btn sm line"
             type="button"

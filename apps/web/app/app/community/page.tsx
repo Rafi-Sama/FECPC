@@ -228,6 +228,8 @@ function CommunityContent() {
   const [annPinned, setAnnPinned] = useState(false);
   const [annRequiresAck, setAnnRequiresAck] = useState(false);
   const [activeAnn, setActiveAnn] = useState<UnifiedAnnouncement | null>(null);
+  const canAnnounce = !!can(s.roles, 'announce.post');
+  const [composeOpen, setComposeOpen] = useState(canAnnounce);
   const [optimisticReadIds, setOptimisticReadIds] = useState<string[]>([]);
 
   const allAnnouncements = useMemo<UnifiedAnnouncement[]>(() => {
@@ -582,89 +584,8 @@ function CommunityContent() {
 
       {/* ────────── TAB 2: ANNOUNCEMENTS ────────── */}
       {tab === 'Announcements' && (
-        <div className="stack">
-          {can(s.roles, 'announce.post') && (
-            <SaveForm
-              className="panel stack"
-              style={{ '--g': '14px' } as React.CSSProperties}
-              label="Unpublished announcement"
-              saveLabel="Publish"
-              onDiscard={resetAnnouncement}
-              onSubmit={handlePublishAnnouncement}
-            >
-              <p className="label">
-                Publish announcement · scope:{' '}
-                {can(s.roles, 'announce.post') === 'scope'
-                  ? 'only your mentees see this'
-                  : 'club officers'}
-              </p>
-              <label className="field">
-                <span className="label">Title</span>
-                <input
-                  className="input"
-                  value={annTitle}
-                  onChange={(e) => setAnnTitle(e.target.value)}
-                  required
-                  minLength={3}
-                  maxLength={140}
-                  placeholder="Headline for the announcement"
-                />
-              </label>
-              <MarkdownEditor
-                id="ann-body-md"
-                label="Message (Markdown · supports @mentions and > blockquotes)"
-                value={annBody}
-                onChange={setAnnBody}
-                rows={4}
-                maxLength={6000}
-                placeholder="Write details in Markdown… Use @everyone and > Date / Time / Venue lines"
-              />
-              <div className="row between" style={{ '--g': '12px' } as React.CSSProperties}>
-                <div className="row" style={{ '--g': '16px' } as React.CSSProperties}>
-                  {can(s.roles, 'announce.post') === true && (
-                    <label className="row" style={{ '--g': '8px' } as React.CSSProperties}>
-                      <span className="label">Audience</span>
-                      <select
-                        className="input"
-                        style={{ minHeight: 38, width: 'auto' }}
-                        value={annAudience}
-                        onChange={(e) => setAnnAudience(e.target.value as 'all' | 'mentees')}
-                      >
-                        <option value="all">Everyone</option>
-                        <option value="mentees">My mentees</option>
-                      </select>
-                    </label>
-                  )}
-                  <label
-                    className="row"
-                    style={{ cursor: 'pointer', '--g': '8px' } as React.CSSProperties}
-                  >
-                    <input
-                      type="checkbox"
-                      className="check"
-                      checked={annPinned}
-                      onChange={(e) => setAnnPinned(e.target.checked)}
-                    />
-                    <span className="label">Pin to top</span>
-                  </label>
-                  <label
-                    className="row"
-                    style={{ cursor: 'pointer', '--g': '8px' } as React.CSSProperties}
-                  >
-                    <input
-                      type="checkbox"
-                      className="check"
-                      checked={annRequiresAck}
-                      onChange={(e) => setAnnRequiresAck(e.target.checked)}
-                    />
-                    <span className="label">Require acknowledgement</span>
-                  </label>
-                </div>
-              </div>
-            </SaveForm>
-          )}
-
-          <div className="cm-chips" role="group" aria-label="Filter announcements">
+        <div className={`ann-layout${composeOpen ? ' open' : ''}`}>
+          <div className="cm-chips ann-chips" role="group" aria-label="Filter announcements">
             <button
               type="button"
               className={`tag ${annFilter === 'all' ? 'on' : ''}`}
@@ -691,7 +612,18 @@ function CommunityContent() {
             </button>
           </div>
 
-          <section className="panel">
+          {canAnnounce && (
+            <button
+              type="button"
+              data-nav
+              className="btn sm ann-compose-btn"
+              aria-expanded={composeOpen}
+              onClick={() => setComposeOpen(!composeOpen)}
+            >
+              + Publish
+            </button>
+          )}
+          <section className="panel ann-list">
             {filteredAnnouncements.length === 0 ? (
               <p className="empty">No announcements match this filter.</p>
             ) : (
@@ -776,6 +708,84 @@ function CommunityContent() {
               </div>
             )}
           </section>
+          {composeOpen && (
+            <SaveForm
+              className="panel stack ann-compose"
+              style={{ '--g': '18px' } as React.CSSProperties}
+              label="Unpublished announcement"
+              saveLabel="Publish"
+              onDiscard={resetAnnouncement}
+              onSubmit={handlePublishAnnouncement}
+            >
+              <p className="label">
+                Publish ·{' '}
+                {can(s.roles, 'announce.post') === 'scope'
+                  ? 'only your mentees see this'
+                  : 'officers'}
+              </p>
+              <label className="field">
+                <span className="label">Title</span>
+                <input
+                  className="input"
+                  value={annTitle}
+                  onChange={(e) => setAnnTitle(e.target.value)}
+                  required
+                  minLength={3}
+                  maxLength={140}
+                  placeholder="Headline for the announcement"
+                />
+              </label>
+              <MarkdownEditor
+                id="ann-body-md"
+                label="Message (Markdown)"
+                value={annBody}
+                onChange={setAnnBody}
+                rows={5}
+                maxLength={6000}
+                placeholder="Supports @mentions and > Date / Time / Venue lines"
+              />
+              {can(s.roles, 'announce.post') === true && (
+                <label className="field">
+                  <span className="label">Audience</span>
+                  <select
+                    className="input"
+                    value={annAudience}
+                    onChange={(e) => setAnnAudience(e.target.value as 'all' | 'mentees')}
+                  >
+                    <option value="all">All members</option>
+                    <option value="mentees">My mentees</option>
+                  </select>
+                </label>
+              )}
+              <label
+                className="row"
+                style={{ cursor: 'pointer', '--g': '8px' } as React.CSSProperties}
+              >
+                <input
+                  type="checkbox"
+                  className="check"
+                  checked={annPinned}
+                  onChange={(e) => setAnnPinned(e.target.checked)}
+                />
+                Pin to top
+              </label>
+              <label
+                className="row"
+                style={{ cursor: 'pointer', '--g': '8px' } as React.CSSProperties}
+              >
+                <input
+                  type="checkbox"
+                  className="check"
+                  checked={annRequiresAck}
+                  onChange={(e) => setAnnRequiresAck(e.target.checked)}
+                />
+                Require acknowledgement
+              </label>
+              <button className="btn sm" style={{ alignSelf: 'flex-start' }}>
+                Publish
+              </button>
+            </SaveForm>
+          )}
         </div>
       )}
 

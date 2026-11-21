@@ -1,11 +1,12 @@
 'use client';
 import { SaveForm } from '../SaveBar';
 import { Fragment, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Tabs } from '../Shell';
 import { useStore } from '../Store';
-import { EventForm, FieldsEditor, Method, cleanFields } from './EventForm';
-import { downloadCsv, fmtWhen, renderCertificate } from '@/lib/events';
+import { EventSections, FieldsEditor, Method, cleanFields } from './EventForm';
+import { downloadCsv, renderCertificate } from '@/lib/events';
 import { useConfirm, usePrompt } from '../shared/PromptDialog';
 import { CertPreview } from './CertPreview';
 import {
@@ -40,7 +41,6 @@ export function EventAdmin({ e, reload }: { e: EventDetail; reload: () => void }
 function Details({ e, reload }: { e: EventDetail; reload: () => void }) {
   const { act } = useStore();
   const router = useRouter();
-  const [copying, setCopying] = useState(false);
   const confirmIt = useConfirm();
   const final = e.status === 'completed';
   const del = async () => {
@@ -56,57 +56,20 @@ function Details({ e, reload }: { e: EventDetail; reload: () => void }) {
     if (await act('eventDelete', { id: e.id })) router.push('/app/events');
   };
 
-  if (copying)
-    return (
-      <div className="stack">
-        <p className="body">
-          <span>
-            A <b>new</b> event, starting from “{e.title}”. Pick a new date; the roles come along.
-            This event stays exactly as it is.
-          </span>
-        </p>
-        <EventForm
-          copyOf={e}
-          onCancel={() => setCopying(false)}
-          saved={() => router.push('/app/events')}
-        />
-      </div>
-    );
-
   return (
     <div className="stack">
-      {final ? (
-        // Completed is final: nothing here is editable, so there is nothing to save or discard.
-        <section className="stack">
-          <p className="body">
-            This event is completed, so its details are final. Feedback and certificates stay
-            available in their tabs.
-          </p>
-          <dl className="ev-facts">
-            <dt className="label">Title</dt>
-            <dd>{e.title}</dd>
-            <dt className="label">Type</dt>
-            <dd>{e.type}</dd>
-            <dt className="label">Started</dt>
-            <dd>{fmtWhen(e.startsAt)}</dd>
-            <dt className="label">Place</dt>
-            <dd>{e.place || '—'}</dd>
-            <dt className="label">Sign-up</dt>
-            <dd>
-              {e.mode === 'form' ? 'Google Form' : 'On this site'} ·{' '}
-              {e.seats === null ? 'no seat limit' : `${e.taken} of ${e.seats} seats taken`}
-              {e.fee > 0 ? ` · ৳${e.fee}` : ''}
-            </dd>
-          </dl>
-        </section>
-      ) : (
-        <EventForm event={e} saved={reload} />
+      {final && (
+        <p className="body">
+          This event is completed, so its details are final. Feedback and certificates stay
+          available in their tabs.
+        </p>
       )}
+      <EventSections event={e} saved={reload} readOnly={final} />
       <div className="row">
         {(final || e.status === 'cancelled') && (
-          <button className="btn sm" type="button" onClick={() => setCopying(true)}>
+          <Link className="btn sm" href={`/app/events/new?copy=${e.id}`}>
             Run again as a new event
-          </button>
+          </Link>
         )}
         <button className="btn sm line danger" type="button" onClick={del}>
           Delete event

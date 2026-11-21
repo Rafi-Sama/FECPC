@@ -28,6 +28,17 @@ export const EVENT_TYPES = [
   'ICPC prep',
   'Social',
 ] as const;
+/** A new event's id: its title as a slug plus a random suffix, e.g. `intro-to-dp-3f9a`. */
+export const eventSlug = (title: string, suffix: string) =>
+  (title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .slice(0, 40)
+    .replace(/^-+|-+$/g, '') || 'event') +
+  '-' +
+  suffix;
+export const EVENT_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
 export type EntryStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
 
 /** A custom question on a registration form. With `options` it is a choice. */

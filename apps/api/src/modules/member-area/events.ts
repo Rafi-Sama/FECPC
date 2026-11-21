@@ -7,7 +7,9 @@ import {
   certHeadline,
   DEFAULT_CERT,
   EVENT_STATUSES,
+  EVENT_ID,
   EVENT_TYPES,
+  eventSlug,
   fillTemplate,
   type ClubEvent,
   type EventDetail,
@@ -257,18 +259,15 @@ export const eventHandlers: Record<
       await audit(c, a, `edited event ${id}`);
       return;
     }
+    // The page may propose the id (so it can open the new event); it must look like one and be free.
     const id =
-      (title
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '')
-        .slice(0, 40) || 'event') +
-      '-' +
-      randomBytes(2).toString('hex');
-    await c.query(
-      `insert into club_events (id, title, starts_at, created_by) values ($1, $2, now(), $3)`,
+      i.newId === undefined ? eventSlug(title, randomBytes(2).toString('hex')) : String(i.newId);
+    if (id.length > 60 || !EVENT_ID.test(id)) throw new Fail(400, 'That event id is not valid.');
+    const made = await c.query(
+      `insert into club_events (id, title, starts_at, created_by) values ($1, $2, now(), $3) on conflict (id) do nothing`,
       [id, title, a.id],
     );
+    if (!made.rowCount) throw new Fail(409, 'That event id is taken. Save again.');
     await c.query(`update club_events set ${set} where id = $1`, [id, ...v]);
     if (typeof i.copyOf === 'string' && i.copyOf) {
       const from = await eventRow(c, i.copyOf);

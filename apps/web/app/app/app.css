@@ -5112,9 +5112,13 @@ select.member-filter-ctrl {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
   gap: 20px;
-  align-items: start;
+  align-items: stretch;
 }
+/* Every card in a row is as tall as the tallest, at least 380px; Details sits at the bottom. */
 .ev-tile {
+  display: flex;
+  flex-direction: column;
+  min-height: 380px;
   animation: page-in 0.4s ease-out both;
   animation-delay: calc(var(--i, 0) * 50ms);
   transition:
@@ -5128,11 +5132,37 @@ select.member-filter-ctrl {
 .ev-tile:hover .ban {
   background-position: 100% 0;
 }
+/* One banner height for every card, whatever the title length or image. */
+.ev-tile .ban,
+.ev-ban-preview {
+  flex: none;
+  height: 120px;
+  min-height: 0;
+  overflow: hidden;
+}
+.ev-tile .ban span,
+.ev-ban-preview span {
+  font-size: 26px;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
 .ev-body {
   padding: 18px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  flex: 1;
+}
+.ev-body > .body {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+.ev-body > .btn:last-child {
+  margin-top: auto;
 }
 .ev-body h2 a,
 .ev-detail .label a {
@@ -5141,26 +5171,76 @@ select.member-filter-ctrl {
 .ev-body h2 a:hover {
   color: var(--acc);
 }
+/* Filters: one row of equal-height controls; wraps on narrow screens. */
 .ev-filter {
+  display: flex;
   flex-wrap: wrap;
+  gap: 8px;
+  align-items: stretch;
   margin-bottom: 20px;
+}
+.ev-filter > .input {
+  width: auto;
+  min-height: 44px;
+}
+.ev-filter > .ev-search {
+  flex: 1 1 260px;
+}
+.ev-toggles {
+  display: flex;
+  border: 2px solid var(--ink);
+}
+.ev-toggles button {
+  padding: 0 14px;
+  min-height: 40px;
+  font: 500 14px var(--sans, sans-serif);
+  color: var(--ink);
+  background: var(--panel);
+  border: 0;
+  cursor: pointer;
+}
+.ev-toggles button + button {
+  border-left: 1px solid var(--ink);
+}
+.ev-toggles button:hover {
+  background: color-mix(in srgb, var(--acc) 10%, var(--panel));
+}
+.ev-toggles button[aria-pressed='true'] {
+  background: var(--acc);
+  color: #fff;
 }
 .ev-detail {
   display: flex;
   flex-direction: column;
   gap: 20px;
 }
-.ev-filter .input {
-  min-width: min(100%, 260px);
-}
 .ev-ticket {
   font-size: 20px;
 }
 .ev-detail .ev-hero {
-  min-height: 180px;
+  height: 200px;
+  min-height: 0;
+  overflow: hidden;
 }
 .ev-detail .ev-hero span {
-  font-size: clamp(32px, 6vw, 56px);
+  font-size: clamp(28px, 5vw, 48px);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+/* Organiser details: one card per section; the one being edited gets the accent edge. */
+.ev-sec {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--line);
+  background: var(--panel);
+}
+.ev-sec[data-open] {
+  border-left-color: var(--acc);
 }
 .ev-split {
   display: grid;
@@ -6050,6 +6130,15 @@ textarea.tm-code {
   color: var(--on);
   border-color: var(--acc);
 }
+/* Light theme: a white bar, so it reads as part of the page rather than a black slab. */
+.t-b .savebar {
+  background: #fff;
+  color: var(--ink);
+}
+.t-b .savebar .btn.line {
+  color: var(--ink);
+  border-color: var(--ink);
+}
 .savebar-label {
   font: 500 14px var(--f-label, monospace);
 }
@@ -6122,10 +6211,6 @@ textarea.tm-code {
 .ev-head-actions {
   --g: 8px;
   align-items: center;
-}
-.ev-new[aria-pressed='true'] {
-  outline: 3px solid var(--acc);
-  outline-offset: 2px;
 }
 .ev-mob-only {
   display: none;
@@ -6248,4 +6333,149 @@ textarea.tm-code {
 }
 .ev-facts dd {
   margin: 0;
+}
+
+/* Event page, organiser view: the header fields are edited in place (EventHead.tsx). They read as the page
+   until hovered or focused. */
+.ev-edit-ban {
+  position: relative;
+}
+.ev-ban-tools {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  --g: 6px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.ev-edit-ban:hover .ev-ban-tools,
+.ev-ban-tools:focus-within {
+  opacity: 1;
+}
+@media (hover: none) {
+  .ev-ban-tools {
+    opacity: 1;
+  }
+}
+.ev-inline {
+  display: block;
+  box-sizing: border-box;
+  width: calc(100% + 16px);
+  margin: 0 -8px;
+  padding: 4px 8px;
+  border: 1px dashed transparent;
+  background: transparent;
+  color: inherit;
+}
+.ev-inline:hover {
+  border-color: var(--line2);
+}
+.ev-inline:focus {
+  outline: 2px solid var(--acc);
+  outline-offset: 0;
+  border-color: transparent;
+}
+.ev-inline-about {
+  resize: vertical;
+  field-sizing: content;
+  min-height: 4lh;
+  font-size: 16px;
+}
+.ev-inline-tags {
+  align-items: stretch;
+}
+.ev-inline-tags select.tag {
+  appearance: none;
+  padding-right: 22px;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%);
+  background-size: 6px 6px;
+  background-position: right 9px center;
+  background-repeat: no-repeat;
+}
+.ev-inline-tags input.tag {
+  cursor: text;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.ev-inline-date .datepick__btn {
+  min-height: 0;
+  height: 100%;
+  padding: 6px 10px;
+  border-width: 1px;
+  font:
+    12px var(--mono, 'JetBrains Mono'),
+    monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.ev-inline-tags select.tag:hover,
+.ev-inline-tags input.tag:hover,
+.ev-inline-date .datepick__btn:hover {
+  outline: 1px dashed var(--ink);
+  outline-offset: 2px;
+}
+.ev-inline-title {
+  resize: none;
+  field-sizing: content;
+  overflow: hidden;
+}
+
+/* Announcements: filters and list on the left, the publish panel on the right with its tab on top. */
+.ann-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px 24px;
+  align-items: start;
+}
+.ann-layout.open {
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+}
+.ann-chips,
+.ann-list {
+  grid-column: 1;
+}
+.ann-layout:not(.open) .ann-list {
+  grid-column: 1 / -1;
+}
+.ann-compose-btn {
+  grid-column: 2;
+  justify-self: end;
+  align-self: end;
+}
+.ann-layout.open .ann-compose-btn {
+  margin-bottom: -16px; /* sits on the panel's top edge, like a tab */
+}
+.ann-compose {
+  grid-column: 2;
+  position: sticky;
+  top: 80px;
+}
+@media (max-width: 900px) {
+  .ann-layout,
+  .ann-layout.open {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ann-layout > * {
+    grid-column: 1 !important;
+  }
+  .ann-compose-btn {
+    justify-self: start;
+    margin-bottom: 0 !important;
+  }
+  .ann-compose {
+    position: static;
+    order: 1;
+  }
+  .ann-list {
+    order: 2;
+  }
+}
+.ann-list,
+.ann-compose {
+  border: 2px solid var(--line2);
+}
+.ann-compose-btn[aria-expanded='true'] {
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
 }

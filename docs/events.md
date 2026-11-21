@@ -12,13 +12,23 @@ organiser sets the status; nothing moves on its own, except that `completed` is 
 it). An event with issued certificates cannot be deleted; cancel it instead. Drafts are visible to organisers only. Platform
 registration is accepted while the time is inside the optional opening/closing window and the status is `open`,
 or the status is `published` with an opening date set (so setting the dates is enough; it opens by itself).
-The window must close no later than the start, and open before it closes. Pages show the live state
+The window must close no later than the start, and open before it closes.
+
+Organisers edit a saved event in place on its page (`EventHead.tsx`): banner, type, start, place, title and
+description are fields styled as the page, saved through the save bar. Sign-up settings and status, which the
+page does not show, are cards under Organise → Details, each opened alone with Edit. Every save sends the whole
+event, so the API validates it all. New events are made at `/app/events/new` in the same layout (header fields in place, status on the right,
+sign-up below); `?copy=<id>` starts from a past event. The page proposes the new id (`eventSlug`), so it can open
+the event after saving; the API refuses a malformed or taken one.
+
+Lists and the calendar decide "past" by the clock (`isOver` in `apps/web/lib/events.ts`): an event is past once
+it started over a day ago, or has started and is completed or cancelled. A future date is never past. Pages show the live state
 ("Sign-up opens …", "Sign-up open until …") rather than the bare status. Role applications are accepted while
 the event is `published`, `open` or `closed`.
 
 An event can be marked `completed` only once its start time has passed, and the organiser confirms it, since
 it is final: the API refuses any later edit, and its Details tab shows a read-only summary. From there (or from a
-cancelled event), **Run again as a new event** opens a copy (`eventSave` with `copyOf`): the new event gets the
+cancelled event), **Run again as a new event** opens `/app/events/new?copy=<id>` (`eventSave` with `copyOf`): the new event gets the
 same roles and participant/winner certificate designs, and the past one is unchanged. Discarding the copy
 closes it. The seat limit can never be set below the seats already held.
 
@@ -44,8 +54,8 @@ their attendance (+XP).
 ## Responses, feedback
 
 Organisers see every entry on the event page (Organise → Responses): stats per participant/role, search,
-filters, bulk approve/decline (a decline needs a reason, stored in `event_entries.reason` and shown to the
-member), the extra-question answers when there are any, 1st–3rd place for approved participants, CSV export of
+filters, bulk approve/decline (a decline needs a reason, stored in `event_entries.reason`, shown to the
+member on the event and sent to their inbox), the extra-question answers when there are any, 1st–3rd place for approved participants, CSV export of
 the filtered rows (built in the browser). Feedback (rating 1–5 and text) opens when the event is `completed`, once per
 member who has an approved entry; only organisers read it.
 

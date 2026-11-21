@@ -1873,6 +1873,12 @@ test('events: organisers run them; members register, apply, rate and download ce
     (e) => e.title === 'Graph Night',
   )!.id;
   await refused(404, ev(id, 'priya')); // drafts are for organisers
+  // the page may propose the new event's id, so it can open it; a taken or malformed one is refused
+  await act('nusrat', { type: 'eventSave', ...base, newId: 'graph-night-ab12' });
+  assert.equal((await ev('graph-night-ab12')).title, 'Graph Night');
+  await refused(409, act('nusrat', { type: 'eventSave', ...base, newId: 'graph-night-ab12' }));
+  await refused(400, act('nusrat', { type: 'eventSave', ...base, newId: 'Bad Id!' }));
+  await act('nusrat', { type: 'eventDelete', id: 'graph-night-ab12' });
   const save = (more: object) =>
     act('nusrat', {
       type: 'eventSave',
@@ -1952,6 +1958,12 @@ test('events: organisers run them; members register, apply, rate and download ce
     reason: 'Seats are full',
   });
   assert.equal((await ev(id, 'shuvo')).mine[0]!.reason, 'Seats are full');
+  assert.ok(
+    (await st('shuvo')).inbox.some(
+      (n) => n.href === `/app/events/${id}` && /was declined: Seats are full$/.test(n.text),
+    ),
+    'the member is notified why',
+  );
   await reg('tasnim');
   await refused(
     409,

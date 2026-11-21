@@ -5,13 +5,22 @@ import { useMemo, useState } from 'react';
 import { Page, Tabs } from '@/components/app/Shell';
 import { useCanLeave } from '@/components/app/SaveBar';
 import { EventsCalendar } from '@/components/app/events/EventsExtra';
-import { EventForm } from '@/components/app/events/EventForm';
 import { useStore } from '@/components/app/Store';
 import { HighlightMatch } from '@/components/app/alumni/HighlightMatch';
-import { can, EVENT_STATUS_LABEL, type ClubEvent } from '@fecpc/contracts';
-import { bannerStyle, fmtWhen, liveStatus, useEventsQuery } from '@/lib/events';
+import { can, EVENT_STATUS_LABEL, EVENT_TYPES, type ClubEvent } from '@fecpc/contracts';
+import {
+  bannerStyle,
+  clubNow,
+  fmtWhen,
+  isOver as over,
+  liveStatus,
+  useEventsQuery,
+} from '@/lib/events';
 
-const TAGS = ['All', 'Class', 'Contest', 'Social'] as const;
+const TAGS = ['All', ...EVENT_TYPES] as const;
+const WHEN = { 'Any time': 0, 'Next 7 days': 7, 'Next 30 days': 30 } as const;
+const ONLY = ['Sign-up open', 'Free', 'Seats left'] as const;
+const PAST_ONLY = ['Free'] as const;
 const STATUS: Record<string, string> = {
   pending: 'Pending',
   approved: 'Approved',
@@ -22,41 +31,42 @@ const STATUS: Record<string, string> = {
 export default function EventsPage() {
   const { s } = useStore();
   const organiser = !!can(s.roles, 'event.publish');
-  // "New event" is a separate primary button, not one of the browsing tabs.
   const tabs = ['Upcoming', 'My events', 'Past', 'Calendar'] as const;
-  const [tab, setTab] = useState<(typeof tabs)[number] | 'New event'>('Upcoming');
+  const [tab, setTab] = useState<(typeof tabs)[number]>('Upcoming');
   const canLeave = useCanLeave();
   const [tag, setTag] = useState<(typeof TAGS)[number]>('All');
   const [q, setQ] = useState('');
-  const { data, reload } = useEventsQuery<ClubEvent[]>({ action: 'list' });
+  const [when, setWhen] = useState<keyof typeof WHEN>('Any time');
+  const [only, setOnly] = useState<(typeof ONLY)[number][]>([]);
+  const { data } = useEventsQuery<ClubEvent[]>({ action: 'list' });
   const events = useMemo(() => data ?? [], [data]);
   const query = q.trim().toLowerCase();
   const listed = tab === 'Upcoming' || tab === 'My events' || tab === 'Past';
-  // an event that started over a day ago is past even if nobody marked it completed
-  const over = (e: ClubEvent) =>
-    e.status === 'completed' ||
-    e.status === 'cancelled' ||
-    e.startsAt < new Date(Date.now() - 864e5).toISOString().slice(0, 16);
+  const days = WHEN[when];
+  const until = days && tab === 'Upcoming' ? clubNow(-days * 864e5) : null;
+  // sign-up and seats mean nothing once an event is over
+  const toggles: readonly (typeof ONLY)[number][] = tab === 'Past' ? PAST_ONLY : ONLY;
 
-  const list = useMemo(
-    () =>
-      events
-        .filter(
-          (e) =>
-            (tab === 'My events'
-              ? e.mine.some((x) => x.status !== 'cancelled')
-              : tab === 'Past'
-                ? over(e)
-                : !over(e)) &&
-            (tag === 'All' ||
-              (tag === 'Social'
-                ? e.type === 'Social' || e.type === 'Hackathon'
-                : e.type === tag)) &&
-            (!query || `${e.title} ${e.about} ${e.place} ${e.type}`.toLowerCase().includes(query)),
-        )
-        .sort((a, b) => (tab === 'Upcoming' ? 1 : -1) * a.startsAt.localeCompare(b.startsAt)),
-    [events, tab, tag, query],
-  );
+  const list = useMemo(() => {
+    const on = only.filter((o) => toggles.includes(o));
+    return events
+      .filter(
+        (e) =>
+          (tab === 'My events'
+            ? e.mine.some((x) => x.status !== 'cancelled')
+            : tab === 'Past'
+              ? over(e)
+              : !over(e)) &&
+          (tag === 'All' || e.type === tag) &&
+          (!until || e.startsAt <= until) &&
+          (!on.includes('Sign-up open') ||
+            (e.mode === 'platform' ? e.regOpen : e.status === 'open')) &&
+          (!on.includes('Free') || e.fee === 0) &&
+          (!on.includes('Seats left') || e.seats === null || e.taken < e.seats) &&
+          (!query || `${e.title} ${e.about} ${e.place} ${e.type}`.toLowerCase().includes(query)),
+      )
+      .sort((a, b) => (tab === 'Upcoming' ? 1 : -1) * a.startsAt.localeCompare(b.startsAt));
+  }, [events, tab, tag, query, until, only, toggles]);
 
   return (
     <Page
@@ -77,80 +87,71 @@ export default function EventsPage() {
             {tabs.map((t) => (
               <option key={t}>{t}</option>
             ))}
-            {organiser && <option>New event</option>}
           </select>
           {organiser && (
-            <button
-              type="button"
-              data-nav
-              className="btn sm b ev-new"
-              aria-pressed={tab === 'New event'}
-              onClick={() => setTab('New event')}
-            >
+            <Link className="btn sm b" href="/app/events/new">
               + New event
-            </button>
+            </Link>
           )}
         </div>
       }
     >
       <div className="ev-desk-only">
-        <Tabs
-          tabs={tabs}
-          value={tab === 'New event' ? ('' as (typeof tabs)[number]) : tab}
-          onChange={setTab}
-        />
+        <Tabs tabs={tabs} value={tab} onChange={setTab} />
       </div>
 
       {listed && (
-        <div className="row ev-filter">
+        <div className="ev-filter">
           <input
             type="search"
-            className="input grow"
+            className="input ev-search"
             aria-label="Search events"
             placeholder="Search events, places, topics"
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
           <select
-            className="input sm ev-mob-only"
-            aria-label="Filter by type"
+            className="input"
+            aria-label="Type"
             value={tag}
             onChange={(e) => setTag(e.target.value as (typeof TAGS)[number])}
           >
             {TAGS.map((t) => (
-              <option key={t}>{t}</option>
+              <option key={t} value={t}>
+                {t === 'All' ? 'All types' : t}
+              </option>
             ))}
           </select>
-          <div className="row ev-desk-only" role="group" aria-label="Filter by type">
-            {TAGS.map((t) => (
+          {tab === 'Upcoming' && (
+            <select
+              className="input"
+              aria-label="When"
+              value={when}
+              onChange={(e) => setWhen(e.target.value as keyof typeof WHEN)}
+            >
+              {Object.keys(WHEN).map((w) => (
+                <option key={w}>{w}</option>
+              ))}
+            </select>
+          )}
+          <div className="ev-toggles" role="group" aria-label="Only show">
+            {toggles.map((o) => (
               <button
-                key={t}
+                key={o}
                 type="button"
-                aria-pressed={tag === t}
-                className={`tag ${tag === t ? 'on' : ''}`}
-                onClick={() => setTag(t)}
+                aria-pressed={only.includes(o)}
+                onClick={() =>
+                  setOnly(only.includes(o) ? only.filter((x) => x !== o) : [...only, o])
+                }
               >
-                {t}
+                {o}
               </button>
             ))}
           </div>
         </div>
       )}
 
-      {tab === 'Calendar' && <EventsCalendar events={events} isOver={over} />}
-      {tab === 'New event' && (
-        <section className="panel">
-          <h2 className="h3" style={{ marginBottom: 24 }}>
-            New event
-          </h2>
-          <EventForm
-            saved={() => {
-              void reload();
-              setTab('Upcoming');
-            }}
-          />
-        </section>
-      )}
+      {tab === 'Calendar' && <EventsCalendar events={events} />}
       {listed && (
         <div className="ev-grid">
           {list.map((e, i) => {
@@ -216,12 +217,19 @@ export default function EventsPage() {
                       )}
                     </div>
                   )}
+                  {mine
+                    .filter((x) => x.status === 'rejected' && x.reason)
+                    .map((x) => (
+                      <p key={x.id} className="bad" style={{ fontSize: 14 }}>
+                        Declined: {x.reason}
+                      </p>
+                    ))}
                   <Link
                     className="btn sm line"
                     href={`/app/events/${e.id}`}
                     style={{ alignSelf: 'flex-start' }}
                   >
-                    {tab === 'Past' && e.status === 'completed' && mine.length
+                    {e.status === 'completed' && mine.some((x) => x.status === 'approved')
                       ? 'Feedback and certificates'
                       : 'Details'}
                   </Link>

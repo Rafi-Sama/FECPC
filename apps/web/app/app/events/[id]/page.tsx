@@ -7,9 +7,10 @@ import { useState } from 'react';
 import { EventAdmin } from '@/components/app/events/EventAdmin';
 import { SignUp } from '@/components/app/events/SignUp';
 import { CertPreview } from '@/components/app/events/CertPreview';
+import { EventHead } from '@/components/app/events/EventHead';
 import { useStore } from '@/components/app/Store';
-import { EVENT_STATUS_LABEL, type EventDetail } from '@fecpc/contracts';
-import { bannerStyle, fmtWhen, liveStatus, renderCertificate, useEventsQuery } from '@/lib/events';
+import type { EventDetail } from '@fecpc/contracts';
+import { renderCertificate, useEventsQuery } from '@/lib/events';
 
 const CERT_NAME: Record<string, string> = {
   participant: 'Participation',
@@ -36,107 +37,101 @@ export default function EventDetailPage() {
       <p className="label">
         <Link href="/app/events">Events</Link> / {e.title}
       </p>
-      <div className="ban ev-hero" data-type={e.type} style={bannerStyle(e.banner)}>
-        {!e.banner && <span>{e.title}</span>}
-      </div>
-
-      <div className="ev-split">
-        <div className="stack">
-          <div className="row">
-            <span className="tag b">{e.type}</span>
-            <span className="tag">{fmtWhen(e.startsAt)}</span>
-            {e.place && <span className="tag">{e.place}</span>}
-            {e.fee > 0 && <span className="tag">৳{e.fee}</span>}
-            <span className="tag k">{liveStatus(e) ?? EVENT_STATUS_LABEL[e.status]}</span>
-          </div>
-          <h1 className="h2">{e.title}</h1>
-          {e.about && (
-            <section className="panel">
-              <p className="body" style={{ whiteSpace: 'pre-line' }}>
-                {e.about}
-              </p>
-            </section>
-          )}
-        </div>
-
-        <aside className="stack ev-aside">
-          {e.certificates.length ? (
-            <section className="panel stack ev-card">
-              <b>Your certificates</b>
-              {e.certificates.map((c) => (
-                <div key={c.code} className="stack">
-                  <span>
-                    {certName(c.kind)} <span className="label mono">{c.code}</span>
-                  </span>
-                  <CertPreview html={c.html} title={`${certName(c.kind)} certificate preview`} />
-                  <div className="row">
-                    <span className="label">Download</span>
-                    {(['png', 'jpeg'] as const).map((t) => (
-                      <button
-                        key={t}
-                        className="btn sm"
-                        type="button"
-                        onClick={() => renderCertificate(c.html, t, `${e.id}-${c.code}`)}
-                      >
-                        {t === 'png' ? 'PNG' : 'JPG'}
-                      </button>
-                    ))}
+      <EventHead
+        e={e}
+        reload={reload}
+        aside={
+          <aside className="stack ev-aside">
+            {e.certificates.length ? (
+              <section className="panel stack ev-card">
+                <b>Your certificates</b>
+                {e.certificates.map((c) => (
+                  <div key={c.code} className="stack">
+                    <span>
+                      {certName(c.kind)} <span className="label mono">{c.code}</span>
+                    </span>
+                    <CertPreview html={c.html} title={`${certName(c.kind)} certificate preview`} />
+                    <div className="row">
+                      <span className="label">Download</span>
+                      {(['png', 'jpeg'] as const).map((t) => (
+                        <button
+                          key={t}
+                          className="btn sm"
+                          type="button"
+                          onClick={() => renderCertificate(c.html, t, `${e.id}-${c.code}`)}
+                        >
+                          {t === 'png' ? 'PNG' : 'JPG'}
+                        </button>
+                      ))}
+                    </div>
                   </div>
+                ))}
+              </section>
+            ) : e.status === 'completed' && tookPart ? (
+              <section className="panel stack ev-card">
+                <b>Your certificates</b>
+                <p className="label">Not issued yet. They will appear here to download.</p>
+              </section>
+            ) : (
+              <section className="panel stack ev-card">
+                <div className="row between">
+                  <b>Participate</b>
+                  {e.mode === 'platform' && left !== null && (
+                    <span className="label">
+                      {left} of {e.seats} left
+                    </span>
+                  )}
                 </div>
-              ))}
-            </section>
-          ) : (
-            <section className="panel stack ev-card">
-              <div className="row between">
-                <b>Participate</b>
-                {e.mode === 'platform' && left !== null && (
-                  <span className="label">
-                    {left} of {e.seats} left
-                  </span>
-                )}
-              </div>
-              <SignUp
-                eventId={e.id}
-                mode={e.mode}
-                formUrl={e.formUrl}
-                fields={e.fields}
-                entry={entry(null)}
-                open={e.regOpen && left !== 0}
-                closedText={left === 0 && e.regOpen ? 'Full.' : 'Registration is not open.'}
-                done={reload}
-              />
-              {e.fee > 0 && entry(null)?.status === 'approved' && (
-                <Link className="btn sm line" href="/app/finance">
-                  Pay ৳{e.fee}
-                </Link>
-              )}
-            </section>
-          )}
-
-          {e.status === 'completed' && tookPart && <FeedbackForm e={e} done={reload} />}
-          {['open', 'closed', 'ongoing'].includes(e.status) &&
-            (e.admin || entry(null)?.status === 'approved') && <CheckIn e={e} />}
-
-          {!over &&
-            e.roles.map((r) => (
-              <section key={r.id} className="panel stack ev-card">
-                <b>{r.title}</b>
-                {r.about && <span className="label">{r.about}</span>}
                 <SignUp
                   eventId={e.id}
-                  roleId={r.id}
-                  mode={r.mode}
-                  formUrl={r.formUrl}
-                  fields={r.fields}
-                  entry={entry(r.id)}
-                  open={['published', 'open', 'closed'].includes(e.status)}
-                  closedText="Applications are closed."
+                  mode={e.mode}
+                  formUrl={e.formUrl}
+                  fields={e.fields}
+                  entry={entry(null)}
+                  open={e.regOpen && left !== 0}
+                  locked={over}
+                  closedText={
+                    over
+                      ? `This event is ${e.status}.`
+                      : left === 0 && e.regOpen
+                        ? 'Full.'
+                        : 'Registration is not open.'
+                  }
                   done={reload}
                 />
+                {e.fee > 0 && entry(null)?.status === 'approved' && (
+                  <Link className="btn sm line" href="/app/finance">
+                    Pay ৳{e.fee}
+                  </Link>
+                )}
               </section>
-            ))}
-        </aside>
-      </div>
+            )}
+
+            {e.status === 'completed' && tookPart && <FeedbackForm e={e} done={reload} />}
+            {['open', 'closed', 'ongoing'].includes(e.status) &&
+              (e.admin || entry(null)?.status === 'approved') && <CheckIn e={e} />}
+
+            {!over &&
+              e.roles.map((r) => (
+                <section key={r.id} className="panel stack ev-card">
+                  <b>{r.title}</b>
+                  {r.about && <span className="label">{r.about}</span>}
+                  <SignUp
+                    eventId={e.id}
+                    roleId={r.id}
+                    mode={r.mode}
+                    formUrl={r.formUrl}
+                    fields={r.fields}
+                    entry={entry(r.id)}
+                    open={['published', 'open', 'closed'].includes(e.status)}
+                    closedText="Applications are closed."
+                    done={reload}
+                  />
+                </section>
+              ))}
+          </aside>
+        }
+      />
       {e.admin && <EventAdmin e={e} reload={reload} />}
     </div>
   );

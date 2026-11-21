@@ -120,6 +120,9 @@ select u.email, u.progress, u.mentor_id, u.vjudge_handle, u.vj_solved,
      where m.user_id = $1 and mk.user_id <> $1) as milestone_kudos_inbox,
   (select coalesce(json_agg(to_user || ':' || kind || ':' || ref), '[]') from pings where from_user = $1) as sent,
   exists (select 1 from messages where kind = 'checkin' and user_id = $1) as checked_in,
+  (select coalesce(json_agg(json_build_object('id', x.id, 'eventId', x.event_id, 'title', e.title, 'role', r.title, 'reason', x.reason) order by x.id desc), '[]')
+     from event_entries x join club_events e on e.id = x.event_id left join event_roles r on r.id = x.role_id
+     where x.user_id = $1 and x.status = 'rejected') as declined_entries,
   (select coalesce(json_agg(json_build_object('id', p.from_user || ':' || p.kind || ':' || p.ref, 'kind', p.kind, 'from', f.name) order by p.at desc), '[]') from pings p join users f on f.id = p.from_user where p.to_user = $1) as pings,
   (select coalesce(json_agg(json_build_object('ideaId', ii.idea_id, 'userId', ii.user_id, 'from', w.name, 'title', i.title) order by ii.created_at desc), '[]')
      from idea_interests ii join ideas i on i.id = ii.idea_id join users w on w.id = ii.user_id where i.user_id = $1 and ii.status = 'pending') as incoming_interests,
@@ -569,6 +572,19 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
       href: '/app/community?tab=feed',
     });
   }
+  for (const d of row.declined_entries as {
+    id: number;
+    eventId: string;
+    title: string;
+    role: string | null;
+    reason: string | null;
+  }[])
+    inbox.push({
+      id: `n:evdec:${d.id}`,
+      cat: 'Events',
+      text: `Your ${d.role ? `application for ${d.role} at` : 'registration for'} "${d.title}" was declined${d.reason ? `: ${d.reason}` : '.'}`,
+      href: `/app/events/${d.eventId}`,
+    });
   for (const c of row.checkins as { id: number; name: string }[])
     inbox.push({
       id: `n:msg:${c.id}`,

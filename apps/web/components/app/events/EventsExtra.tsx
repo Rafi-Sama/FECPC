@@ -2,25 +2,19 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import type { ClubEvent } from '@fecpc/contracts';
-import { download } from '@/lib/events';
+import { clubNow, isOver } from '@/lib/events';
 
 const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const pad = (n: number) => String(n).padStart(2, '0');
 
 /**
- * A month grid you can page through (past months included), the chosen day's or month's events beside it,
- * and an .ics of every upcoming event. Days with events are buttons; events link to their page.
+ * A month grid you can page through (past months included), the chosen day's or month's events beside it.
+ * Days with events are buttons; events link to their page. A day is past by the club's calendar, never by status.
  */
-export function EventsCalendar({
-  events,
-  isOver,
-}: {
-  events: ClubEvent[];
-  isOver: (e: ClubEvent) => boolean;
-}) {
-  const now = new Date();
-  const todayIso = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-  const [cursor, setCursor] = useState({ y: now.getFullYear(), m: now.getMonth() }); // m: 0-11
+export function EventsCalendar({ events }: { events: ClubEvent[] }) {
+  const todayIso = clubNow().slice(0, 10);
+  const [ty, tm] = todayIso.split('-').map(Number) as [number, number];
+  const [cursor, setCursor] = useState({ y: ty, m: tm - 1 }); // m: 0-11
   const [day, setDay] = useState<string | null>(null);
 
   const month = `${cursor.y}-${pad(cursor.m + 1)}`;
@@ -40,11 +34,6 @@ export function EventsCalendar({
     setCursor({ y: d.getFullYear(), m: d.getMonth() });
     setDay(null);
   };
-
-  // RFC 5545: CRLF lines, DTSTAMP, and \ ; , newline escaped in text
-  const esc = (t: string) => t.replace(/[\\;,]/g, (c) => '\\' + c).replace(/\r?\n/g, '\\n');
-  const stamp = now.toISOString().replace(/[-:]|\.\d+/g, '');
-  const upcoming = events.filter((e) => !isOver(e));
 
   return (
     <div className="bento">
@@ -84,7 +73,7 @@ export function EventsCalendar({
               es = on(d);
             const cls = [
               es.length ? 'has' : '',
-              es.length && es.every(isOver) ? 'past' : '',
+              es.length && d < todayIso ? 'past' : '',
               d === todayIso ? 'today' : '',
               d === day ? 'sel' : '',
             ].join(' ');
@@ -109,51 +98,17 @@ export function EventsCalendar({
             );
           })}
         </div>
-        <div className="row between">
-          <button
-            type="button"
-            className="btn xs line"
-            onClick={() => {
-              setCursor({ y: now.getFullYear(), m: now.getMonth() });
-              setDay(null);
-            }}
-          >
-            Today
-          </button>
-          <button
-            type="button"
-            className="btn xs line"
-            disabled={!upcoming.length}
-            onClick={() =>
-              download(
-                'fecpc.ics',
-                new Blob(
-                  [
-                    [
-                      'BEGIN:VCALENDAR',
-                      'VERSION:2.0',
-                      'PRODID:-//FECPC//Events//EN',
-                      ...upcoming.flatMap((e) => [
-                        'BEGIN:VEVENT',
-                        `UID:${e.id}@fecpc`,
-                        `DTSTAMP:${stamp}`,
-                        `DTSTART:${e.startsAt.replace(/[-:]/g, '')}00`,
-                        `SUMMARY:${esc(e.title)}`,
-                        `LOCATION:${esc(e.place)}`,
-                        'END:VEVENT',
-                      ]),
-                      'END:VCALENDAR',
-                      '',
-                    ].join('\r\n'),
-                  ],
-                  { type: 'text/calendar' },
-                ),
-              )
-            }
-          >
-            Download upcoming as .ics
-          </button>
-        </div>
+        <button
+          type="button"
+          className="btn xs line"
+          style={{ alignSelf: 'flex-start' }}
+          onClick={() => {
+            setCursor({ y: ty, m: tm - 1 });
+            setDay(null);
+          }}
+        >
+          Today
+        </button>
       </section>
       <section className="panel c6">
         <div className="row between">
@@ -183,7 +138,7 @@ export function EventsCalendar({
                 <br />
                 <span className="label">
                   {e.startsAt.slice(11)} · {e.place || 'Place TBA'}
-                  {isOver(e) ? ' · past' : ''}
+                  {e.status === 'cancelled' ? ' · cancelled' : isOver(e) ? ' · past' : ''}
                 </span>
               </span>
               {e.mine.some((x) => x.roleId === null && x.status === 'approved') && (

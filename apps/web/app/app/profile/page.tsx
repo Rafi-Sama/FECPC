@@ -70,7 +70,9 @@ function Password() {
 }
 
 export default function Profile() {
-  const { s, me, act } = useStore();
+  const { s, me, act, counts } = useStore();
+  // kudos on the profile itself, plus kudos on the member's milestones in the feed
+  const profileKudos = counts.kudos?.[`member:${me.id}`] ?? 0;
   const { data } = useJudge();
   const days = data
     ? Array.from(
@@ -141,6 +143,13 @@ export default function Profile() {
               <span className="label">Streak</span>
               <span className="stat">{me.streak + (s.checkin ? 1 : 0)}</span>
               <span className="label">days</span>
+            </div>
+            <div className="kv">
+              <span className="label">Kudos</span>
+              <span className="stat">♥ {profileKudos + s.milestoneKudosReceived}</span>
+              <span className="label">
+                {profileKudos} profile · {s.milestoneKudosReceived} milestones
+              </span>
             </div>
           </div>
           <p className="label" style={{ marginTop: 12 }}>
