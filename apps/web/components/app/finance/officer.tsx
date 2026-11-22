@@ -1,6 +1,7 @@
 'use client';
 // The officer side of Finance: verifying payments, filing and deciding expenses, the club fund.
 // Each tab appears only for roles whose capability allows it; the API enforces every decision again.
+import { useEffect } from 'react';
 import { usePrompt, useConfirm } from '@/components/app/shared/PromptDialog';
 import { SaveForm } from '@/components/app/SaveBar';
 import { Bars } from '@/components/app/Charts';
@@ -470,49 +471,82 @@ function ClubFund() {
   );
 }
 
-/** A printable receipt for one verified payment. */
+/** One verified payment's receipt, in a modal. Printing prints only the receipt (see `.receipt-modal` print rules). */
 export function Receipt({
   id,
   label,
   amount,
   date,
   via,
+  onClose,
 }: {
   id: string;
   label: string;
   amount: number;
   date: string;
   via: string;
+  onClose: () => void;
 }) {
   const { me } = useStore();
+  useEffect(() => {
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (event: KeyboardEvent) => event.key === 'Escape' && onClose();
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = previous;
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [onClose]);
   return (
-    <div className="panel receipt">
-      <div className="row between">
-        <div>
-          <p className="label">Receipt</p>
-          <p className="mono" style={{ fontSize: 22 }}>
-            {id}
-          </p>
-        </div>
-        <QR text={`FECPC receipt ${id} ৳${amount}`} size={84} />
-      </div>
-      <dl>
-        {[
-          ['Received from', me.name],
-          ['For', label],
-          ['Amount', `৳${amount}`],
-          ['Paid via', via],
-          ['Date', fmtDate(date, { day: 'numeric', month: 'long', year: 'numeric' })],
-        ].map(([k, v]) => (
-          <div key={k}>
-            <dt className="label">{k}</dt>
-            <dd>{v}</dd>
+    <div
+      className="finance-overlay receipt-modal"
+      role="presentation"
+      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
+    >
+      <div
+        className="finance-modal receipt"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="receipt-title"
+      >
+        <button
+          className="finance-close no-print"
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+        >
+          ×
+        </button>
+        <div className="row between">
+          <div>
+            <p className="label">FECPC · Payment receipt</p>
+            <p id="receipt-title" className="mono" style={{ fontSize: 22 }}>
+              {id}
+            </p>
           </div>
-        ))}
-      </dl>
-      <button className="btn sm no-print" onClick={() => print()}>
-        Print or save as PDF
-      </button>
+        </div>
+        <dl>
+          {[
+            ['Received from', me.name],
+            ['For', label],
+            ['Amount', `৳${amount.toLocaleString('en-US')}`],
+            ['Paid via', via],
+            ['Date', fmtDate(date, { day: 'numeric', month: 'long', year: 'numeric' })],
+          ].map(([k, v]) => (
+            <div key={k}>
+              <dt className="label">{k}</dt>
+              <dd>{v}</dd>
+            </div>
+          ))}
+        </dl>
+        <div className="row between">
+          <QR text={`FECPC ${id} | ${label} | BDT ${amount} | ${via} | ${date}`} size={128} />
+          <button className="btn sm no-print" onClick={() => print()}>
+            Print or save as PDF
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

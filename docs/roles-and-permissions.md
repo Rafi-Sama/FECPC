@@ -30,6 +30,7 @@ Generated from `packages/contracts/src/capabilities.ts`.
 | `sheet.stats`               | See sheet completion statistics                                  |        |        |    ✓    |           |           |     ✓     |      ✓      |
 | `sheet.curate`              | Publish curated problem sheets                                   |        |        |    ✓    |           |           |     ✓     |      ✓      |
 | `payments.verify`           | Verify member payments                                           |        |        |         |     ✓     |           |   view    |      ✓      |
+| `finance.fee`               | Set the amount of member dues                                    |        |        |         |           |     ✓     |     ✓     |      ✓      |
 | `expense.approve`           | Approve expenses                                                 |        |        |         |  propose  |           |     ✓     |      ✓      |
 | `event.publish`             | Run events: create, registrations, feedback, certificates        |        |        |         |           |     ✓     |     ✓     |      ✓      |
 | `contest.run`               | Choose the contests on the contest-day scoreboard                |        |        |    ✓    |           |     ✓     |     ✓     |      ✓      |

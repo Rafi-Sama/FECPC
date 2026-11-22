@@ -45,7 +45,8 @@ import {
   countVjudgeSolved,
 } from '../src/modules/member-area/milestones.ts';
 import { setup } from '../src/db/seed-data.ts';
-import { loadState } from '../src/modules/member-area/state.ts';
+import { loadState, today } from '../src/modules/member-area/state.ts';
+import { CONTRIBUTION } from '@fecpc/content/member-area';
 
 process.env.DATABASE_URL = (
   process.env.DATABASE_URL || 'postgres://fecpc:fecpc_dev@127.0.0.1:5433/fecpc'
@@ -83,6 +84,8 @@ const googleSays = (profile: object) => {
       String(url).includes('oauth2.googleapis.com/token') ? { access_token: 'at' } : profile,
     )) as typeof fetch;
 };
+/** The member-dues period every seeded account is in: they all joined this month. */
+const TERM = 'TERM-' + today().slice(0, 7);
 const st = async (id: string) => (await loadState(db(), id))!;
 /** The newest audit entries, as the President sees them. */
 const logOf = async (id: string, b: Record<string, unknown> = {}) =>
@@ -199,6 +202,7 @@ test('visibility: each role receives only the datasets it has a capability for',
   await refused(403, auditQuery(db(), 'tasnim', {}));
   assert.deepEqual(Object.keys(cpHead.office).sort(), ['ops']);
   assert.deepEqual(Object.keys(treasurer.office).sort(), [
+    'dues',
     'expenses',
     'fund',
     'ops',
@@ -243,8 +247,6 @@ test('visibility: each role receives only the datasets it has a capability for',
     'president',
     'officers who manage accounts see role keys',
   );
-  assert.equal(cpHead.office.ops!.sponsors, undefined, 'no finance capability, no sponsor ledger');
-  assert.ok(treasurer.office.ops!.sponsors);
   assert.equal(
     president.members.some((m) => m.id === 'admin'),
     false,
@@ -534,7 +536,7 @@ test("attendance needs the event's room code and an approved registration", asyn
 test("payments: validated, one transaction ID pays once, and the Treasurer's decision reaches the member", async () => {
   const ok = {
     type: 'pay',
-    invoice: 'INV-2611',
+    invoice: TERM,
     via: 'bKash',
     trx: 'bk12345678',
     sender: '01712345678',
@@ -555,7 +557,7 @@ test("payments: validated, one transaction ID pays once, and the Treasurer's dec
     1,
     'the same ID submitted twice at once is accepted once',
   );
-  assert.equal((await st('tasnim')).s.pay['INV-2611']!.status, 'pending');
+  assert.equal((await st('tasnim')).s.pay[TERM]!.status, 'pending');
   assert.equal(earned((await st('tasnim')).s), 0, 'an unverified payment earns nothing');
 
   const row = (await st('anika')).office.queue!.find((q) => q.trx === 'BK12345678')!;
@@ -579,7 +581,7 @@ test("payments: validated, one transaction ID pays once, and the Treasurer's dec
       reason: 'changed my mind',
     }),
   ); // decided once
-  assert.equal((await st('tasnim')).s.pay['INV-2611']!.status, 'verified');
+  assert.equal((await st('tasnim')).s.pay[TERM]!.status, 'verified');
   assert.equal(earned((await st('tasnim')).s), XP.pay);
 });
 test('payments: a rejected payment can be resubmitted; nobody verifies their own', async () => {
@@ -587,7 +589,7 @@ test('payments: a rejected payment can be resubmitted; nobody verifies their own
     403,
     act('anika', {
       type: 'pay',
-      invoice: 'INV-2612',
+      invoice: 'EV-hack-night',
       via: 'Nagad',
       trx: 'NGOWN00001',
       sender: '01812345678',
@@ -596,7 +598,7 @@ test('payments: a rejected payment can be resubmitted; nobody verifies their own
   await act('anika', { type: 'register', eventId: 'hack-night', phone: '01700000000' });
   await act('anika', {
     type: 'pay',
-    invoice: 'INV-2612',
+    invoice: 'EV-hack-night',
     via: 'Nagad',
     trx: 'NGOWN00001',
     sender: '01812345678',
@@ -619,7 +621,7 @@ test('payments: a rejected payment can be resubmitted; nobody verifies their own
   });
   const after = await st('anika');
   assert.equal(
-    after.s.pay['INV-2612']!.status,
+    after.s.pay['EV-hack-night']!.status,
     'rejected',
     'the member is shown the rejection, not a silent reset',
   );
@@ -629,17 +631,17 @@ test('payments: a rejected payment can be resubmitted; nobody verifies their own
   );
   await act('anika', {
     type: 'pay',
-    invoice: 'INV-2612',
+    invoice: 'EV-hack-night',
     via: 'Nagad',
     trx: 'NGOWN00001',
     sender: '01812345678',
   }); // the same ID again: a wrong rejection is recoverable
-  assert.equal((await st('anika')).s.pay['INV-2612']!.status, 'pending');
+  assert.equal((await st('anika')).s.pay['EV-hack-night']!.status, 'pending');
   await refused(
     409,
     act('priya', {
       type: 'pay',
-      invoice: 'INV-2611',
+      invoice: TERM,
       via: 'Nagad',
       trx: 'NGOWN00001',
       sender: '01812345678',
@@ -724,19 +726,20 @@ test('waivers: requests are gone; a waiver granted earlier still settles its inv
   );
   await refused(
     400,
-    act('zz_w', { type: 'requestWaiver', invoice: 'INV-2611', reason: 'Family emergency' }),
+    act('zz_w', { type: 'requestWaiver', invoice: TERM, reason: 'Family emergency' }),
   );
   await refused(400, act('tanvir', { type: 'decide', kind: 'waiver', id: 'W-1', to: 'waived' }));
   await db().query(
     `insert into waiver_requests (user_id, invoice_id, what, amount, reason, status)
-     select 'zz_w', 'INV-2611', 'Dues', 300, 'Granted earlier', 'waived'`,
+     select 'zz_w', $1, 'Dues', 300, 'Granted earlier', 'waived'`,
+    [TERM],
   );
-  assert.equal((await st('zz_w')).s.pay['INV-2611']!.status, 'waived');
+  assert.equal((await st('zz_w')).s.pay[TERM]!.status, 'waived');
   await refused(
     403,
     act('zz_w', {
       type: 'pay',
-      invoice: 'INV-2611',
+      invoice: TERM,
       via: 'bKash',
       trx: 'ZZWAIVE001',
       sender: '01700000001',
@@ -1177,11 +1180,11 @@ test('inbox is built from real records and can be cleared', async () => {
   const z = await st('rahim');
   assert.deepEqual(
     z.inbox.filter((n) => n.cat === 'Finance').map((n) => n.id),
-    ['n:due:INV-2611'],
+    [`n:due:${TERM}`],
     'term dues only: no fee for an event he never registered for',
   );
   await act('rahim', { type: 'register', eventId: 'hack-night', phone: '01700000000' });
-  assert.ok((await st('rahim')).inbox.some((n) => n.id === 'n:due:INV-2612'));
+  assert.ok((await st('rahim')).inbox.some((n) => n.id === 'n:due:EV-hack-night'));
   await act('rahim', { type: 'readAll' });
   const after = await st('rahim');
   assert.ok(after.inbox.every((n) => after.s.read.includes(n.id)));
@@ -1273,7 +1276,7 @@ test('the operator account is not a member: no ballot, no dues, no purchases', a
     403,
     act('admin', {
       type: 'pay',
-      invoice: 'INV-2611',
+      invoice: TERM,
       via: 'bKash',
       trx: 'ADMIN00001',
       sender: '01712345678',
@@ -1971,7 +1974,7 @@ test('club fund: verified payments add to it and approved expenses take from it'
   assert.equal((await st('tasnim')).office.fund, undefined, 'the ledger is for finance roles');
 });
 
-test('ops: the committee creates, edits, assigns and deletes tasks, meetings and equipment', async () => {
+test('ops: the committee creates, edits, assigns and deletes tasks, documents and equipment', async () => {
   const ops = async () => (await st('nadia')).office.ops!;
   await refused(403, act('tasnim', { type: 'saveTask', title: 'Not mine' }));
   await refused(403, act('tasnim', { type: 'kv', key: 'inv:1', value: 'me' })); // the old switches are gone
@@ -1988,26 +1991,23 @@ test('ops: the committee creates, edits, assigns and deletes tasks, meetings and
   await act('sadia', { type: 'deleteTask', id: t.id });
   assert.equal((await st('tasnim')).office.ops, undefined, "the workspace is the committee's");
 
-  await act('nadia', {
-    type: 'saveMeeting',
-    date: '2026-12-02',
-    title: 'Contest debrief',
-    agenda: ['Scores', ''],
+  await refused(403, act('tasnim', { type: 'saveDoc', title: 'Minutes', url: 'https://x.test/a' }));
+  await refused(
+    400,
+    act('nadia', { type: 'saveDoc', title: 'Minutes', url: 'javascript:alert(1)' }),
+  );
+  await refused(403, act('nadia', { type: 'saveDoc', title: 'Minutes' })); // a link is required
+  await act('sadia', {
+    type: 'saveDoc',
+    title: 'Constitution',
+    about: '2024 revision',
+    url: 'https://drive.example/constitution',
   });
-  const m = (await ops()).meetings.find((x) => x.title === 'Contest debrief')!;
-  assert.deepEqual(m.agenda, ['Scores']);
-  await act('nadia', {
-    type: 'saveMeetingAction',
-    meeting: m.id,
-    what: 'Upload the editorial',
-    who: 'rahim',
-  });
-  const x = (await ops()).meetings.find((y) => y.id === m.id)!.actions[0]!;
-  await act('sadia', { type: 'saveMeetingAction', ...x, done: true });
-  assert.equal((await ops()).meetings.find((y) => y.id === m.id)!.actions[0]!.done, true);
-  await refused(403, act('tasnim', { type: 'saveMeetingAction', ...x, done: false }));
-  await act('nadia', { type: 'deleteMeeting', id: m.id });
-  assert.ok(!(await ops()).meetings.some((y) => y.id === m.id));
+  const doc = (await ops()).docs.find((y) => y.title === 'Constitution')!;
+  assert.deepEqual([doc.about, doc.byId, doc.at.length], ['2024 revision', 'sadia', 10]);
+  await refused(403, act('nadia', { type: 'deleteDoc', id: doc.id })); // not hers, and she is not an admin
+  await act('sadia', { type: 'deleteDoc', id: doc.id });
+  assert.ok(!(await ops()).docs.some((y) => y.id === doc.id));
 
   await act('sadia', { type: 'saveItem', name: 'Spare router' });
   const it = (await ops()).inventory.find((y) => y.name === 'Spare router')!;
@@ -2635,4 +2635,64 @@ test('audit log: sections, search, paging, and it cannot be edited or deleted', 
   // append-only
   await assert.rejects(db().query(`delete from audit`), /append-only/);
   await assert.rejects(db().query(`update audit set what = 'nothing happened'`), /append-only/);
+});
+
+test('dues: 3-month periods; the President or Secretary sets the amounts; alumni contribute instead', async () => {
+  const nadia = (await st('nadia')).s;
+  assert.deepEqual(
+    nadia.dues.map((d) => [d.id, d.amount]),
+    [[TERM, 300]],
+    'member dues for the period that began in the join month; no post dues while the post fee is 0',
+  );
+  await refused(403, act('anika', { type: 'setFee', kind: 'term', amount: 500 }));
+  await refused(400, act('sadia', { type: 'setFee', kind: 'term', amount: -5 }));
+  await refused(400, act('sadia', { type: 'setFee', kind: 'event', amount: 5 }));
+  await refused(403, act('nadia', { type: 'kv', key: 'fee:term', value: '1' })); // not through personal settings
+  await act('sadia', { type: 'setFee', kind: 'term', amount: 450 });
+  await act('tanvir', { type: 'setFee', kind: 'post', amount: 200 });
+  const after = (await st('nadia')).s.dues;
+  assert.deepEqual(
+    after.map((d) => [d.id.replace(/\d{4}-\d{2}$/, ''), d.amount]),
+    [
+      ['TERM-', 450],
+      ['POST-', 200],
+    ],
+    'a CP Head holds a post, so post dues start',
+  );
+  assert.equal((await st('tasnim')).s.dues.find((d) => d.id === TERM)!.amount, 450);
+  const summary = (await st('anika')).office.dues!;
+  assert.equal(summary.term.fee, 450);
+  assert.ok(summary.term.of > 0 && summary.post.of > 0 && summary.post.of < summary.term.of);
+  assert.equal((await st('nadia')).office.dues, undefined, 'only finance roles see the summary');
+
+  const alum = (await st('nabila')).s;
+  assert.equal(alum.dues.length, 0, 'alumni owe no member or post dues');
+  const gift = { type: 'contribute', via: 'Nagad', sender: '01812345678' };
+  await refused(403, act('nabila', { ...gift, type: 'pay', invoice: TERM, trx: 'GF00000001' }));
+  await refused(403, act('nadia', { ...gift, amount: 100, trx: 'GF00000002' }));
+  await refused(400, act('nabila', { ...gift, amount: 0, trx: 'GF00000003' }));
+  await act('nabila', { ...gift, amount: 2500, trx: 'GF00000004' });
+  await act('nabila', { ...gift, amount: 700, trx: 'GF00000005' }); // any number of times
+  const q = (await st('anika')).office.queue!.filter((p) => p.label === CONTRIBUTION);
+  assert.deepEqual(q.map((p) => p.amount).sort(), [2500, 700].sort());
+  await act('sadia', { type: 'setFee', kind: 'term', amount: 300 });
+  await act('sadia', { type: 'setFee', kind: 'post', amount: 0 });
+});
+
+test('platform streak: consecutive daily check-ins, reset after a missed day', async () => {
+  const set = (checkin: string, run: number) =>
+    db().query(`update users set progress = progress || $2::jsonb where id = $1`, [
+      'imran',
+      JSON.stringify({ checkin, run }),
+    ]);
+  const day = (n: number) => today(new Date(Date.now() - n * 864e5));
+  await set(day(1), 4);
+  assert.equal((await st('imran')).s.run, 4, 'yesterday still counts until today ends');
+  await act('imran', { type: 'checkin' });
+  await act('imran', { type: 'checkin' });
+  assert.equal((await st('imran')).s.run, 5);
+  await set(day(2), 9);
+  assert.equal((await st('imran')).s.run, 0);
+  await act('imran', { type: 'checkin' });
+  assert.equal((await st('imran')).s.run, 1);
 });

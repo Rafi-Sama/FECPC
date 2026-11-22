@@ -63,6 +63,7 @@ and extra columns on existing tables.
 | `decisions`                   | Older officer decisions by kind and id (no longer written for waivers)                  | users |
 | `waiver_requests`             | Old waiver requests; no longer written. A `waived` row still settles its invoice        | users |
 | `committee_tasks`             | Ops board tasks: assignee, due date, column                                             | users |
+| `documents`                   | Committee document links (Ops → Documents): title, description, link, who added it      | users |
 | `meetings`, `meeting_actions` | Committee meetings with agenda, and their action items                                  | users |
 | `inventory`                   | Club equipment and who holds it                                                         | users |
 | `budgets`                     | Event budgets: plan, and spending from before the ledger (`spent_before`)               | —     |
@@ -70,6 +71,9 @@ and extra columns on existing tables.
 Invoices, the fund's opening balance and accounts are placeholder content
 (`packages/content/src/member-area.ts`, `apps/api/src/modules/member-area/office-data.ts`). The fund balance and
 ledger add the real movements on top: verified `payments` in, approved `expenses` out (`MONEY` in `state.ts`).
+Dues are not stored as invoices: `duesFor` in `packages/contracts/src/dues.ts` derives them from `users.created_at`,
+`users.post_since` (kept by the `trg_users_post_since` trigger whenever role or post changes) and event fees. Billing
+starts at `BILLING_START` (Nov 2026).
 The opening balance (`accounts` in `office-data.ts`) stays a seeded constant because nothing records the club's money
 before this ledger; replace it with a real opening entry once one exists. Everything else on the transparency tab is
 real and visible to every member: term totals, this term's approved expenses with their approver, and the monthly

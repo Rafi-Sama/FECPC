@@ -3,7 +3,7 @@
 import {
   APPROVAL_THRESHOLD,
   announcements,
-  invoices,
+  CONTRIBUTION,
   sheet,
   shop,
 } from '@fecpc/content/member-area';
@@ -11,6 +11,7 @@ import { cols, courses, posts as editorials, volunteerShifts, wiki } from '@fecp
 import {
   can,
   canFully,
+  FEE_KEYS,
   postName,
   postableRoles,
   posts,
@@ -63,7 +64,16 @@ import {
 } from '@fecpc/contracts';
 import { challengeHandlers, sheetHandlers } from './sheets.ts';
 import { DAILY_KUDOS_CAP, MILESTONE_FRESHNESS_DAYS } from './milestones.ts';
-import { isAdmin, isCommittee, loadState, progress, today, TZ, type Progress } from './state.ts';
+import {
+  isAdmin,
+  isCommittee,
+  loadState,
+  progress,
+  today,
+  TZ,
+  yesterday,
+  type Progress,
+} from './state.ts';
 
 type Actor = { id: string; role: Role; roles: Role[]; name: string; system: boolean };
 // A member's effective roles: their own role plus what their post grants. For queries on an unaliased `users`.
@@ -237,21 +247,49 @@ async function setClub(c: Db, a: Actor, k: string, value: boolean | string) {
   );
 }
 
-/** One of the member's own invoices: event invoices only for members registered for the event. */
-async function myInvoice(c: Db, a: Actor, id: unknown) {
-  const inv = invoices.find((x) => x.id === id);
-  need(inv, 'That invoice does not exist.');
-  if (inv.event)
-    need(
-      (
-        await c.query(
-          `select 1 from event_entries where user_id = $1 and event_id = $2 and role_id is null and status = 'approved'`,
-          [a.id, inv.event],
-        )
-      ).rowCount,
-      'That invoice is only for members registered for the event.',
+/** Records a wallet payment for the Treasurer to verify. The unique indexes stop a transaction ID paying twice. */
+async function submitPayment(
+  c: Db,
+  a: Actor,
+  i: Record<string, unknown>,
+  inv: { id: string; label: string; amount: number },
+) {
+  const via = pick(i.via, ['bKash', 'Nagad', 'Rocket'] as const, 'wallet'),
+    trx = String(i.trx ?? '')
+      .trim()
+      .toUpperCase(),
+    sender = String(i.sender ?? '').trim();
+  if (!/^[A-Z0-9]{8,12}$/.test(trx))
+    throw new Fail(
+      400,
+      'A transaction ID is 8 to 12 letters and digits. Copy it from the wallet SMS.',
     );
-  return inv;
+  if (!/^01[3-9]\d{8}$/.test(sender))
+    throw new Fail(400, 'Enter the 11-digit number the money was sent from.');
+  // The two unique indexes are the rule; checking first would let two simultaneous submissions both pass.
+  const r = await c.query(
+    `insert into payments (user_id, invoice_id, label, amount, via, trx, sender) values ($1, $2, $3, $4, $5, $6, $7) on conflict do nothing returning id`,
+    [a.id, inv.id, inv.label, inv.amount, via, trx, sender],
+  );
+  if (!r.rows[0]) {
+    const mine = (
+      await c.query(
+        `select 1 from payments where user_id = $1 and invoice_id = $2 and status <> 'rejected'`,
+        [a.id, inv.id],
+      )
+    ).rowCount;
+    throw new Fail(
+      409,
+      mine
+        ? 'You have already submitted a payment for this invoice.'
+        : 'That transaction ID has already been used. Check the SMS from your wallet and enter the ID exactly.',
+    );
+  }
+  await audit(
+    c,
+    a,
+    `submitted payment PAY-${r.rows[0].id} for ${inv.id} (${via}, ${tk(inv.amount)})`,
+  );
 }
 /** An active member id, or null when cleared. */
 async function memberOrNull(c: Db, v: unknown) {
@@ -390,6 +428,8 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     );
   },
   async checkin(_c, _a, p) {
+    if (p.checkin === today()) return;
+    p.run = p.checkin === yesterday() ? p.run + 1 : 1;
     p.checkin = today();
   },
   async flag(c, a, p, i) {
@@ -417,6 +457,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
       v = text(i.value, 0, 200, 'Value');
     need(!/^(task|inv):/.test(k), 'Tasks and equipment have their own actions now.');
     need(!k.startsWith('role:'), 'Use the role action for that.');
+    need(!k.startsWith('fee:'), 'Dues are set with the setFee action.');
     if (k.startsWith('conf:')) {
       need(
         sheet.some((x) => x.id === k.slice(5)),
@@ -502,7 +543,9 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
   },
   async pay(c, a, _p, i) {
     person(a);
-    const inv = await myInvoice(c, a, i.invoice);
+    // The same list the member sees: their own periods and the fees of events they are registered for.
+    const inv = (await loadState(c, a.id))!.s.dues.find((d) => d.id === i.invoice);
+    need(inv, 'That invoice does not exist, or is not yours.');
     need(
       !(
         await c.query(
@@ -512,38 +555,32 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
       ).rowCount,
       'That invoice was waived; there is nothing to pay.',
     );
-    const via = pick(i.via, ['bKash', 'Nagad', 'Rocket'] as const, 'wallet'),
-      trx = String(i.trx ?? '')
-        .trim()
-        .toUpperCase(),
-      sender = String(i.sender ?? '').trim();
-    if (!/^[A-Z0-9]{8,12}$/.test(trx))
-      throw new Fail(
-        400,
-        'A transaction ID is 8 to 12 letters and digits. Copy it from the wallet SMS.',
-      );
-    if (!/^01[3-9]\d{8}$/.test(sender))
-      throw new Fail(400, 'Enter the 11-digit number the money was sent from.');
-    // The two unique indexes are the rule; checking first would let two simultaneous submissions both pass.
-    const r = await c.query(
-      `insert into payments (user_id, invoice_id, label, amount, via, trx, sender) values ($1, $2, $3, $4, $5, $6, $7) on conflict do nothing returning id`,
-      [a.id, inv.id, inv.label, inv.amount, via, trx, sender],
+    await submitPayment(c, a, i, inv);
+  },
+  async contribute(c, a, _p, i) {
+    person(a);
+    need(a.roles.includes('alumni'), 'Contributions are for alumni; members pay their dues.');
+    const amount = Number(i.amount);
+    if (!Number.isInteger(amount) || amount < 1 || amount > 1_000_000)
+      throw new Fail(400, 'Enter a whole amount in taka.');
+    // Each contribution is its own record; the transaction ID keeps the id unique.
+    const trx = String(i.trx ?? '')
+      .trim()
+      .toUpperCase();
+    await submitPayment(c, a, i, { id: 'GIFT-' + trx, label: CONTRIBUTION, amount });
+  },
+  async setFee(c, a, _p, i) {
+    need(canFully(a.roles, 'finance.fee'), 'Only the President or Secretary sets the dues.');
+    const kind = pick(i.kind, ['term', 'post'] as const, 'fee');
+    const amount = Number(i.amount);
+    if (!Number.isInteger(amount) || amount < 0 || amount > 100_000)
+      throw new Fail(400, 'Enter a whole amount in taka, or 0 for no fee.');
+    await setClub(c, a, 'kv:' + FEE_KEYS[kind], String(amount));
+    await audit(
+      c,
+      a,
+      `set ${kind === 'term' ? 'member' : 'post'} dues to ${tk(amount)} per 3 months`,
     );
-    if (!r.rows[0]) {
-      const mine = (
-        await c.query(
-          `select 1 from payments where user_id = $1 and invoice_id = $2 and status <> 'rejected'`,
-          [a.id, inv.id],
-        )
-      ).rowCount;
-      throw new Fail(
-        409,
-        mine
-          ? 'You have already submitted a payment for this invoice.'
-          : 'That transaction ID has already been used. Check the SMS from your wallet and enter the ID exactly.',
-      );
-    }
-    await audit(c, a, `submitted payment PAY-${r.rows[0].id} for ${inv.id} (${via})`);
   },
   async redeem(c, a, p, i) {
     person(a);
@@ -1003,62 +1040,6 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
   async deleteTask(c, a, _p, i) {
     await opsDelete(c, a, 'committee_tasks', i.id, 'task');
   },
-  async saveMeeting(c, a, _p, i) {
-    need(isCommittee(a.roles), 'Only the committee manages the workspace.');
-    const agenda = (Array.isArray(i.agenda) ? i.agenda : [])
-      .map((x) => text(x, 0, 140, 'An agenda item'))
-      .filter(Boolean);
-    need(agenda.length <= 15, 'At most 15 agenda items.');
-    const v = [isoDay(i.date, 'The date') ?? today(), text(i.title, 3, 120, 'The title'), agenda];
-    if (i.id === undefined || i.id === null) {
-      await c.query(
-        `insert into meetings (day, title, agenda, created_by) values ($1, $2, $3, $4)`,
-        [...v, a.id],
-      );
-      return void (await audit(c, a, `added meeting: ${v[1]}`));
-    }
-    const r = await c.query(`update meetings set day = $2, title = $3, agenda = $4 where id = $1`, [
-      posInt(i.id, 'meeting'),
-      ...v,
-    ]);
-    if (!r.rowCount) throw new Fail(404, 'That meeting does not exist.');
-  },
-  async deleteMeeting(c, a, _p, i) {
-    await opsDelete(c, a, 'meetings', i.id, 'meeting');
-  },
-  // An action item: added to a meeting, then edited, reassigned or ticked off by anyone on the committee.
-  async saveMeetingAction(c, a, _p, i) {
-    need(isCommittee(a.roles), 'Only the committee manages the workspace.');
-    const what = text(i.what, 3, 160, 'The action item'),
-      who = await memberOrNull(c, i.who),
-      done = Boolean(i.done);
-    if (i.id === undefined || i.id === null) {
-      const r = await c.query(
-        `insert into meeting_actions (meeting_id, what, who) select id, $2, $3 from meetings where id = $1 returning (select title from meetings where id = $1) as meeting`,
-        [posInt(i.meeting, 'meeting'), what, who],
-      );
-      if (!r.rowCount) throw new Fail(404, 'That meeting does not exist.');
-      return void (await audit(
-        c,
-        a,
-        `added action item "${what}"${who ? ` for ${who}` : ''} to meeting "${r.rows[0].meeting}"`,
-      ));
-    }
-    const r = await c.query(
-      `update meeting_actions set what = $2, who = $3, done = $4 where id = $1`,
-      [posInt(i.id, 'action item'), what, who, done],
-    );
-    if (!r.rowCount) throw new Fail(404, 'That action item does not exist.');
-    await audit(c, a, `${done ? 'completed' : 'updated'} action item "${what}"`);
-  },
-  async deleteMeetingAction(c, a, _p, i) {
-    need(isCommittee(a.roles), 'Only the committee manages the workspace.');
-    const r = await c.query(`delete from meeting_actions where id = $1 returning what`, [
-      posInt(i.id, 'action item'),
-    ]);
-    if (!r.rowCount) throw new Fail(404, 'That action item does not exist.');
-    await audit(c, a, `deleted action item "${r.rows[0].what}"`);
-  },
   async saveItem(c, a, _p, i) {
     need(isCommittee(a.roles), 'Only the committee manages the workspace.');
     const name = text(i.name, 2, 80, 'The item');
@@ -1071,6 +1052,23 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
       name,
     ]);
     if (!r.rowCount) throw new Fail(404, 'That item does not exist.');
+  },
+  async saveDoc(c, a, _p, i) {
+    need(isCommittee(a.roles), 'Only the committee manages the workspace.');
+    const title = text(i.title, 3, 120, 'The title'),
+      about = text(i.about ?? '', 0, 300, 'The description'),
+      url = optionalUrl(i.url, 'The link');
+    need(url, 'Add a link to the document.');
+    await c.query(`insert into documents (title, about, url, created_by) values ($1, $2, $3, $4)`, [
+      title,
+      about,
+      url,
+      a.id,
+    ]);
+    await audit(c, a, `added document: ${title}`);
+  },
+  async deleteDoc(c, a, _p, i) {
+    await opsDelete(c, a, 'documents', i.id, 'document');
   },
   async deleteItem(c, a, _p, i) {
     await opsDelete(c, a, 'inventory', i.id, 'item');
@@ -1660,7 +1658,7 @@ area(
   'handle',
   'vjudge',
 );
-area('Finance', 'pay', 'expense', 'saveBudget', 'deleteBudget');
+area('Finance', 'pay', 'contribute', 'setFee', 'expense', 'saveBudget', 'deleteBudget');
 area(
   'Events',
   'eventSave',
@@ -1696,10 +1694,8 @@ area(
   'Workspace',
   'saveTask',
   'deleteTask',
-  'saveMeeting',
-  'deleteMeeting',
-  'saveMeetingAction',
-  'deleteMeetingAction',
+  'saveDoc',
+  'deleteDoc',
   'saveItem',
   'deleteItem',
   'holdItem',

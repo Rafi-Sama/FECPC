@@ -7,12 +7,12 @@ import { AdminExtra } from '@/components/app/admin/AdminExtra';
 import { Recruit } from '@/components/app/admin/Recruit';
 import { ProfileRequests } from '@/components/app/admin/ProfileRequests';
 import { AuditLog } from '@/components/app/admin/AuditLog';
+import { Dashboard } from '@/components/app/admin/Dashboard';
 
-const hues = ['#3de1ff', '#ff8a3d', '#7ce38b', '#ff4d8d'];
 const cell = (v: unknown) => (v === true ? '✓' : v ? String(v) : '–');
 
 export default function Admin() {
-  const { s, office, members, toast } = useStore();
+  const { s, office } = useStore();
   const caps = {
     apps: can(s.roles, 'application.approve'),
     roles: can(s.roles, 'roles.assign'),
@@ -36,57 +36,6 @@ export default function Admin() {
       </Page>
     );
   const cur = tabs.includes(tab) ? tab : 'Dashboard';
-  const people = members.filter((m) => m.id !== 'admin'),
-    pendingApps = (office.recruit?.applicants ?? []).filter((a) => a.status === 'pending').length;
-  // Every tile is counted from live records; a role only gets the tiles it has the authority to act on.
-  const tiles: [string, number, string][] = [
-    [
-      'Members',
-      people.filter((m) => !m.suspended).length,
-      `${people.filter((m) => m.suspended).length} suspended · ${people.filter((m) => m.pending).length} invited, not joined`,
-    ],
-    ...(caps.apps
-      ? [['Applicants', pendingApps, 'waiting for a decision'] as [string, number, string]]
-      : []),
-    ...(office.profileRequests
-      ? [
-          ['Profile changes', office.profileRequests.length, 'waiting for a decision'] as [
-            string,
-            number,
-            string,
-          ],
-        ]
-      : []),
-    ...(office.queue
-      ? [
-          [
-            'Payments',
-            office.queue.filter((q) => q.status === 'pending').length,
-            'waiting for verification',
-          ] as [string, number, string],
-        ]
-      : []),
-    ...(office.expenses
-      ? [
-          [
-            'Expenses',
-            office.expenses.filter(
-              (e) => e.status === 'pending' || e.status === 'sent to President',
-            ).length,
-            'waiting for a decision',
-          ] as [string, number, string],
-        ]
-      : []),
-  ];
-  const download = async () => {
-    const res = await fetch('/api/export/members');
-    if (!res.ok) return toast((await res.json()).error ?? 'The export failed.', 'bad');
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(await res.blob());
-    a.download = 'members.csv';
-    a.click();
-    URL.revokeObjectURL(a.href);
-  };
   return (
     <Page
       title={
@@ -97,33 +46,7 @@ export default function Admin() {
       }
     >
       <Tabs tabs={tabs} value={cur} onChange={setTab} />
-      {cur === 'Dashboard' && (
-        <div className="bento">
-          {tiles.map(([l, v, d], i) => (
-            <section
-              key={l}
-              className="panel c3 tile"
-              style={{ '--hue': hues[i % hues.length] } as React.CSSProperties}
-            >
-              <p className="label">{l}</p>
-              <p className="big">{v}</p>
-              <p className="body">{d}</p>
-            </section>
-          ))}
-          {caps.exp && (
-            <section
-              className="panel c4 tile"
-              style={{ '--hue': '#ffd23f' } as React.CSSProperties}
-            >
-              <p className="label">Member list</p>
-              <p className="body">Exports are written to the audit log.</p>
-              <button className="btn sm" style={{ alignSelf: 'flex-start' }} onClick={download}>
-                Export members (CSV)
-              </button>
-            </section>
-          )}
-        </div>
-      )}
+      {cur === 'Dashboard' && <Dashboard go={setTab} exp={!!caps.exp} />}
       {cur === 'Dashboard' && office.suggestions && (
         <section className="panel" style={{ marginTop: 16 }}>
           <p className="label">Anonymous suggestions · {office.suggestions.length}</p>

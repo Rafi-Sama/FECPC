@@ -53,7 +53,9 @@ Two guards appear throughout:
 
 | `type`                       | Arguments                         | Who                                             | What it does                                                                                                                                                             |
 | ---------------------------- | --------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `pay`                        | `invoice`, `via`, `trx`, `sender` | members (not the operator)                      | Submits a bKash/Nagad payment for one of your invoices. Event invoices only if registered. One transaction ID pays for one thing. A rejected payment can be resubmitted. |
+| `pay`                        | `invoice`, `via`, `trx`, `sender` | members (not the operator)                      | Pays one of the member's own bills from `s.dues` (`packages/contracts/src/dues.ts`): `TERM-YYYY-MM` every 3 months from the join month, `POST-YYYY-MM` every 3 months from `users.post_since`, `EV-<id>` for approved registrations to events with a fee. One transaction ID pays for one thing. A rejected payment can be resubmitted. |
+| `contribute`                 | `amount`, `via`, `trx`, `sender`  | alumni                                          | Sends any amount to the club. Alumni owe no term dues and get no invoice or receipt; the Treasurer still verifies the money arrived. |
+| `setFee`                     | `kind` (`term`/`post`), `amount`  | full `finance.fee` (Secretary, President, Super Admin) | Sets member or post dues per 3-month period (club `kv:fee:term` / `kv:fee:post`; 0 = no fee). Unpaid periods show the new amount; paid ones keep what was paid. Audited. |
 | `expense`                    | `what`, `amount`, `event`         | committee                                       | Files an expense request. An approved one counts against the budget whose name equals `event`.                                                                           |
 | `saveBudget`, `deleteBudget` | `id?`, `name`, `plan` / `id`      | full `payments.verify` (Treasurer, Super Admin) | Creates, renames, re-plans or deletes an event budget. Spent is computed, never entered. Audited.                                                                        |
 | `decide`                     | `kind`, `id`, `to`, `reason?`     | see below                                       | Officer decisions.                                                                                                                                                       |
@@ -162,14 +164,13 @@ only those on no team (plus whoever invited you), never you.
 
 ### Committee workspace (Ops)
 
-All need the committee (`isCommittee`). Anyone on it edits, assigns and moves records; deleting a task, meeting
-or item needs whoever added it, or an admin.
+All need the committee (`isCommittee`). Anyone on it edits, assigns and moves records; deleting a task,
+document or item needs whoever added it, or an admin.
 
 | `type`                                     | Arguments                                                                   | What it does                                                                                                        |
 | ------------------------------------------ | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | `saveTask`, `deleteTask`                   | `id?`, `title`, `who?`, `due?` (YYYY-MM-DD), `col` (`To do`/`Doing`/`Done`) | Creates or updates a board task.                                                                                    |
-| `saveMeeting`, `deleteMeeting`             | `id?`, `date`, `title`, `agenda[]` (≤ 15)                                   | Creates or updates a meeting; deleting removes its action items.                                                    |
-| `saveMeetingAction`, `deleteMeetingAction` | `meeting` (new) or `id`, `what`, `who?`, `done`                             | Adds, edits, reassigns or ticks off an action item.                                                                 |
+| `saveDoc`, `deleteDoc`                     | `title`, `about?` (≤ 300), `url` (http/https) / `id`                        | Adds a committee document link; shows who added it and when. Audited.                                               |
 | `saveItem`, `deleteItem`                   | `id?`, `name`                                                               | Adds or renames equipment.                                                                                          |
 | `holdItem`                                 | `id`, `to` (member or `null`)                                               | Check out to yourself (only when free), return (the holder or an admin), or hand to someone else (admins). Audited. |
 

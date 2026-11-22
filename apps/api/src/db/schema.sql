@@ -987,3 +987,37 @@ DROP TRIGGER IF EXISTS trg_audit_guard ON audit;
 CREATE TRIGGER trg_audit_guard BEFORE UPDATE OR DELETE ON audit FOR EACH ROW EXECUTE FUNCTION audit_guard();
 -- After the guard is in place, so re-filing out of 'Other' goes through its rules.
 UPDATE audit SET area = audit_area(what) WHERE area IS NULL OR area = 'Other';
+-- 21. Dues: member dues every 3 months from the join month; post dues every 3 months from the month a member
+-- takes a post other than member/alumni (packages/contracts/src/dues.ts). post_since follows role and post.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS post_since date;
+CREATE OR REPLACE FUNCTION users_post_since() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF (NEW.post IS NOT NULL AND NEW.post <> 'member') OR NEW.role IN ('cp_head','treasurer','secretary','president') THEN
+    NEW.post_since := coalesce(NEW.post_since, (now() AT TIME ZONE 'Asia/Dhaka')::date);
+  ELSE
+    NEW.post_since := NULL;
+  END IF;
+  RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS trg_users_post_since ON users;
+CREATE TRIGGER trg_users_post_since BEFORE INSERT OR UPDATE OF role, post ON users FOR EACH ROW EXECUTE FUNCTION users_post_since();
+UPDATE users SET post_since = (created_at AT TIME ZONE 'Asia/Dhaka')::date
+  WHERE post_since IS NULL AND ((post IS NOT NULL AND post <> 'member') OR role IN ('cp_head','treasurer','secretary','president'));
+-- The fixed invoices became per-member periods and event fees: INV-2611 is the member's period holding Nov 2026.
+CREATE OR REPLACE FUNCTION term_of_nov_2026(joined timestamptz) RETURNS text LANGUAGE sql IMMUTABLE AS $$
+  SELECT 'TERM-' || to_char(date_trunc('month', joined AT TIME ZONE 'Asia/Dhaka')
+    + make_interval(months => 3 * greatest(0, floor(((2026 * 12 + 10)
+      - (extract(year FROM joined AT TIME ZONE 'Asia/Dhaka') * 12 + extract(month FROM joined AT TIME ZONE 'Asia/Dhaka') - 1)) / 3))::int), 'YYYY-MM')
+$$;
+UPDATE payments p SET invoice_id = term_of_nov_2026(u.created_at) FROM users u WHERE u.id = p.user_id AND p.invoice_id = 'INV-2611';
+UPDATE waiver_requests w SET invoice_id = term_of_nov_2026(u.created_at) FROM users u WHERE u.id = w.user_id AND w.invoice_id = 'INV-2611';
+UPDATE payments SET invoice_id = 'EV-hack-night' WHERE invoice_id = 'INV-2612';
+-- 22. Committee documents: a title, a short description and a link (Ops → Documents).
+CREATE TABLE IF NOT EXISTS documents (
+  id         int GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  title      text NOT NULL CHECK (length(title) BETWEEN 3 AND 120),
+  about      text NOT NULL DEFAULT '' CHECK (length(about) <= 300),
+  url        text NOT NULL CHECK (url ~* '^https?://'),
+  created_by text REFERENCES users ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
