@@ -49,7 +49,7 @@ The full rules are in [Roles and permissions](roles-and-permissions.md).
 | Notifications  | `/app/notifications`              | Inbox built from real records (dues, decisions, team invites, kudos); latest six in the topbar bell; team invites and idea interests answer in one click (`actions` on the item)                                                                     |
 | Profile        | `/app/profile`                    | Own details, Codeforces handle, password change                                                                                                                                                                                                      |
 | Admin          | `/app/admin`                      | Dashboard (counts, member export, suggestions), recruit (links, QR posters, CSV import, applicant review), members (role, post, suspend/reinstate, invite and reset links), permissions matrix, audit log                                            |
-| Ops            | `/app/ops`                        | Committee workspace: task board, meetings, documents, inventory, sponsors (finance roles), reports                                                                                                                                                   |
+| Ops            | `/app/ops`                        | Committee workspace: task board, documents, inventory, reports                                                                                                                                                     |
 
 `/app/members` and `/app/alumni` are old URLs that redirect to `/app/directory` and `/app/career`.
 

@@ -12,3 +12,4 @@ export * from './recruit.ts';
 export * from './mail.ts';
 export * from './profile.ts';
 export * from './audit.ts';
+export * from './dues.ts';

@@ -83,30 +83,6 @@ export const applications = [
   { id: 'ap2', name: 'Lamia Haque', dept: 'EEE', batch: 26, quiz: 74, src: 'Friend' },
   { id: 'ap3', name: 'Sakib Al Noman', dept: 'CSE', batch: 26, quiz: 91, src: 'Facebook' },
 ];
-export const vault = [
-  ['Constitution (2024 revision)', 'PDF', '12 pages'],
-  ['MoU: department lab access', 'PDF', '3 pages'],
-  ['Budget, Autumn 2026', 'Sheet', 'approved 2 Oct'],
-  ['Annual report 2025', 'PDF', '28 pages'],
-  ['Handover notes: 2025 committee', 'Doc', 'updated Jun'],
-];
-export const sponsors = [
-  {
-    name: 'Title sponsor (fintech)',
-    promised: 60000,
-    got: 40000,
-    owe: 'Logo on scoreboard, 20-min talk',
-    last: 'Call, 6 Nov',
-  },
-  {
-    name: 'Local ISP',
-    promised: 20000,
-    got: 20000,
-    owe: 'Banner at venue, named prize',
-    last: 'Email, 2 Nov',
-  },
-  { name: 'Bookshop', promised: 5000, got: 0, owe: 'Logo on sponsor page', last: 'Visit, 28 Oct' },
-];
 export const reports = {
   growth: [88, 94, 101, 109, 118, 126, 131, 144],
   retention: [71, 74, 70, 78, 81, 79, 84, 86],

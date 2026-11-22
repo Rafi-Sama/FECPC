@@ -5,7 +5,8 @@ import { Page } from '@/components/app/Shell';
 import QR from '@/components/app/QR';
 import { OfficerPanel, officerTabs, Receipt } from '@/components/app/finance/officer';
 import { useStore } from '@/components/app/Store';
-import { myInvoices, owes } from '@fecpc/content/member-area';
+import { canFully, feesOf } from '@fecpc/contracts';
+import { CONTRIBUTION, owes } from '@fecpc/content/member-area';
 import { fmtDate } from '@fecpc/content/site';
 
 const tk = (n: number) => '৳' + Math.round(Math.abs(n)).toLocaleString('en-US');
@@ -92,9 +93,11 @@ function PaymentModal({
   const [method, setMethod] = useState<Wallet | null>(null);
   const [sender, setSender] = useState('');
   const [trx, setTrx] = useState('');
-  const [amount, setAmount] = useState(String(invoice.amount));
+  const gift = invoice.id === 'GIFT'; // an alumni contribution: any amount, no invoice, no receipt
+  const [amount, setAmount] = useState(gift ? '' : String(invoice.amount));
   const [error, setError] = useState('');
   const wallet = method ? wallets[method] : null;
+  const sum = gift ? 'any amount' : tk(invoice.amount);
 
   useEffect(() => {
     const previous = document.body.style.overflow;
@@ -119,12 +122,10 @@ function PaymentModal({
       return setError('Enter the amount you sent.');
     if (!wallet) return;
     setError('');
-    const ok = await act('pay', {
-      invoice: invoice.id,
-      via: wallet.label,
-      trx: cleanTrx,
-      sender: cleanSender,
-    });
+    const paid = { via: wallet.label, trx: cleanTrx, sender: cleanSender };
+    const ok = gift
+      ? await act('contribute', { ...paid, amount: numericAmount })
+      : await act('pay', { ...paid, invoice: invoice.id });
     if (ok) setStep(3);
   };
 
@@ -145,10 +146,18 @@ function PaymentModal({
         </button>
         <header className="finance-modal-head">
           <h2 id="payment-title">
-            Pay <em>{tk(invoice.amount)}.</em>
+            {gift ? (
+              <>
+                Contribute<em>.</em>
+              </>
+            ) : (
+              <>
+                Pay <em>{tk(invoice.amount)}.</em>
+              </>
+            )}
           </h2>
           <span className="finance-mono">
-            {invoice.id} · {invoice.label}
+            {gift ? invoice.label : `${invoice.id} · ${invoice.label}`}
           </span>
         </header>
         {step < 3 && (
@@ -227,15 +236,17 @@ function PaymentModal({
                         <div className="finance-copy-row">
                           <span>
                             <small>Amount to send</small>
-                            <strong>{tk(invoice.amount)}</strong>
+                            <strong>{sum}</strong>
                           </span>
-                          <button
-                            type="button"
-                            className="btn sm"
-                            onClick={() => navigator.clipboard.writeText(String(invoice.amount))}
-                          >
-                            Copy
-                          </button>
+                          {!gift && (
+                            <button
+                              type="button"
+                              className="btn sm"
+                              onClick={() => navigator.clipboard.writeText(String(invoice.amount))}
+                            >
+                              Copy
+                            </button>
+                          )}
                         </div>
                         <ol>
                           <li>
@@ -243,8 +254,7 @@ function PaymentModal({
                             <b>Send Money</b>.
                           </li>
                           <li>
-                            Check the number, enter <b>{tk(invoice.amount)}</b> and confirm with
-                            your PIN.
+                            Check the number, enter <b>{sum}</b> and confirm with your PIN.
                           </li>
                           <li>
                             Note the <b>Transaction ID</b> from the SMS, then continue.
@@ -265,7 +275,7 @@ function PaymentModal({
                         <div className="finance-copy-row finance-copy-lock">
                           <span>
                             <small>Amount to send</small>
-                            <strong>{tk(invoice.amount)}</strong>
+                            <strong>{sum}</strong>
                           </span>
                           <button type="button" className="btn sm" disabled>
                             Copy
@@ -331,10 +341,10 @@ function PaymentModal({
             {step === 3 && wallet && (
               <div className="finance-done">
                 <div>✓</div>
-                <h3>Payment submitted</h3>
+                <h3>{gift ? 'Thank you' : 'Payment submitted'}</h3>
                 <p>
                   The Treasurer will check it against the {wallet.label} statement within 24 hours.
-                  Your receipt will appear in Payment history once verified.
+                  {!gift && ' Your receipt will appear in Payment history once verified.'}
                 </p>
               </div>
             )}
@@ -343,18 +353,22 @@ function PaymentModal({
             <aside className="finance-modal-side">
               <small>Paying for</small>
               <dl>
-                <div>
-                  <dt>Invoice</dt>
-                  <dd>{invoice.id}</dd>
-                </div>
+                {!gift && (
+                  <div>
+                    <dt>Invoice</dt>
+                    <dd>{invoice.id}</dd>
+                  </div>
+                )}
                 <div>
                   <dt>Description</dt>
                   <dd>{invoice.label}</dd>
                 </div>
-                <div>
-                  <dt>Due</dt>
-                  <dd>{dateLabel(invoice.due, true)}</dd>
-                </div>
+                {!gift && (
+                  <div>
+                    <dt>Due</dt>
+                    <dd>{dateLabel(invoice.due, true)}</dd>
+                  </div>
+                )}
                 {wallet && (
                   <div>
                     <dt>Method</dt>
@@ -364,7 +378,7 @@ function PaymentModal({
               </dl>
               <div className="finance-modal-total">
                 <small>Total</small>
-                <strong>{tk(invoice.amount)}</strong>
+                <strong>{gift ? (amount ? tk(Number(amount)) : '—') : tk(invoice.amount)}</strong>
               </div>
             </aside>
           )}
@@ -386,7 +400,7 @@ function PaymentModal({
           )}
           {step === 2 && (
             <button type="button" className="btn sm" onClick={() => void submit()}>
-              Submit payment
+              {gift ? 'Send contribution' : 'Submit payment'}
             </button>
           )}
           {step === 3 && (
@@ -397,6 +411,57 @@ function PaymentModal({
         </footer>
       </div>
     </div>
+  );
+}
+
+/** President and Secretary set what each invoice costs; payments submitted afterwards use the new amount. */
+function Fees() {
+  const { s, act } = useStore();
+  const fees = feesOf(s.kv);
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const rows = [
+    ['term', 'Member dues', 'Every 3 months from the month a member joined'],
+    ['post', 'Post dues', 'Every 3 months from the month a member took a post'],
+  ] as const;
+  return (
+    <section className="finance-panel">
+      <header>
+        <span>Dues amounts</span>
+        <small>0 means no fee · event fees are set on each event</small>
+      </header>
+      {rows.map(([kind, label, hint]) => {
+        const v = draft[kind] ?? String(fees[kind]);
+        return (
+          <article className="finance-invoice" key={kind}>
+            <div>
+              <h3>{label}</h3>
+              <p className="finance-mono">{hint}</p>
+            </div>
+            <div className="finance-invoice-action">
+              <div className="finance-amount">
+                <span>৳</span>
+                <input
+                  className="input mono"
+                  aria-label={`${label} per 3 months`}
+                  value={v}
+                  inputMode="numeric"
+                  onChange={(e) =>
+                    setDraft({ ...draft, [kind]: e.target.value.replace(/\D/g, '') })
+                  }
+                />
+              </div>
+              <button
+                className="btn sm"
+                disabled={v === '' || +v === fees[kind]}
+                onClick={() => void act('setFee', { kind, amount: +v })}
+              >
+                Save
+              </button>
+            </div>
+          </article>
+        );
+      })}
+    </section>
   );
 }
 
@@ -427,7 +492,9 @@ export default function Finance() {
     setTab(next);
     history.replaceState(null, '', '#' + encodeURIComponent(next));
   };
-  const invoices = me.system ? [] : myInvoices(s.reg);
+  const invoices = me.system ? [] : s.dues;
+  const alumni = s.roles.includes('alumni'),
+    setsFee = canFully(s.roles, 'finance.fee');
   const payments = Object.values(s.pay)
     .filter((p) => p.status !== 'waived')
     .sort((a, b) => b.at.localeCompare(a.at));
@@ -467,6 +534,10 @@ export default function Finance() {
   ) : pending.length ? (
     <>
       Payment sent<span className="accent">.</span> <small>Awaiting verification.</small>
+    </>
+  ) : alumni ? (
+    <>
+      Back the club<span className="accent">.</span>
     </>
   ) : (
     <>
@@ -529,7 +600,7 @@ export default function Finance() {
                 </small>
               </div>
               <div>
-                <small>Paid so far</small>
+                <small>{alumni ? 'Given so far' : 'Paid so far'}</small>
                 <b>{tk(verified.reduce((sum, payment) => sum + payment.amount, 0))}</b>
                 <small>
                   {verified.length} verified payment{verified.length === 1 ? '' : 's'}
@@ -547,6 +618,32 @@ export default function Finance() {
                 </small>
               </div>
             </div>
+            {alumni && (
+              <section className="finance-panel">
+                <header>
+                  <span>Contribute</span>
+                  <small>Any amount</small>
+                </header>
+                <article className="finance-invoice">
+                  <div>
+                    <h3>Support the club</h3>
+                    <p className="finance-mono">No fixed amount, no invoice.</p>
+                  </div>
+                  <div className="finance-invoice-action">
+                    <button
+                      className="btn sm finance-pay-btn"
+                      onClick={() =>
+                        setPaymentInvoice({ id: 'GIFT', label: CONTRIBUTION, amount: 0, due: '' })
+                      }
+                    >
+                      <span>Contribute</span>
+                      <b aria-hidden="true">→</b>
+                    </button>
+                  </div>
+                </article>
+              </section>
+            )}
+            {setsFee && <Fees />}
             <section className="finance-panel">
               <header>
                 <span>Invoices</span>
@@ -637,7 +734,7 @@ export default function Finance() {
                           <td className="finance-mono">{payment.trx}</td>
                           <td className="right finance-mono">{tk(payment.amount)}</td>
                           <td className="right">
-                            {payment.status === 'verified' ? (
+                            {payment.status === 'verified' && payment.label !== CONTRIBUTION ? (
                               <button
                                 className="finance-link"
                                 onClick={() => setReceipt(String(payment.id))}
@@ -666,6 +763,7 @@ export default function Finance() {
                   amount={receiptPayment.amount}
                   date={receiptPayment.at.slice(0, 10)}
                   via={receiptPayment.via}
+                  onClose={() => setReceipt(null)}
                 />
               )}
             </section>

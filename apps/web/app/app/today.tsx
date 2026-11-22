@@ -5,7 +5,7 @@ import { useStore } from '@/components/app/Store';
 import { HandleBox, useJudge, useSolved } from '@/components/app/Judge';
 import { Onboarding } from '@/components/app/home/Onboarding';
 import { SolveCheck, useDaily } from '@/components/app/home/Daily';
-import { cfUrl, myInvoices, owes } from '@fecpc/content/member-area';
+import { cfUrl, owes } from '@fecpc/content/member-area';
 import { fmtDate } from '@fecpc/content/site';
 import { usePublicEvents } from '@/lib/events';
 import { LEVEL, level, quests, rankFor, XP } from '@fecpc/contracts';
@@ -31,17 +31,17 @@ export default function Today({
 }: {
   up: { id: number; name: string; when: string; start: number; durationH: number }[];
 }) {
-  const { s, me, xp, act, sheets, news } = useStore();
+  const { s, xp, act, sheets, news } = useStore();
   const { isSolved } = useSolved();
   const { data: cf } = useJudge();
   const daily = useDaily();
-  const owed = myInvoices(s.reg).filter((i) => owes(s.pay, i.id));
+  const owed = s.dues.filter((i) => owes(s.pay, i.id));
   const week = sheets.find((x) => x.kind === 'weekly');
   const weekDone = week?.problems.filter((p) => isSolved(p.id)).length ?? 0;
   const next = week?.problems.find((p) => !isSolved(p.id));
   const events = usePublicEvents();
   const unread = news.filter((a) => !s.read.includes(a.id));
-  const streak = me.streak + (s.checkin ? 1 : 0),
+  const streak = s.run,
     lv = level(xp);
   const q = quests(s),
     qn = q.filter((x) => x.done).length;

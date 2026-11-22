@@ -1,5 +1,6 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Denied, Page, Tabs } from '@/components/app/Shell';
 import { useStore } from '@/components/app/Store';
 import { Bars } from '@/components/app/Charts';
@@ -12,7 +13,7 @@ import { PersonPicker } from '@/components/app/shared/PersonPicker';
 import { SaveForm } from '@/components/app/SaveBar';
 import { useConfirm } from '@/components/app/shared/PromptDialog';
 
-const allTabs = ['Board', 'Meetings', 'Documents', 'Inventory', 'Sponsors', 'Reports'] as const;
+const allTabs = ['Board', 'Documents', 'Inventory', 'Reports'] as const;
 // Assignee picker shared by tasks, action items and equipment; '' means nobody.
 function Who({
   value,
@@ -33,10 +34,10 @@ function Who({
     />
   );
 }
-const tk = (n: number) => '৳' + n.toLocaleString('en');
 
 export default function Ops() {
   const sure = useConfirm();
+  const [addingDoc, setAddingDoc] = useState(false);
   const { s, me, act, office, who, members } = useStore();
   const [tab, setTab] = useState<(typeof allTabs)[number]>('Board');
   // Drag a card onto a column to move it; `moving` shows it there until the server confirms.
@@ -48,12 +49,9 @@ export default function Ops() {
         <Denied need="a committee role" />
       </Page>
     );
-  const { inventory, meetings, reports, sponsors, tasks, vault } = office.ops;
-  // The sponsor ledger is for finance roles.
-  const tabs = allTabs.filter((t) => t !== 'Sponsors' || sponsors);
+  const { docs, inventory, reports, tasks } = office.ops;
   const people = members.filter((m) => !m.suspended);
   const admin = isAdmin(s.roles);
-  const day = (d: string | null) => (d ? fmtDate(d) : 'no date');
   return (
     <Page
       title={
@@ -69,7 +67,7 @@ export default function Ops() {
         )
       }
     >
-      <Tabs tabs={tabs} value={tab} onChange={setTab} />
+      <Tabs tabs={allTabs} value={tab} onChange={setTab} />
       {tab === 'Board' && (
         <>
           <SaveForm
@@ -142,160 +140,49 @@ export default function Ops() {
           </div>
         </>
       )}
-      {tab === 'Meetings' && (
+      {tab === 'Documents' && (
         <div className="stack">
-          <SaveForm
-            className="row ops-add"
-            label="New meeting"
-            saveLabel="Add meeting"
-            onSubmit={async (e) => {
-              const f = e.currentTarget,
-                d = new FormData(f);
-              const agenda = String(d.get('agenda'))
-                .split('\n')
-                .map((x) => x.trim())
-                .filter(Boolean);
-              const ok = await act('saveMeeting', {
-                date: d.get('date'),
-                title: String(d.get('title')).trim(),
-                agenda,
-              });
-              if (ok) f.reset();
-              return ok;
-            }}
+          <button
+            className="btn sm b"
+            style={{ alignSelf: 'flex-end' }}
+            onClick={() => setAddingDoc(true)}
           >
-            <DatePicker name="date" label="Date" required />
-            <input
-              name="title"
-              className="input"
-              placeholder="New meeting"
-              aria-label="Meeting title"
-              required
-              minLength={3}
-            />
-            <textarea
-              name="agenda"
-              className="input"
-              rows={1}
-              placeholder="Agenda, one item per line"
-              aria-label="Agenda"
-            />
-          </SaveForm>
-          {meetings.length === 0 && <p className="body">No meetings yet.</p>}
-          <div className="bento">
-            {meetings.map((m) => (
-              <section key={m.id} className="panel c6 meeting">
-                <span className="row between">
-                  <p className="label">{day(m.date)}</p>
+            + Add document
+          </button>
+          {addingDoc && <DocModal onClose={() => setAddingDoc(false)} />}
+          {docs.length === 0 && <p className="body">No documents yet.</p>}
+          <div className="list">
+            {docs.map((doc) => (
+              <div key={doc.id}>
+                <span className="grow">
+                  <a className="link" href={doc.url} target="_blank" rel="noopener noreferrer">
+                    <strong>{doc.title}</strong> ↗
+                  </a>
+                  {doc.about && <span className="mut"> · {doc.about}</span>}
+                  <br />
+                  <span className="label">
+                    {doc.by ?? 'former member'} · {fmtDate(doc.at)} · {host(doc.url)}
+                  </span>
+                </span>
+                {(admin || doc.byId === me.id) && (
                   <button
-                    className="btn xs line danger"
-                    aria-label={`Delete ${m.title}`}
+                    className="btn xs line"
+                    aria-label={`Delete ${doc.title}`}
                     onClick={async () =>
-                      (await sure(`Delete “${m.title}” and its action items?`)) &&
-                      act('deleteMeeting', { id: m.id })
+                      (await sure(
+                        `Delete ${doc.title}?`,
+                        'The link is removed for everyone on the committee.',
+                        'Delete',
+                        true,
+                      )) && act('deleteDoc', { id: doc.id })
                     }
                   >
                     ×
                   </button>
-                </span>
-                <h2 className="h3">{m.title}</h2>
-                {m.agenda.length > 0 && (
-                  <>
-                    <p className="label">Agenda</p>
-                    <ol className="prose">
-                      {m.agenda.map((a) => (
-                        <li key={a}>{a}</li>
-                      ))}
-                    </ol>
-                  </>
                 )}
-                <p className="label">Action items</p>
-                <div className="list">
-                  {m.actions.map((x) => (
-                    <div key={x.id} style={{ alignItems: 'center', gap: 10 }}>
-                      <input
-                        type="checkbox"
-                        className="check"
-                        aria-label={`Done: ${x.what}`}
-                        checked={x.done}
-                        onChange={() => act('saveMeetingAction', { ...x, done: !x.done })}
-                      />
-                      <span
-                        className="grow"
-                        style={{ textDecoration: x.done ? 'line-through' : 'none' }}
-                      >
-                        {x.what}
-                      </span>
-                      <Who
-                        label={`Owner of ${x.what}`}
-                        value={x.who}
-                        onPick={(v) => act('saveMeetingAction', { ...x, who: v })}
-                      />
-                      <button
-                        className="btn xs line"
-                        aria-label={`Remove ${x.what}`}
-                        onClick={() => act('deleteMeetingAction', { id: x.id })}
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                <SaveForm
-                  className="row"
-                  style={{ '--g': '8px' } as React.CSSProperties}
-                  label="New action item"
-                  saveLabel="Add item"
-                  onSubmit={async (e) => {
-                    const f = e.currentTarget,
-                      d = new FormData(f);
-                    const ok = await act('saveMeetingAction', {
-                      meeting: m.id,
-                      what: String(d.get('what')).trim(),
-                      who: d.get('who') || null,
-                    });
-                    if (ok) f.reset();
-                    return ok;
-                  }}
-                >
-                  <input
-                    name="what"
-                    className="input"
-                    style={{ flex: '1 1 160px' }}
-                    placeholder="New action item"
-                    aria-label="New action item"
-                    required
-                    minLength={3}
-                  />
-                  <PersonPicker name="who" people={people} label="Owner" />
-                </SaveForm>
-              </section>
+              </div>
             ))}
           </div>
-        </div>
-      )}
-      {tab === 'Documents' && (
-        <div className="scroll-x">
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Document</th>
-                <th>Type</th>
-                <th>Detail</th>
-              </tr>
-            </thead>
-            <tbody>
-              {vault.map(([n, t, d]) => (
-                <tr key={n}>
-                  <td>
-                    <strong>{n}</strong>
-                  </td>
-                  <td>{t}</td>
-                  <td className="mut">{d}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       )}
       {tab === 'Inventory' && (
@@ -363,31 +250,6 @@ export default function Ops() {
               </div>
             ))}
           </div>
-        </div>
-      )}
-      {tab === 'Sponsors' && (
-        <div className="bento">
-          {(sponsors ?? []).map((sp) => (
-            <section key={sp.name} className="panel c4">
-              <h2 className="h3">{sp.name}</h2>
-              <p className="big" style={{ fontSize: 36 }}>
-                {tk(sp.got)}
-                <span className="mut" style={{ fontSize: '.45em' }}>
-                  {' '}
-                  / {tk(sp.promised)}
-                </span>
-              </p>
-              <div
-                className="meter"
-                style={{ '--v': `${(sp.got / sp.promised) * 100}%` } as React.CSSProperties}
-              >
-                <i />
-              </div>
-              <p className="label">We owe</p>
-              <p className="body">{sp.owe}</p>
-              <p className="label">{sp.last}</p>
-            </section>
-          ))}
         </div>
       )}
       {tab === 'Reports' && (
@@ -563,5 +425,82 @@ function TaskCard({
         </span>
       )}
     </SaveForm>
+  );
+}
+
+const host = (url: string) => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return '';
+  }
+};
+
+/** Adds a committee document: title, short description and link. */
+function DocModal({ onClose }: { onClose: () => void }) {
+  const { act } = useStore();
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    addEventListener('keydown', onKey);
+    return () => removeEventListener('keydown', onKey);
+  }, [onClose]);
+  // Portalled into <main> (which carries the theme): the page's entry animation is a transform, which would trap a fixed backdrop inside it.
+  return createPortal(
+    <div
+      className="cm-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Add document"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <form
+        className="cm-modal"
+        style={{ maxWidth: 520 }}
+        onSubmit={async (e) => {
+          e.preventDefault();
+          const d = new FormData(e.currentTarget);
+          setBusy(true);
+          const ok = await act('saveDoc', {
+            title: String(d.get('title')).trim(),
+            about: String(d.get('about')).trim(),
+            url: String(d.get('url')).trim(),
+          });
+          setBusy(false);
+          if (ok) onClose();
+        }}
+      >
+        <div className="cm-modal-head">
+          <h2 className="h3">Add document</h2>
+          <button type="button" className="cm-modal-close" aria-label="Close" onClick={onClose}>
+            ×
+          </button>
+        </div>
+        <label className="field">
+          <span className="label">Title</span>
+          <input name="title" className="input" required minLength={3} maxLength={120} autoFocus />
+        </label>
+        <label className="field">
+          <span className="label">Short description</span>
+          <textarea name="about" className="input" rows={2} maxLength={300} />
+        </label>
+        <label className="field">
+          <span className="label">Link</span>
+          <input name="url" type="url" className="input" placeholder="https://…" required />
+        </label>
+        <div
+          className="row"
+          style={{ justifyContent: 'flex-end', '--g': '8px' } as React.CSSProperties}
+        >
+          <button type="button" className="btn sm line" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" className="btn sm" disabled={busy}>
+            Add document
+          </button>
+        </div>
+      </form>
+    </div>,
+    document.querySelector('main') ?? document.body,
   );
 }

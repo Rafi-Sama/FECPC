@@ -5065,9 +5065,26 @@ select.member-filter-ctrl {
   font-size: 14px;
   width: auto;
 }
+/* Solid destructive buttons: white on red, one red for every skin so the contrast holds (some skins' --bad is pale). */
 .btn.danger {
+  background: #c4321c;
+  color: #fff;
+  border-color: #c4321c;
+}
+.btn.danger:hover {
+  background: #a3260f;
+  color: #fff;
+}
+/* Outline variant: red text and border on the page. */
+.btn.line.danger {
+  background: none;
   color: var(--bad);
   border-color: var(--bad);
+}
+.btn.line.danger:hover {
+  background: #c4321c;
+  color: #fff;
+  border-color: #c4321c;
 }
 .accounts td {
   vertical-align: middle;
@@ -8898,5 +8915,36 @@ textarea.tm-code {
   }
   .al-tag {
     grid-column: 2;
+  }
+}
+
+/* Payment receipt modal: on screen a dialog, on paper only the receipt. */
+.receipt-modal .receipt {
+  margin-top: 0;
+  padding: 28px;
+  width: min(520px, 100%);
+}
+@media print {
+  body:has(.receipt-modal) * {
+    visibility: hidden;
+  }
+  body:has(.receipt-modal) .receipt-modal,
+  body:has(.receipt-modal) .receipt-modal * {
+    visibility: visible;
+  }
+  .receipt-modal {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    display: block;
+    padding: 0;
+    background: none;
+    backdrop-filter: none;
+  }
+  .receipt-modal .receipt {
+    box-shadow: none;
+    border: 1px dashed #000 !important;
+    color: #000;
+    background: #fff;
   }
 }

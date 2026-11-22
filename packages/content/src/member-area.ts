@@ -52,25 +52,8 @@ export const upsolve = [
   { id: '1195C', from: 'Weekly #40 · E', due: 'overdue' },
 ];
 
-export const invoices: {
-  id: string;
-  label: string;
-  amount: number;
-  due: string;
-  event?: string;
-}[] = [
-  { id: 'INV-2611', label: 'Semester subscription, Autumn 2026', amount: 300, due: '2026-11-16' },
-  {
-    id: 'INV-2612',
-    label: 'Winter Hack Night registration',
-    amount: 150,
-    due: '2026-12-03',
-    event: 'hack-night',
-  }, // owed only by members who registered
-];
-/** The invoices that apply to this member: term dues for everyone, event fees only for events they registered for. */
-export const myInvoices = (reg: string[]) =>
-  invoices.filter((i) => !i.event || reg.includes(i.event));
+/** The label alumni contributions carry in the payment records. */
+export const CONTRIBUTION = 'Alumni contribution';
 /** True while the member still has to act on an invoice: nothing submitted, or the last submission was rejected. */
 export const owes = (pay: Record<string, { status: string }>, id: string) =>
   !pay[id] || pay[id].status === 'rejected';

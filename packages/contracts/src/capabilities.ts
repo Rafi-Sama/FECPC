@@ -50,6 +50,12 @@ export const matrix = {
     president: 'view',
     super_admin: Y,
   },
+  'finance.fee': {
+    label: 'Set the amount of member dues',
+    secretary: Y,
+    president: Y,
+    super_admin: Y,
+  },
   'expense.approve': {
     label: 'Approve expenses',
     treasurer: 'propose',

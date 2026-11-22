@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { useStore } from '../Store';
 import { useSolved } from '../Judge';
-import { myInvoices, owes, sheet } from '@fecpc/content/member-area';
+import { owes, sheet } from '@fecpc/content/member-area';
 
 const css = (o: Record<string, string | number>) => o as React.CSSProperties;
 
@@ -13,7 +13,7 @@ export function Onboarding() {
   const steps: [string, boolean, string][] = [
     ['Link your Codeforces handle', !!s.handle, '/app/profile'],
     ['Solve three starter problems', starter >= 3, '/app/sheets'],
-    ['Clear your dues', myInvoices(s.reg).every((i) => !owes(s.pay, i.id)), '/app/finance'],
+    ['Clear your dues', s.dues.every((i) => !owes(s.pay, i.id)), '/app/finance'],
     ['Register for an event', s.reg.length > 0, '/app/events'],
   ];
   const n = steps.filter((x) => x[1]).length;

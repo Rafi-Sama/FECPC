@@ -1,5 +1,6 @@
 // The shape of everything the server sends a signed-in member. Built by the API's loadState (modules/member-area/state.ts), read by the web store.
 import type { Post, Role } from './roles.ts';
+import type { Due } from './dues.ts';
 import type { Applicant, RecruitLink } from './recruit.ts';
 import type { ProfileRequest, ProfileRequestReview } from './profile.ts';
 
@@ -49,6 +50,8 @@ export type S = {
   read: string[];
   kudos: string[];
   reg: string[];
+  /** This member's bills: member dues, post dues and event fees (see dues.ts). Settled ones stay listed. */
+  dues: Due[];
   present: string[];
   quiz: Record<string, number>;
   votes: Record<string, string>;
@@ -63,6 +66,8 @@ export type S = {
   posts: number;
   spent: number;
   checkin: boolean;
+  /** Platform streak: consecutive daily check-ins, including today once checked in. */
+  run: number;
   feedPosts: number;
   feedUpvotes: number;
   ideasCount: number;
@@ -410,6 +415,12 @@ export type Office = {
     budgets: { id: number; name: string; plan: number; spent: number }[];
   };
   expenses?: Expense[];
+  /** Finance roles: how many are paid up for their current period, by account, and alumni gifts this term. */
+  dues?: {
+    term: { of: number; paid: number; waiting: number; fee: number };
+    post: { of: number; paid: number; waiting: number; fee: number };
+    gifts: { amount: number; count: number };
+  };
   recruit?: { links: RecruitLink[]; applicants: Applicant[] };
   /** Open profile change requests, for officers with full `member.editDetails`. */
   profileRequests?: ProfileRequestReview[];
@@ -427,16 +438,18 @@ export type Office = {
   feedback?: { body: string; at: string }[];
   ops?: {
     tasks: { id: number; title: string; who: string | null; due: string | null; col: string }[];
-    meetings: {
+    docs: {
       id: number;
-      date: string;
       title: string;
-      agenda: string[];
-      actions: { id: number; what: string; who: string | null; done: boolean }[];
+      about: string;
+      url: string;
+      /** Who added it; null once that account is deleted. */
+      by: string | null;
+      byId: string | null;
+      /** YYYY-MM-DD */
+      at: string;
     }[];
-    vault: string[][];
     inventory: { id: number; name: string; holder: string | null }[];
-    sponsors?: { name: string; promised: number; got: number; owe: string; last: string }[];
     reports: { growth: number[]; retention: number[]; solves: number[] };
   };
 };

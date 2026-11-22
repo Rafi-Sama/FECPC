@@ -1,12 +1,15 @@
 // Builds everything one member's screens need, in one query (two for officers).
 // This is the only place that decides what a role may SEE: a dataset the role has no capability for is never sent.
 import { mailStatus } from './mail.ts';
-import { myInvoices } from '@fecpc/content/member-area';
 import {
   formatMilestoneTitle,
   milestoneKudosNotification,
   can,
   canFully,
+  duesFor,
+  FEE_KEYS,
+  feesOf,
+  periods,
   PROFILE_FIELDS,
   type ProfileRequest,
   isAdmin,
@@ -30,8 +33,9 @@ import { MILESTONE_FRESHNESS_DAYS } from './milestones.ts';
 export const TZ = 'Asia/Dhaka';
 export const today = (now = new Date()) =>
   new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(now); // YYYY-MM-DD
+export const yesterday = () => today(new Date(Date.now() - 864e5));
 export { isAdmin, isCommittee };
-/** The sponsor ledger needs a finance capability. */
+/** Money records need a finance capability. */
 export const seesMoney = (r: Who) => !!(can(r, 'payments.verify') || can(r, 'expense.approve'));
 
 /** The member's own lists and preferences, as stored in users.progress. Unknown or missing fields fall back to empty. */
@@ -48,6 +52,8 @@ export type Progress = {
   kv: Record<string, string>;
   spent: number;
   checkin: string;
+  /** Consecutive days checked in, ending on `checkin`. */
+  run: number;
 };
 export function progress(raw: Partial<Progress> | null): Progress {
   const p = raw ?? {};
@@ -64,6 +70,7 @@ export function progress(raw: Partial<Progress> | null): Progress {
     kv: p.kv ?? {},
     spent: p.spent ?? 0,
     checkin: p.checkin ?? '',
+    run: p.run ?? (p.checkin ? 1 : 0),
   };
 }
 
@@ -71,7 +78,10 @@ const ROSTER = `json_build_object('id', id, 'no', member_no, 'name', name, 'hand
   'solved', greatest(problems_solved, solved), 'problems_solved', greatest(problems_solved, solved), 'avatar_url', avatar_url, 'cf_contests', cf_contests, 'streak', greatest(current_streak, streak), 'current_streak', greatest(current_streak, streak), 'contests_participated', contests_participated, 'helper', helper, 'skills', skills, 'xp', solved * 12 + vj_solved * 12 + streak * 30 + helper * 8, 'roleKey', role, 'post', post, 'email', email, 'suspended', suspended, 'system', system, 'pending', pass_hash is null and google_sub is null)`;
 const EXPENSE = `json_build_object('id', 'EXP-' || e.id, 'by', e.by, 'name', w.name, 'what', e.what, 'amount', e.amount, 'event', e.event, 'status', e.status)`;
 const MINE = `
-select u.email, u.progress, u.vjudge_handle, u.vj_solved, nullif(coalesce(nullif(u.cf_handle, ''), u.handle), '') as cf_handle,
+select u.email, u.progress, to_char(u.created_at at time zone '${TZ}', 'YYYY-MM-DD') as joined, to_char(u.post_since, 'YYYY-MM-DD') as post_since,
+  (select coalesce(json_agg(json_build_object('id', e.id, 'title', e.title, 'fee', e.fee, 'date', to_char(e.starts_at at time zone '${TZ}', 'YYYY-MM-DD')) order by e.starts_at), '[]')
+    from event_entries x join club_events e on e.id = x.event_id where x.user_id = $1 and x.role_id is null and x.status = 'approved' and e.fee > 0) as fee_events,
+  u.vjudge_handle, u.vj_solved, nullif(coalesce(nullif(u.cf_handle, ''), u.handle), '') as cf_handle,
   (select coalesce(json_object_agg(post, roles), '{}') from post_roles) as post_roles, (select ${ROSTER} from users m where m.id = u.id) as me,
   (select coalesce(json_agg(distinct event_id), '[]') from event_entries where user_id = $1 and role_id is null and status = 'approved') as reg,
   (select coalesce(json_agg(key), '[]') from attendance where user_id = $1) as present,
@@ -226,10 +236,9 @@ select
     from waiver_requests where user_id = $2 and status = 'waived') as waived,
   case when $3 then (select coalesce(json_agg(json_build_object('id', id, 'title', title, 'who', who, 'due', to_char(due, 'YYYY-MM-DD'), 'col', col) order by due nulls last, id), '[]')
     from committee_tasks) end as tasks,
-  case when $3 then (select coalesce(json_agg(json_build_object('id', m.id, 'date', to_char(m.day, 'YYYY-MM-DD'), 'title', m.title, 'agenda', m.agenda,
-      'actions', (select coalesce(json_agg(json_build_object('id', a.id, 'what', a.what, 'who', a.who, 'done', a.done) order by a.id), '[]')
-        from meeting_actions a where a.meeting_id = m.id)) order by m.day desc, m.id desc), '[]')
-    from (select * from meetings order by day desc limit 50) m) end as meetings,
+  case when $3 then (select coalesce(json_agg(json_build_object('id', d.id, 'title', d.title, 'about', d.about, 'url', d.url, 'by', u.name, 'byId', d.created_by,
+      'at', to_char(d.created_at at time zone '${TZ}', 'YYYY-MM-DD')) order by d.id desc), '[]')
+    from documents d left join users u on u.id = d.created_by) end as docs,
   case when $3 then (select coalesce(json_agg(json_build_object('id', id, 'name', name, 'holder', holder) order by id), '[]') from inventory) end as inventory`;
 
 type Raw = Roster & {
@@ -263,12 +272,17 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
     : {};
 
   const flags = { ...p.flags },
-    kv = { ...p.kv };
+    kv = { ...p.kv },
+    club = row.club as Record<string, unknown>,
+    fees = feesOf({
+      [FEE_KEYS.term]: club['kv:' + FEE_KEYS.term],
+      [FEE_KEYS.post]: club['kv:' + FEE_KEYS.post],
+    });
   for (const [k, v] of Object.entries(row.club as Record<string, unknown>)) {
     const [kind, key] = [k.slice(0, k.indexOf(':')), k.slice(k.indexOf(':') + 1)];
     const everyone =
       (kind === 'flag' && (key === 'unfrozen' || key.startsWith('mod:'))) ||
-      (kind === 'kv' && key === 'contests');
+      (kind === 'kv' && (key === 'contests' || key.startsWith('fee:')));
     if (!committee && !everyone) continue; // members see only what changes their own screens
     if (kind === 'flag') flags[key] = v === true;
     else kv[key] = String(v);
@@ -291,8 +305,17 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
     quiz: p.quiz,
     spent: p.spent,
     checkin: p.checkin === today(),
+    run: p.checkin === today() || p.checkin === yesterday() ? p.run : 0,
     kudos: [...row.kudos, ...p.shop.map((x) => 'shop:' + x)],
     reg: row.reg,
+    dues: raw.system
+      ? []
+      : duesFor(
+          { joined: row.joined, postSince: row.post_since, alumni: role === 'alumni' },
+          fees,
+          row.fee_events,
+          today(),
+        ),
     present: row.present,
     votes: row.votes,
     pay: row.pay,
@@ -354,6 +377,7 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
       ledger: [...money.ledger, ...data.ledger],
       budgets: money.budgets,
     };
+  if (seesMoney(roles)) office.dues = await duesSummary(db, fees, money.since);
   if (caps.exp) office.expenses = expenses;
   if (caps.apps) office.recruit = { links: off.links, applicants: off.apps };
   if (caps.apps || caps.feedback) office.mail = await mailStatus(db);
@@ -376,16 +400,14 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
   if (committee)
     office.ops = {
       tasks: money.tasks,
-      meetings: money.meetings,
-      vault: data.vault,
+      docs: money.docs,
       inventory: money.inventory,
-      sponsors: seesMoney(roles) ? data.sponsors : undefined,
       reports: data.reports,
     };
 
   // The inbox is derived from real records, so it can never claim something that did not happen.
   const inbox: AppState['inbox'] = [];
-  for (const inv of raw.system ? [] : myInvoices(row.reg)) {
+  for (const inv of s.dues) {
     const pay = row.pay[inv.id];
     if (!pay)
       inbox.push({
@@ -584,5 +606,54 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
     fantasy: row.fantasy,
     challenges: row.challenges,
     postRoles,
+  };
+}
+
+/** Who is paid up for their current period, counted per account id over every live payment. */
+async function duesSummary(db: Db, fees: { term: number; post: number }, since: string) {
+  const people = (
+    await db.query(
+      `select id, to_char(created_at at time zone '${TZ}', 'YYYY-MM-DD') joined, to_char(post_since, 'YYYY-MM-DD') post_since
+       from users where not system and not suspended and role <> 'alumni' and (pass_hash is not null or google_sub is not null)`,
+    )
+  ).rows as { id: string; joined: string; post_since: string | null }[];
+  const live = new Map(
+    (
+      await db.query(
+        `select user_id || ' ' || invoice_id k, status from payments where status <> 'rejected' and invoice_id ~ '^(TERM|POST)-'
+         union all select user_id || ' ' || invoice_id, 'verified' from waiver_requests where status = 'waived'`,
+      )
+    ).rows.map((r: { k: string; status: string }) => [r.k, r.status]),
+  );
+  const t = today();
+  const tally = (
+    kind: 'TERM' | 'POST',
+    fee: number,
+    from: (u: (typeof people)[number]) => string | null,
+  ) => {
+    const r = { of: 0, paid: 0, waiting: 0, fee };
+    if (!fee) return r;
+    for (const u of people) {
+      const start = from(u),
+        cur = start && periods(start, t).at(-1);
+      if (!cur) continue;
+      r.of++;
+      const st = live.get(`${u.id} ${kind}-${cur}`);
+      if (st === 'verified') r.paid++;
+      else if (st === 'pending') r.waiting++;
+    }
+    return r;
+  };
+  const gifts = (
+    await db.query(
+      `select coalesce(sum(amount), 0)::int amount, count(*)::int count from payments
+       where status = 'verified' and invoice_id like 'GIFT-%' and created_at at time zone '${TZ}' >= $1::date`,
+      [since],
+    )
+  ).rows[0] as { amount: number; count: number };
+  return {
+    term: tally('TERM', fees.term, (u) => u.joined),
+    post: tally('POST', fees.post, (u) => u.post_since),
+    gifts,
   };
 }

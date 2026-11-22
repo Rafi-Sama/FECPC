@@ -1,6 +1,6 @@
 'use client';
 import { useMemo, useState } from 'react';
-import { cfUrl, myInvoices, owes } from '@fecpc/content/member-area';
+import { cfUrl, owes } from '@fecpc/content/member-area';
 import { can, rankFor, type CfRound, type Roster } from '@fecpc/contracts';
 import { toggle, useStore } from '../Store';
 import { HandleBox, useJudge, useSolved } from '../Judge';
@@ -257,7 +257,7 @@ export function Trophies() {
       '৳0',
       'Zero Dues',
       'Nothing owed to the club.',
-      me.system || myInvoices(s.reg).some((i) => owes(s.pay, i.id)) ? 0 : 1,
+      me.system || s.dues.some((i) => owes(s.pay, i.id)) ? 0 : 1,
       1,
     ],
   ];

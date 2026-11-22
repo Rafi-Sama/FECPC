@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { MemberFace } from './shared/MemberFace';
-import { myInvoices, owes } from '@fecpc/content/member-area';
+import { owes } from '@fecpc/content/member-area';
 import { can, canFully, isAdmin, isCommittee, roleName, LEVEL, level } from '@fecpc/contracts';
 import type { AppState } from '@fecpc/contracts';
 import { site } from '@/lib/site';
@@ -210,7 +210,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     Object.keys(subs).find((k) => subs[k].items.some((i) => i[0] === cur.href)) ?? cur.href;
   const fam = subs[top] && [[top, subs[top].self] as const, ...subs[top].items];
   const lv = level(xp),
-    streak = me.streak + (s.checkin ? 1 : 0);
+    streak = s.run;
   // Officer screens are not listed for roles that cannot open them (the server refuses those routes as well).
   // An operator account is not a member: it gets the officer screens, the directory and its own account, nothing personal.
   const show = (href: string) =>
@@ -244,7 +244,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const badge: Record<string, number> = {
     '/app/notifications': inbox.filter((n) => !s.read.includes(n.id)).length,
     '/app/finance':
-      (me.system ? 0 : myInvoices(s.reg).filter((i) => owes(s.pay, i.id)).length) +
+      (me.system ? 0 : s.dues.filter((i) => owes(s.pay, i.id)).length) +
       (canFully(s.roles, 'payments.verify')
         ? (office.queue ?? []).filter((q) => q.status === 'pending' && !q.mine).length
         : 0),
