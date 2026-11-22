@@ -608,9 +608,11 @@
   position: absolute;
   right: -6px;
   bottom: -34px;
-  color: transparent;
+  /* The card is an inverted surface; --mut is dark in the light skin, so use its own text colour. */
+  color: inherit;
+  -webkit-text-fill-color: transparent;
   font: 700 150px/1 var(--f-disp);
-  -webkit-text-stroke: 1.5px color-mix(in srgb, var(--mut) 22%, transparent);
+  -webkit-text-stroke: 1.5px color-mix(in srgb, currentColor 30%, transparent);
 }
 
 .finance-chart {
