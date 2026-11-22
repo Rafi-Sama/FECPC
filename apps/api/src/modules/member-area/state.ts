@@ -436,7 +436,7 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
       id: n.id,
       cat: 'Announcement',
       text: `${n.by}: ${n.title}`,
-      href: '/app/community?tab=announcements',
+      href: `/app/community?tab=announcements&open=${encodeURIComponent(n.id)}`,
     });
   for (const g of row.team_invites as { id: string; from: string }[])
     inbox.push({

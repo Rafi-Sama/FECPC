@@ -2009,6 +2009,15 @@ test('ops: the committee creates, edits, assigns and deletes tasks, documents an
   await act('sadia', { type: 'deleteDoc', id: doc.id });
   assert.ok(!(await ops()).docs.some((y) => y.id === doc.id));
 
+  await refused(403, act('nadia', { type: 'saveItem', name: 'Camera', holder: 'tasnim' })); // not an admin
+  await act('nadia', { type: 'saveItem', name: 'Camera', holder: 'nadia' });
+  await act('sadia', { type: 'saveItem', name: 'Tripod', holder: 'rahim' });
+  assert.deepEqual(
+    (await ops()).inventory
+      .filter((y) => ['Camera', 'Tripod'].includes(y.name))
+      .map((y) => y.holder),
+    ['nadia', 'rahim'],
+  );
   await act('sadia', { type: 'saveItem', name: 'Spare router' });
   const it = (await ops()).inventory.find((y) => y.name === 'Spare router')!;
   await act('nadia', { type: 'holdItem', id: it.id, to: 'nadia' });

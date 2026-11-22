@@ -292,14 +292,12 @@ export default function Today({
                       {a.requires_ack ? ' · must read' : ''}
                     </span>
                   </span>
-                  {!s.read.includes(a.id) && (
-                    <button
-                      className="btn xs line"
-                      onClick={() => act('toggle', { list: 'read', id: a.id, on: true })}
-                    >
-                      Read
-                    </button>
-                  )}
+                  <Link
+                    className="btn xs line"
+                    href={`/app/community?tab=announcements&open=${encodeURIComponent(a.id)}`}
+                  >
+                    Open
+                  </Link>
                 </li>
               ))}
             </ul>

@@ -1044,8 +1044,22 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     need(isCommittee(a.roles), 'Only the committee manages the workspace.');
     const name = text(i.name, 2, 80, 'The item');
     if (i.id === undefined || i.id === null) {
-      await c.query(`insert into inventory (name, created_by) values ($1, $2)`, [name, a.id]);
-      return void (await audit(c, a, `added equipment: ${name}`));
+      // Who has it from the start: nobody, yourself, or (admins) anyone. The same rule as handing it over.
+      const holder = await memberOrNull(c, i.holder);
+      need(
+        holder === null || holder === a.id || isAdmin(a.roles),
+        'Only an admin hands equipment to someone else.',
+      );
+      await c.query(`insert into inventory (name, holder, created_by) values ($1, $2, $3)`, [
+        name,
+        holder,
+        a.id,
+      ]);
+      return void (await audit(
+        c,
+        a,
+        `added equipment: ${name}${holder ? `, with ${holder}` : ''}`,
+      ));
     }
     const r = await c.query(`update inventory set name = $2 where id = $1`, [
       posInt(i.id, 'item'),

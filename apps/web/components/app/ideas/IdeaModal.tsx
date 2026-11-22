@@ -188,6 +188,12 @@ export function IdeaModal({
                       {detail.my_interest === 'accepted' && (
                         <span className="pill ok cm-idea-accepted-badge">✓ Accepted</span>
                       )}
+                      {detail.my_interest === 'declined' && (
+                        <span className="pill bad cm-idea-status-badge">✗ Declined</span>
+                      )}
+                      {detail.my_interest === 'pending' && (
+                        <span className="pill warn cm-idea-status-badge">Interest sent</span>
+                      )}
                     </div>
                   </div>
                   <h2 className="cm-idea-detail-title">{editing ? 'Edit idea' : detail.title}</h2>
@@ -250,16 +256,6 @@ export function IdeaModal({
                         <option value="closed">Closed</option>
                       </select>
                     </label>
-                    <div className="row" style={{ '--g': '8px' } as React.CSSProperties}>
-                      <button
-                        type="button"
-                        className="btn sm line"
-                        data-close
-                        onClick={() => setEditing(false)}
-                      >
-                        Close editor
-                      </button>
-                    </div>
                   </SaveForm>
                 ) : (
                   <>
@@ -309,12 +305,6 @@ export function IdeaModal({
                       <span className="cm-idea-interested-label">
                         INTERESTED ({detail.interested_count})
                       </span>
-                      {detail.my_interest === 'declined' && (
-                        <span className="pill bad cm-idea-status-badge">✗ Declined</span>
-                      )}
-                      {detail.my_interest === 'pending' && (
-                        <span className="pill warn cm-idea-status-badge">Interest sent</span>
-                      )}
                     </div>
                   </div>
 
@@ -335,6 +325,17 @@ export function IdeaModal({
                           {detail.roles.length > 0 ? 'Apply to Join' : "I'm in"}
                         </button>
                       )}
+                    {editing && (
+                      // data-close: with unsaved edits the save bar holds the editor open instead.
+                      <button
+                        type="button"
+                        className="btn xs line"
+                        data-close
+                        onClick={() => setEditing(false)}
+                      >
+                        Close editor
+                      </button>
+                    )}
                     {isPoster && onManage && !editing && (
                       <button
                         type="button"
