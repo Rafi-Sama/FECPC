@@ -15,6 +15,8 @@ import { PostModal } from '@/components/app/feed/PostModal';
 import { ReportsPanel } from '@/components/app/feed/ReportsPanel';
 import { VoteWidget } from '@/components/app/feed/VoteWidget';
 import { IdeaModal } from '@/components/app/ideas/IdeaModal';
+import { JoinIdeaModal, type JoinIdeaTarget } from '@/components/app/ideas/JoinIdeaModal';
+import { ManageInterestedModal } from '@/components/app/ideas/ManageInterestedModal';
 import { ideaTypeLabel, NewIdeaModal } from '@/components/app/ideas/NewIdeaModal';
 import { ProfileModal } from '@/components/app/members/ProfileModal';
 import {
@@ -23,9 +25,10 @@ import {
   relTime,
 } from '@/components/app/shared/MarkdownEditor';
 import { TierAvatar, TierName } from '@/components/app/shared/SolvedTier';
+import { AvatarRing } from '@/components/app/shared/RatingBadge';
 import { HighlightMatch } from '@/components/app/alumni/HighlightMatch';
 import { announcements } from '@fecpc/content/member-area';
-import { can, canFully, isCommittee } from '@fecpc/contracts';
+import { can, canFully, isCommittee, rankFor } from '@fecpc/contracts';
 import { useConfirm } from '@/components/app/shared/PromptDialog';
 import type {
   FeedCategory,
@@ -234,8 +237,20 @@ function CommunityContent() {
   const [annRequiresAck, setAnnRequiresAck] = useState(false);
   const [activeAnn, setActiveAnn] = useState<UnifiedAnnouncement | null>(null);
   const canAnnounce = !!can(s.roles, 'announce.post');
-  const [composeOpen, setComposeOpen] = useState(canAnnounce);
+  const [composeOpen, setComposeOpen] = useState(false);
   const [optimisticReadIds, setOptimisticReadIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!composeOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        resetAnnouncement();
+        setComposeOpen(false);
+      }
+    };
+    addEventListener('keydown', onKey);
+    return () => removeEventListener('keydown', onKey);
+  }, [composeOpen]);
 
   const allAnnouncements = useMemo<UnifiedAnnouncement[]>(() => {
     const dbItems: UnifiedAnnouncement[] = news.map((n) => ({
@@ -343,6 +358,9 @@ function CommunityContent() {
   const [ideaInitialized, setIdeaInitialized] = useState(false);
   const [newIdeaOpen, setNewIdeaOpen] = useState(false);
   const [activeIdeaId, setActiveIdeaId] = useState<number | null>(null);
+  const [manageIdeaId, setManageIdeaId] = useState<number | null>(null);
+  const [joinIdea, setJoinIdea] = useState<JoinIdeaTarget | null>(null);
+  const [joiningIdeaId, setJoiningIdeaId] = useState<number | null>(null);
   const ideaSentinelRef = useRef<HTMLDivElement>(null);
   const ideaReqSeq = useRef(0);
 
@@ -435,6 +453,23 @@ function CommunityContent() {
     if (!ok) await fetchIdeas(null, false);
   };
 
+  const handleCardJoin = async (idea: IdeaSummary) => {
+    if (joiningIdeaId !== null || idea.my_interest || idea.status === 'closed' || me.system) return;
+    if (idea.roles.length > 0) {
+      setJoinIdea({
+        id: idea.id,
+        title: idea.title,
+        author_name: idea.author_name,
+        roles: idea.roles,
+      });
+      return;
+    }
+    setJoiningIdeaId(idea.id);
+    const ok = await act('expressInterest', { ideaId: idea.id, response: {} });
+    setJoiningIdeaId(null);
+    if (ok) await fetchIdeas(null, false);
+  };
+
   /* ────────── POLLS STATE ────────── */
   const canPoll = canFully(s.roles, 'poll.create');
   const [pollQ, setPollQ] = useState('');
@@ -473,8 +508,15 @@ function CommunityContent() {
           <span className="acc">.</span>
         </>
       }
+      aside={
+        tab === 'Announcements' && canAnnounce ? (
+          <button type="button" className="ann-btn-primary" onClick={() => setComposeOpen(true)}>
+            + Publish
+          </button>
+        ) : undefined
+      }
     >
-      <Tabs tabs={tabs} value={tab} onChange={handleTabChange} />
+      {tab !== 'Announcements' && <Tabs tabs={tabs} value={tab} onChange={handleTabChange} />}
 
       {/* ────────── TAB 1: FEED ────────── */}
       {tab === 'Feed' && (
@@ -629,46 +671,40 @@ function CommunityContent() {
 
       {/* ────────── TAB 2: ANNOUNCEMENTS ────────── */}
       {tab === 'Announcements' && (
-        <div className={`ann-layout${composeOpen ? ' open' : ''}`}>
-          <div className="cm-chips ann-chips" role="group" aria-label="Filter announcements">
-            <button
-              type="button"
-              className={`tag ${annFilter === 'all' ? 'on' : ''}`}
-              aria-pressed={annFilter === 'all'}
-              onClick={() => setAnnFilter('all')}
-            >
-              All
-            </button>
-            <button
-              type="button"
-              className={`tag ${annFilter === 'unread' ? 'on' : ''}`}
-              aria-pressed={annFilter === 'unread'}
-              onClick={() => setAnnFilter('unread')}
-            >
-              Unread {unreadAnnCount}
-            </button>
-            <button
-              type="button"
-              className={`tag ${annFilter === 'must' ? 'on' : ''}`}
-              aria-pressed={annFilter === 'must'}
-              onClick={() => setAnnFilter('must')}
-            >
-              Must read
-            </button>
+        <div className="ann-container">
+          <div className="ann-nav-group">
+            <div className="ann-nav-tabs">
+              <Tabs tabs={tabs} value={tab} onChange={handleTabChange} />
+            </div>
+            <div className="ann-filter-tabs" role="group" aria-label="Filter announcements">
+              <button
+                type="button"
+                className={`ann-filter-btn ${annFilter === 'all' ? 'active' : ''}`}
+                aria-pressed={annFilter === 'all'}
+                onClick={() => setAnnFilter('all')}
+              >
+                All
+              </button>
+              <button
+                type="button"
+                className={`ann-filter-btn ${annFilter === 'unread' ? 'active' : ''}`}
+                aria-pressed={annFilter === 'unread'}
+                onClick={() => setAnnFilter('unread')}
+              >
+                Unread {unreadAnnCount}
+              </button>
+              <button
+                type="button"
+                className={`ann-filter-btn ${annFilter === 'must' ? 'active' : ''}`}
+                aria-pressed={annFilter === 'must'}
+                onClick={() => setAnnFilter('must')}
+              >
+                Must Read
+              </button>
+            </div>
           </div>
 
-          {canAnnounce && (
-            <button
-              type="button"
-              data-nav
-              className="btn sm ann-compose-btn"
-              aria-expanded={composeOpen}
-              onClick={() => setComposeOpen(!composeOpen)}
-            >
-              + Publish
-            </button>
-          )}
-          <section className="ann-list">
+          <main>
             <AnnouncementBoard
               items={filteredAnnouncements}
               isRead={isAnnRead}
@@ -680,95 +716,136 @@ function CommunityContent() {
               isOfficer={isOfficer}
               memberTotal={activeMemberTotal}
             />
-          </section>
+          </main>
+
           {composeOpen && (
-            <SaveForm
-              className="panel stack ann-compose"
-              style={{ '--g': '18px' } as React.CSSProperties}
-              label="Unpublished announcement"
-              saveLabel="Publish"
-              onDiscard={resetAnnouncement}
-              onSubmit={handlePublishAnnouncement}
+            <div
+              className="cm-backdrop ann-modal-backdrop"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Publish Announcement"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) {
+                  resetAnnouncement();
+                  setComposeOpen(false);
+                }
+              }}
             >
-              <p className="label">Publish · everyone sees this</p>
-              <label className="field">
-                <span className="label">Title</span>
-                <input
-                  className="input"
-                  value={annTitle}
-                  onChange={(e) => setAnnTitle(e.target.value)}
-                  required
-                  minLength={3}
-                  maxLength={140}
-                  placeholder="Headline for the announcement"
-                />
-              </label>
-              <MarkdownEditor
-                id="ann-body-md"
-                label="Message (Markdown)"
-                value={annBody}
-                onChange={setAnnBody}
-                rows={5}
-                maxLength={6000}
-                placeholder="Supports @mentions and > Date / Time / Venue lines"
-              />
-              <label
-                className="row"
-                style={{ cursor: 'pointer', '--g': '8px' } as React.CSSProperties}
-              >
-                <input
-                  type="checkbox"
-                  className="check"
-                  checked={annPinned}
-                  onChange={(e) => setAnnPinned(e.target.checked)}
-                />
-                Pin to top
-              </label>
-              <label
-                className="row"
-                style={{ cursor: 'pointer', '--g': '8px' } as React.CSSProperties}
-              >
-                <input
-                  type="checkbox"
-                  className="check"
-                  checked={annRequiresAck}
-                  onChange={(e) => setAnnRequiresAck(e.target.checked)}
-                />
-                Require acknowledgement
-              </label>
-              <button className="btn sm" style={{ alignSelf: 'flex-start' }}>
-                Publish
-              </button>
-            </SaveForm>
+              <div className="ann-modal publish-modal">
+                <div className="ann-modal-header">
+                  <div className="mono ann-modal-subtitle">Publish · Everyone sees this</div>
+                  <button
+                    type="button"
+                    className="ann-close-btn"
+                    aria-label="Close"
+                    onClick={() => {
+                      resetAnnouncement();
+                      setComposeOpen(false);
+                    }}
+                  >
+                    &times;
+                  </button>
+                </div>
+                <div className="ann-modal-body">
+                  <SaveForm
+                    label="Unpublished announcement"
+                    saveLabel="Publish"
+                    onDiscard={() => {
+                      resetAnnouncement();
+                      setComposeOpen(false);
+                    }}
+                    onSubmit={async () => {
+                      const ok = await handlePublishAnnouncement();
+                      if (ok) setComposeOpen(false);
+                    }}
+                  >
+                    <div className="ann-form-group">
+                      <label htmlFor="ann-title">Title</label>
+                      <input
+                        id="ann-title"
+                        type="text"
+                        className="ann-form-control"
+                        value={annTitle}
+                        onChange={(e) => setAnnTitle(e.target.value)}
+                        required
+                        minLength={3}
+                        maxLength={140}
+                        placeholder="e.g., Codeforces Round #800 Div 2"
+                      />
+                    </div>
+
+                    <div className="ann-form-group">
+                      <MarkdownEditor
+                        id="ann-body-md"
+                        label="Message (Markdown Supported)"
+                        value={annBody}
+                        onChange={setAnnBody}
+                        rows={5}
+                        maxLength={6000}
+                        placeholder="Supports @mentions and > Date / Time / Venue lines"
+                      />
+                    </div>
+
+                    <div style={{ marginBottom: '2rem' }}>
+                      <div className="ann-checkbox-group">
+                        <input
+                          type="checkbox"
+                          id="pin-top"
+                          checked={annPinned}
+                          onChange={(e) => setAnnPinned(e.target.checked)}
+                        />
+                        <label htmlFor="pin-top">Pin to top of feed</label>
+                      </div>
+                      <div className="ann-checkbox-group">
+                        <input
+                          type="checkbox"
+                          id="req-ack"
+                          checked={annRequiresAck}
+                          onChange={(e) => setAnnRequiresAck(e.target.checked)}
+                        />
+                        <label htmlFor="req-ack">Require acknowledgement (Must Read)</label>
+                      </div>
+                    </div>
+
+                    <button type="submit" className="ann-btn-primary" style={{ width: '100%' }}>
+                      Publish Announcement
+                    </button>
+                  </SaveForm>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       )}
 
       {/* ────────── TAB 3: IDEAS (merged with Teammates) ────────── */}
       {tab === 'Ideas' && (
-        <div className="stack" style={{ '--g': '16px' } as React.CSSProperties}>
-          <div className="row between" style={{ '--g': '12px' } as React.CSSProperties}>
+        <div className="cm-ideas">
+          <div className="cm-ideas-head">
             <input
               type="search"
-              className="cm-search grow"
-              style={{ maxWidth: 420 }}
+              className="cm-search cm-ideas-search"
               value={ideaQ}
               onChange={(e) => setIdeaQ(e.target.value)}
               placeholder="Search ideas, teammate requests, or study sessions"
               aria-label="Search ideas"
             />
             {!me.system && (
-              <button type="button" className="btn sm" onClick={() => setNewIdeaOpen(true)}>
+              <button
+                type="button"
+                className="btn sm cm-ideas-submit"
+                onClick={() => setNewIdeaOpen(true)}
+              >
                 + Submit Idea
               </button>
             )}
           </div>
 
-          <div className="row between" style={{ '--g': '12px' } as React.CSSProperties}>
-            <div className="cm-chips" role="group" aria-label="Sort ideas">
+          <div className="cm-ideas-toolbar">
+            <div className="cm-ideas-filter" role="group" aria-label="Sort ideas">
               <button
                 type="button"
-                className={`tag ${ideaSort === 'top' ? 'on' : ''}`}
+                className={`cm-ideas-pill ${ideaSort === 'top' ? 'on' : ''}`}
                 aria-pressed={ideaSort === 'top'}
                 onClick={() => setIdeaSort('top')}
               >
@@ -776,7 +853,7 @@ function CommunityContent() {
               </button>
               <button
                 type="button"
-                className={`tag ${ideaSort === 'new' ? 'on' : ''}`}
+                className={`cm-ideas-pill ${ideaSort === 'new' ? 'on' : ''}`}
                 aria-pressed={ideaSort === 'new'}
                 onClick={() => setIdeaSort('new')}
               >
@@ -785,21 +862,21 @@ function CommunityContent() {
               {!me.system && (
                 <button
                   type="button"
-                  className={`tag ${ideaMine ? 'on' : ''}`}
+                  className={`cm-ideas-pill ${ideaMine ? 'on' : ''}`}
                   aria-pressed={ideaMine}
                   onClick={() => setIdeaMine(!ideaMine)}
                 >
-                  My ideas
+                  My Ideas
                 </button>
               )}
             </div>
 
-            <div className="cm-chips" role="group" aria-label="Filter ideas by type">
+            <div className="cm-ideas-filter" role="group" aria-label="Filter ideas by type">
               {IDEA_TYPE_FILTERS.map((f) => (
                 <button
                   key={f.key}
                   type="button"
-                  className={`tag ${ideaType === f.key ? 'on' : ''}`}
+                  className={`cm-ideas-pill ${ideaType === f.key ? 'on' : ''}`}
                   aria-pressed={ideaType === f.key}
                   onClick={() => setIdeaType(f.key)}
                 >
@@ -808,12 +885,12 @@ function CommunityContent() {
               ))}
             </div>
 
-            <div className="cm-chips" role="group" aria-label="Filter ideas by status">
+            <div className="cm-ideas-filter" role="group" aria-label="Filter ideas by status">
               {IDEA_STATUS_FILTERS.map((f) => (
                 <button
                   key={f.key}
                   type="button"
-                  className={`tag ${ideaStatus === f.key ? 'on' : ''}`}
+                  className={`cm-ideas-pill ${ideaStatus === f.key ? 'on' : ''}`}
                   aria-pressed={ideaStatus === f.key}
                   onClick={() => setIdeaStatus(f.key)}
                 >
@@ -823,94 +900,137 @@ function CommunityContent() {
             </div>
           </div>
 
-          <section className="panel">
-            {!ideaInitialized && ideaLoading ? (
-              <p className="body">Loading ideas…</p>
-            ) : ideaItems.length === 0 ? (
-              <p className="empty">No ideas match those filters yet.</p>
-            ) : (
-              <div className="list">
-                {ideaItems.map((it) => {
-                  const mine = it.user_id === me.id;
-                  const upOn = s.kudos.includes(`idea:${it.id}`);
-                  return (
-                    <div
-                      key={it.id}
-                      className="cm-row-click"
-                      style={{ flexWrap: 'wrap' }}
-                      onClick={() => setActiveIdeaId(it.id)}
-                    >
-                      <span className="cm-idea-score">{it.upvotes}</span>
-                      <div className="grow">
-                        <button
-                          type="button"
-                          className="cm-title"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActiveIdeaId(it.id);
-                          }}
-                        >
-                          <HighlightMatch text={it.title} query={ideaQ} />
-                        </button>
-                        <p className="cm-excerpt">
-                          <HighlightMatch text={excerptFromMarkdown(it.body_md)} query={ideaQ} />
-                        </p>
-                        <div className="cm-meta">
-                          <TierName name={it.author_name} solved={it.author_solved} />
-                          <span>· {relTime(it.created_at)}</span>
-                          <span className="pill" style={{ fontSize: 11, padding: '1px 6px' }}>
-                            {ideaTypeLabel(it.type)}
-                          </span>
-                          <span
-                            className={`pill ${it.status === 'shipped' ? 'ok' : it.status === 'closed' ? 'bad' : ''}`}
-                            style={{ fontSize: 11, padding: '1px 6px' }}
-                          >
-                            {it.status}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div
-                        className="row"
-                        style={{ '--g': '8px', flexWrap: 'wrap' } as React.CSSProperties}
-                        onClick={(e) => e.stopPropagation()}
+          {!ideaInitialized && ideaLoading ? (
+            <p className="body">Loading ideas…</p>
+          ) : ideaItems.length === 0 ? (
+            <p className="empty">No ideas match those filters yet.</p>
+          ) : (
+            <div className="cm-ideas-list">
+              {ideaItems.map((it) => {
+                const mine = it.user_id === me.id;
+                const upOn = s.kudos.includes(`idea:${it.id}`);
+                return (
+                  <article
+                    key={it.id}
+                    className={`cm-idea-card${mine ? ' is-mine' : ''}`}
+                    onClick={() => setActiveIdeaId(it.id)}
+                  >
+                    <div className="cm-idea-vote">
+                      <button
+                        type="button"
+                        className={`cm-idea-vote-btn${upOn ? ' on' : ''}`}
+                        aria-pressed={upOn}
+                        aria-label={upOn ? 'Remove upvote' : 'Upvote idea'}
+                        disabled={mine || me.system}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleIdeaUpvote(it.id);
+                        }}
                       >
-                        <button
-                          type="button"
-                          className={`btn xs ${upOn ? '' : 'line'}`}
-                          aria-pressed={upOn}
-                          disabled={mine || me.system}
-                          onClick={() => handleIdeaUpvote(it.id)}
-                        >
-                          ▲ {it.upvotes}
-                        </button>
-                        <span className="cm-inert-pill">Interested ({it.interested_count})</span>
-                        {mine && (
-                          <>
-                            <span className="pill">you</span>
-                            <button
-                              type="button"
-                              className="btn xs line"
-                              onClick={() => setActiveIdeaId(it.id)}
-                            >
-                              Manage interested
-                            </button>
-                          </>
-                        )}
+                        ▲
+                      </button>
+                      <span className={`cm-idea-vote-count${upOn ? ' on' : ''}`}>{it.upvotes}</span>
+                    </div>
+
+                    <div className="cm-idea-content">
+                      <button
+                        type="button"
+                        className="cm-idea-title"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveIdeaId(it.id);
+                        }}
+                      >
+                        <HighlightMatch text={it.title} query={ideaQ} />
+                      </button>
+                      <p className="cm-idea-excerpt">
+                        <HighlightMatch text={excerptFromMarkdown(it.body_md)} query={ideaQ} />
+                      </p>
+                      <div className="cm-idea-meta">
+                        <span className="cm-idea-author">
+                          <AvatarRing
+                            name={it.author_name}
+                            avatarUrl={it.author_avatar}
+                            size={28}
+                            ringWidth={2}
+                            ringOffset={2}
+                            rank={rankFor(it.author_rating)}
+                          />
+                          <TierName name={it.author_name} solved={it.author_solved} />
+                        </span>
+                        <span className="cm-idea-time">{relTime(it.created_at)}</span>
+                        <div className="cm-idea-tags">
+                          <span className="cm-idea-tag">{ideaTypeLabel(it.type)}</span>
+                          <span className={`cm-idea-tag status-${it.status}`}>{it.status}</span>
+                          {it.my_interest === 'accepted' && (
+                            <span className="pill ok cm-idea-accepted-badge">✓ Accepted</span>
+                          )}
+                        </div>
+                        {mine && <span className="cm-idea-you">You</span>}
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-            <div ref={ideaSentinelRef} className="cm-sentinel" aria-live="polite">
-              {ideaLoading && ideaInitialized
-                ? 'Loading more ideas…'
-                : ideaCursor
-                  ? 'Scroll for more ideas'
-                  : ''}
+
+                    <div className="cm-idea-action">
+                      {mine ? (
+                        <>
+                          <span className="cm-idea-applicant-count">
+                            {it.interested_count} New Applicant
+                            {it.interested_count === 1 ? '' : 's'}
+                          </span>
+                          <button
+                            type="button"
+                            className="btn xs cm-idea-manage"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setManageIdeaId(it.id);
+                            }}
+                          >
+                            Manage Interested ({it.interested_count})
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <span className="cm-idea-interested-label">
+                            Interested ({it.interested_count})
+                          </span>
+                          {it.my_interest === 'declined' && (
+                            <span className="pill bad cm-idea-status-badge">✗ Declined</span>
+                          )}
+                          {it.my_interest === 'pending' && (
+                            <span className="pill warn cm-idea-status-badge">Interest sent</span>
+                          )}
+                          {!it.my_interest && !me.system && it.status !== 'closed' && (
+                            <button
+                              type="button"
+                              className="btn xs cm-idea-card-join"
+                              disabled={joiningIdeaId === it.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void handleCardJoin(it);
+                              }}
+                            >
+                              {joiningIdeaId === it.id
+                                ? 'Joining…'
+                                : it.roles.length > 0
+                                  ? 'Apply to Join'
+                                  : "I'm in"}
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
             </div>
-          </section>
+          )}
+          <div ref={ideaSentinelRef} className="cm-sentinel" aria-live="polite">
+            {ideaLoading && ideaInitialized
+              ? 'Loading more ideas…'
+              : ideaCursor
+                ? 'Scroll for more ideas'
+                : ''}
+          </div>
         </div>
       )}
 
@@ -1030,8 +1150,16 @@ function CommunityContent() {
           (can(s.roles, 'announce.post') === true ||
             news.some((n) => n.id === activeAnn.id && n.user_id === me.id))
             ? async () => {
-                if (!(await sure('Delete this announcement for everyone?'))) return;
-                if (await act('deleteAnnouncement', { id: activeAnn.id })) setActiveAnn(null);
+                const target = activeAnn;
+                setActiveAnn(null);
+                const confirmed = await sure(
+                  'Delete this announcement for everyone?',
+                  'This cannot be undone.',
+                  'Delete',
+                  true,
+                );
+                if (!confirmed) return;
+                await act('deleteAnnouncement', { id: target.id });
               }
             : undefined
         }
@@ -1043,10 +1171,28 @@ function CommunityContent() {
         onSubmit={handleCreateIdea}
       />
 
+      <ManageInterestedModal
+        ideaId={manageIdeaId}
+        onClose={() => setManageIdeaId(null)}
+        onMutated={() => fetchIdeas(null, false)}
+        onOpenProfile={handleOpenProfile}
+      />
+
+      <JoinIdeaModal
+        idea={joinIdea}
+        onClose={() => setJoinIdea(null)}
+        onSubmitted={() => fetchIdeas(null, false)}
+      />
+
       <IdeaModal
         ideaId={activeIdeaId}
         onClose={() => setActiveIdeaId(null)}
         onMutated={() => fetchIdeas(null, false)}
+        onManage={() => {
+          if (activeIdeaId == null) return;
+          setManageIdeaId(activeIdeaId);
+          setActiveIdeaId(null);
+        }}
       />
 
       {activeProfileId && (

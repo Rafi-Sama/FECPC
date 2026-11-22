@@ -107,14 +107,6 @@ function PromptDialog({
       >
         <div className="cm-modal-head">
           <h2 className="h3">{title}</h2>
-          <button
-            type="button"
-            className="cm-modal-close"
-            aria-label="Close"
-            onClick={() => onDone(null)}
-          >
-            ×
-          </button>
         </div>
         {confirmOnly ? (
           label && <p style={{ margin: 0, fontSize: 15, lineHeight: 1.5 }}>{label}</p>
