@@ -7,6 +7,7 @@ import { HighlightMatch } from './HighlightMatch';
 import type { InterviewProblem, InterviewRoadmap, InterviewTopic } from '@fecpc/contracts';
 import { useStore } from '@/components/app/Store';
 import { canFully } from '@fecpc/contracts';
+import { useConfirm } from '@/components/app/shared/PromptDialog';
 
 const mono = {
   font: '14px ui-monospace, Menlo, monospace',
@@ -91,6 +92,7 @@ export function PrepTab({
   readonly onCountChange?: (count: number) => void;
   readonly onShowToast?: (msg: string) => void;
 }) {
+  const sure = useConfirm();
   const { s } = useStore();
   // Page gates are cosmetic; the API checks both capabilities again.
   const canManageRoadmaps = canFully(s.roles, 'interview.roadmap.manage');
@@ -196,7 +198,7 @@ export function PrepTab({
   };
 
   const handleDeleteProblem = async (problemId: number) => {
-    if (!window.confirm('Delete this problem?')) return;
+    if (!(await sure('Delete this problem?'))) return;
     if (await query({ action: 'deleteInterviewProblem', problemId })) {
       setTopicProblems((prev) => prev.filter((p) => p.id !== problemId));
       onShowToast?.('Problem deleted');

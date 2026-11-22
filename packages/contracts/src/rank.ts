@@ -11,7 +11,7 @@ export type Rank = {
 };
 
 /**
- * Codeforces-inspired rank tier map derived from `users.problems_solved`.
+ * Codeforces rank tiers by rating (`coalesce(cf_rating, rating)`), so a title always matches the number beside it.
  *
  * - `color` is the canonical tier hex used for the 4px left accent bar, avatar ring,
  *   and translucent pill background/border.
@@ -28,7 +28,7 @@ export const RANKS: Rank[] = [
     border: 'rgba(128, 128, 128, 0.4)',
     hoverColor: '#6B6B6B',
     min: 0,
-    max: 399,
+    max: 1199,
   },
   {
     title: 'Pupil',
@@ -37,8 +37,8 @@ export const RANKS: Rank[] = [
     textColor: '#006B00',
     border: 'rgba(0, 128, 0, 0.4)',
     hoverColor: '#006600',
-    min: 400,
-    max: 799,
+    min: 1200,
+    max: 1399,
   },
   {
     title: 'Specialist',
@@ -47,8 +47,8 @@ export const RANKS: Rank[] = [
     textColor: '#006D67',
     border: 'rgba(3, 168, 158, 0.4)',
     hoverColor: '#028A82',
-    min: 800,
-    max: 1199,
+    min: 1400,
+    max: 1599,
   },
   {
     title: 'Expert',
@@ -57,8 +57,8 @@ export const RANKS: Rank[] = [
     textColor: '#0000DD',
     border: 'rgba(0, 0, 255, 0.4)',
     hoverColor: '#0000D6',
-    min: 1200,
-    max: 1599,
+    min: 1600,
+    max: 1899,
   },
   {
     title: 'Candidate Master',
@@ -67,8 +67,8 @@ export const RANKS: Rank[] = [
     textColor: '#8F008F',
     border: 'rgba(170, 0, 170, 0.4)',
     hoverColor: '#8E008E',
-    min: 1600,
-    max: 1999,
+    min: 1900,
+    max: 2099,
   },
   {
     title: 'Master',
@@ -77,7 +77,7 @@ export const RANKS: Rank[] = [
     textColor: '#9E5200',
     border: 'rgba(255, 140, 0, 0.4)',
     hoverColor: '#D97700',
-    min: 2000,
+    min: 2100,
     max: 2399,
   },
   {
@@ -88,7 +88,7 @@ export const RANKS: Rank[] = [
     border: 'rgba(255, 0, 0, 0.4)',
     hoverColor: '#D60000',
     min: 2400,
-    max: 2799,
+    max: 2999,
   },
   {
     title: 'Legendary GM',
@@ -97,7 +97,7 @@ export const RANKS: Rank[] = [
     textColor: '#0B0B0B',
     border: '#FF0000',
     hoverColor: '#D60000',
-    min: 2800,
+    min: 3000,
     max: Number.POSITIVE_INFINITY,
   },
 ];
@@ -114,53 +114,12 @@ export const UNRATED_RANK: Rank = {
   unrated: true,
 };
 
-/**
- * Returns the rank tier for a member's `problems_solved` count.
- * When `solved` is null/undefined, or `solved <= 0` and `cfHandle` is explicitly
- * empty/missing, returns the `Unrated` fallback tier.
- */
-export function rankFor(solved: number | null | undefined, cfHandle?: string | null): Rank {
-  if (solved === null || solved === undefined || Number.isNaN(solved)) {
-    return UNRATED_RANK;
-  }
-  const n = Math.max(0, Math.floor(solved));
-  if (n === 0 && cfHandle !== undefined && !cfHandle?.trim()) {
-    return UNRATED_RANK;
-  }
-  for (const r of RANKS) {
-    if (n >= r.min && n <= r.max) return r;
-  }
-  return RANKS[RANKS.length - 1]!;
-}
-
 export const RANK_TITLES: readonly string[] = [...RANKS.map((r) => r.title), UNRATED_RANK.title];
 
-/**
- * Maps a Codeforces numeric rating to its official rank tier (using the same
- * visual Rank objects from `RANKS`).
- * - <= 0 / null / undefined → Unrated
- * - 1..1199 → Newbie
- * - 1200..1399 → Pupil
- * - 1400..1599 → Specialist
- * - 1600..1899 → Expert
- * - 1900..2099 → Candidate Master
- * - 2100..2399 → Master
- * - 2400..2999 → Grandmaster
- * - 3000+ → Legendary GM
- */
-export function ratingRankFor(rating: number | null | undefined): Rank {
-  if (rating === null || rating === undefined || Number.isNaN(rating) || rating <= 0) {
-    return UNRATED_RANK;
-  }
-  const r = Math.floor(rating);
-  if (r < 1200) return RANKS[0]!; // Newbie
-  if (r < 1400) return RANKS[1]!; // Pupil
-  if (r < 1600) return RANKS[2]!; // Specialist
-  if (r < 1900) return RANKS[3]!; // Expert
-  if (r < 2100) return RANKS[4]!; // Candidate Master
-  if (r < 2400) return RANKS[5]!; // Master
-  if (r < 3000) return RANKS[6]!; // Grandmaster
-  return RANKS[7]!; // Legendary GM
+/** The Codeforces rank for a rating; no rating (null or <= 0) is Unrated. */
+export function rankFor(rating: number | null | undefined): Rank {
+  if (!rating || !(rating > 0)) return UNRATED_RANK;
+  return RANKS.find((r) => rating >= r.min && rating <= r.max) ?? RANKS[RANKS.length - 1]!;
 }
 
 /** Returns the rank title immediately below `title` in `RANKS`, or null if lowest/unknown. */

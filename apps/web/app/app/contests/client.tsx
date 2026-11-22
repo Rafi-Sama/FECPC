@@ -2,6 +2,7 @@
 import React from 'react';
 import { Page } from '@/components/app/Shell';
 import { useStore } from '@/components/app/Store';
+import { useSolved } from '@/components/app/Judge';
 
 export type ContestItem = {
   id: number;
@@ -136,7 +137,8 @@ const memberReports: MemberReport[] = [
 ];
 
 export default function ContestsClient({ up }: { up: ContestItem[] }) {
-  const { s, me } = useStore();
+  const { me } = useStore();
+  const { isSolved } = useSolved();
 
   const formatDuration = (hours: number) => {
     if (hours >= 48) return `${Math.round(hours / 24)} DAYS`;
@@ -216,7 +218,7 @@ export default function ContestsClient({ up }: { up: ContestItem[] }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             {upsolveContests.map((group) => {
               // Automatically hide problems that the user has already solved
-              const remaining = group.problems.filter((p) => !s.solved.includes(p.id));
+              const remaining = group.problems.filter((p) => !isSolved(p.id));
               if (remaining.length === 0) return null;
 
               return (
@@ -252,7 +254,7 @@ export default function ContestsClient({ up }: { up: ContestItem[] }) {
               );
             })}
 
-            {upsolveContests.every((g) => g.problems.every((p) => s.solved.includes(p.id))) && (
+            {upsolveContests.every((g) => g.problems.every((p) => isSolved(p.id))) && (
               <p
                 className="body"
                 style={{ color: 'var(--mut)', padding: '16px 0', textAlign: 'center' }}
@@ -273,7 +275,7 @@ export default function ContestsClient({ up }: { up: ContestItem[] }) {
               CODEFORCES CONTEST REPORT · LAST 3 CONTESTS
             </p>
             <span className="label" style={{ letterSpacing: '0.08em' }}>
-              CLUB MEMBERS · 6
+              CLUB MEMBERS · {memberReports.length}
             </span>
           </div>
 

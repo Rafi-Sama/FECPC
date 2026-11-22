@@ -460,7 +460,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
         400,
         'A transaction ID is 8 to 12 letters and digits. Copy it from the wallet SMS.',
       );
-    if (!/^01\d{9}$/.test(sender))
+    if (!/^01[3-9]\d{8}$/.test(sender))
       throw new Fail(400, 'Enter the 11-digit number the money was sent from.');
     // The two unique indexes are the rule; checking first would let two simultaneous submissions both pass.
     const r = await c.query(
@@ -2148,29 +2148,14 @@ export async function listMembers(
   }
 
   if (rating && rating.toLowerCase() !== 'all ratings') {
-    if (rating.toLowerCase() === UNRATED_RANK.title.toLowerCase()) {
-      where.push(
-        `(greatest(u.problems_solved, u.solved) = 0 and coalesce(nullif(u.cf_handle, ''), u.handle, '') = '')`,
-      );
-    } else {
-      const tier = RANKS.find((r) => r.title.toLowerCase() === rating.toLowerCase());
-      if (tier) {
-        if (tier.min === 0) {
-          where.push(
-            `(greatest(u.problems_solved, u.solved) between 0 and $${idx} and not (greatest(u.problems_solved, u.solved) = 0 and coalesce(nullif(u.cf_handle, ''), u.handle, '') = ''))`,
-          );
-          params.push(tier.max);
-          idx++;
-        } else if (Number.isFinite(tier.max)) {
-          where.push(`greatest(u.problems_solved, u.solved) between $${idx} and $${idx + 1}`);
-          params.push(tier.min, tier.max);
-          idx += 2;
-        } else {
-          where.push(`greatest(u.problems_solved, u.solved) >= $${idx}`);
-          params.push(tier.min);
-          idx++;
-        }
-      }
+    // Same rule as rankFor: the Codeforces rating, else the stored one; none (<= 0) is Unrated.
+    const r = `coalesce(nullif(u.cf_rating, 0), u.rating, 0)`;
+    const tier = RANKS.find((t) => t.title.toLowerCase() === rating.toLowerCase());
+    if (rating.toLowerCase() === UNRATED_RANK.title.toLowerCase()) where.push(`${r} <= 0`);
+    else if (tier) {
+      where.push(`${r} between greatest(1, $${idx}::int) and $${idx + 1}::int`);
+      params.push(tier.min, Number.isFinite(tier.max) ? tier.max : 2_000_000_000);
+      idx += 2;
     }
   }
 

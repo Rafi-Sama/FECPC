@@ -256,7 +256,8 @@ function MembersInner() {
     <Page
       title={
         <span className="members-head-title">
-          <strong>{total}</strong> <span className="acc">members.</span>
+          <strong>{total}</strong>{' '}
+          <span className="acc">{total === 1 ? 'member' : 'members'}.</span>
         </span>
       }
     >

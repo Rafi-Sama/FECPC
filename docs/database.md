@@ -66,12 +66,14 @@ and extra columns on existing tables.
 | `inventory`                   | Club equipment and who holds it                                                         | users |
 | `budgets`                     | Event budgets: plan, and spending from before the ledger (`spent_before`)               | —     |
 
-Invoices, the fund's opening balance, accounts and cash flow are placeholder content
+Invoices, the fund's opening balance and accounts are placeholder content
 (`packages/content/src/member-area.ts`, `apps/api/src/modules/member-area/office-data.ts`). The fund balance and
 ledger add the real movements on top: verified `payments` in, approved `expenses` out (`MONEY` in `state.ts`).
 Mentor pairings are `users.mentor_id`; only the weekly mentee numbers are sample data.
 The opening balance (`accounts` in `office-data.ts`) stays a seeded constant because nothing records the club's money
-before this ledger; replace it with a real opening entry once one exists. The transparency tab's term totals are real.
+before this ledger; replace it with a real opening entry once one exists. Everything else on the transparency tab is
+real and visible to every member: term totals, this term's approved expenses with their approver, and the monthly
+money in/out for the last six months (`term` in `AppState`).
 `schema.sql` inserts the demo waivers, ops board, meetings, equipment and budgets once, and only after the demo
 members exist (the seed applies the schema again after creating them). Some old dev databases also hold empty
 prototype tables `waivers` and `ops_tasks`; nothing uses them.
@@ -129,7 +131,7 @@ Prefixed `icpc_` because some older databases carry an unrelated, unused `teams`
 ## Seeding
 
 `pnpm db:seed` (`apps/api/src/db/seed.ts` → `seed-data.ts`) applies the schema and, **only if `users` is
-empty**, creates the placeholder club: 27 accounts (passwords = `SEED_PASSWORD`), feed posts and a comment,
+empty**, creates the placeholder club: 27 accounts (passwords = `SEED_PASSWORD`), feed posts,
 an idea with an interest request, sample payments, expenses and applications, alumni jobs and bookmarks,
 interview prep, blog posts, and milestones backfilled from the seeded ratings. Running it again never changes existing
 data.

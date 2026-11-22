@@ -120,7 +120,7 @@ export function ProfileModal({
   const kudosTotal = counts.kudos?.[kudosId] ?? 0;
   const alreadyPinged = s.sent.some((x) => x.startsWith(`${userId}:team:`));
 
-  const rank = profile ? rankFor(profile.problems_solved, profile.cf_handle) : rankFor(null);
+  const rank = rankFor(profile && (profile.cf_rating || profile.rating));
   const roleLabel = profile ? profile.role || (profile.is_alumni ? 'Alumni' : 'Member') : '';
 
   const handleShare = () => {
@@ -229,8 +229,6 @@ export function ProfileModal({
                 <div className="dossier__id">
                   <AvatarRing
                     name={profile.name}
-                    solved={profile.problems_solved}
-                    cfHandle={profile.cf_handle}
                     avatarUrl={profile.avatar_url}
                     size={84}
                     ringWidth={3}

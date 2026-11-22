@@ -48,15 +48,7 @@ export function TierAvatar({
   );
 }
 
-export function TierName({
-  name,
-  solved,
-  showBadge = false,
-}: {
-  name: string;
-  solved: number;
-  showBadge?: boolean;
-}) {
+export function TierName({ name, solved }: { name: string; solved: number }) {
   const tier = solvedTier(solved);
   return (
     <span
@@ -64,11 +56,6 @@ export function TierName({
       style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
     >
       <span className="cm-tier-name">{name}</span>
-      {showBadge && (
-        <span className="pill" style={{ fontSize: 11, padding: '1px 6px', color: 'var(--tier-c)' }}>
-          {tier.label}
-        </span>
-      )}
     </span>
   );
 }

@@ -691,6 +691,14 @@
 .node.locked {
   opacity: 0.7;
 }
+.node[role='button']:focus-visible {
+  outline: none;
+}
+.node[role='button']:hover rect,
+.node[role='button']:focus-visible rect {
+  stroke: var(--hi);
+  stroke-width: 3;
+}
 .rm-list {
   display: flex;
   flex-direction: column;
@@ -1239,24 +1247,6 @@ i.k.open {
 }
 .shots li:hover img {
   filter: none;
-}
-.frame-empty {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-}
-.frame-empty i {
-  aspect-ratio: 4/5;
-  border: 1px dashed var(--line2);
-  background: repeating-linear-gradient(
-    135deg,
-    transparent 0 10px,
-    rgba(255, 90, 31, 0.06) 10px 11px
-  );
-}
-.frame-empty i:nth-child(2),
-.frame-empty i:nth-child(6) {
-  border-color: var(--acc);
 }
 .hint {
   border-top: 1px dashed var(--line2);

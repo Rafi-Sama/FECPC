@@ -111,7 +111,7 @@ function PaymentModal({
     const cleanSender = sender.replace(/[\s-]/g, '').replace(/^\+?88/, '');
     const cleanTrx = trx.trim().toUpperCase();
     const numericAmount = Number(amount.replace(/\D/g, ''));
-    if (!/^01\d{9}$/.test(cleanSender))
+    if (!/^01[3-9]\d{8}$/.test(cleanSender))
       return setError('Enter the 11-digit number the money was sent from.');
     if (!/^[A-Z0-9]{8,12}$/.test(cleanTrx))
       return setError('Transaction ID must be 8 to 12 letters and digits.');
@@ -370,13 +370,15 @@ function PaymentModal({
           )}
         </div>
         <footer className="finance-modal-foot">
-          <button
-            type="button"
-            className="btn sm line"
-            onClick={step === 1 || step === 3 ? onClose : () => setStep(step - 1)}
-          >
-            {step === 1 || step === 3 ? 'Cancel' : '← Back'}
-          </button>
+          {step !== 3 && (
+            <button
+              type="button"
+              className="btn sm line"
+              onClick={step === 1 ? onClose : () => setStep(step - 1)}
+            >
+              {step === 1 ? 'Cancel' : '← Back'}
+            </button>
+          )}
           {step === 1 && (
             <button type="button" className="btn sm" disabled={!method} onClick={() => setStep(2)}>
               I’ve sent it →
@@ -399,7 +401,7 @@ function PaymentModal({
 }
 
 export default function Finance() {
-  const { s, me, office, fundTotal, term } = useStore();
+  const { s, me, fundTotal, term } = useStore();
   // 'dues' and 'transparency' are for everyone; officer tabs depend on the role's capabilities.
   const officer = officerTabs(s.roles);
   const [tab, setTab] = useState('dues');
@@ -435,16 +437,16 @@ export default function Finance() {
   const next = invoices
     .filter((invoice) => owes(s.pay, invoice.id))
     .sort((a, b) => a.due.localeCompare(b.due))[0];
-  const ledger = office.fund?.ledger ?? [];
+  const ledger = term.expenses;
   const categories = useMemo(() => {
     const values = new Map<string, number>();
-    for (const item of ledger)
-      values.set(item.cat, (values.get(item.cat) ?? 0) + Math.abs(item.amt));
+    for (const item of ledger) values.set(item.cat, (values.get(item.cat) ?? 0) + item.amount);
     const total = [...values.values()].reduce((sum, value) => sum + value, 0) || 1;
     return [...values.entries()]
       .map(([name, value]) => ({ name, value, percent: Math.round((value / total) * 100) }))
       .sort((a, b) => b.value - a.value);
   }, [ledger]);
+  const flowMax = Math.max(1, ...term.flow.flatMap((m) => [m.in, m.out]));
   const filteredLedger = ledger.filter((item) =>
     `${item.what} ${item.cat} ${item.date}`.toLowerCase().includes(query.toLowerCase()),
   );
@@ -520,16 +522,18 @@ export default function Finance() {
                 </b>
                 <small>
                   {pending.length
-                    ? `${pending.length} payment awaiting verification`
+                    ? `${pending.length} payment${pending.length === 1 ? '' : 's'} awaiting verification`
                     : owed.length
-                      ? `${owed.length} invoice open`
+                      ? `${owed.length} invoice${owed.length === 1 ? '' : 's'} open`
                       : 'Nothing due'}
                 </small>
               </div>
               <div>
                 <small>Paid so far</small>
                 <b>{tk(verified.reduce((sum, payment) => sum + payment.amount, 0))}</b>
-                <small>{verified.length} verified payments</small>
+                <small>
+                  {verified.length} verified payment{verified.length === 1 ? '' : 's'}
+                </small>
               </div>
               <div>
                 <small>Next deadline</small>
@@ -584,7 +588,9 @@ export default function Finance() {
                             <b aria-hidden="true">→</b>
                           </button>
                         ) : (
-                          <small>Settled</small>
+                          <small>
+                            {payment?.status === 'pending' ? 'Being checked' : 'Settled'}
+                          </small>
                         )}
                       </div>
                     </article>
@@ -671,7 +677,7 @@ export default function Finance() {
             <div className="finance-sample">
               <span className="tag">Partly sample</span>
               <span>
-                Balance and term totals are real; the opening balance and charts are sample data
+                Everything here is real except the fund's opening balance, which is sample data
               </span>
             </div>
             <div className="finance-transparency-grid">
@@ -691,19 +697,23 @@ export default function Finance() {
               <section className="finance-panel">
                 <header>
                   <span>Money in vs. money out</span>
-                  <small>This term</small>
+                  <small>Last 6 months</small>
                 </header>
                 <div className="finance-chart">
-                  {(office.fund?.cashflow ?? []).slice(-6).map((value, index) => (
-                    <div className="finance-chart-col" key={`${value}-${index}`}>
+                  {term.flow.map((m) => (
+                    <div className="finance-chart-col" key={m.month}>
                       <div>
-                        <i style={{ height: `${Math.min(100, Math.max(8, value * 2))}%` }} />
+                        <i
+                          style={{ height: `${(m.in / flowMax) * 100}%` }}
+                          title={`In: ${tk(m.in)}`}
+                        />
                         <i
                           className="out"
-                          style={{ height: `${Math.min(100, Math.max(8, value * 1.4))}%` }}
+                          style={{ height: `${(m.out / flowMax) * 100}%` }}
+                          title={`Out: ${tk(m.out)}`}
                         />
                       </div>
-                      <small>{['Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov'][index]}</small>
+                      <small>{fmtDate(m.month + '-01', { month: 'short' })}</small>
                     </div>
                   ))}
                 </div>
@@ -742,7 +752,7 @@ export default function Finance() {
                     </button>
                   ))
                 ) : (
-                  <p className="finance-empty">No published spending data yet.</p>
+                  <p className="finance-empty">No approved expenses this term.</p>
                 )}
               </div>
               <p className="finance-note">Select a category to filter the ledger below.</p>
@@ -780,17 +790,24 @@ export default function Finance() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredLedger.map((item) => (
-                      <tr key={`${item.date}-${item.what}`}>
+                    {filteredLedger.map((item, i) => (
+                      <tr key={i}>
                         <td className="finance-mono">{fmtDate(item.date)}</td>
                         <td>
                           <b>{item.what}</b>
                         </td>
                         <td>{item.cat}</td>
-                        <td>{item.amt < 0 ? 'Treasurer' : 'President'}</td>
-                        <td className="right finance-mono">{tk(Math.abs(item.amt))}</td>
+                        <td>{item.by ?? '—'}</td>
+                        <td className="right finance-mono">{tk(item.amount)}</td>
                       </tr>
                     ))}
+                    {!filteredLedger.length && (
+                      <tr>
+                        <td colSpan={5} className="finance-empty">
+                          {ledger.length ? 'No expenses match.' : 'No approved expenses this term.'}
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>

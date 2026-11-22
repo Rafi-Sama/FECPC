@@ -10,7 +10,7 @@ import { CertPreview } from '@/components/app/events/CertPreview';
 import { EventHead } from '@/components/app/events/EventHead';
 import { useStore } from '@/components/app/Store';
 import type { EventDetail } from '@fecpc/contracts';
-import { renderCertificate, useEventsQuery } from '@/lib/events';
+import { clubNow, renderCertificate, useEventsQuery } from '@/lib/events';
 
 const CERT_NAME: Record<string, string> = {
   participant: 'Participation',
@@ -109,7 +109,10 @@ export default function EventDetailPage() {
 
             {e.status === 'completed' && tookPart && <FeedbackForm e={e} done={reload} />}
             {['open', 'closed', 'ongoing'].includes(e.status) &&
-              (e.admin || entry(null)?.status === 'approved') && <CheckIn e={e} />}
+              (e.admin ||
+                // Members get the code box from the event's day on.
+                (entry(null)?.status === 'approved' &&
+                  e.startsAt.slice(0, 10) <= clubNow().slice(0, 10))) && <CheckIn e={e} />}
 
             {!over &&
               e.roles.map((r) => (
@@ -181,7 +184,7 @@ function CheckIn({ e }: { e: EventDetail }) {
 }
 
 function FeedbackForm({ e, done }: { e: EventDetail; done: () => void }) {
-  const { act } = useStore();
+  const { act, toast } = useStore();
   const [rating, setRating] = useState(0); // 0 = not rated yet
   const [body, setBody] = useState('');
   if (e.feedback)
@@ -202,7 +205,7 @@ function FeedbackForm({ e, done }: { e: EventDetail; done: () => void }) {
       }}
       onSubmit={async () => {
         if (!rating) {
-          alert('Pick a rating from 1 to 5 first.');
+          toast('Pick a rating from 1 to 5 first.', 'bad');
           return false;
         }
         const ok = await act('eventFeedback', { eventId: e.id, rating, body: body.trim() });

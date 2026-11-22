@@ -1,6 +1,7 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import { useStore } from '@/components/app/Store';
+import { useConfirm } from '@/components/app/shared/PromptDialog';
 
 type Report = {
   id: number;
@@ -18,6 +19,7 @@ export function ReportsPanel({
   onOpen: (id: number) => void;
   onChange: () => void;
 }) {
+  const sure = useConfirm();
   const { act } = useStore();
   const [items, setItems] = useState<Report[] | null>(null);
   const load = useCallback(async () => {
@@ -33,7 +35,7 @@ export function ReportsPanel({
   }, [load]);
 
   const decide = async (postId: number, decision: 'remove' | 'dismiss') => {
-    if (decision === 'remove' && !confirm('Remove this post for everyone?')) return;
+    if (decision === 'remove' && !(await sure('Remove this post for everyone?'))) return;
     if (await act('moderateFeedPost', { postId, decision })) {
       setItems((x) => x?.filter((r) => r.id !== postId) ?? null);
       onChange();

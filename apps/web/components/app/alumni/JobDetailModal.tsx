@@ -5,6 +5,7 @@ import type { AlumniJob } from '@fecpc/contracts';
 import { deterministicColor, formatDeadlineStatus } from './JobCard';
 import { useStore } from '@/components/app/Store';
 import { isAdmin } from '@fecpc/contracts';
+import { useConfirm } from '@/components/app/shared/PromptDialog';
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -66,8 +67,10 @@ async function deleteJob(
   job: AlumniJob,
   onDeleted: ((jobId: number) => Promise<void> | void) | undefined,
   onClose: () => void,
+  sure: (question: string) => Promise<boolean>,
+  toast: (text: string, kind?: 'bad') => void,
 ) {
-  if (!window.confirm(`Delete job posting for "${job.title || job.role}" at ${job.company}?`)) {
+  if (!(await sure(`Delete job posting for "${job.title || job.role}" at ${job.company}?`))) {
     return;
   }
 
@@ -81,10 +84,10 @@ async function deleteJob(
       await onDeleted?.(job.id);
       onClose();
     } else {
-      alert('Could not delete job posting.');
+      toast('Could not delete the job posting.', 'bad');
     }
   } catch {
-    alert('Network error while deleting job.');
+    toast('Could not reach the server. Try again.', 'bad');
   }
 }
 
@@ -192,6 +195,8 @@ export function JobDetailModal({
   onClose: () => void;
   onDeleted?: (jobId: number) => Promise<void> | void;
 }>) {
+  const sure = useConfirm();
+  const { toast } = useStore();
   const { me, s } = useStore();
   const modalRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
@@ -753,7 +758,7 @@ export function JobDetailModal({
           {canDelete && (
             <button
               type="button"
-              onClick={() => void deleteJob(job, onDeleted, onClose)}
+              onClick={() => void deleteJob(job, onDeleted, onClose, sure, toast)}
               className="btn sm danger"
             >
               Delete job

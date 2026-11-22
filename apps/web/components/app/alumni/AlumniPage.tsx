@@ -128,7 +128,8 @@ function AlumniPageInner() {
     const n = tabCounts.alumni;
     headerContent = (
       <>
-        <strong>{n}</strong> alumni <span className="acc">open to questions.</span>
+        <strong>{n}</strong> {n === 1 ? 'alumnus' : 'alumni'}{' '}
+        <span className="acc">open to questions.</span>
       </>
     );
   } else if (activeTab === 'jobs') {

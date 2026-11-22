@@ -3,6 +3,7 @@ import { useState } from 'react';
 import Board from '@/components/site/Board';
 import { Page, Tabs } from '@/components/app/Shell';
 import { useStore } from '@/components/app/Store';
+import { useSolved } from '@/components/app/Judge';
 import { Avatar, Bug } from '@/components/pixel/Sprites';
 import { PersonPicker } from '@/components/app/shared/PersonPicker';
 import { bounties, cfUrl, duels, myInvoices, owes, potd, shop } from '@fecpc/content/member-area';
@@ -15,6 +16,7 @@ const tabs = ['DAILY', 'RANKS', 'DUELS', 'SEASON'] as const;
 
 export default function Arena() {
   const { s, me, xp, act, members } = useStore();
+  const { synced, isSolved } = useSolved();
   const [tab, setTab] = useState<(typeof tabs)[number]>('DAILY');
   const lv = level(xp);
   const [rival, setRival] = useState('');
@@ -55,7 +57,7 @@ export default function Arena() {
         <div>
           <span className="label">Daily cleared</span>
           <strong>
-            {potd.filter((p) => s.solved.includes(p.id)).length}
+            {potd.filter((p) => isSolved(p.id)).length}
             <small>/ {potd.length}</small>
           </strong>
         </div>
@@ -65,7 +67,7 @@ export default function Arena() {
         <div className="stack">
           <div className="tier3">
             {potd.map((p, i) => {
-              const done = s.solved.includes(p.id);
+              const done = isSolved(p.id);
               return (
                 <div key={p.id} className="panel" style={{ gap: 14 }}>
                   <Bug i={i} size={44} />
@@ -77,10 +79,11 @@ export default function Arena() {
                   </a>
                   <button
                     className="btn sm"
+                    disabled={synced.has(p.id)}
                     onClick={() => act('toggle', { list: 'solved', id: p.id })}
                   >
                     {done ? 'CLEARED' : 'SOLVE'}
-                    {done && <Verified on={s.verified.includes(p.id)} />}
+                    {done && <Verified on={synced.has(p.id) || s.verified.includes(p.id)} />}
                   </button>
                 </div>
               );

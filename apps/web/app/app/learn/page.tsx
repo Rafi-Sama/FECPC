@@ -1,9 +1,11 @@
 'use client';
 import { SaveForm } from '@/components/app/SaveBar';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Roadmap from '@/components/site/Roadmap';
 import { Page, Tabs } from '@/components/app/Shell';
 import { useStore } from '@/components/app/Store';
+import { useSolved } from '@/components/app/Judge';
 import { Avatar } from '@/components/pixel/Sprites';
 import { doubts, resources, sheet } from '@fecpc/content/member-area';
 import { roadmap } from '@fecpc/content/site';
@@ -24,6 +26,8 @@ const nodeShelf: Record<string, string> = { ds: 'Data structures', icpc: 'ICPC' 
 
 export default function Learn() {
   const { s, me, act, office, who } = useStore();
+  const router = useRouter();
+  const { isSolved } = useSolved();
   const mentees = office.mentees ?? [];
   const [tab, setTab] = useState<(typeof tabs)[number]>('Roadmap');
   const [lvl, setLvl] = useState<(typeof levels)[number]>('All');
@@ -37,9 +41,7 @@ export default function Learn() {
   const done = roadmap
     .filter((n) =>
       nodeSheet[n.id]
-        ? sheet
-            .filter((x) => x.topic === nodeSheet[n.id] && x.must)
-            .every((x) => s.solved.includes(x.id))
+        ? sheet.filter((x) => x.topic === nodeSheet[n.id] && x.must).every((x) => isSolved(x.id))
         : resources.filter((r) => r.topic === nodeShelf[n.id]).every((r) => s.done.includes(r.id)),
     )
     .map((n) => n.id);
@@ -62,7 +64,10 @@ export default function Learn() {
       <Tabs tabs={tabs} value={tab} onChange={setTab} />
       {tab === 'Roadmap' && (
         <>
-          <Roadmap done={done} />
+          <Roadmap
+            done={done}
+            onPick={(id) => (nodeSheet[id] ? router.push('/app/sheets') : setTab('Resources'))}
+          />
         </>
       )}
       {tab === 'Resources' && (

@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import type { InterviewProblem, InterviewRoadmap, InterviewTopic } from '@fecpc/contracts';
 import { SaveForm } from '@/components/app/SaveBar';
 import { NODE_H, NODE_W, TreeEdges, TreeFrame, layoutTree } from './RoadmapTreeCanvas';
+import { useConfirm } from '@/components/app/shared/PromptDialog';
 
 type Difficulty = 'easy' | 'medium' | 'hard';
 type EditorProblem = {
@@ -206,6 +207,7 @@ export function RoadmapEditor({
   readonly onSaved: (roadmapId: number) => void;
   readonly onDeleted: () => void;
 }) {
+  const sure = useConfirm();
   const [name, setName] = useState(roadmap?.name ?? '');
   const [description, setDescription] = useState(roadmap?.description ?? '');
   const [nodes, setNodes] = useState<EditorNode[]>(() =>
@@ -278,7 +280,7 @@ export function RoadmapEditor({
     });
   };
 
-  const deleteSelected = () => {
+  const deleteSelected = async () => {
     if (!selected || !canDelete) return;
     const doomed = subtree(nodes, selected.key);
     const gone = nodes.filter((n) => doomed.has(n.key));
@@ -289,9 +291,9 @@ export function RoadmapEditor({
         : `“${selected.name}”`;
     if (
       (lost || gone.length > 1) &&
-      !window.confirm(
+      !(await sure(
         `Delete ${what}?${lost ? ` ${lost} problem(s) and everyone's progress on them go too.` : ''} Nothing is removed until you save.`,
-      )
+      ))
     )
       return;
     const rest = nodes.filter((n) => !doomed.has(n.key));
@@ -351,7 +353,7 @@ export function RoadmapEditor({
   };
 
   const remove = async () => {
-    if (!roadmap || !window.confirm(`Delete “${roadmap.name}” with all its topics and problems?`))
+    if (!roadmap || !(await sure(`Delete “${roadmap.name}” with all its topics and problems?`)))
       return;
     setBusy(true);
     try {
@@ -440,7 +442,7 @@ export function RoadmapEditor({
                     onKeyDown={(e) => {
                       if (isSelected && e.key === 'Delete') {
                         e.preventDefault();
-                        deleteSelected();
+                        void deleteSelected();
                       }
                     }}
                     style={{

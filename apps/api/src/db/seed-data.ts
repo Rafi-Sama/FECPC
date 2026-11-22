@@ -102,7 +102,7 @@ export async function setup(db: Db, password: string) {
       [
         'mehedi',
         'DP Sheet Q&A: breaking down state transitions on Vacations (698A) and Boredom (455A)',
-        'Several Batch 24 members asked how to choose DP states without getting stuck in greedy traps.\n\n> Rule of thumb: write down what information from prefix `1..i` actually constrains choice `i+1`. Everything else does not belong in the state.\n\nDrop your stuck submission links or state attempts in the comments below and I will walk through them tonight.',
+        'Several Batch 24 members asked how to choose DP states without getting stuck in greedy traps.\n\n> Rule of thumb: write down what information from prefix `1..i` actually constrains choice `i+1`. Everything else does not belong in the state.\n\nBring your stuck submission links or state attempts to the session tonight and I will walk through them.',
         'upsolving',
         17,
         '3 hours',

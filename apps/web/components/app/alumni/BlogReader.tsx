@@ -1,10 +1,11 @@
 'use client';
 import React, { useEffect, useRef, useState } from 'react';
 import type { BlogPost } from '@fecpc/contracts';
-import { AvatarRing } from '@/components/app/shared/RatingBadge';
+import { AvatarRing, tierText } from '@/components/app/shared/RatingBadge';
 import { canFully, rankFor } from '@fecpc/contracts';
 import { useStore } from '@/components/app/Store';
 import { MarkdownBody } from '@/components/app/shared/MarkdownEditor';
+import { useConfirm } from '@/components/app/shared/PromptDialog';
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -22,7 +23,8 @@ export function BlogReader({
   onDelete?: (postId: number) => void;
   onOpenProfile?: (userId: string) => void;
 }) {
-  const { me, s } = useStore();
+  const sure = useConfirm();
+  const { me, s, toast } = useStore();
   const modalRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
 
@@ -33,7 +35,7 @@ export function BlogReader({
   const canManage = isAuthor || canFully(s.roles, 'blog.post.delete');
 
   const rank = rankFor(post.author_rating ?? 0);
-  const tierColor = rank.color && rank.color !== '#6B6B6B' ? rank.color : 'var(--ink, #0B0B0B)';
+  const tierColor = rank.color;
 
   const readTime =
     post.read_time_min || Math.max(1, Math.round(post.body_md.split(/\s+/).length / 200));
@@ -107,7 +109,7 @@ export function BlogReader({
         await navigator.share({ title: post.title, url });
       } else {
         await navigator.clipboard.writeText(url);
-        alert('Post link copied to clipboard!');
+        toast('Post link copied.');
       }
     } catch {
       // ignore
@@ -253,7 +255,6 @@ export function BlogReader({
           >
             <AvatarRing
               name={post.author_name || 'Alumnus'}
-              solved={post.author_rating ?? 0}
               avatarUrl={post.author_avatar}
               size={40}
               ringWidth={2}
@@ -263,7 +264,7 @@ export function BlogReader({
           </div>
 
           <div>
-            <b style={{ color: tierColor, fontSize: 15, fontWeight: 700 }}>
+            <b style={{ color: tierText(tierColor), fontSize: 15, fontWeight: 700 }}>
               {post.author_name || 'Alumnus'}
             </b>
             <div
@@ -375,8 +376,8 @@ export function BlogReader({
             <button
               type="button"
               className="sm"
-              onClick={() => {
-                if (window.confirm('Delete this blog post?')) {
+              onClick={async () => {
+                if (await sure('Delete this blog post?')) {
                   onDelete(post.id);
                 }
               }}
@@ -457,7 +458,6 @@ export function BlogReader({
           >
             <AvatarRing
               name={post.author_name || 'Alumnus'}
-              solved={post.author_rating ?? 0}
               avatarUrl={post.author_avatar}
               size={56}
               ringWidth={2}

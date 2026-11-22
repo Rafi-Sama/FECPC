@@ -178,6 +178,14 @@ select
   (select to_char(since, 'YYYY-MM-DD') from term) as since,
   (select coalesce(sum(amount), 0)::int from payments, term where status = 'verified' and created_at at time zone '${TZ}' >= since) as incoming,
   (select coalesce(sum(amount), 0)::int from expenses, term where status = 'approved' and created_at at time zone '${TZ}' >= since) as spent,
+  (select coalesce(json_agg(json_build_object('date', to_char(e.created_at at time zone '${TZ}', 'YYYY-MM-DD'), 'what', e.what,
+      'cat', e.category, 'amount', e.amount, 'by', u.name) order by e.created_at desc, e.id desc), '[]')
+    from expenses e cross join term left join users u on u.id = e.decided_by
+    where e.status = 'approved' and e.created_at at time zone '${TZ}' >= since) as term_expenses,
+  (select json_agg(json_build_object('month', to_char(m, 'YYYY-MM'),
+      'in', (select coalesce(sum(amount), 0)::int from payments where status = 'verified' and date_trunc('month', created_at at time zone '${TZ}') = m),
+      'out', (select coalesce(sum(amount), 0)::int from expenses where status = 'approved' and date_trunc('month', created_at at time zone '${TZ}') = m)) order by m)
+    from generate_series(date_trunc('month', now() at time zone '${TZ}') - interval '5 months', date_trunc('month', now() at time zone '${TZ}'), interval '1 month') m) as flow,
   case when $1 then (select coalesce(json_agg(x order by x.date desc, x.what), '[]') from (
     (select to_char(created_at at time zone '${TZ}', 'YYYY-MM-DD') as date, label || ' · PAY-' || id as what, 'Dues' as cat, amount as amt
       from payments where status = 'verified' order by id desc limit 100)
@@ -206,119 +214,8 @@ type Raw = Roster & {
   pending: boolean;
 };
 
-let schemaPromise: Promise<void> | null = null;
-function ensureSchemaOnce(db: Db): Promise<void> {
-  return (schemaPromise ??= (async () => {
-    try {
-      await db.query(`
-        alter table if exists users add column if not exists available_for_questions boolean not null default true;
-        alter table if exists users add column if not exists location text;
-
-        create table if not exists alumni_saves (
-          user_id    text not null references users(id) on delete cascade,
-          alumni_id  text not null references users(id) on delete cascade,
-          created_at timestamptz not null default now(),
-          primary key (user_id, alumni_id)
-        );
-
-        create table if not exists alumni_jobs (
-          id               serial primary key,
-          alumni_id        text references users(id) on delete set null,
-          company          text not null,
-          role             text not null,
-          title            text,
-          location         text,
-          url              text not null,
-          vacancies        integer not null default 1,
-          job_type         text,
-          experience       text,
-          salary           text,
-          description      text,
-          responsibilities jsonb not null default '[]'::jsonb,
-          requirements     jsonb not null default '[]'::jsonb,
-          deadline         date,
-          company_logo_url text,
-          posted_at        timestamptz not null default now(),
-          source           text not null check (source in ('fetched','manual')),
-          fetched_at       timestamptz,
-          created_at       timestamptz not null default now()
-        );
-
-        alter table if exists alumni_jobs add column if not exists title text;
-        alter table if exists alumni_jobs add column if not exists vacancies integer not null default 1;
-        alter table if exists alumni_jobs add column if not exists job_type text;
-        alter table if exists alumni_jobs add column if not exists experience text;
-        alter table if exists alumni_jobs add column if not exists salary text;
-        alter table if exists alumni_jobs add column if not exists description text;
-        alter table if exists alumni_jobs add column if not exists responsibilities jsonb not null default '[]'::jsonb;
-        alter table if exists alumni_jobs add column if not exists requirements jsonb not null default '[]'::jsonb;
-        alter table if exists alumni_jobs add column if not exists deadline date;
-        alter table if exists alumni_jobs add column if not exists company_logo_url text;
-        alter table if exists alumni_jobs add column if not exists posted_at timestamptz not null default now();
-
-        create table if not exists interview_topics (
-          id           serial primary key,
-          name         text not null unique,
-          description  text,
-          created_by   text references users(id) on delete set null,
-          order_index  integer not null default 0,
-          created_at   timestamptz not null default now()
-        );
-
-        create table if not exists interview_problems (
-          id           serial primary key,
-          topic_id     integer not null references interview_topics(id) on delete cascade,
-          title        text not null,
-          url          text not null,
-          difficulty   text not null check (difficulty in ('easy','medium','hard')),
-          meta         jsonb not null default '{}'::jsonb,
-          created_by   text references users(id) on delete set null,
-          created_at   timestamptz not null default now()
-        );
-
-        create table if not exists interview_user_progress (
-          user_id      text not null references users(id) on delete cascade,
-          problem_id   integer not null references interview_problems(id) on delete cascade,
-          completed_at timestamptz not null default now(),
-          primary key (user_id, problem_id)
-        );
-
-        create table if not exists interview_tips (
-          id           serial primary key,
-          author_id    text not null references users(id) on delete cascade,
-          topic_id     integer references interview_topics(id) on delete cascade,
-          title        text not null,
-          body_md      text not null,
-          created_at   timestamptz not null default now(),
-          updated_at   timestamptz not null default now()
-        );
-
-        create table if not exists blog_posts (
-          id           serial primary key,
-          author_id    text not null references users(id) on delete cascade,
-          slug         text not null unique,
-          title        text not null,
-          subtitle     text,
-          excerpt      text,
-          body_md      text not null,
-          cover_url    text,
-          tags         jsonb not null default '[]'::jsonb,
-          status       text not null default 'draft' check (status in ('draft','published')),
-          published_at timestamptz,
-          views        integer not null default 0,
-          created_at   timestamptz not null default now(),
-          updated_at   timestamptz not null default now()
-        );
-      `);
-    } catch {
-      // Fallback
-    }
-  })());
-}
-
 /** Everything `userId` may see, or null when the account is gone or suspended. */
 export async function loadState(db: Db, userId: string): Promise<AppState | null> {
-  await ensureSchemaOnce(db);
   const row = (await db.query(MINE, [userId])).rows[0];
   if (!row) return null;
   const postRoles = row.post_roles as AppState['postRoles'],
@@ -437,7 +334,6 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
       accounts: [...data.accounts],
       ledger: [...money.ledger, ...data.ledger],
       budgets: money.budgets,
-      cashflow: data.cashflow,
     };
   if (caps.exp) office.expenses = expenses;
   const view = can(roles, 'mentees.view');
@@ -650,7 +546,13 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
     polls: row.polls,
     inbox,
     myExpenses: row.my_exp,
-    term: { since: money.since, incoming: money.incoming, spent: money.spent },
+    term: {
+      since: money.since,
+      incoming: money.incoming,
+      spent: money.spent,
+      expenses: money.term_expenses,
+      flow: money.flow,
+    },
     // The seeded opening balance plus every verified payment, minus every approved expense.
     fundTotal: data.accounts.reduce((a, x) => a + x[1], 0) + money.net,
     office,

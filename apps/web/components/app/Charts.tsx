@@ -86,7 +86,7 @@ export function Radar({ data }: { data: [string, number][] }) {
   );
 }
 export function Bars({ data, unit = '' }: { data: number[]; unit?: string }) {
-  const max = Math.max(...data);
+  const max = Math.max(1, ...data);
   return (
     <div
       className="bars"

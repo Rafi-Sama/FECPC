@@ -83,16 +83,30 @@ A redesign of the Finance page had dropped the officer views, so payment verific
 waivers and the club fund had no interface even though the API supported them. They are back as extra tabs
 (`components/app/finance/officer.tsx`), shown by capability.
 
+### Rank titles follow the rating
+
+Codeforces titles (Newbie … Legendary GM) used to be computed from the solved count and shown beside the rating, so a
+1934-rated member read "1934 · Expert". `rankFor(rating)` in `@fecpc/contracts` now uses Codeforces' own rating bands,
+and the directory's rank filter filters by rating. `SolvedTier` still colours names by solved count; it shows no title.
+
+### No invented data when a judge is down
+
+Codeforces and VJudge outages used to be covered with made-up contests and "simulated" standings that looked live.
+Now the contest list is empty and contest day says VJudge did not answer.
+
+### One "are you sure?" dialog
+
+Native `confirm()`/`alert()` were replaced by the in-app `useConfirm()` dialog and store toasts, which match the theme and
+keep the page responsive.
+
 ## Known gaps
 
 | Gap                                                                                                                                                                                                                                 | Where to start                                              |
 | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
 | Password reset by email: `/v1/auth/password/forgot` sends nothing. Officers issue reset links instead (`invite` action).                                                                                                            | add a mailer; store reset tokens like invite tokens         |
 | No two-factor authentication.                                                                                                                                                                                                       | `modules/auth`                                              |
-| Invoices, the fund's opening balance and accounts, cash flow, mentee weekly stats and some public-site figures are placeholder content, not tables. Fund balance, ledger, term totals, budgets and the ops board are real. | `packages/content`, `member-area/office-data.ts`            |
+| Invoices, the fund's opening balance and accounts, mentee weekly stats and some public-site figures are placeholder content, not tables. Fund balance, ledger, term totals, monthly cash flow, budgets and the ops board are real. | `packages/content`, `member-area/office-data.ts`            |
 | The public site (members, certificates, hall of fame) is static content; events come from the database. `/verify` checks certificates against that list.                                                                            | `packages/content/src/site.ts`                              |
-| Contest-day contest IDs are saved in the admin's own browser (`localStorage`), not shared with members.                                                                                                                             | store them through a `club` key with the `kv` action        |
-| VJudge falls back to simulated standings when it does not answer (`source: "simulated"`); the page does not label them yet.                                                                                                         | `apps/web/app/app/contest-day/page.tsx`                     |
 | The rate limit and the Codeforces sync throttle are in memory: per process, reset on restart.                                                                                                                                       | move to the database before running several API instances   |
 | The ESLint config has no React Hooks rules.                                                                                                                                                                                         | add `eslint-plugin-react-hooks` to `packages/config-eslint` |
 | `users` still has columns only the removed modules used (for example `avatar`, `legacy_id`), and existing databases still have those modules' tables.                                                                               | drop them with a deliberate, reviewed migration             |

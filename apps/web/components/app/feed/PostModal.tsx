@@ -1,10 +1,11 @@
 'use client';
-import { usePrompt } from '@/components/app/shared/PromptDialog';
+import { usePrompt, useConfirm } from '@/components/app/shared/PromptDialog';
 import { useCallback, useEffect, useState } from 'react';
 import { useStore } from '@/components/app/Store';
 import { SaveForm } from '@/components/app/SaveBar';
 import { MarkdownBody, MarkdownEditor, relTime } from '@/components/app/shared/MarkdownEditor';
-import { solvedTier, TierAvatar, TierName } from '@/components/app/shared/SolvedTier';
+import { TierAvatar, TierName } from '@/components/app/shared/SolvedTier';
+import { rankFor } from '@fecpc/contracts';
 import { feedCategoryChip } from '@/components/app/feed/NewPostModal';
 import { VoteWidget } from '@/components/app/feed/VoteWidget';
 import type { FeedPostDetail } from '@fecpc/contracts';
@@ -22,6 +23,7 @@ export function PostModal({
   onVote: (postId: number, value: 1 | -1) => Promise<void>;
   onMutated: () => void;
 }) {
+  const sure = useConfirm();
   const { me, act } = useStore();
   const ask = usePrompt();
   const [detail, setDetail] = useState<FeedPostDetail | null>(null);
@@ -75,7 +77,6 @@ export function PostModal({
   const wasEdited = detail
     ? new Date(detail.updated_at).getTime() - new Date(detail.created_at).getTime() > 5000
     : false;
-  const tier = detail ? solvedTier(detail.author_solved) : null;
 
   const handleSaveEdit = async () => {
     if (!detail) return false;
@@ -94,7 +95,7 @@ export function PostModal({
 
   const handleDelete = async () => {
     if (!detail || busy) return;
-    if (!confirm('Delete this post? This cannot be undone.')) return;
+    if (!(await sure('Delete this post? This cannot be undone.'))) return;
     setBusy(true);
     const ok = await act('deleteFeedPost', { postId: detail.id });
     setBusy(false);
@@ -238,9 +239,9 @@ export function PostModal({
                     size={48}
                   />
                   <div className="grow" style={{ minWidth: 0 }}>
-                    <TierName name={detail.author_name} solved={detail.author_solved} showBadge />
+                    <TierName name={detail.author_name} solved={detail.author_solved} />
                     <div className="label" style={{ marginTop: 2 }}>
-                      {tier?.label} · {detail.author_rating}
+                      {rankFor(detail.author_rating).title} · {detail.author_rating}
                     </div>
                   </div>
                 </div>

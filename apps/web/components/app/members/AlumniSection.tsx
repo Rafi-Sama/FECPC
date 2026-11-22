@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useStore } from '@/components/app/Store';
 import { canFully, isAdmin } from '@fecpc/contracts';
 import type { AlumniJob, MemberProfile } from '@fecpc/contracts';
+import { useConfirm } from '@/components/app/shared/PromptDialog';
 
 function fmtShortDate(iso: string) {
   try {
@@ -25,6 +26,7 @@ export function AlumniSection({
   profile: MemberProfile;
   onReload: () => Promise<void> | void;
 }) {
+  const sure = useConfirm();
   const { s, me, act } = useStore();
   const [adding, setAdding] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -69,7 +71,7 @@ export function AlumniSection({
   };
 
   const handleDelete = async (jobId: number) => {
-    if (!window.confirm('Delete this job listing?')) return;
+    if (!(await sure('Delete this job listing?'))) return;
     try {
       const res = await fetch('/api/alumni', {
         method: 'POST',

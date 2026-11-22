@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from '@/components/app/Store';
 import { canFully } from '@fecpc/contracts';
+import { useConfirm } from '@/components/app/shared/PromptDialog';
 
 export function AdminMenu({
   userId,
@@ -14,6 +15,7 @@ export function AdminMenu({
   isAlumni: boolean;
   onDone?: () => void;
 }) {
+  const sure = useConfirm();
   const { s, me, act, who } = useStore();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -55,7 +57,7 @@ export function AdminMenu({
     action: 'promoteMember' | 'makeAlumni' | 'deactivateMember',
     confirmMsg?: string,
   ) => {
-    if (confirmMsg && !window.confirm(confirmMsg)) return;
+    if (confirmMsg && !(await sure(confirmMsg))) return;
     setBusy(true);
     try {
       const ok = await act(action, { userId });

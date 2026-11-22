@@ -2,7 +2,7 @@
 
 import { Page } from '@/components/app/Shell';
 import { useStore } from '@/components/app/Store';
-import { useJudge } from '@/components/app/Judge';
+import { useSolved } from '@/components/app/Judge';
 import { cfUrl, sheet } from '@fecpc/content/member-area';
 import { can } from '@fecpc/contracts';
 import { SheetExtras } from '@/components/app/sheets/SheetExtras';
@@ -14,9 +14,7 @@ export default function Sheets() {
   const { s, act, counts, members } = useStore();
   const rate = (id: string) =>
     Math.round(((counts.solved[id] ?? 0) / Math.max(1, members.length)) * 100); // share of members who marked it solved
-  const { data } = useJudge();
-  const auto = new Set(data?.solved ?? []);
-  const isDone = (id: string) => auto.has(id) || s.solved.includes(id);
+  const { synced: auto, isSolved: isDone } = useSolved();
   const done = sheet.filter((p) => isDone(p.id)).length;
 
   // Pick up to 4 unsolved problems from distinct topics
@@ -110,8 +108,11 @@ export default function Sheets() {
                     <a href={cfUrl(p.id)} target="_blank" rel="noreferrer">
                       <span className="dim">{p.id}</span> {p.name}
                     </a>
-                    {s.solved.includes(p.id) && <Verified on={s.verified.includes(p.id)} />}
-                    <span className={`label ${p.must ? '' : 'dim'}`}>
+                    <span
+                      className={`label ${p.must ? '' : 'dim'}`}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                    >
+                      {s.solved.includes(p.id) && <Verified on={s.verified.includes(p.id)} />}
                       {auto.has(p.id) ? 'synced' : p.must ? 'must' : 'optional'}
                     </span>
                     <span className="num acc2">{p.rating}</span>

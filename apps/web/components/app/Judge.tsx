@@ -1,6 +1,6 @@
 'use client';
 import { SaveForm } from '@/components/app/SaveBar';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useStore } from './Store';
 
 export type Judge = {
@@ -54,6 +54,17 @@ export function useJudge() {
     };
   }, [s.handle, syncJudges]);
   return { data, err, busy };
+}
+
+/** Solved = ticked by hand or accepted on Codeforces. `synced` problems cannot be unticked. */
+export function useSolved() {
+  const { s } = useStore();
+  const { data } = useJudge();
+  return useMemo(() => {
+    const synced = new Set(data?.solved ?? []);
+    const ticked = new Set(s.solved);
+    return { synced, isSolved: (id: string) => synced.has(id) || ticked.has(id) };
+  }, [data, s.solved]);
 }
 
 export function HandleBox() {

@@ -32,14 +32,23 @@ function NewEvent() {
   const copy = useSearchParams().get('copy');
   const { s } = useStore();
   if (!can(s.roles, 'event.publish'))
-    return <p className="page empty">Only organisers can create events.</p>;
+    return (
+      <div className="page">
+        <p className="empty">Only organisers can create events.</p>
+      </div>
+    );
   return copy ? <Copy id={copy} /> : <Editor from={null} />;
 }
 
 function Copy({ id }: { id: string }) {
   const { data } = useEventsQuery<EventDetail>({ action: 'event', id });
   if (data === undefined) return <div className="page" aria-busy="true" />;
-  if (data === null) return <p className="page empty">That event could not be loaded.</p>;
+  if (data === null)
+    return (
+      <div className="page">
+        <p className="empty">That event could not be loaded.</p>
+      </div>
+    );
   return <Editor from={data} />;
 }
 

@@ -186,6 +186,16 @@ canvas {
   --f-label: var(--mono), ui-monospace, monospace;
   --f-num: var(--mono), monospace;
 }
+/* Rank colours are tuned for paper; dark skins mix them toward the text colour to stay readable. */
+.t-a,
+.t-c,
+.t-d {
+  --tier-mix: 45%;
+}
+.t-b,
+.t-e {
+  --tier-mix: 0%;
+}
 .t-a,
 .t-b,
 .t-c,

@@ -411,7 +411,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             </details>
           </div>
         </header>
-        <div className={`main t-${cur.href === '/app/arena' ? 'c' : th}`}>
+        <main id="main" className={`main t-${cur.href === '/app/arena' ? 'c' : th}`}>
           {fam && (
             <nav className="subnav" aria-label="Section">
               {fam.map(([href, label]) => (
@@ -424,7 +424,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           <SaveBarProvider>
             <PromptProvider>{children}</PromptProvider>
           </SaveBarProvider>
-        </div>
+        </main>
       </div>
       <nav className="tabbar t-d" aria-label="Quick navigation">
         {[

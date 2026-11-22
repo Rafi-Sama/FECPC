@@ -4,12 +4,14 @@ import { Denied, Page, Tabs } from '@/components/app/Shell';
 import { useStore } from '@/components/app/Store';
 import { can, matrix, roleName, roles, type Cap } from '@fecpc/contracts';
 import { AdminExtra } from '@/components/app/admin/AdminExtra';
+import { useConfirm } from '@/components/app/shared/PromptDialog';
 
 const hues = ['#3de1ff', '#ff8a3d', '#7ce38b', '#ff4d8d'];
 const cell = (v: unknown) => (v === true ? '✓' : v ? String(v) : '–');
 
 export default function Admin() {
-  const { s, act, office, members } = useStore();
+  const sure = useConfirm();
+  const { s, act, office, members, toast } = useStore();
   const applications = office.applications ?? [];
   const caps = {
     apps: can(s.roles, 'application.approve'),
@@ -67,7 +69,7 @@ export default function Admin() {
   ];
   const download = async () => {
     const res = await fetch('/api/export/members');
-    if (!res.ok) return alert((await res.json()).error ?? 'The export failed.');
+    if (!res.ok) return toast((await res.json()).error ?? 'The export failed.', 'bad');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(await res.blob());
     a.download = 'members.csv';
@@ -183,8 +185,8 @@ export default function Admin() {
                         >
                           <button
                             className="btn xs"
-                            onClick={() =>
-                              confirm(`Accept ${a.name}? This creates their account.`) &&
+                            onClick={async () =>
+                              (await sure(`Accept ${a.name}? This creates their account.`)) &&
                               act('decide', { kind: 'application', id: a.id, to: 'accepted' })
                             }
                           >
@@ -192,8 +194,8 @@ export default function Admin() {
                           </button>
                           <button
                             className="btn xs line"
-                            onClick={() =>
-                              confirm(`Decline ${a.name}? This cannot be undone.`) &&
+                            onClick={async () =>
+                              (await sure(`Decline ${a.name}? This cannot be undone.`)) &&
                               act('decide', { kind: 'application', id: a.id, to: 'declined' })
                             }
                           >

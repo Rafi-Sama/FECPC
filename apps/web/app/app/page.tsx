@@ -3,20 +3,29 @@ import Link from 'next/link';
 import { Page } from '@/components/app/Shell';
 import { useStore } from '@/components/app/Store';
 import { Verified } from '@/components/app/sheets/Verified';
+import { useSolved } from '@/components/app/Judge';
 import { Onboarding } from '@/components/app/home/Onboarding';
 import { announcements, cfUrl, myInvoices, owes, potd, sheet } from '@fecpc/content/member-area';
 import { fmtDate, squads } from '@fecpc/content/site';
 import { fmtWhen, usePublicEvents } from '@/lib/events';
 import { LEVEL, level, quests, XP } from '@fecpc/contracts';
 
-const TODAY = '2026-11-12'; // shortcut: seed data is dated around this day; use the real clock with real data
-const daysTo = (iso: string) => Math.round((+new Date(iso) - +new Date(TODAY)) / 864e5);
+// Whole days from the member's local today to a YYYY-MM-DD date.
+const daysTo = (iso: string) =>
+  Math.round((Date.parse(iso) - Date.parse(new Date().toLocaleDateString('en-CA'))) / 864e5);
+const dueIn = (d: number) =>
+  d < 0
+    ? `overdue by ${-d} day${d === -1 ? '' : 's'}`
+    : d === 0
+      ? 'due today'
+      : `due in ${d} day${d === 1 ? '' : 's'}`;
 const questLink = ['/app/sheets', '/app/courses', '/app/community'];
 
 export default function Today() {
   const { s, me, xp, act, office, who } = useStore();
+  const { synced, isSolved } = useSolved();
   const owed = myInvoices(s.reg).filter((i) => owes(s.pay, i.id));
-  const next = sheet.find((p) => !s.solved.includes(p.id));
+  const next = sheet.find((p) => !isSolved(p.id));
   const events = usePublicEvents();
   const contest = events.find((e) => e.type === 'Contest');
   const unread = announcements.filter((a) => !s.read.includes(a.id));
@@ -24,7 +33,7 @@ export default function Today() {
     lv = level(xp);
   const q = quests(s),
     qn = q.filter((x) => x.done).length;
-  const firstOpen = potd.find((p) => !s.solved.includes(p.id));
+  const firstOpen = potd.find((p) => !isSolved(p.id));
   const rank = [...squads].findIndex((x) => x.name === me.squad),
     ahead = squads[rank - 1];
   return (
@@ -45,7 +54,7 @@ export default function Today() {
         <div className="alert">
           <span>
             <strong>৳{owed.reduce((a, i) => a + i.amount, 0)}</strong> across {owed.length} invoice
-            {owed.length > 1 ? 's' : ''} · ৳{owed[0].amount} due in {daysTo(owed[0].due)} days
+            {owed.length > 1 ? 's' : ''} · ৳{owed[0].amount} {dueIn(daysTo(owed[0].due))}
           </span>
           <Link href="/app/finance" className="btn xs line">
             Pay
@@ -66,7 +75,7 @@ export default function Today() {
           </div>
           <div className="tier3">
             {potd.map((p) => {
-              const done = s.solved.includes(p.id);
+              const done = isSolved(p.id);
               return (
                 <div key={p.id} className={`potd ${done ? 'done' : ''}`} data-tier={p.tier}>
                   <span className="label acc2">
@@ -84,10 +93,11 @@ export default function Today() {
                   <span className="label">{p.id}</span>
                   <button
                     className={`btn sm ${done || (s.checkin && p !== firstOpen) || !s.checkin ? 'line' : ''}`}
+                    disabled={synced.has(p.id)}
                     onClick={() => act('toggle', { list: 'solved', id: p.id })}
                   >
                     {done ? 'Solved' : 'Mark solved'}
-                    {done && <Verified on={s.verified.includes(p.id)} />}
+                    {done && <Verified on={synced.has(p.id) || s.verified.includes(p.id)} />}
                   </button>
                 </div>
               );
@@ -160,7 +170,7 @@ export default function Today() {
             className="meter"
             style={
               {
-                '--v': `${(s.solved.filter((id) => sheet.some((p) => p.id === id)).length / sheet.length) * 100}%`,
+                '--v': `${(sheet.filter((p) => isSolved(p.id)).length / sheet.length) * 100}%`,
               } as React.CSSProperties
             }
           >
@@ -174,7 +184,7 @@ export default function Today() {
           <section className="panel c4">
             <p className="label">Next contest</p>
             <p className="big">
-              {daysTo(contest.startsAt.slice(0, 10))}
+              {Math.max(0, daysTo(contest.startsAt.slice(0, 10)))}
               <span className="mut" style={{ fontSize: '.36em' }}>
                 {' '}
                 days
@@ -235,7 +245,7 @@ export default function Today() {
           <ul className="list">
             {events.slice(0, 3).map((e) => (
               <li key={e.id}>
-                <span className="mono acc" style={{ width: 54 }}>
+                <span className="mono acc" style={{ width: 64, whiteSpace: 'nowrap' }}>
                   {fmtDate(e.startsAt.slice(0, 10))}
                 </span>
                 <span className="grow">
@@ -244,7 +254,7 @@ export default function Today() {
                   </Link>
                   <br />
                   <span className="label">
-                    {e.startsAt.slice(11)} · {e.place}
+                    {[e.startsAt.slice(11), e.place].filter(Boolean).join(' · ')}
                   </span>
                 </span>
                 {s.reg.includes(e.id) && <span className="pill ok">going</span>}

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { RANKS, UNRATED_RANK, previousRankTitle, rankFor, ratingRankFor } from '../src/rank.ts';
+import { RANKS, previousRankTitle, rankFor } from '../src/rank.ts';
 
 function hexToRgb(h: string): [number, number, number] {
   const n = parseInt(h.slice(1), 16);
@@ -18,33 +18,6 @@ function contrast(c1: [number, number, number], c2: [number, number, number]) {
     l2 = relLum(c2);
   return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
 }
-
-test('rankFor maps solved thresholds to Codeforces tiers and Unrated fallback', () => {
-  assert.equal(rankFor(0).title, 'Newbie');
-  assert.equal(rankFor(399).title, 'Newbie');
-  assert.equal(rankFor(400).title, 'Pupil');
-  assert.equal(rankFor(799).title, 'Pupil');
-  assert.equal(rankFor(800).title, 'Specialist');
-  assert.equal(rankFor(1199).title, 'Specialist');
-  assert.equal(rankFor(1200).title, 'Expert');
-  assert.equal(rankFor(1599).title, 'Expert');
-  assert.equal(rankFor(1600).title, 'Candidate Master');
-  assert.equal(rankFor(1999).title, 'Candidate Master');
-  assert.equal(rankFor(2000).title, 'Master');
-  assert.equal(rankFor(2399).title, 'Master');
-  assert.equal(rankFor(2400).title, 'Grandmaster');
-  assert.equal(rankFor(2799).title, 'Grandmaster');
-  assert.equal(rankFor(2800).title, 'Legendary GM');
-  assert.equal(rankFor(4500).title, 'Legendary GM');
-
-  // Unrated fallback: null/undefined or 0 solved with no CF handle
-  assert.equal(rankFor(null).title, 'Unrated');
-  assert.equal(rankFor(undefined).title, 'Unrated');
-  assert.equal(rankFor(0, '').title, 'Unrated');
-  assert.equal(rankFor(0, null).title, 'Unrated');
-  assert.equal(rankFor(0, 'handle_ok').title, 'Newbie');
-  assert.equal(UNRATED_RANK.color, '#B0B0B0');
-});
 
 test('all rank tier text colors pass >= 4.5:1 WCAG AA contrast against #F6F4EE and pill background', () => {
   const paper = hexToRgb('#F6F4EE');
@@ -70,18 +43,20 @@ test('all rank tier text colors pass >= 4.5:1 WCAG AA contrast against #F6F4EE a
   }
 });
 
-test('ratingRankFor maps Codeforces ratings to official rank tiers and previousRankTitle resolves predecessors', () => {
-  assert.equal(ratingRankFor(null).title, 'Unrated');
-  assert.equal(ratingRankFor(0).title, 'Unrated');
-  assert.equal(ratingRankFor(1199).title, 'Newbie');
-  assert.equal(ratingRankFor(1200).title, 'Pupil');
-  assert.equal(ratingRankFor(1399).title, 'Pupil');
-  assert.equal(ratingRankFor(1400).title, 'Specialist');
-  assert.equal(ratingRankFor(1600).title, 'Expert');
-  assert.equal(ratingRankFor(1900).title, 'Candidate Master');
-  assert.equal(ratingRankFor(2100).title, 'Master');
-  assert.equal(ratingRankFor(2400).title, 'Grandmaster');
-  assert.equal(ratingRankFor(3000).title, 'Legendary GM');
+test('rankFor maps Codeforces ratings to official rank tiers and previousRankTitle resolves predecessors', () => {
+  assert.equal(rankFor(null).title, 'Unrated');
+  assert.equal(rankFor(0).title, 'Unrated');
+  assert.equal(rankFor(1199).title, 'Newbie');
+  assert.equal(rankFor(1200).title, 'Pupil');
+  assert.equal(rankFor(1399).title, 'Pupil');
+  assert.equal(rankFor(1400).title, 'Specialist');
+  assert.equal(rankFor(1600).title, 'Expert');
+  assert.equal(rankFor(1900).title, 'Candidate Master');
+  assert.equal(rankFor(2100).title, 'Master');
+  assert.equal(rankFor(2400).title, 'Grandmaster');
+  assert.equal(rankFor(1899).title, 'Expert');
+  assert.equal(rankFor(1934).title, 'Candidate Master');
+  assert.equal(rankFor(3000).title, 'Legendary GM');
 
   assert.equal(previousRankTitle('Newbie'), null);
   assert.equal(previousRankTitle('Pupil'), 'Newbie');

@@ -5,49 +5,10 @@ export type CfContest = {
   name: string;
   start: number;
   durationH: number;
-  when?: string;
 };
 
-const fallbackContests: CfContest[] = [
-  {
-    id: 2040,
-    name: 'Codeforces Round (Div. 1)',
-    start: new Date('2026-11-21T20:35:00+06:00').getTime(),
-    durationH: 2,
-    when: 'SAT 21 NOV, 20:35',
-  },
-  {
-    id: 2041,
-    name: 'Codeforces Round (Div. 2)',
-    start: new Date('2026-11-21T20:35:00+06:00').getTime(),
-    durationH: 2,
-    when: 'SAT 21 NOV, 20:35',
-  },
-  {
-    id: 2042,
-    name: 'Codeforces Round (Div. 2)',
-    start: new Date('2026-11-22T15:05:00+06:00').getTime(),
-    durationH: 2,
-    when: 'SUN 22 NOV, 15:05',
-  },
-  {
-    id: 2043,
-    name: 'Kotlin Heroes: Practice 15',
-    start: new Date('2026-12-01T20:30:00+06:00').getTime(),
-    durationH: 168,
-    when: 'TUE 01 DEC, 20:30',
-  },
-  {
-    id: 2044,
-    name: 'Kotlin Heroes: Episode 15',
-    start: new Date('2026-12-08T20:35:00+06:00').getTime(),
-    durationH: 2.5,
-    when: 'TUE 08 DEC, 20:35',
-  },
-];
-
 // Upcoming Codeforces rounds, cached for an hour so no page load ever waits on the judge.
-// Returns fallback rounds when the judge is unreachable so UI remains complete.
+// An empty list when the judge is unreachable; the page says so instead of inventing rounds.
 export async function upcomingContests(limit = 6): Promise<CfContest[]> {
   try {
     const res = await fetch('https://codeforces.com/api/contest.list?gym=false', {
@@ -55,7 +16,7 @@ export async function upcomingContests(limit = 6): Promise<CfContest[]> {
       signal: AbortSignal.timeout(8000),
     });
     const json = await res.json();
-    if (json.status !== 'OK') return fallbackContests.slice(0, limit);
+    if (json.status !== 'OK') return [];
     const parsed = (
       json.result as {
         id: number;
@@ -74,9 +35,9 @@ export async function upcomingContests(limit = 6): Promise<CfContest[]> {
         start: c.startTimeSeconds! * 1000,
         durationH: c.durationSeconds / 3600,
       }));
-    return parsed.length > 0 ? parsed : fallbackContests.slice(0, limit);
+    return parsed;
   } catch {
-    return fallbackContests.slice(0, limit);
+    return [];
   }
 }
 

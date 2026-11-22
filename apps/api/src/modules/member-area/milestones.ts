@@ -3,7 +3,7 @@
 // Policy constants:
 // - Daily milestone kudos cap: 20 per user per day, resetting at 00:00 UTC.
 // - Sidebar freshness window: 14 days (older milestones stay on the member's profile only).
-import { previousRankTitle, ratingRankFor } from '@fecpc/contracts';
+import { previousRankTitle, rankFor } from '@fecpc/contracts';
 import type { MilestoneType } from '@fecpc/contracts';
 import { tx, type Db } from './db.ts';
 
@@ -51,8 +51,8 @@ export function detectCrossovers(
   const oldRating = prev.cf_rating ?? 0;
   const newRating = next.cf_rating ?? 0;
   if (newRating > oldRating && newRating > 0) {
-    const oldRank = ratingRankFor(oldRating);
-    const newRank = ratingRankFor(newRating);
+    const oldRank = rankFor(oldRating);
+    const newRank = rankFor(newRating);
     if (!newRank.unrated && newRank.title !== oldRank.title) {
       const fromTitle = oldRank.unrated ? previousRankTitle(newRank.title) : oldRank.title;
       // Do not emit an initial Unrated -> Newbie entry as a rank promotion; only actual tier promotions.
@@ -301,7 +301,7 @@ export async function backfillMilestones(db: Db): Promise<number> {
   let inserted = 0;
   for (const u of users) {
     const meta = JSON.stringify({ cf_handle: u.cf_handle || null, backfilled: true });
-    const rank = ratingRankFor(u.cf_rating);
+    const rank = rankFor(u.cf_rating);
     const prevRank = !rank.unrated ? previousRankTitle(rank.title) : null;
 
     if (prevRank) {

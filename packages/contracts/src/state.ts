@@ -401,7 +401,6 @@ export type Office = {
     ledger: { date: string; what: string; cat: string; amt: number }[];
     /** `spent` = spent before the ledger existed + approved expenses filed under the budget's name. */
     budgets: { id: number; name: string; plan: number; spent: number }[];
-    cashflow: number[];
   };
   expenses?: Expense[];
   mentees?: {
@@ -481,7 +480,15 @@ export type AppState = {
   myExpenses: Expense[];
   fundTotal: number;
   /** Real money this term (since 1 Jan or 1 Jul): verified payments in, approved expenses out. */
-  term: { since: string; incoming: number; spent: number };
+  term: {
+    since: string;
+    incoming: number;
+    spent: number;
+    /** Approved expenses this term, newest first; every member sees them. */
+    expenses: { date: string; what: string; cat: string; amount: number; by: string | null }[];
+    /** Verified payments in and approved expenses out, per month, the last six months. */
+    flow: { month: string; in: number; out: number }[];
+  };
   office: Office;
   /** Which roles each club post grants. Set by the Super Admin. */
   postRoles: Partial<Record<Post, Role[]>>;

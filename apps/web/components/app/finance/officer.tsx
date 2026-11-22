@@ -1,7 +1,7 @@
 'use client';
 // The officer side of Finance: verifying payments, filing and deciding expenses, the club fund.
 // Each tab appears only for roles whose capability allows it; the API enforces every decision again.
-import { usePrompt } from '@/components/app/shared/PromptDialog';
+import { usePrompt, useConfirm } from '@/components/app/shared/PromptDialog';
 import { SaveForm } from '@/components/app/SaveBar';
 import { Bars } from '@/components/app/Charts';
 import QR from '@/components/app/QR';
@@ -49,6 +49,7 @@ export function OfficerPanel({ tab }: { tab: string }) {
 }
 
 function Payments() {
+  const sure = useConfirm();
   const { s, act, office } = useStore();
   const ask = usePrompt();
   const queue = office.queue ?? [];
@@ -136,10 +137,10 @@ function Payments() {
                       >
                         <button
                           className="btn xs"
-                          onClick={() =>
-                            confirm(
+                          onClick={async () =>
+                            (await sure(
                               `Verify ${q.id}: ${tk(q.amount)} from ${q.name}? Check it against the wallet statement first.`,
-                            ) && act('decide', { kind: 'payment', id: q.id, to: 'verified' })
+                            )) && act('decide', { kind: 'payment', id: q.id, to: 'verified' })
                           }
                         >
                           Verify
@@ -242,6 +243,7 @@ function MyRequests() {
 }
 
 function Expenses() {
+  const sure = useConfirm();
   const { s, me, act, office } = useStore();
   const expenses = office.expenses ?? [];
   const approve = can(s.roles, 'expense.approve');
@@ -287,8 +289,8 @@ function Expenses() {
                 <>
                   <button
                     className="btn xs"
-                    onClick={() =>
-                      confirm(`Approve ${x.id}: ${tk(x.amount)} for "${x.what}"?`) &&
+                    onClick={async () =>
+                      (await sure(`Approve ${x.id}: ${tk(x.amount)} for "${x.what}"?`)) &&
                       act('decide', { kind: 'expense', id: x.id, to: 'approved' })
                     }
                   >
@@ -296,8 +298,8 @@ function Expenses() {
                   </button>
                   <button
                     className="btn xs line"
-                    onClick={() =>
-                      confirm(`Reject ${x.id}? This cannot be undone.`) &&
+                    onClick={async () =>
+                      (await sure(`Reject ${x.id}? This cannot be undone.`)) &&
                       act('decide', { kind: 'expense', id: x.id, to: 'rejected' })
                     }
                   >
@@ -323,15 +325,16 @@ function Expenses() {
 }
 
 function ClubFund() {
-  const { s, act, office, fundTotal } = useStore();
+  const sure = useConfirm();
+  const { s, act, office, fundTotal, term } = useStore();
   const ask = usePrompt();
   const edit = canFully(s.roles, 'payments.verify');
-  const { accounts = [], budgets = [], cashflow = [], ledger = [] } = office.fund ?? {};
+  const { accounts = [], budgets = [], ledger = [] } = office.fund ?? {};
   return (
     <div className="bento">
       <p className="body" style={{ gridColumn: '1 / -1' }} role="note">
         Verified payments and approved expenses update the balance, ledger and budgets. The opening
-        balance, accounts and cash flow are sample figures.
+        balance and accounts are sample figures.
       </p>
       <section className="panel c4">
         <p className="label">Balance</p>
@@ -346,8 +349,8 @@ function ClubFund() {
         </ul>
       </section>
       <section className="panel c8">
-        <p className="label">Cash flow, 12 months (thousand ৳)</p>
-        <Bars data={cashflow} unit="k" />
+        <p className="label">Money in, last 6 months (thousand ৳)</p>
+        <Bars data={term.flow.map((m) => Math.round(m.in / 100) / 10)} unit="k" />
       </section>
       <section className="panel c6">
         <p className="label">Event budgets · spent = approved expenses filed under the name</p>
@@ -389,8 +392,9 @@ function ClubFund() {
                   </button>
                   <button
                     className="btn xs line danger"
-                    onClick={() =>
-                      confirm(`Delete the ${g.name} budget?`) && act('deleteBudget', { id: g.id })
+                    onClick={async () =>
+                      (await sure(`Delete the ${g.name} budget?`)) &&
+                      act('deleteBudget', { id: g.id })
                     }
                   >
                     Delete

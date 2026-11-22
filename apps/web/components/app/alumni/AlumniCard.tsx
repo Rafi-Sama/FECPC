@@ -1,6 +1,6 @@
 'use client';
 import React, { useState } from 'react';
-import { AvatarRing } from '@/components/app/shared/RatingBadge';
+import { AvatarRing, tierText } from '@/components/app/shared/RatingBadge';
 import { rankFor } from '@fecpc/contracts';
 import type { AlumniSummary } from '@fecpc/contracts';
 import { HighlightMatch } from './HighlightMatch';
@@ -21,8 +21,8 @@ export function AlumniCard({
   const [saved, setSaved] = useState(Boolean(alumnus.saved));
   const [saving, setSaving] = useState(false);
 
-  const rank = rankFor(alumnus.problems_solved, alumnus.cf_handle);
-  const tierColor = rank.color && rank.color !== '#6B6B6B' ? rank.color : 'var(--ink, #0B0B0B)';
+  const rank = rankFor(alumnus.cf_rating || alumnus.rating);
+  const tierColor = rank.color;
   const batchStr =
     alumnus.batch !== null && alumnus.batch !== undefined ? String(alumnus.batch).slice(-2) : 'AL';
   const company =
@@ -152,8 +152,6 @@ export function AlumniCard({
           >
             <AvatarRing
               name={alumnus.name}
-              solved={alumnus.problems_solved}
-              cfHandle={alumnus.cf_handle}
               avatarUrl={alumnus.avatar_url}
               size={56}
               ringWidth={2}
@@ -170,7 +168,7 @@ export function AlumniCard({
             fontSize: 19,
             fontWeight: 600,
             margin: '12px 0 2px',
-            color: tierColor,
+            color: tierText(tierColor),
             lineHeight: 1.2,
           }}
         >

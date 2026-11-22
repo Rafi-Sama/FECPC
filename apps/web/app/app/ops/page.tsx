@@ -10,6 +10,7 @@ import { Avatar } from '@/components/pixel/Sprites';
 import { DatePicker } from '@/components/app/shared/DatePicker';
 import { PersonPicker } from '@/components/app/shared/PersonPicker';
 import { SaveForm } from '@/components/app/SaveBar';
+import { useConfirm } from '@/components/app/shared/PromptDialog';
 
 const allTabs = [
   'Board',
@@ -43,6 +44,7 @@ function Who({
 const tk = (n: number) => '৳' + n.toLocaleString('en');
 
 export default function Ops() {
+  const sure = useConfirm();
   const { s, me, act, office, who, members } = useStore();
   const [tab, setTab] = useState<(typeof allTabs)[number]>('Board');
   // Drag a card onto a column to move it; `moving` shows it there until the server confirms.
@@ -198,8 +200,8 @@ export default function Ops() {
                   <button
                     className="btn xs line danger"
                     aria-label={`Delete ${m.title}`}
-                    onClick={() =>
-                      confirm(`Delete “${m.title}” and its action items?`) &&
+                    onClick={async () =>
+                      (await sure(`Delete “${m.title}” and its action items?`)) &&
                       act('deleteMeeting', { id: m.id })
                     }
                   >
@@ -363,7 +365,9 @@ export default function Ops() {
                 <button
                   className="btn xs line danger"
                   aria-label={`Delete ${it.name}`}
-                  onClick={() => confirm(`Delete ${it.name}?`) && act('deleteItem', { id: it.id })}
+                  onClick={async () =>
+                    (await sure(`Delete ${it.name}?`)) && act('deleteItem', { id: it.id })
+                  }
                 >
                   ×
                 </button>
@@ -433,7 +437,11 @@ export default function Ops() {
 // Pairs members with mentors (users.mentor_id). The API checks the same grant and that the mentor can mentor.
 function Mentors() {
   const { act, members } = useStore();
-  const mentors = members.filter((m) => m.roleKey && can(m.roleKey, 'mentees.view'));
+  // Same set the API accepts: real, active people who can mentor (the operator account is not one).
+  const mentors = members.filter(
+    (m) =>
+      m.roleKey && m.roleKey !== 'super_admin' && !m.suspended && can(m.roleKey, 'mentees.view'),
+  );
   const mentees = members.filter((m) => m.roleKey !== 'alumni' && !m.suspended);
   return (
     <div className="stack">

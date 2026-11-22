@@ -21,7 +21,7 @@ export function MilestoneRow({
   onGiveKudos: (milestoneId: number) => void;
   onOpenMember: (userId: string, trigger?: HTMLElement | null) => void;
 }) {
-  const rank = rankFor(milestone.member_solved, milestone.member_cf_handle);
+  const rank = rankFor(milestone.member_rating);
   const targetText = formatMilestoneTarget(milestone.type, milestone.to_value);
   const subline = formatMilestoneSubline(milestone);
   const givers = milestone.recent_givers ?? [];
@@ -105,8 +105,6 @@ export function MilestoneRow({
       >
         <AvatarRing
           name={milestone.member_name}
-          solved={milestone.member_solved}
-          cfHandle={milestone.member_cf_handle}
           avatarUrl={milestone.member_avatar}
           size={36}
           ringWidth={2}

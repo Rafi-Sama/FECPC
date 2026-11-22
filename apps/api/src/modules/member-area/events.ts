@@ -60,8 +60,15 @@ const url = (v: unknown, what: string) => {
 const banner = (v: unknown) => {
   const t = typeof v === 'string' ? v.trim() : '';
   if (!t) return null;
-  if (/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(t) && t.length <= 700_000)
+  const [, kind, b64] = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(t) ?? [];
+  if (kind && b64 && t.length <= 700_000) {
+    // The bytes must really be the declared format, or the banner renders blank.
+    const head = Buffer.from(b64.slice(0, 24), 'base64').toString('latin1');
+    const magic = { png: '\x89PNG', jpeg: '\xff\xd8\xff', webp: 'RIFF' }[kind as 'png'];
+    if (!head.startsWith(magic) || (kind === 'webp' && head.slice(8, 12) !== 'WEBP'))
+      throw new Fail(400, 'The banner image is damaged. Pick it again.');
     return t;
+  }
   return url(t, 'The banner');
 };
 /** Club-local `YYYY-MM-DDTHH:MM` (what a datetime-local input sends), or null when empty and allowed. */

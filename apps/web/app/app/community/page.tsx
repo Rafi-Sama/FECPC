@@ -26,6 +26,7 @@ import { TierAvatar, TierName } from '@/components/app/shared/SolvedTier';
 import { HighlightMatch } from '@/components/app/alumni/HighlightMatch';
 import { announcements } from '@fecpc/content/member-area';
 import { can, canFully, isCommittee } from '@fecpc/contracts';
+import { useConfirm } from '@/components/app/shared/PromptDialog';
 import type {
   FeedCategory,
   FeedPostSummary,
@@ -65,6 +66,7 @@ function parseTab(param: string | null): Tab {
 }
 
 function CommunityContent() {
+  const sure = useConfirm();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { s, me, act, counts, news, polls, members, who } = useStore();
@@ -108,7 +110,7 @@ function CommunityContent() {
   const [feedMine, setFeedMine] = useState(false);
   const [feedItems, setFeedItems] = useState<FeedPostSummary[]>([]);
   const [feedCursor, setFeedCursor] = useState<string | null>(null);
-  const [feedLoading, setFeedLoading] = useState(false);
+  const [feedLoading, setFeedLoading] = useState(true);
   const [feedInitialized, setFeedInitialized] = useState(false);
   const [newPostOpen, setNewPostOpen] = useState(false);
   const [activePostId, setActivePostId] = useState<number | null>(null);
@@ -340,7 +342,7 @@ function CommunityContent() {
   const [ideaMine, setIdeaMine] = useState(false);
   const [ideaItems, setIdeaItems] = useState<IdeaSummary[]>([]);
   const [ideaCursor, setIdeaCursor] = useState<string | null>(null);
-  const [ideaLoading, setIdeaLoading] = useState(false);
+  const [ideaLoading, setIdeaLoading] = useState(true);
   const [ideaInitialized, setIdeaInitialized] = useState(false);
   const [newIdeaOpen, setNewIdeaOpen] = useState(false);
   const [activeIdeaId, setActiveIdeaId] = useState<number | null>(null);
@@ -1009,8 +1011,8 @@ function CommunityContent() {
                     <button
                       type="button"
                       className="btn xs line"
-                      onClick={() =>
-                        window.confirm(`Delete the poll "${p.q}" and its votes?`) &&
+                      onClick={async () =>
+                        (await sure(`Delete the poll "${p.q}" and its votes?`)) &&
                         act('deletePoll', { id: p.id })
                       }
                     >
@@ -1049,7 +1051,7 @@ function CommunityContent() {
           (can(s.roles, 'announce.post') === true ||
             news.some((n) => n.id === activeAnn.id && n.user_id === me.id))
             ? async () => {
-                if (!confirm('Delete this announcement for everyone?')) return;
+                if (!(await sure('Delete this announcement for everyone?'))) return;
                 if (await act('deleteAnnouncement', { id: activeAnn.id })) setActiveAnn(null);
               }
             : undefined

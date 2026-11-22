@@ -7,6 +7,7 @@ import { TierAvatar, TierName } from '@/components/app/shared/SolvedTier';
 import { ideaTypeLabel } from '@/components/app/ideas/NewIdeaModal';
 import { canFully } from '@fecpc/contracts';
 import type { IdeaDetail, IdeaStatus } from '@fecpc/contracts';
+import { useConfirm } from '@/components/app/shared/PromptDialog';
 
 export function IdeaModal({
   ideaId,
@@ -17,6 +18,7 @@ export function IdeaModal({
   onClose: () => void;
   onMutated: () => void;
 }) {
+  const sure = useConfirm();
   const { s, me, act } = useStore();
   const [detail, setDetail] = useState<IdeaDetail | null>(null);
   const [loading, setLoading] = useState(false);
@@ -145,7 +147,8 @@ export function IdeaModal({
 
   const handleClosePost = async () => {
     if (!detail || busy) return;
-    if (!confirm('Close this post? Members will no longer be able to express interest.')) return;
+    if (!(await sure('Close this post? Members will no longer be able to express interest.')))
+      return;
     setBusy(true);
     const ok = await act('closeIdea', { ideaId: detail.id });
     setBusy(false);

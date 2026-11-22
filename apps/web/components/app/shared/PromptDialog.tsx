@@ -45,11 +45,11 @@ export function PromptProvider({ children }: Readonly<{ children: ReactNode }>) 
   );
 }
 
-/** `const ok = await confirmIt(title, message)`: an in-app replacement for window.confirm(). */
+/** `const sure = useConfirm(); if (await sure(question, detail?)) …`: the in-app window.confirm(). */
 export function useConfirm() {
   const ask = usePrompt();
   return useCallback(
-    async (title: string, message: string, confirmLabel = 'Confirm', danger = false) =>
+    async (title: string, message = '', confirmLabel = 'Confirm', danger = false) =>
       (await ask({ title, label: message, confirmLabel, danger, confirmOnly: true })) !== null,
     [ask],
   );
@@ -117,7 +117,7 @@ function PromptDialog({
           </button>
         </div>
         {confirmOnly ? (
-          <p style={{ margin: 0, fontSize: 15, lineHeight: 1.5 }}>{label}</p>
+          label && <p style={{ margin: 0, fontSize: 15, lineHeight: 1.5 }}>{label}</p>
         ) : (
           <label className="field">
             <span className="label">{label}</span>

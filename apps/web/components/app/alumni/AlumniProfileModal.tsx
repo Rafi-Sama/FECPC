@@ -1,9 +1,10 @@
 'use client';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AvatarRing } from '@/components/app/shared/RatingBadge';
+import { AvatarRing, tierText } from '@/components/app/shared/RatingBadge';
 import { canFully, rankFor, isAdmin } from '@fecpc/contracts';
 import { useStore } from '@/components/app/Store';
 import type { MemberProfile, BlogPost, AlumniJob } from '@fecpc/contracts';
+import { useConfirm } from '@/components/app/shared/PromptDialog';
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -17,7 +18,8 @@ export function AlumniProfileModal({
   onClose: () => void;
   onMutated?: () => void;
 }) {
-  const { me, s, act } = useStore();
+  const sure = useConfirm();
+  const { me, s, act, toast } = useStore();
   const [profile, setProfile] = useState<MemberProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -196,7 +198,7 @@ export function AlumniProfileModal({
         await navigator.share({ title: profile?.name || 'Alumni Profile', url });
       } else {
         await navigator.clipboard.writeText(url);
-        alert('Profile link copied to clipboard!');
+        toast('Profile link copied.');
       }
     } catch {
       // ignore
@@ -204,7 +206,7 @@ export function AlumniProfileModal({
   };
 
   const handleDeleteJob = async (jobId: number) => {
-    if (!window.confirm('Are you sure you want to delete this job posting?')) return;
+    if (!(await sure('Are you sure you want to delete this job posting?'))) return;
     try {
       const res = await fetch('/api/alumni', {
         method: 'POST',
@@ -215,7 +217,7 @@ export function AlumniProfileModal({
         setJobsPosted((prev) => prev.filter((j) => j.id !== jobId));
       }
     } catch {
-      alert('Failed to delete job.');
+      toast('Could not delete the job.', 'bad');
     }
   };
 
@@ -295,7 +297,7 @@ export function AlumniProfileModal({
     );
   }
 
-  const rank = rankFor(profile.problems_solved, profile.cf_handle);
+  const rank = rankFor(profile.cf_rating || profile.rating);
   const batchNumber = profile.batch ?? 16;
   const batchStr = String(batchNumber).slice(-2);
   const batchYear = profile.batch ? 2000 + Number(String(profile.batch).slice(-2)) : 2016;
@@ -446,8 +448,6 @@ export function AlumniProfileModal({
               >
                 <AvatarRing
                   name={profile.name}
-                  solved={profile.problems_solved}
-                  cfHandle={profile.cf_handle}
                   avatarUrl={profile.avatar_url}
                   size={128}
                   ringWidth={3}
@@ -604,7 +604,7 @@ export function AlumniProfileModal({
               }}
             >
               <div style={{ flex: 1, padding: 16, borderLeft: 0 }}>
-                <b style={{ display: 'block', fontSize: 32, color: rank.color || '#0000FF' }}>
+                <b style={{ display: 'block', fontSize: 32, color: tierText(rank.color) }}>
                   {profile.cf_rating || profile.rating || '—'}
                 </b>
                 <span className="m" style={{ color: 'var(--dim, #5F5F5F)' }}>
@@ -612,7 +612,7 @@ export function AlumniProfileModal({
                 </span>
               </div>
               <div style={{ flex: 1, padding: 16, borderLeft: '1px solid var(--line, #cfcbbf)' }}>
-                <b style={{ display: 'block', fontSize: 32, color: rank.color || '#0000FF' }}>
+                <b style={{ display: 'block', fontSize: 32, color: tierText(rank.color) }}>
                   {profile.problems_solved || 0}
                 </b>
                 <span className="m" style={{ color: 'var(--dim, #5F5F5F)' }}>
@@ -620,7 +620,7 @@ export function AlumniProfileModal({
                 </span>
               </div>
               <div style={{ flex: 1, padding: 16, borderLeft: '1px solid var(--line, #cfcbbf)' }}>
-                <b style={{ display: 'block', fontSize: 32, color: rank.color || '#0000FF' }}>
+                <b style={{ display: 'block', fontSize: 32, color: tierText(rank.color) }}>
                   {profile.current_streak ? `${profile.current_streak}d` : '0d'}
                 </b>
                 <span className="m" style={{ color: 'var(--dim, #5F5F5F)' }}>
@@ -628,7 +628,7 @@ export function AlumniProfileModal({
                 </span>
               </div>
               <div style={{ flex: 1, padding: 16, borderLeft: '1px solid var(--line, #cfcbbf)' }}>
-                <b style={{ display: 'block', fontSize: 32, color: rank.color || '#0000FF' }}>
+                <b style={{ display: 'block', fontSize: 32, color: tierText(rank.color) }}>
                   {String(profile.contests_participated || 0).padStart(2, '0')}
                 </b>
                 <span className="m" style={{ color: 'var(--dim, #5F5F5F)' }}>
@@ -1043,13 +1043,9 @@ export function AlumniProfileModal({
                 <button
                   type="button"
                   className="btn k"
-                  onClick={() => {
-                    if (isOwner) {
-                      alert('You cannot ping yourself.');
-                    } else {
-                      setPingOpen(true);
-                    }
-                  }}
+                  disabled={isOwner}
+                  title={isOwner ? 'This is your own profile' : undefined}
+                  onClick={() => setPingOpen(true)}
                   style={{
                     width: '100%',
                     marginBottom: 8,

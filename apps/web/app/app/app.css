@@ -523,6 +523,9 @@
 .finance-balance b.green {
   color: var(--acc3);
 }
+.t-b .finance-balance b.green {
+  color: #6fdc9c; /* --acc3 is ink in the light skin, and this card stays dark */
+}
 .finance-balance b.red {
   color: var(--bad);
 }
@@ -2919,6 +2922,12 @@ kbd {
   color: #ffffff;
   border-color: var(--acc);
 }
+/* White on the dark skin's orange is under 4.5:1; its near-black passes. */
+.t-d .tag.on,
+.t-d .tag.tab.on,
+.t-d .tag.b {
+  color: var(--on);
+}
 
 .t-b .tag.tab {
   border-width: 2px;
@@ -3018,6 +3027,7 @@ kbd {
   letter-spacing: -0.02em;
   color: #fff;
   line-height: 1.1;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 0.45); /* the amber and lime banners are too light for white alone */
 }
 
 .chip {

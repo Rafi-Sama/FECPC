@@ -13,14 +13,36 @@ const pos: Record<string, [number, number]> = {
 const W = 186,
   H = 68;
 
-export default function Roadmap({ done = [] as string[] }) {
+export default function Roadmap({
+  done = [] as string[],
+  onPick,
+}: {
+  done?: string[];
+  /** Makes unlocked nodes open their material. */
+  onPick?: (id: string) => void;
+}) {
   const state = (id: string) => {
     const n = roadmap.find((r) => r.id === id)!;
     return done.includes(id) ? 'done' : n.needs.every((d) => done.includes(d)) ? 'open' : 'locked';
   };
+  const pick = (id: string) =>
+    onPick && state(id) !== 'locked'
+      ? {
+          role: 'button',
+          tabIndex: 0,
+          style: { cursor: 'pointer' },
+          onClick: () => onPick(id),
+          onKeyDown: (e: React.KeyboardEvent) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onPick(id);
+            }
+          },
+        }
+      : {};
   return (
     <div className="roadmap">
-      <svg viewBox="0 0 1000 300" aria-hidden className="rm-svg">
+      <svg viewBox="0 0 1000 300" aria-hidden={!onPick} className="rm-svg">
         {roadmap.flatMap((n) =>
           n.needs.map((d) => {
             const [x1, y1] = pos[d],
@@ -38,7 +60,13 @@ export default function Roadmap({ done = [] as string[] }) {
         {roadmap.map((n) => {
           const [x, y] = pos[n.id];
           return (
-            <g key={n.id} className={`node ${state(n.id)}`} transform={`translate(${x} ${y})`}>
+            <g
+              key={n.id}
+              className={`node ${state(n.id)}`}
+              transform={`translate(${x} ${y})`}
+              aria-label={onPick ? `${n.name}, ${state(n.id)}` : undefined}
+              {...pick(n.id)}
+            >
               <rect width={W} height={H} />
               <text x={12} y={28} className="t1">
                 {n.name}
@@ -56,7 +84,7 @@ export default function Roadmap({ done = [] as string[] }) {
       </svg>
       <ol className="rm-list">
         {roadmap.map((n) => (
-          <li key={n.id} className={state(n.id)}>
+          <li key={n.id} className={state(n.id)} {...pick(n.id)}>
             <span className="mono st">{state(n.id) === 'done' ? 'done' : state(n.id)}</span>
             <strong>{n.name}</strong>
             <span className="body">

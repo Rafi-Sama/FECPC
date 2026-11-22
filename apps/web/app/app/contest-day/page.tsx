@@ -14,26 +14,9 @@ type ConfiguredContest = {
   addedAt: string;
 };
 
-const DEFAULT_CONTESTS: ConfiguredContest[] = [
-  {
-    id: '612840',
-    name: 'FECPC Intra-College Programming Contest 2026 (Live)',
-    type: 'running',
-    addedAt: '2026-11-18',
-  },
-  {
-    id: '594821',
-    name: 'ICPC Mock #2 (Dhaka Regional Replay)',
-    type: 'previous',
-    addedAt: '2026-10-11',
-  },
-  {
-    id: '582109',
-    name: 'Weekly Club Contest #41 (VJudge Replay)',
-    type: 'previous',
-    addedAt: '2026-11-09',
-  },
-];
+type Board = VjudgeContestData | { error: string } | null;
+// Pulls a status colour toward the text colour: darker on paper, lighter on charcoal, readable on both.
+const readable = (c: string) => `color-mix(in oklab, ${c}, var(--ink) 40%)`;
 
 export default function ContestDay() {
   const { s, act } = useStore();
@@ -42,17 +25,17 @@ export default function ContestDay() {
   const registry = useMemo<ConfiguredContest[]>(() => {
     try {
       const r = JSON.parse(s.kv.contests ?? '');
-      if (Array.isArray(r) && r.length) return r;
+      if (Array.isArray(r)) return r;
     } catch {}
-    return DEFAULT_CONTESTS;
+    return [];
   }, [s.kv.contests]);
   const setRegistry = (next: (prev: ConfiguredContest[]) => ConfiguredContest[]) =>
     act('contestDay', { contests: next(registry) });
 
-  const runningConfig = registry.find((c) => c.type === 'running') || registry[0];
+  const runningConfig = registry.find((c) => c.type === 'running');
   const previousConfigs = registry.filter((c) => c.type === 'previous');
 
-  const [selectedPrevId, setSelectedPrevId] = useState<string>(previousConfigs[0]?.id || '594821');
+  const [selectedPrevId, setSelectedPrevId] = useState<string>(previousConfigs[0]?.id ?? '');
 
   // Tabs — ADMIN SETUP only visible to cp_head, president, super_admin
   const isAdmin = !!can(s.roles, 'contest.run');
@@ -67,11 +50,11 @@ export default function ContestDay() {
   const [tab, setTab] = useState<(typeof allTabs)[number]>('RUNNING CONTEST');
 
   // Contest data states
-  const [runningData, setRunningData] = useState<VjudgeContestData | null>(null);
-  const [runningLoading, setRunningLoading] = useState(false);
+  const [runningData, setRunningData] = useState<Board>(null);
+  const [runningLoading, setRunningLoading] = useState(true);
 
-  const [prevData, setPrevData] = useState<VjudgeContestData | null>(null);
-  const [prevLoading, setPrevLoading] = useState(false);
+  const [prevData, setPrevData] = useState<Board>(null);
+  const [prevLoading, setPrevLoading] = useState(true);
 
   // Filter search queries
   const [searchQuery, setSearchQuery] = useState('');
@@ -82,45 +65,29 @@ export default function ContestDay() {
   const [adminInputType, setAdminInputType] = useState<'running' | 'previous'>('running');
   const [adminMsg, setAdminMsg] = useState<{ text: string; error?: boolean } | null>(null);
 
-  // Fetch running contest data
-  useEffect(() => {
-    if (!runningConfig?.id) return;
-    setRunningLoading(true);
-    fetch(`/api/vjudge?id=${encodeURIComponent(runningConfig.id)}`)
+  const load = (id: string, set: (d: Board) => void, busy: (b: boolean) => void) => {
+    busy(true);
+    fetch(`/api/vjudge?id=${encodeURIComponent(id)}`)
       .then((r) => r.json())
-      .then((d) => setRunningData(d))
-      .catch(() => {})
-      .finally(() => setRunningLoading(false));
-  }, [runningConfig?.id]);
-
-  // Fetch previous contest data
-  useEffect(() => {
-    if (!selectedPrevId) return;
-    setPrevLoading(true);
-    fetch(`/api/vjudge?id=${encodeURIComponent(selectedPrevId)}`)
-      .then((r) => r.json())
-      .then((d) => setPrevData(d))
-      .catch(() => {})
-      .finally(() => setPrevLoading(false));
-  }, [selectedPrevId]);
-
-  const refreshContest = (id: string, isRunning: boolean) => {
-    if (isRunning) {
-      setRunningLoading(true);
-      fetch(`/api/vjudge?id=${encodeURIComponent(id)}`)
-        .then((r) => r.json())
-        .then((d) => setRunningData(d))
-        .catch(() => {})
-        .finally(() => setRunningLoading(false));
-    } else {
-      setPrevLoading(true);
-      fetch(`/api/vjudge?id=${encodeURIComponent(id)}`)
-        .then((r) => r.json())
-        .then((d) => setPrevData(d))
-        .catch(() => {})
-        .finally(() => setPrevLoading(false));
-    }
+      .then(set, () => set({ error: 'Could not reach the server.' }))
+      .finally(() => busy(false));
   };
+  const refreshContest = (id: string, isRunning: boolean) =>
+    isRunning ? load(id, setRunningData, setRunningLoading) : load(id, setPrevData, setPrevLoading);
+  useEffect(() => {
+    if (runningConfig?.id) load(runningConfig.id, setRunningData, setRunningLoading);
+    else {
+      setRunningData(null);
+      setRunningLoading(false);
+    }
+  }, [runningConfig?.id]);
+  useEffect(() => {
+    if (selectedPrevId) load(selectedPrevId, setPrevData, setPrevLoading);
+    else {
+      setPrevData(null);
+      setPrevLoading(false);
+    }
+  }, [selectedPrevId]);
 
   // Admin: Add or update contest ID
   const handleAddContest = async () => {
@@ -192,17 +159,13 @@ export default function ContestDay() {
   };
 
   const handleDeleteContest = (contestId: string) => {
-    if (registry.length <= 1) {
-      alert('At least one contest must remain in the registry.');
-      return;
-    }
     setRegistry((prev) => prev.filter((c) => c.id !== contestId));
   };
 
   const done = (id: string) => s.flags['cd:' + id];
 
   // Helper to render Leaderboard Table
-  const renderLeaderboard = (data: VjudgeContestData | null, isLoading: boolean) => {
+  const renderLeaderboard = (data: Board, isLoading: boolean) => {
     if (isLoading) {
       return (
         <div className="panel" style={{ textAlign: 'center', padding: '48px 0' }}>
@@ -211,10 +174,16 @@ export default function ContestDay() {
       );
     }
 
-    if (!data) {
+    if (!data || 'error' in data) {
       return (
         <div className="panel" style={{ textAlign: 'center', padding: '48px 0' }}>
-          <p className="body">No contest data available.</p>
+          <p className="body">
+            {data
+              ? data.error
+              : isAdmin
+                ? 'No contest set. Add one in Admin setup.'
+                : 'No contest set yet.'}
+          </p>
         </div>
       );
     }
@@ -342,14 +311,8 @@ export default function ContestDay() {
 
             <tbody>
               {filteredStandings.map((row) => {
-                const rankColor =
-                  row.rank === 1
-                    ? '#eab308'
-                    : row.rank === 2
-                      ? '#94a3b8'
-                      : row.rank === 3
-                        ? '#d97706'
-                        : undefined;
+                const medal = ['#eab308', '#94a3b8', '#d97706'][row.rank - 1];
+                const rankColor = medal && readable(medal);
 
                 return (
                   <tr key={row.userId} style={{ borderBottom: '1px solid var(--line)' }}>
@@ -449,7 +412,7 @@ export default function ContestDay() {
                               borderLeft: '1px solid var(--line)',
                               padding: '4px',
                               backgroundColor: 'rgba(34, 197, 94, 0.16)',
-                              color: '#16a34a',
+                              color: readable('#16a34a'),
                             }}
                             title={`Accepted at minute ${cell.time} with ${cell.attempts} failed tries`}
                           >
@@ -472,7 +435,7 @@ export default function ContestDay() {
                                 borderLeft: '1px solid var(--line)',
                                 padding: '4px',
                                 backgroundColor: 'rgba(245, 158, 11, 0.16)',
-                                color: '#d97706',
+                                color: readable('#d97706'),
                               }}
                               title={`${cell.attempts} pending runs`}
                             >
@@ -490,7 +453,7 @@ export default function ContestDay() {
                               borderLeft: '1px solid var(--line)',
                               padding: '4px',
                               backgroundColor: 'rgba(239, 68, 68, 0.15)',
-                              color: '#dc2626',
+                              color: readable('#dc2626'),
                             }}
                             title={`${cell.attempts} failed attempts`}
                           >
@@ -582,7 +545,7 @@ export default function ContestDay() {
                       }
                     >
                       {stat?.firstSolver ? (
-                        <span style={{ color: '#16a34a', fontWeight: 600 }}>
+                        <span style={{ color: readable('#16a34a'), fontWeight: 600 }}>
                           {stat.firstSolver.time}m
                         </span>
                       ) : (

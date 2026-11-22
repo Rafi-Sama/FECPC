@@ -1,7 +1,7 @@
 'use client';
 import React, { useState } from 'react';
 import type { BlogPost } from '@fecpc/contracts';
-import { AvatarRing } from '@/components/app/shared/RatingBadge';
+import { AvatarRing, tierText } from '@/components/app/shared/RatingBadge';
 import { rankFor } from '@fecpc/contracts';
 import { excerptFromMarkdown, relTime } from '@/components/app/shared/MarkdownEditor';
 import { HighlightMatch } from './HighlightMatch';
@@ -24,7 +24,7 @@ export function BlogCard({
     post.read_time_min || Math.max(1, Math.round(post.body_md.split(/\s+/).length / 200));
 
   const rank = rankFor(post.author_rating ?? 0);
-  const tierColor = rank.color && rank.color !== '#6B6B6B' ? rank.color : 'var(--ink, #0B0B0B)';
+  const tierColor = rank.color;
 
   const handleUpvote = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -145,7 +145,6 @@ export function BlogCard({
           >
             <AvatarRing
               name={post.author_name || 'Alumnus'}
-              solved={post.author_rating ?? 0}
               avatarUrl={post.author_avatar}
               size={40}
               ringWidth={2}
@@ -155,7 +154,7 @@ export function BlogCard({
           </div>
 
           <div className="g" style={{ flex: 1, minWidth: 0 }}>
-            <b style={{ color: tierColor, fontSize: 15, fontWeight: 700 }}>
+            <b style={{ color: tierText(tierColor), fontSize: 15, fontWeight: 700 }}>
               <HighlightMatch text={post.author_name || 'Alumnus'} query={highlightQuery} />
             </b>
             <div

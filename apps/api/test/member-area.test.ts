@@ -262,7 +262,8 @@ test('progress: only real items are accepted; XP follows', async () => {
   await refused(403, act('shuvo', { type: 'toggle', list: 'lessons', id: 'dp:99' }));
   const s = (await st('shuvo')).s;
   assert.ok(s.solved.includes('282A') && s.checkin);
-  assert.equal(earned(s) - x0, XP.solve + XP.checkin + XP.lesson);
+  // A ticked solve earns nothing until Codeforces confirms it (cf_solves); the rest counts at once.
+  assert.equal(earned(s) - x0, XP.checkin + XP.lesson);
   await act('shuvo', { type: 'toggle', list: 'solved', id: '282A' });
   assert.equal((await st('shuvo')).s.solved.includes('282A'), false);
 });
@@ -2105,4 +2106,23 @@ test('events: organisers run them; members register, apply, rate and download ce
   assert.equal((await ev(copy)).admin!.entries.length, 0);
   assert.equal((await ev(id)).status, 'completed');
   assert.equal((await ev(id)).title, 'Graph Night');
+});
+
+test('events: a banner must really be the image format it claims', async () => {
+  const save = (banner: string) =>
+    act('nusrat', {
+      type: 'eventSave',
+      title: 'Banner check',
+      eventType: 'Workshop',
+      startsAt: '2027-01-10T10:00',
+      banner,
+    });
+  await refused(400, save('data:image/png;base64,EXIkud5UO6vXwzkRjqqAN6oh'));
+  await refused(
+    400,
+    save('data:image/webp;base64,' + Buffer.from('RIFF....JPEG').toString('base64')),
+  );
+  await save(
+    'data:image/png;base64,' + Buffer.from('\x89PNG\r\n\x1a\n0000', 'latin1').toString('base64'),
+  );
 });

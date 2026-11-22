@@ -1,13 +1,15 @@
 'use client';
 import Link from 'next/link';
 import { useStore } from '../Store';
+import { useSolved } from '../Judge';
 import { myInvoices, owes, sheet } from '@fecpc/content/member-area';
 
 const css = (o: Record<string, string | number>) => o as React.CSSProperties;
 
 export function Onboarding() {
   const { s } = useStore();
-  const starter = s.solved.filter((id) => sheet.some((p) => p.id === id)).length;
+  const { isSolved } = useSolved();
+  const starter = sheet.filter((p) => isSolved(p.id)).length;
   const steps: [string, boolean, string][] = [
     ['Link your Codeforces handle', !!s.handle, '/app/profile'],
     ['Send your mentor a check-in', s.sent.includes('checkin'), '/app/learn'],

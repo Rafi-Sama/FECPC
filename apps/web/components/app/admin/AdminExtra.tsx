@@ -1,5 +1,5 @@
 'use client';
-import { usePrompt } from '@/components/app/shared/PromptDialog';
+import { usePrompt, useConfirm } from '@/components/app/shared/PromptDialog';
 import { SaveForm } from '@/components/app/SaveBar';
 import { useState } from 'react';
 import { useStore } from '../Store';
@@ -20,6 +20,7 @@ const statuses = ['All', 'Active', 'Invited', 'Suspended'] as const;
 
 // Every account and what this officer may do to it. The same rank rules are enforced by the API.
 function Accounts() {
+  const sure = useConfirm();
   const { s, me, act, members, postRoles } = useStore();
   const ask = usePrompt();
   const [q, setQ] = useState('');
@@ -163,10 +164,10 @@ function Accounts() {
                       {link && (
                         <button
                           className="btn xs line"
-                          onClick={() =>
-                            confirm(
+                          onClick={async () =>
+                            (await sure(
                               `Create a new one-time ${m.pending ? 'invite' : 'password reset'} link for ${m.name}?`,
-                            ) && act('invite', { user: m.id })
+                            )) && act('invite', { user: m.id })
                           }
                         >
                           {m.pending ? 'Invite link' : 'Reset link'}
@@ -175,12 +176,12 @@ function Accounts() {
                       {suspend && (
                         <button
                           className={`btn xs ${m.suspended ? '' : 'line danger'}`}
-                          onClick={() =>
-                            confirm(
+                          onClick={async () =>
+                            (await sure(
                               m.suspended
                                 ? `Reinstate ${m.name}?`
                                 : `Suspend ${m.name}? They are signed out everywhere at once.`,
-                            ) && act('suspend', { user: m.id, on: !m.suspended })
+                            )) && act('suspend', { user: m.id, on: !m.suspended })
                           }
                         >
                           {m.suspended ? 'Reinstate' : 'Suspend'}
@@ -205,6 +206,7 @@ export function AdminExtra({ tab }: { tab: string }) {
 }
 
 function Permissions({ tab }: { tab: string }) {
+  const sure = useConfirm();
   const { s, act, members, postRoles } = useStore();
   const [email, setEmail] = useState('');
   const superAdmin = s.role === 'super_admin';
@@ -223,10 +225,10 @@ function Permissions({ tab }: { tab: string }) {
             onSubmit={async () => {
               if (!match) return false; // the status line already says no member has that email
               const ok =
-                confirm(
+                (await sure(
                   `Make ${match.name} (${match.email}) President?` +
                     (president.length ? ` ${president.join(', ')} becomes a Member.` : ''),
-                ) && (await act('appointPresident', { user: match.id, email: match.email }));
+                )) && (await act('appointPresident', { user: match.id, email: match.email }));
               if (ok) setEmail('');
               return ok;
             }}

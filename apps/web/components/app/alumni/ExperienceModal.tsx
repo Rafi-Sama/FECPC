@@ -1,10 +1,12 @@
 'use client';
 import React, { useEffect, useRef } from 'react';
 import type { InterviewTip } from '@fecpc/contracts';
-import { TierAvatar, TierName } from '@/components/app/shared/SolvedTier';
+import { AvatarRing } from '@/components/app/shared/RatingBadge';
+import { rankFor } from '@fecpc/contracts';
 import { MarkdownBody, relTime } from '@/components/app/shared/MarkdownEditor';
 import { useStore } from '@/components/app/Store';
 import { isAdmin } from '@fecpc/contracts';
+import { useConfirm } from '@/components/app/shared/PromptDialog';
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -18,6 +20,7 @@ export function ExperienceModal({
   onClose: () => void;
   onDeleted?: (tipId: number) => void;
 }) {
+  const sure = useConfirm();
   const { me, s } = useStore();
   const modalRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
@@ -63,7 +66,7 @@ export function ExperienceModal({
   }, [onClose]);
 
   const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete this tip?')) return;
+    if (!(await sure('Are you sure you want to delete this tip?'))) return;
     try {
       const res = await fetch('/api/alumni', {
         method: 'POST',
@@ -177,16 +180,14 @@ export function ExperienceModal({
             marginBottom: 24,
           }}
         >
-          <TierAvatar
+          <AvatarRing
             name={tip.author_name || 'Alumnus'}
-            solved={tip.author_rating ?? 0}
             avatarUrl={tip.author_avatar}
             size={36}
+            rank={rankFor(tip.author_rating)}
           />
           <div>
-            <div style={{ fontWeight: 600, fontSize: 14 }}>
-              <TierName name={tip.author_name || 'Alumnus'} solved={tip.author_rating ?? 0} />
-            </div>
+            <div style={{ fontWeight: 600, fontSize: 14 }}>{tip.author_name || 'Alumnus'}</div>
             <div
               style={{
                 fontFamily: 'var(--mono)',
@@ -206,8 +207,8 @@ export function ExperienceModal({
               onClick={handleDelete}
               style={{
                 marginLeft: 'auto',
-                color: 'var(--accent2, #FF5A1F)',
-                borderColor: 'var(--accent2, #FF5A1F)',
+                color: 'var(--acc2)',
+                borderColor: 'var(--acc2)',
                 fontSize: 11,
                 fontFamily: 'var(--mono)',
                 cursor: 'pointer',

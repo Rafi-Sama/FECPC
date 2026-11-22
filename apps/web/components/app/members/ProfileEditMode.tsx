@@ -70,8 +70,7 @@ export function ProfileEditMode({
   const [avatarErr, setAvatarErr] = useState('');
 
   const allSkillOptions = Array.from(new Set([...SKILL_CHOICES, ...profile.skills]));
-  const previewSolved = cfSynced ? cfSynced.solved : profile.problems_solved;
-  const rank = rankFor(previewSolved, cfHandle);
+  const rank = rankFor(cfSynced ? cfSynced.rating : profile.cf_rating || profile.rating);
   const roleLabel = profile.role || (profile.is_alumni ? 'Alumni' : 'Member');
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -183,8 +182,6 @@ export function ProfileEditMode({
         >
           <AvatarRing
             name={profile.name}
-            solved={previewSolved}
-            cfHandle={cfHandle}
             avatarUrl={avatarUrl}
             size={96}
             ringWidth={3}

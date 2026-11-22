@@ -24,6 +24,8 @@ type Store = AppState & {
   act: (type: string, arg?: Record<string, unknown>) => Promise<boolean>;
   /** Has the server pull the member's Codeforces and VJudge stats, then reloads state so new XP shows. */
   syncJudges: () => Promise<void>;
+  /** A short message at the bottom of the screen; `bad` for errors. */
+  toast: (text: string, kind?: 'bad' | 'big') => void;
   /** A member by id. People who have left still render, as their id. */
   who: (id: string) => Roster | { id: string; name: string; handle: string; rating: number };
 };
@@ -209,9 +211,10 @@ export function StoreProvider({
       giveKudos,
       act,
       syncJudges,
+      toast,
       who: (id) => byId.get(id) ?? { id, name: id, handle: id, rating: 0 },
     };
-  }, [st, act, giveKudos, syncJudges]);
+  }, [st, act, giveKudos, syncJudges, toast]);
   return (
     <Ctx.Provider value={value}>
       {children}

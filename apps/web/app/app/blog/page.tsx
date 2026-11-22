@@ -2,17 +2,19 @@
 import { useState } from 'react';
 import { Page } from '@/components/app/Shell';
 import { useStore } from '@/components/app/Store';
+import { useSolved } from '@/components/app/Judge';
 import { cfUrl } from '@fecpc/content/member-area';
 import { posts } from '@fecpc/content/training';
 import { byId } from '@fecpc/content/site';
 
 export default function Blog() {
   const { s, me, act } = useStore();
+  const { isSolved } = useSolved();
   const [open, setOpen] = useState(posts[0].id);
   const [step, setStep] = useState<Record<string, number>>({});
   const p = posts.find((x) => x.id === open)!,
     n = step[p.id] ?? 0,
-    solved = s.solved.includes(p.id);
+    solved = isSolved(p.id);
   return (
     <Page title="Editorials">
       <div className="bento">

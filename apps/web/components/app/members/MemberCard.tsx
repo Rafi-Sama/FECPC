@@ -24,7 +24,7 @@ export function MemberCard({
   const isSelf = member.id === me.id;
   const kudosId = `member:${member.id}`;
   const hasKudos = s.kudos.includes(kudosId);
-  const rank = rankFor(member.problems_solved, member.cf_handle);
+  const rank = rankFor(member.cf_rating || member.rating);
   const roleLabel = member.role || (member.is_alumni ? 'Alumni' : 'Member');
 
   const handleKudos = (e: React.MouseEvent<HTMLButtonElement>) => {
@@ -58,8 +58,6 @@ export function MemberCard({
       <div className="member-card__top">
         <AvatarRing
           name={member.name}
-          solved={member.problems_solved}
-          cfHandle={member.cf_handle}
           avatarUrl={member.avatar_url}
           size={40}
           ringWidth={2}
@@ -118,13 +116,7 @@ export function MemberCard({
       </div>
 
       <div className="member-card__stats">
-        <TierBadge
-          solved={member.problems_solved}
-          rating={member.cf_rating}
-          cfHandle={member.cf_handle}
-          size="sm"
-          rank={rank}
-        />
+        <TierBadge rating={member.cf_rating} size="sm" rank={rank} />
         <span className="member-card__stat-text">
           {!rank.unrated ? '· ' : ''}
           {member.problems_solved} solved · {member.current_streak}d streak

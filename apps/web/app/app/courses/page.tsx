@@ -3,6 +3,7 @@ import { SaveForm } from '@/components/app/SaveBar';
 import { useState } from 'react';
 import { Page } from '@/components/app/Shell';
 import { useStore } from '@/components/app/Store';
+import { useSolved } from '@/components/app/Judge';
 import { cfUrl, sheet } from '@fecpc/content/member-area';
 import { courses, quizzes } from '@fecpc/content/training';
 import { byId } from '@fecpc/content/site';
@@ -10,13 +11,14 @@ import { XP } from '@fecpc/contracts';
 
 export default function Courses() {
   const { s, act } = useStore();
+  const { isSolved } = useSolved();
   const [open, setOpen] = useState(courses[0].id);
   const [pick, setPick] = useState<Record<number, number>>({});
   const c = courses.find((x) => x.id === open)!,
     quiz = quizzes[c.id];
   const lk = (i: number) => `${c.id}:${i}`;
   const doneL = c.lessons.filter((_, i) => s.lessons.includes(lk(i))).length;
-  const doneA = c.assign.filter((id) => s.solved.includes(id)).length;
+  const doneA = c.assign.filter(isSolved).length;
   const score = s.quiz[c.id],
     passed = score >= 2;
   const total = c.lessons.length + c.assign.length + 1,
@@ -109,7 +111,7 @@ export default function Courses() {
           <div className="list">
             {c.assign.map((id) => {
               const p = sheet.find((x) => x.id === id)!,
-                d = s.solved.includes(id);
+                d = isSolved(id);
               return (
                 <div key={id}>
                   <span className="grow">

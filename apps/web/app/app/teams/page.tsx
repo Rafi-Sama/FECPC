@@ -4,7 +4,7 @@ import { Page } from '@/components/app/Shell';
 import { SaveForm } from '@/components/app/SaveBar';
 import { useStore } from '@/components/app/Store';
 import { templates } from '@fecpc/content/training';
-import { ratingRankFor } from '@fecpc/contracts';
+import { rankFor } from '@fecpc/contracts';
 import { Avatar } from '@/components/pixel/Sprites';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -560,7 +560,7 @@ export default function Teams() {
       {onTeam && (
         <button
           className="btn sm line no-print"
-          style={{ color: 'var(--red, #e63946)', borderColor: 'var(--red, #e63946)' }}
+          style={{ color: 'var(--bad)', borderColor: 'var(--bad)' }}
           onClick={() => setConfirmLeave(true)}
         >
           leave your team
@@ -625,7 +625,11 @@ export default function Teams() {
                       onClick={() => switchMember(id)}
                       style={
                         isActive
-                          ? { background: 'var(--acc)', color: '#fff', borderColor: 'var(--acc)' }
+                          ? {
+                              background: 'var(--acc)',
+                              color: 'var(--on)',
+                              borderColor: 'var(--acc)',
+                            }
                           : {}
                       }
                     >
@@ -639,7 +643,8 @@ export default function Teams() {
                   <button
                     className="tag tab"
                     style={{ fontWeight: 700 }}
-                    title="Find a teammate"
+                    title={memberSlots.length >= maxSlots ? 'Your team is full' : 'Find a teammate'}
+                    disabled={memberSlots.length >= maxSlots}
                     onClick={() => setShowLFT((v) => !v)}
                   >
                     +
@@ -661,7 +666,7 @@ export default function Teams() {
                             top: 'calc(100% + 6px)',
                             right: 0,
                             background: 'var(--bg, #f5f5f0)',
-                            border: '1px solid var(--border, #d8d4cc)',
+                            border: '1px solid var(--line)',
                             borderRadius: 6,
                             width: 300,
                             zIndex: 50,
@@ -672,7 +677,7 @@ export default function Teams() {
                           <div
                             style={{
                               padding: '10px 12px',
-                              borderBottom: '1px solid var(--border, #d8d4cc)',
+                              borderBottom: '1px solid var(--line)',
                             }}
                           >
                             <p className="label" style={{ margin: '0 0 8px' }}>
@@ -689,8 +694,8 @@ export default function Teams() {
                                 boxSizing: 'border-box',
                                 padding: '6px 10px',
                                 borderRadius: 4,
-                                border: '1px solid var(--border, #d8d4cc)',
-                                background: 'var(--bg2, #eeeee8)',
+                                border: '1px solid var(--line)',
+                                background: 'var(--bg)',
                                 fontSize: '0.82rem',
                                 outline: 'none',
                               }}
@@ -713,7 +718,7 @@ export default function Teams() {
                                       alignItems: 'center',
                                       gap: 8,
                                       padding: '9px 12px',
-                                      borderBottom: '1px solid var(--border, #d8d4cc)',
+                                      borderBottom: '1px solid var(--line)',
                                     }}
                                   >
                                     <span className="grow" style={{ minWidth: 0 }}>
@@ -775,7 +780,7 @@ export default function Teams() {
                         outline: 'none',
                         fontSize: 15,
                         width: '18ch',
-                        background: 'var(--bg2, #eeeee8)',
+                        background: 'var(--bg)',
                       }}
                     />
                   ) : (
@@ -819,7 +824,7 @@ export default function Teams() {
                             onClick={() => setConfirmDeleteTopic({ name: x })}
                             title={`Remove ${x}`}
                             aria-label={`Remove ${x}`}
-                            style={{ color: 'var(--red, #e63946)' }}
+                            style={{ color: 'var(--bad)' }}
                           >
                             ×
                           </button>
@@ -853,14 +858,14 @@ export default function Teams() {
                         outline: 'none',
                         fontSize: 15,
                         width: '18ch',
-                        background: 'var(--bg2, #eeeee8)',
+                        background: 'var(--bg)',
                       }}
                     />
                     <button
                       className="btn xs"
                       style={{
                         background: 'var(--acc)',
-                        color: '#fff',
+                        color: 'var(--on)',
                         border: 'none',
                         height: 40,
                         padding: '0 14px',
@@ -934,7 +939,7 @@ export default function Teams() {
                         fontFamily: 'var(--mono, monospace)',
                         fontSize: '0.82rem',
                         padding: 16,
-                        background: 'var(--bg2, #eeeee8)',
+                        background: 'var(--bg)',
                         boxSizing: 'border-box',
                         lineHeight: 1.6,
                       }}
@@ -945,7 +950,7 @@ export default function Teams() {
                     style={{
                       margin: 0,
                       minHeight: 280,
-                      background: 'var(--bg2, #eeeee8)',
+                      background: 'var(--bg)',
                       borderRadius: 4,
                       padding: 16,
                       overflowX: 'auto',
@@ -964,7 +969,7 @@ export default function Teams() {
                 style={{
                   width: 220,
                   flexShrink: 0,
-                  border: '1px solid var(--border, #d8d4cc)',
+                  border: '1px solid var(--line)',
                   borderRadius: 4,
                   overflow: 'hidden',
                   display: 'flex',
@@ -977,7 +982,7 @@ export default function Teams() {
                   style={{
                     padding: '10px 14px',
                     margin: 0,
-                    borderBottom: '1px solid var(--border, #d8d4cc)',
+                    borderBottom: '1px solid var(--line)',
                     flexShrink: 0,
                     background: 'var(--bg, #f5f5f0)',
                   }}
@@ -1002,10 +1007,8 @@ export default function Teams() {
                       style={{
                         padding: '10px 14px',
                         borderBottom:
-                          i < displayHistory.length - 1
-                            ? '1px solid var(--border, #d8d4cc)'
-                            : 'none',
-                        background: i === 0 && editing ? 'var(--bg2, #eeeee8)' : undefined,
+                          i < displayHistory.length - 1 ? '1px solid var(--line)' : 'none',
+                        background: i === 0 && editing ? 'var(--bg)' : undefined,
                       }}
                     >
                       <strong className="hi" style={{ display: 'block', fontSize: '0.85rem' }}>
@@ -1073,7 +1076,7 @@ export default function Teams() {
           <div
             style={{
               background: 'var(--bg, #f5f5f0)',
-              border: '1px solid var(--border, #d8d4cc)',
+              border: '1px solid var(--line)',
               borderRadius: 8,
               padding: 28,
               maxWidth: 360,
@@ -1092,7 +1095,7 @@ export default function Teams() {
               </button>
               <button
                 className="btn sm"
-                style={{ background: 'var(--red, #e63946)', color: '#fff', border: 'none' }}
+                style={{ background: 'var(--bad)', color: '#fff', border: 'none' }}
                 onClick={() => {
                   setConfirmLeave(false);
                   void run('teamLeave');
@@ -1121,7 +1124,7 @@ export default function Teams() {
           <div
             style={{
               background: 'var(--bg, #f5f5f0)',
-              border: '1px solid var(--border, #d8d4cc)',
+              border: '1px solid var(--line)',
               borderRadius: 8,
               padding: 28,
               maxWidth: 380,
@@ -1142,7 +1145,7 @@ export default function Teams() {
               {
                 <button
                   className="btn sm"
-                  style={{ background: 'var(--red, #e63946)', color: '#fff', border: 'none' }}
+                  style={{ background: 'var(--bad)', color: '#fff', border: 'none' }}
                   onClick={() => {
                     void removeTopic(confirmDeleteTopic.name);
                     setConfirmDeleteTopic(null);
@@ -1172,7 +1175,7 @@ export default function Teams() {
           <div
             style={{
               background: 'var(--bg, #f5f5f0)',
-              border: '1px solid var(--border, #d8d4cc)',
+              border: '1px solid var(--line)',
               borderRadius: 8,
               padding: 24,
               maxWidth: 480,
@@ -1194,7 +1197,7 @@ export default function Teams() {
             <div
               style={{
                 marginBottom: 16,
-                border: '1px solid var(--border, #d8d4cc)',
+                border: '1px solid var(--line)',
                 borderRadius: 6,
                 padding: 14,
               }}
@@ -1259,7 +1262,7 @@ export default function Teams() {
             <div
               style={{
                 marginBottom: 20,
-                border: '1px solid var(--border, #d8d4cc)',
+                border: '1px solid var(--line)',
                 borderRadius: 6,
                 padding: 14,
               }}
@@ -1377,7 +1380,7 @@ export default function Teams() {
                         <div
                           key={id}
                           style={{
-                            borderBottom: '1px solid var(--border, #d8d4cc)',
+                            borderBottom: '1px solid var(--line)',
                             paddingBottom: 10,
                           }}
                         >
@@ -1464,7 +1467,7 @@ export default function Teams() {
                 <button
                   type="button"
                   className="btn sm"
-                  style={{ background: 'var(--acc)', color: '#fff', border: 'none' }}
+                  style={{ background: 'var(--acc)', color: 'var(--on)', border: 'none' }}
                   disabled={
                     Object.values(selectedMemberTopics).reduce((s, a) => s + a.length, 0) === 0
                   }
@@ -1530,7 +1533,7 @@ function TeamOverview({
   const unsynced = stats.members.filter((m) => m.problems_solved > 0 && !tagged.has(m.id));
   const topBand = Math.max(1, ...stats.spread.map((x) => x.n));
   const kpis: [string, string | number, string?][] = [
-    ['avg rating', avg ?? '—', avg ? ratingRankFor(avg).color : undefined],
+    ['avg rating', avg ?? '—', avg ? rankFor(avg).color : undefined],
     ['team solved', stats.distinctSolved],
     [`solved by all ${stats.members.length}`, stats.solvedByAll],
     ['notebook topics', stats.members.reduce((a, m) => a + m.topics, 0)],
@@ -1576,7 +1579,7 @@ function TeamOverview({
 
       {/* One card per member, in their Codeforces rank colour. */}
       {stats.members.map((m) => {
-        const rank = ratingRankFor(m.cf_rating);
+        const rank = rankFor(m.cf_rating);
         const next = Math.min(
           ...[1200, 1400, 1600, 1900, 2100, 2400, 3000].filter((x) => x > (m.cf_rating ?? 0)),
         );
@@ -1704,7 +1707,7 @@ function TeamOverview({
                 <i
                   style={{
                     height: `${Math.max(4, (b.n / topBand) * 100)}%`,
-                    background: ratingRankFor(b.band).color,
+                    background: rankFor(b.band).color,
                   }}
                 />
                 <span className="tov-hist-k">{b.band === 2800 ? '2800+' : b.band}</span>

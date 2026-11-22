@@ -78,7 +78,6 @@ export const expenses = [
     event: 'Intra-College Contest',
   },
 ];
-export const cashflow = [18, 26, 22, 41, 35, 29, 44, 38, 52, 47, 61, 55];
 export const mentees = [
   { id: 'tasnim', week: [5, 4], last: 'today', flag: '' },
   { id: 'zahid', week: [5, 2], last: 'yesterday', flag: '' },

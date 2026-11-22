@@ -3,20 +3,19 @@ import type { CSSProperties } from 'react';
 import { Avatar } from '@/components/pixel/Sprites';
 import { rankFor, type Rank } from '@fecpc/contracts';
 
+/** A rank colour for text, readable in every skin (see `--tier-mix`). */
+export const tierText = (color: string) =>
+  `color-mix(in oklab, ${color}, var(--hi) var(--tier-mix, 0%))`;
+
 export function TierBadge({
-  solved,
   rating,
-  cfHandle,
   size = 'sm',
-  rank: rankProp,
+  rank = rankFor(rating),
 }: {
-  solved: number | null | undefined;
   rating?: number | null;
-  cfHandle?: string | null;
   size?: 'sm' | 'md';
   rank?: Rank;
 }) {
-  const rank = rankProp ?? rankFor(solved, cfHandle);
   if (rank.unrated) return null;
 
   const hasRating = typeof rating === 'number' && rating > 0;
@@ -42,27 +41,21 @@ export function TierBadge({
 
 export function AvatarRing({
   name,
-  solved,
-  cfHandle,
   avatarUrl,
   size = 40,
   ringWidth = 2,
   ringOffset = 2,
   notched = false,
-  rank: rankProp,
+  rank,
 }: {
   name: string;
-  solved: number | null | undefined;
-  cfHandle?: string | null;
   avatarUrl?: string | null;
   size?: number;
   ringWidth?: number;
   ringOffset?: number;
   notched?: boolean;
-  rank?: Rank;
+  rank: Rank;
 }) {
-  const rank = rankProp ?? rankFor(solved, cfHandle);
-
   return (
     <span
       className={`avatar-ring${notched ? ' avatar-ring--notched' : ''}${rank.unrated ? ' avatar-ring--unrated' : ''}`}
