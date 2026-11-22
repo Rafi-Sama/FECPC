@@ -214,8 +214,8 @@ export default function Admin() {
       {cur === 'Permissions' && (
         <div className="stack">
           <p className="body" style={{ maxWidth: '70ch' }}>
-            ✓ full · scope: only their own mentees · view: read only · propose: starts a decision
-            that a second officer finishes. Posts are assigned from a member's ⋯ menu.
+            ✓ full · scope: only their own items · view: read only · propose: starts a decision that
+            a second officer finishes. Posts are assigned from a member's ⋯ menu.
           </p>
           <div className="scroll-x">
             <table className="tbl matrix">

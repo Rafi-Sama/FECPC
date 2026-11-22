@@ -46,7 +46,7 @@ const groups: { g: string; items: Item[] }[] = [
 // Pages folded under one sidebar link; they show as a link row on that link's pages.
 const subs: Record<string, { self: string; items: Item[] }> = {
   '/app/learn': {
-    self: 'Roadmap & library',
+    self: 'Roadmap',
     items: [
       ['/app/courses', 'Courses'],
       ['/app/blog', 'Editorials'],
@@ -227,7 +227,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             '/app/community',
             '/app/events',
             ...(can(s.roles, 'contest.run') ? ['/app/contests', '/app/contest-day'] : []),
-            ...(canFully(s.roles, 'mentees.view') ? ['/app/teams'] : []),
+            ...(canFully(s.roles, 'teams.oversee') ? ['/app/teams'] : []),
           ].includes(href);
   const router = useRouter();
   useEffect(() => {

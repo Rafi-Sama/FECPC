@@ -3,9 +3,7 @@
 import {
   APPROVAL_THRESHOLD,
   announcements,
-  doubts,
   invoices,
-  resources,
   sheet,
   shop,
 } from '@fecpc/content/member-area';
@@ -38,6 +36,7 @@ import type {
   InterviewProblem,
   InterviewTip,
   InterviewRoadmap,
+  RoadmapKind,
   InterviewTopic,
   MemberActivityItem,
   MemberContestRow,
@@ -202,7 +201,7 @@ const flip = (list: string[], id: string, on: boolean) =>
 // What each personal list accepts. Anything else is refused, so a list can never hold an id that earns XP for nothing.
 const lists: Record<string, (id: string) => boolean> = {
   solved: (id) => sheet.some((p) => p.id === id),
-  done: (id) => resources.some((r) => r.id === id) || wiki.some((w) => 'wiki:' + w.id === id),
+  done: (id) => wiki.some((w) => 'wiki:' + w.id === id),
   lessons: (id) => courses.some((c) => c.lessons.some((_, i) => `${c.id}:${i}` === id)),
   read: (id) => announcements.some((a) => a.id === id) || /^(an:\d{1,9}|n:[\w:.-]{1,70})$/.test(id),
 };
@@ -223,7 +222,7 @@ async function kudosOwner(c: Db, id: string): Promise<string | null> {
       null
     );
   if (kind === 'post') return editorials.find((x) => x.id === ref)?.by ?? null;
-  return doubts.find((x) => x.id === id)?.by ?? null;
+  return null;
 }
 
 const inInbox = async (c: Db, userId: string, id: string) =>
@@ -354,7 +353,6 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
         );
       return;
     }
-    if (k.startsWith('nudge')) need(can(a.roles, 'mentees.view'));
     if (!(k in p.flags) && Object.keys(p.flags).length >= 300)
       throw new Fail(400, 'Too many saved preferences.');
     p.flags[k] = i.on;
@@ -504,26 +502,17 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
         : '';
     const pinned = Boolean(i.pinned);
     const requiresAck = Boolean(i.requires_ack);
-    // A scoped grant (mentor) reaches that mentor's own mentees only; the audience is decided here, never by the caller.
-    const audience =
-      can(a.roles, 'announce.post') === 'scope' || i.audience === 'mentees'
-        ? 'mentees:' + a.id
-        : 'all';
     await c.query(
-      `insert into announcements (user_id, title, body_md, audience, pinned, requires_ack) values ($1, $2, $3, $4, $5, $6)`,
-      [a.id, title, bodyMd, audience, pinned, requiresAck],
+      `insert into announcements (user_id, title, body_md, pinned, requires_ack) values ($1, $2, $3, $4, $5)`,
+      [a.id, title, bodyMd, pinned, requiresAck],
     );
-    await audit(
-      c,
-      a,
-      `posted announcement "${title}"${audience === 'all' ? '' : ' to their mentees'}`,
-    );
+    await audit(c, a, `posted announcement "${title}"`);
   },
   async markAnnouncementRead(c, a, p, i) {
     const raw = String(i.id ?? '').trim();
     const id = /^\d{1,9}$/.test(raw) ? 'an:' + raw : key(raw);
     const isSeed = announcements.some((x) => x.id === id);
-    // Only one addressed to this member: a mentor's note to their mentees is not everyone's XP.
+    // Only one this member can see.
     if (!isSeed)
       need(
         /^an:\d{1,9}$/.test(id) && (await inInbox(c, a.id, id)),
@@ -769,49 +758,14 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     if (!r.rows[0]) throw new Fail(404, 'That interest request does not exist.');
   },
   async send(c, a, _p, i) {
-    const kind = pick(i.kind, ['checkin', 'suggest', 'feedback'] as const, 'message');
+    const kind = pick(i.kind, ['suggest', 'feedback'] as const, 'message');
     const body = text(i.body, kind === 'feedback' ? 1 : 3, 1000, 'Your message');
-    if (kind === 'checkin') {
-      const mentor = (await c.query(`select mentor_id from users where id = $1`, [a.id])).rows[0]
-        ?.mentor_id;
-      need(mentor, 'You do not have a mentor yet. Ask the CP Head to assign one.');
-      return void (await c.query(
-        `insert into messages (kind, user_id, to_user, body) values ('checkin', $1, $2, $3)`,
-        [a.id, mentor, body],
-      ));
-    }
     // A suggestion is anonymous for real: the sender is not written anywhere, not even to the audit log.
     await c.query(`insert into messages (kind, user_id, body) values ($1, $2, $3)`, [
       kind,
       kind === 'suggest' ? null : a.id,
       body,
     ]);
-  },
-  async ping(c, a, _p, i) {
-    const kind = pick(i.kind, ['invite', 'duel', 'nudge', 'team'] as const, 'request'),
-      to = key(i.to),
-      ref = typeof i.ref === 'string' ? i.ref.trim() : '';
-    if (ref && !KEY.test(ref))
-      throw new Fail(
-        400,
-        "A note can use letters, digits, spaces and : . & ' / + # - only, up to 80 characters.",
-      );
-    need(to !== a.id, 'You cannot send that to yourself.');
-    const t = (
-      await c.query(`select mentor_id from users where id = $1 and not suspended and not system`, [
-        to,
-      ])
-    ).rows[0];
-    need(t, 'That member does not exist.');
-    if (kind === 'nudge') {
-      const lvl = can(a.roles, 'mentees.view');
-      need(lvl);
-      need(lvl === true || t.mentor_id === a.id, 'You can only nudge your own mentees.');
-    }
-    await c.query(
-      `insert into pings (from_user, to_user, kind, ref) values ($1, $2, $3, $4) on conflict do nothing`,
-      [a.id, to, kind, ref],
-    );
   },
   async expense(c, a, _p, i) {
     need(isCommittee(a.roles), 'Only committee members file expense requests.');
@@ -1172,31 +1126,6 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     if (i.on) await c.query(`delete from sessions where user_id = $1`, [user]); // signed out everywhere, immediately
     await audit(c, a, `${i.on ? 'suspended' : 'reinstated'} ${r.rows[0].name}`);
   },
-  // Pairs a member with a mentor (or clears it). The CP Head and above; the mentor must hold the mentoring grant.
-  async assignMentor(c, a, _p, i) {
-    need(canFully(a.roles, 'mentees.view'), 'Only the CP Head or the President assigns mentors.');
-    const user = key(i.user),
-      mentor = i.mentor === null || i.mentor === '' ? null : key(i.mentor);
-    need(user !== mentor, 'Nobody mentors themselves.');
-    if (mentor) {
-      const m = (
-        await c.query(`select ${ROLES} from users where id = $1 and not system and not suspended`, [
-          mentor,
-        ])
-      ).rows[0];
-      need(m && can(m.roles, 'mentees.view'), 'That member is not a mentor.');
-    }
-    const r = await c.query(
-      `update users set mentor_id = $2 where id = $1 and not system and role <> 'alumni' returning name`,
-      [user, mentor],
-    );
-    if (!r.rows[0]) throw new Fail(404, 'That member does not exist.');
-    await audit(
-      c,
-      a,
-      `${mentor ? `assigned mentor ${mentor} to` : 'cleared the mentor of'} ${r.rows[0].name}`,
-    );
-  },
   // A fresh one-time link: the first password for someone who never signed in, or a reset for someone locked out.
   async invite(c, a, _p, i) {
     const user = key(i.user),
@@ -1387,21 +1316,23 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
   async setAvailableForQuestions(c, a, _p, i) {
     const targetId = typeof i.alumniId === 'string' && KEY.test(i.alumniId) ? i.alumniId : a.id;
     need(
-      targetId === a.id || canFully(a.roles, 'alumni.toggleMentoring'),
-      'Only the account owner or the President can change mentoring availability.',
+      targetId === a.id || canFully(a.roles, 'alumni.toggleQuestions'),
+      'Only the account owner or the President can change availability for questions.',
     );
     const val = Boolean(i.value);
     await c.query(`update users set available_for_questions = $1 where id = $2 and not system`, [
       val,
       targetId,
     ]);
-    await audit(c, a, `set mentoring availability for ${targetId} to ${val}`);
+    await audit(c, a, `set availability for questions for ${targetId} to ${val}`);
   },
   async createAlumniJob(c, a, _p, i) {
     need(canFully(a.roles, 'alumni.job.post'), 'Only alumni or admins can post alumni jobs.');
     const j = jobFields(i);
     const alumniId =
-      isAdmin(a.roles) && typeof i.alumniId === 'string' && KEY.test(i.alumniId)
+      canFully(a.roles, 'alumni.job.fetch') &&
+      typeof i.alumniId === 'string' &&
+      KEY.test(i.alumniId)
         ? i.alumniId
         : a.id;
     const owner = (await c.query(`select id from users where id = $1 and not system`, [alumniId]))
@@ -1417,7 +1348,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     ).rows[0];
     if (!row) throw new Fail(404, 'That job listing does not exist.');
     need(
-      row.alumni_id === a.id || isAdmin(a.roles),
+      row.alumni_id === a.id || canFully(a.roles, 'alumni.job.fetch'),
       'Only the author or an admin can delete this job.',
     );
     await c.query(`delete from alumni_jobs where id = $1`, [jobId]);
@@ -1473,7 +1404,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     ).rows[0];
     if (!p) throw new Fail(404, 'That problem does not exist.');
     need(
-      p.created_by === a.id || isAdmin(a.roles),
+      p.created_by === a.id || canFully(a.roles, 'interview.roadmap.manage'),
       'Only the creator or an admin can delete this problem.',
     );
     await c.query(`delete from interview_problems where id = $1`, [problemId]);
@@ -1505,7 +1436,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     ).rows[0];
     if (!tip) throw new Fail(404, 'That tip does not exist.');
     need(
-      tip.author_id === a.id || isAdmin(a.roles),
+      tip.author_id === a.id || canFully(a.roles, 'interview.roadmap.manage'),
       'Only the author or an admin can delete this tip.',
     );
     await c.query(`delete from interview_tips where id = $1`, [tipId]);
@@ -1637,20 +1568,6 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     );
     await c.query(`delete from blog_posts where id = $1`, [id]);
     await audit(c, a, `deleted blog post #${id}: ${post.title}`);
-  },
-  async promoteMember(c, a, _p, i) {
-    need(
-      canFully(a.roles, 'member.promote'),
-      'Only the President or Super Admin can promote members.',
-    );
-    const userId = key(i.userId);
-    need(userId !== a.id, 'You cannot promote yourself.');
-    const r = await c.query(
-      `update users set role = 'mentor', title = 'Mentor' where id = $1 and not system and role = 'member' returning name`,
-      [userId],
-    );
-    if (!r.rows[0]) throw new Fail(404, 'That member does not exist, or cannot be modified.');
-    await audit(c, a, `promoted ${r.rows[0].name} to Mentor`);
   },
   async makeAlumni(c, a, _p, i) {
     need(
@@ -2384,8 +2301,8 @@ export async function fetchAlumniJobs(
   ).rows[0];
   if (!actor) throw new Fail(401, 'Sign in again.');
   need(
-    actor.id === userId || isAdmin(actor.roles),
-    'Only the alumni member or an admin can refresh fetched jobs.',
+    actor.id === userId || canFully(actor.roles, 'alumni.job.fetch'),
+    'Only the alumnus or the President can refresh fetched jobs.',
   );
 
   const target = (
@@ -2662,7 +2579,7 @@ export async function listAlumni(
     q?: string;
     batch?: string | number;
     location?: string;
-    mentoringOnly?: boolean;
+    availableOnly?: boolean;
     page?: number;
     pageSize?: number;
   } = {},
@@ -2720,7 +2637,7 @@ export async function listAlumni(
     pIdx++;
   }
 
-  if (input.mentoringOnly) {
+  if (input.availableOnly) {
     conditions.push(`u.available_for_questions = true`);
   }
 
@@ -2834,8 +2751,8 @@ export async function setAvailableForQuestions(
     const rawTarget = input.userId ?? input.alumniId;
     const targetId = typeof rawTarget === 'string' && KEY.test(rawTarget) ? rawTarget : userId;
     need(
-      targetId === userId || canFully(u.roles, 'alumni.toggleMentoring'),
-      'Only the account owner or the President can change mentoring availability.',
+      targetId === userId || canFully(u.roles, 'alumni.toggleQuestions'),
+      'Only the account owner or the President can change availability for questions.',
     );
     const val = input.available !== undefined ? Boolean(input.available) : Boolean(input.value);
     await conn.query(`update users set available_for_questions = $1 where id = $2 and not system`, [
@@ -3040,7 +2957,7 @@ export async function deleteAlumniJob(
     ).rows[0];
     if (!row) throw new Fail(404, 'That job listing does not exist.');
     need(
-      row.alumni_id === userId || isAdmin(actor.roles),
+      row.alumni_id === userId || canFully(actor.roles, 'alumni.job.fetch'),
       'Only the author or an admin can delete this job.',
     );
     await conn.query(`delete from alumni_jobs where id = $1`, [jobId]);
@@ -3056,10 +2973,11 @@ export async function deleteAlumniJob(
 export async function listInterviewRoadmaps(
   db: Db,
   viewerId: string,
+  kind: RoadmapKind = 'prep',
 ): Promise<{ roadmaps: InterviewRoadmap[] }> {
   const rows = (
     await db.query(
-      `select r.id, r.name, r.description, r.created_at,
+      `select r.id, r.kind, r.name, r.description, r.created_at,
          (select count(*)::int from interview_topics t where t.roadmap_id = r.id) as "topicCount",
          (select count(*)::int from interview_problems p
           join interview_topics t on t.id = p.topic_id where t.roadmap_id = r.id) as "totalCount",
@@ -3070,8 +2988,9 @@ export async function listInterviewRoadmaps(
          coalesce((select array_agg(t.name order by t.order_index)
            from interview_topics t where t.roadmap_id = r.id), '{}') as "topicNames"
        from interview_roadmaps r
+       where r.kind = $2
        order by r.id asc`,
-      [viewerId],
+      [viewerId, kind],
     )
   ).rows;
   return { roadmaps: rows as InterviewRoadmap[] };
@@ -3117,7 +3036,13 @@ async function roadmapManager(conn: Db, userId: string): Promise<Actor> {
  */
 export async function saveInterviewRoadmap(
   actorId: string,
-  input: { roadmapId?: unknown; name?: unknown; description?: unknown; topics?: unknown },
+  input: {
+    roadmapId?: unknown;
+    kind?: unknown;
+    name?: unknown;
+    description?: unknown;
+    topics?: unknown;
+  },
 ): Promise<{ roadmapId: number }> {
   return tx(async (conn) => {
     const actor = await roadmapManager(conn, actorId);
@@ -3174,11 +3099,18 @@ export async function saveInterviewRoadmap(
 
     let roadmapId: number;
     if (input.roadmapId == null) {
+      const kind = pick(input.kind ?? 'prep', ['prep', 'learn'] as const, 'roadmap kind');
+      // Learn has exactly one roadmap; the unique index backs this up against a race.
+      if (
+        kind === 'learn' &&
+        (await conn.query(`select 1 from interview_roadmaps where kind = 'learn'`)).rowCount
+      )
+        throw new Fail(409, 'The learning roadmap already exists. Edit it instead.');
       roadmapId = Number(
         (
           await conn.query(
-            `insert into interview_roadmaps (name, description, created_by) values ($1, $2, $3) returning id`,
-            [name, desc, actor.id],
+            `insert into interview_roadmaps (name, description, created_by, kind) values ($1, $2, $3, $4) returning id`,
+            [name, desc, actor.id, kind],
           )
         ).rows[0].id,
       );
@@ -3573,7 +3505,7 @@ export async function deleteInterviewProblem(
     ).rows[0];
     if (!p) throw new Fail(404, 'That problem does not exist.');
     need(
-      canFully(actor.roles, 'interview.roadmap.manage') || isAdmin(actor.roles),
+      canFully(actor.roles, 'interview.roadmap.manage'),
       'Only the CP head or president can delete problems.',
     );
     await conn.query(`delete from interview_problems where id = $1`, [problemId]);
@@ -3673,7 +3605,7 @@ export async function deleteInterviewTip(
     ).rows[0];
     if (!tip) throw new Fail(404, 'That tip does not exist.');
     need(
-      tip.author_id === userId || isAdmin(actor.roles),
+      tip.author_id === userId || canFully(actor.roles, 'interview.roadmap.manage'),
       'Only the author or an admin can delete this tip.',
     );
     await conn.query(`delete from interview_tips where id = $1`, [tipId]);

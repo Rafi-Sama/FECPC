@@ -99,13 +99,20 @@ Now the contest list is empty and contest day says VJudge did not answer.
 Native `confirm()`/`alert()` were replaced by the in-app `useConfirm()` dialog and store toasts, which match the theme and
 keep the page responsive.
 
+### Mentor role and pings removed
+
+The Mentor role, mentor pairing (Ops → Mentors), weekly check-ins, nudges, mentee-only announcements and
+member-to-member pings (profile pings, alumni pings, Arena duel challenges) were removed as unnecessary for now.
+Existing mentors became members (`schema.sql`, last block). ICPC team invites still use the `pings` table; the CP
+Head's power over teams is the `teams.oversee` capability (formerly `mentees.view`).
+
 ## Known gaps
 
 | Gap                                                                                                                                                                                                                                 | Where to start                                              |
 | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
 | Password reset by email: `/v1/auth/password/forgot` sends nothing. Officers issue reset links instead (`invite` action).                                                                                                            | add a mailer; store reset tokens like invite tokens         |
 | No two-factor authentication.                                                                                                                                                                                                       | `modules/auth`                                              |
-| Invoices, the fund's opening balance and accounts, mentee weekly stats and some public-site figures are placeholder content, not tables. Fund balance, ledger, term totals, monthly cash flow, budgets and the ops board are real. | `packages/content`, `member-area/office-data.ts`            |
+| Invoices, the fund's opening balance and accounts and some public-site figures are placeholder content, not tables. Fund balance, ledger, term totals, monthly cash flow, budgets and the ops board are real. | `packages/content`, `member-area/office-data.ts`            |
 | The public site (members, certificates, hall of fame) is static content; events come from the database. `/verify` checks certificates against that list.                                                                            | `packages/content/src/site.ts`                              |
 | The rate limit and the Codeforces sync throttle are in memory: per process, reset on restart.                                                                                                                                       | move to the database before running several API instances   |
 | The ESLint config has no React Hooks rules.                                                                                                                                                                                         | add `eslint-plugin-react-hooks` to `packages/config-eslint` |

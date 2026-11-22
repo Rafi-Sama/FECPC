@@ -6,7 +6,7 @@ export const metadata = { title: 'Projects' };
 const steps = [
   [
     'Pitch',
-    'Post an idea on the board. If three people upvote it, it gets a channel and a mentor.',
+    'Post an idea on the board. If three people upvote it, it gets a channel and a committee sponsor.',
   ],
   ['Team up', 'The find-a-teammate board matches by skill and rating. Mixed years work best.'],
   [

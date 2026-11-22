@@ -5058,7 +5058,7 @@ select.member-filter-ctrl {
   color: var(--ink);
 }
 
-/* admin + ops: account and mentor tables, coloured stat tiles */
+/* admin + ops: account tables, coloured stat tiles */
 .input.sm {
   min-height: 36px;
   padding: 4px 8px;
@@ -7227,7 +7227,7 @@ textarea.tm-code {
   outline: none;
 }
 
-.dossier__mentor {
+.dossier__availability {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -7472,24 +7472,6 @@ textarea.tm-code {
   position: relative;
 }
 
-.dossier__ping {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 100%;
-  display: flex;
-  gap: 8px;
-  padding: 10px 20px;
-  border-top: 1px solid var(--line2);
-  background: var(--panel);
-  animation: dossier-panel 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.dossier__ping .input {
-  flex: 1;
-  min-width: 0;
-}
-
 .kudos {
   position: relative;
   display: inline-flex;
@@ -7574,8 +7556,7 @@ textarea.tm-code {
   .ladder__rung i::after,
   .chart__col i,
   .kudos__heart,
-  .kudos__burst,
-  .dossier__ping {
+  .kudos__burst {
     animation: none !important;
   }
 }

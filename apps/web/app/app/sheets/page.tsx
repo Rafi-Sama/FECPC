@@ -123,7 +123,7 @@ export default function Sheets() {
           );
         })}
         <SheetExtras isDone={isDone} />
-        {can(s.roles, 'sheet.edit') ? (
+        {can(s.roles, 'sheet.stats') ? (
           <section className="panel c8" style={{ gridColumn: '1 / -1' }}>
             <p className="label">where members get stuck · least-solved problems on the sheet</p>
             <div className="scroll-x">

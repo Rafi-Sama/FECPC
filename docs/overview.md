@@ -18,7 +18,6 @@ Every account has exactly one role. Officers are the "committee".
 | ----------- | -------------------------------------------------------------------- | :-------: |
 | Member      | A current student member                                             |           |
 | Alumni      | A graduate; can post jobs, prep material and blog posts              |           |
-| Mentor      | Guides a group of mentees                                            |           |
 | CP Head     | Runs training and contest logistics                                  |     ✓     |
 | Treasurer   | Verifies payments, files and decides small expenses                  |     ✓     |
 | Secretary   | Runs events, reviews applications                                    |     ✓     |
@@ -37,20 +36,20 @@ The full rules are in [Roles and permissions](roles-and-permissions.md).
 | Contests      | `/app/contests`                   | Upcoming Codeforces contests; register interest                                                                                                                                      |
 | Contest day   | `/app/contest-day`                | Live VJudge standings for the running contest and past ones; balloons and prints for runners                                                                                         |
 | Courses       | `/app/courses`                    | Lessons and server-scored quizzes                                                                                                                                                    |
-| Learn         | `/app/learn`                      | Roadmap, resources, doubts, and mentorship (weekly check-ins, mentor nudges)                                                                                                         |
+| Learn         | `/app/learn`                      | The club's one learning roadmap: a topic tree with problems and per-member progress, kept by the CP Head and President (same editor as Interview prep)                              |
 | Wiki          | `/app/wiki`                       | Club knowledge base                                                                                                                                                                  |
 | Community     | `/app/community`                  | Feed (posts, votes, reports, milestones and kudos), announcements, ideas (with interest requests), polls                                                                   |
 | Blog          | `/app/blog`                       | Club blog reading list                                                                                                                                                               |
 | Interview prep | `/app/prep`                      | Roadmaps of topics and problems with per-member progress; CP Head and President edit the roadmaps (under Learn)                                                                     |
 | Events        | `/app/events`, `/app/events/[id]` | Register or apply for roles, check in with the room code, feedback, certificates; organisers manage everything ([Events](events.md))                                                 |
-| Teams         | `/app/teams`                      | ICPC team, shared template notebook with edit history, team pings                                                                                                                    |
+| Teams         | `/app/teams`                      | ICPC team, team invites, shared template notebook with edit history                                                                                                                    |
 | Members       | `/app/directory`                  | Searchable directory and member profiles; officer actions on members                                                                                                                 |
 | Alumni & jobs | `/app/career`                     | Alumni directory, job board, alumni blog                                                                                                    |
 | Finance       | `/app/finance`                    | Own dues and payments, receipts, transparency; officers: payment verification, expense requests and decisions, club fund                                                    |
-| Notifications | `/app/notifications`              | Inbox built from real records (dues, decisions, pings, kudos, check-ins); latest six in the topbar bell; team invites and idea interests answer in one click (`actions` on the item) |
+| Notifications | `/app/notifications`              | Inbox built from real records (dues, decisions, team invites, kudos); latest six in the topbar bell; team invites and idea interests answer in one click (`actions` on the item) |
 | Profile       | `/app/profile`                    | Own details, Codeforces handle, password change                                                                                                                                      |
 | Admin         | `/app/admin`                      | Dashboard (counts, member export, suggestions), applications, members (role, post, suspend/reinstate, invite and reset links), permissions matrix, audit log                         |
-| Ops           | `/app/ops`                        | Committee workspace: task board, meetings, mentor pairing (CP Head and above), documents, inventory, sponsors (finance roles), reports                                               |
+| Ops           | `/app/ops`                        | Committee workspace: task board, meetings, documents, inventory, sponsors (finance roles), reports                                               |
 
 `/app/members` and `/app/alumni` are old URLs that redirect to `/app/directory` and `/app/career`.
 

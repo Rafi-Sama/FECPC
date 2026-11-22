@@ -184,15 +184,13 @@ test('auth: GitHub sign-in links the first account whose verified email is a mem
 
 test('visibility: each role receives only the datasets it has a capability for', async () => {
   const member = await st('tasnim'),
-    mentor = await st('mehedi'),
     treasurer = await st('anika'),
     secretary = await st('sadia'),
     president = await st('tanvir'),
     cpHead = await st('nadia');
   assert.deepEqual(Object.keys(member.office), []);
   assert.deepEqual([member.s.log, member.s.queue, member.s.exp, member.s.apps], [[], {}, {}, {}]);
-  assert.deepEqual(Object.keys(mentor.office), ['mentees']);
-  assert.deepEqual(Object.keys(cpHead.office).sort(), ['mentees', 'ops']);
+  assert.deepEqual(Object.keys(cpHead.office).sort(), ['ops']);
   assert.deepEqual(Object.keys(treasurer.office).sort(), [
     'expenses',
     'fund',
@@ -225,9 +223,7 @@ test('visibility: each role receives only the datasets it has a capability for',
     "no member's email is in the roster",
   );
   assert.equal(
-    member.members.some(
-      (m) => 'roleKey' in m || 'suspended' in m || 'system' in m || 'mentorId' in m,
-    ),
+    member.members.some((m) => 'roleKey' in m || 'suspended' in m || 'system' in m),
     false,
     'account-management fields stay with the officers who manage accounts',
   );
@@ -327,14 +323,7 @@ test('cheers, reads and seats cannot be invented: XP needs a real target', async
   await refused(403, act('priya', { type: 'toggle', list: 'kudos', id: 'made:up' }));
   await refused(403, act('priya', { type: 'toggle', list: 'read', id: 'n:not-in-my-inbox' }));
   await act('priya', { type: 'toggle', list: 'kudos', id: 'post:4A' }); // someone else's editorial
-  // a mentor's note to their own mentees is not another member's to read for XP
-  await act('rahim', { type: 'announce', title: 'Mentee-only note' });
-  const id = (await st('rahim')).news.find((n) => n.title === 'Mentee-only note')!.id;
-  const outsider = (await st('anika')).news.some((n) => n.id === id) ? null : 'anika';
-  if (outsider) {
-    await refused(403, act(outsider, { type: 'markAnnouncementRead', id }));
-    await refused(403, act(outsider, { type: 'toggle', list: 'read', id }));
-  }
+  await refused(403, act('priya', { type: 'markAnnouncementRead', id: 'an:999999' }));
   // the last seat goes to one of two simultaneous registrations
   await pool().query(`update club_events set seats = 1 where id = 'icpc-mock-3'`);
   const r = await Promise.allSettled(
@@ -828,7 +817,7 @@ test('applications: bots fill the honeypot for nothing; one address is capped at
 test('roles: only the Super Admin assigns roles; never to oneself; the operator is untouchable', async () => {
   await refused(
     403,
-    act('tanvir', { type: 'role', user: 'zahid', role: 'mentor', reason: 'term roster' }),
+    act('tanvir', { type: 'role', user: 'zahid', role: 'secretary', reason: 'term roster' }),
   ); // the President assigns posts, not roles
   await refused(
     403,
@@ -838,20 +827,21 @@ test('roles: only the Super Admin assigns roles; never to oneself; the operator 
     400,
     act('admin', { type: 'role', user: 'zahid', role: 'emperor', reason: 'term roster' }),
   );
-  await refused(400, act('admin', { type: 'role', user: 'zahid', role: 'mentor', reason: '' }));
-  await act('admin', { type: 'role', user: 'zahid', role: 'mentor', reason: 'term roster' });
+  await refused(400, act('admin', { type: 'role', user: 'zahid', role: 'mentor', reason: 'x' })); // removed role
+  await refused(400, act('admin', { type: 'role', user: 'zahid', role: 'secretary', reason: '' }));
+  await act('admin', { type: 'role', user: 'zahid', role: 'secretary', reason: 'term roster' });
   const z = await st('zahid');
-  assert.equal(z.s.role, 'mentor');
-  assert.deepEqual(
-    Object.keys(z.office),
-    ['mentees'],
+  assert.equal(z.s.role, 'secretary');
+  assert.ok(
+    z.office.applications,
     'new capabilities apply on the next request, without signing in again',
   );
   assert.match(
     (await st('tanvir')).s.log[0]!.what,
-    /assigned role Mentor to Zahid Hasan \(reason: term roster\)/,
+    /assigned role Secretary to Zahid Hasan \(reason: term roster\)/,
   );
-  assert.equal(z.me.role, 'Mentor', 'the public title follows the role');
+  assert.equal(z.me.role, 'Secretary', 'the public title follows the role');
+  await act('admin', { type: 'role', user: 'zahid', role: 'member', reason: 'term ended' });
   await act('admin', { type: 'role', user: 'nusrat', role: 'member', reason: 'term ended' });
   assert.equal((await st('nusrat')).me.role, null, 'a demoted officer does not keep the title');
 });
@@ -864,7 +854,7 @@ test('posts: the President assigns them, the Super Admin decides which roles eac
   await act('tanvir', { type: 'post', user: 'zahid', post: 'joint_treasurer' });
   let z = await st('zahid');
   assert.equal(z.me.role, 'Joint Treasurer', 'the public title follows the post');
-  assert.ok(z.s.roles.includes('mentor') && z.s.roles.includes('treasurer'));
+  assert.ok(z.s.roles.includes('member') && z.s.roles.includes('treasurer'));
   assert.ok(z.office.queue, 'the post grants what its roles can do');
 
   await refused(
@@ -877,14 +867,14 @@ test('posts: the President assigns them, the Super Admin decides which roles eac
   ); // a post never grants rank
   await act('admin', { type: 'postRole', post: 'joint_treasurer', role: 'treasurer', on: false });
   z = await st('zahid');
-  assert.deepEqual(z.s.roles, ['mentor']);
+  assert.deepEqual(z.s.roles, ['member']);
   assert.equal(z.office.queue, undefined);
   assert.deepEqual(z.postRoles.joint_treasurer, []);
   await act('admin', { type: 'postRole', post: 'joint_treasurer', role: 'treasurer', on: true });
   await act('admin', { type: 'postRole', post: 'joint_treasurer', role: 'treasurer', on: true });
   assert.deepEqual((await st('zahid')).postRoles.joint_treasurer, ['treasurer'], 'no duplicates');
   await act('tanvir', { type: 'post', user: 'zahid', post: null });
-  assert.deepEqual((await st('zahid')).s.roles, ['mentor']);
+  assert.deepEqual((await st('zahid')).s.roles, ['member']);
 });
 test('suspension signs the member out everywhere and blocks every door', async () => {
   const s = await login('sabbir@fecpc.example', PW);
@@ -912,7 +902,6 @@ test('shared switches: members cannot flip them and do not see committee state',
   await refused(403, act('tasnim', { type: 'flag', key: 'susp:zahid', on: true }));
   await refused(403, act('tasnim', { type: 'kv', key: 'task:t1', value: 'Done' }));
   await refused(403, act('tasnim', { type: 'kv', key: 'role:tasnim', value: 'President' }));
-  await refused(403, act('tasnim', { type: 'flag', key: 'nudgemim', on: true }));
   await act('sadia', { type: 'flag', key: 'unfrozen', on: true });
   await act('tasnim', { type: 'flag', key: 'dark', on: true });
   const [member, officer] = [await st('tasnim'), await st('anika')];
@@ -981,60 +970,15 @@ test('the action endpoint refuses anything it does not know', async () => {
   await refused(401, act('ghost', { type: 'checkin' }));
   await refused(400, act('tanvir', { type: 'rollover' })); // removed: it only ever wrote a log line
   await refused(403, act('tasnim', { type: 'invite', user: 'zahid' }));
+  await refused(400, act('tasnim', { type: 'ping', kind: 'duel', to: 'zahid' })); // removed
+  await refused(400, act('tasnim', { type: 'assignMentor', user: 'zahid', mentor: null })); // removed
 });
 
-test("mentors: mentees, announcements and nudges are scoped to the mentor's own people", async () => {
-  const [mehedi, rahim, nadia] = [await st('mehedi'), await st('rahim'), await st('nadia')];
-  assert.deepEqual(mehedi.office.mentees!.map((m) => m.id).sort(), [
-    'jannat',
-    'mim',
-    'tasnim',
-    'zahid',
-  ]);
-  assert.deepEqual(rahim.office.mentees, [], 'another mentor sees none of them');
-  assert.equal(nadia.office.mentees!.length, 4, 'the CP Head sees every mentee');
-  await act('mehedi', { type: 'announce', title: 'Five DP problems this week' });
-  assert.equal((await st('jannat')).news[0]!.title, 'Five DP problems this week');
-  assert.equal((await st('jannat')).news[0]!.mentees, true);
-  assert.equal(
-    (await st('priya')).news.some((n) => n.title === 'Five DP problems this week'),
-    false,
-    "a mentor's post never reaches the rest of the club",
-  );
-  assert.equal(
-    (await st('tanvir')).news.some((n) => n.title === 'Five DP problems this week'),
-    false,
-  );
-  await refused(403, act('rahim', { type: 'ping', kind: 'nudge', to: 'jannat' }));
-  await refused(403, act('priya', { type: 'ping', kind: 'nudge', to: 'jannat' }));
-  await act('mehedi', { type: 'ping', kind: 'nudge', to: 'jannat' });
-  await act('mehedi', { type: 'ping', kind: 'nudge', to: 'jannat' }); // twice is still one
-  assert.equal(
-    (await st('jannat')).inbox.filter((n) => /Mehedi Hasan nudged you/.test(n.text)).length,
-    1,
-  );
-  assert.ok((await st('mehedi')).s.sent.includes('jannat:nudge:'));
-  await refused(403, act('priya', { type: 'ping', kind: 'invite', to: 'priya' }));
-  await refused(403, act('priya', { type: 'ping', kind: 'invite', to: 'admin' }));
-  await refused(400, act('priya', { type: 'ping', kind: 'poke', to: 'imran' }));
-});
-test('messages are delivered: check-ins to the mentor, suggestions anonymously to officers', async () => {
+test('messages are delivered: suggestions anonymously to officers, feedback to organisers', async () => {
   await refused(
-    403,
-    act('priya', { type: 'send', kind: 'checkin', body: 'Solved three this week.' }),
-  ); // no mentor assigned
-  await refused(400, act('jannat', { type: 'send', kind: 'checkin', body: 'x' }));
-  await act('jannat', {
-    type: 'send',
-    kind: 'checkin',
-    body: 'Stuck on Vacations, the state is unclear.',
-  });
-  const m = await st('mehedi');
-  assert.equal(
-    m.office.mentees!.find((x) => x.id === 'jannat')!.checkin!.body,
-    'Stuck on Vacations, the state is unclear.',
+    400,
+    act('jannat', { type: 'send', kind: 'checkin', body: 'Mentor check-ins are gone.' }),
   );
-  assert.ok(m.inbox.some((n) => / sent a weekly check-in$/.test(n.text))); // (an earlier test renamed this member)
   await act('priya', { type: 'send', kind: 'suggest', body: 'Please open the lab on Fridays.' });
   assert.equal(
     (await db().query(`select user_id from messages where kind = 'suggest'`)).rows[0]!.user_id,
@@ -1326,14 +1270,6 @@ test('community ideas: poster-only interested payload, expressInterest, decideIn
   assert.ok(
     priyaState.inbox.some((n) => n.href === '/app/community?tab=ideas' && /accepted/.test(n.text)),
   );
-
-  // Legacy team ping inbox link must point to /app/community?tab=ideas
-  await act('farhan', { type: 'ping', kind: 'team', to: 'priya', ref: 'check1' });
-  assert.ok(
-    (await st('priya')).inbox.some(
-      (n) => n.href === '/app/community?tab=ideas' && /team up/.test(n.text),
-    ),
-  );
 });
 
 test('members redesign: paginated listMembers, filters, and no alumni', async () => {
@@ -1413,13 +1349,9 @@ test('members redesign: getMemberProfile privacy, updateProfile, alumni jobs, an
   await refused(403, act('tasnim', { type: 'deleteAlumniJob', jobId: posted!.id }));
   await act('shahriar', { type: 'deleteAlumniJob', jobId: posted!.id });
 
-  // Admin actions: promoteMember, makeAlumni, deactivateMember
-  await refused(403, act('tasnim', { type: 'promoteMember', userId: 'mim' }));
+  // Admin actions: makeAlumni, deactivateMember
   await refused(403, act('sadia', { type: 'makeAlumni', userId: 'mim' }));
   await refused(403, act('tanvir', { type: 'deactivateMember', userId: 'tanvir' }));
-
-  await act('tanvir', { type: 'promoteMember', userId: 'mim' });
-  assert.equal((await st('mim')).s.role, 'mentor');
 
   await act('tanvir', { type: 'makeAlumni', userId: 'mim' });
   assert.equal((await st('mim')).s.role, 'alumni');
@@ -1607,8 +1539,7 @@ test('officers cannot act on accounts at or above their rank; suspension blocks 
   await refused(404, act('tanvir', { type: 'suspend', user: 'nusrat', on: true }));
   await refused(404, act('tanvir', { type: 'makeAlumni', userId: 'nusrat' }));
   await refused(404, act('tanvir', { type: 'deactivateMember', userId: 'nusrat' }));
-  await refused(404, act('tanvir', { type: 'promoteMember', userId: 'anika' })); // a Treasurer is not turned into a Mentor
-  await refused(403, act('rahim', { type: 'role', user: 'tasnim', role: 'member', reason })); // Mentors assign nothing
+  await refused(403, act('rahim', { type: 'role', user: 'tasnim', role: 'member', reason })); // a plain member assigns nothing
   await act('admin', { type: 'role', user: 'nusrat', role: 'secretary', reason });
 
   await act('tanvir', { type: 'suspend', user: 'imran', on: true });
@@ -1741,21 +1672,6 @@ test('a post grants the powers of its ticked roles, and loses them when unticked
   assert.equal((await st('tasnim')).office.applications, undefined);
   await act('admin', { type: 'postRole', post: 'vice_president', role: 'secretary', on: true });
   await act('tanvir', { type: 'post', user: 'tasnim', post: null });
-});
-
-test('mentors: the CP Head pairs members with real mentors; mentees come from the pairing', async () => {
-  await refused(403, act('rahim', { type: 'assignMentor', user: 'zahid', mentor: 'rahim' }));
-  await refused(403, act('nadia', { type: 'assignMentor', user: 'zahid', mentor: 'tasnim' }));
-  await act('nadia', { type: 'assignMentor', user: 'zahid', mentor: 'rahim' });
-  assert.ok((await st('rahim')).office.mentees!.some((m) => m.id === 'zahid'));
-  assert.equal((await st('nadia')).members.find((m) => m.id === 'zahid')!.mentorId, 'rahim');
-  assert.equal(
-    (await st('tasnim')).members[0]!.mentorId,
-    undefined,
-    'pairings stay with the CP Head',
-  );
-  await act('nadia', { type: 'assignMentor', user: 'zahid', mentor: 'mehedi' });
-  assert.ok(!(await st('rahim')).office.mentees!.some((m) => m.id === 'zahid'));
 });
 
 test('accounts: reinstating keeps an unjoined account invited; alumni lose their post', async () => {

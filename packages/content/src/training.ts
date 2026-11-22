@@ -22,13 +22,6 @@ export const notifications = [
     ago: '3h',
   },
   {
-    id: 'n4',
-    cat: 'Mentor',
-    text: 'Mehedi left a note on your weekly check-in',
-    href: '/app/learn',
-    ago: '5h',
-  },
-  {
     id: 'n5',
     cat: 'Event',
     text: 'A seat opened: you are off the waitlist for ICPC Mock #3',
@@ -181,25 +174,25 @@ export const alumni = [
     batch: 16,
     at: 'Software Engineer, fintech',
     city: 'Dhaka',
-    mentor: true,
+    open: true,
   },
   {
     name: 'Tahmina Akhter',
     batch: 17,
     at: 'ML Engineer, healthcare startup',
     city: 'Singapore',
-    mentor: true,
+    open: true,
   },
   {
     name: 'Rakibul Islam',
     batch: 17,
     at: 'Backend Engineer, e-commerce',
     city: 'Dhaka',
-    mentor: false,
+    open: false,
   },
-  { name: 'Fariha Noor', batch: 18, at: 'PhD student, algorithms', city: 'Toronto', mentor: true },
-  { name: 'Asif Mahmud', batch: 19, at: 'SRE, telecom', city: 'Dhaka', mentor: false },
-  { name: 'Nabila Karim', batch: 19, at: 'Product Engineer, edtech', city: 'Dhaka', mentor: true },
+  { name: 'Fariha Noor', batch: 18, at: 'PhD student, algorithms', city: 'Toronto', open: true },
+  { name: 'Asif Mahmud', batch: 19, at: 'SRE, telecom', city: 'Dhaka', open: false },
+  { name: 'Nabila Karim', batch: 19, at: 'Product Engineer, edtech', city: 'Dhaka', open: true },
 ];
 export const jobs = [
   {

@@ -58,8 +58,6 @@ export type S = {
   apps: Record<string, string>;
   flags: Record<string, boolean>;
   kv: Record<string, string>;
-  /** Requests this member has sent to others ("to:kind:ref"), so a button can show it was sent. */
-  sent: string[];
   posts: number;
   spent: number;
   checkin: boolean;
@@ -85,7 +83,6 @@ export type Roster = Member & {
   /** Super Admin only. */ email?: string;
   suspended?: boolean;
   /** invited, has not set a password yet */ pending?: boolean;
-  /** Only for whoever assigns mentors (full `mentees.view`). */ mentorId?: string | null;
 };
 
 export type MemberExperience = {
@@ -153,8 +150,10 @@ export type AlumniSummary = {
   saved?: boolean;
 };
 
+export type RoadmapKind = 'prep' | 'learn';
 export type InterviewRoadmap = {
   id: number;
+  kind: RoadmapKind;
   name: string;
   description: string | null;
   created_at: string;
@@ -377,7 +376,6 @@ export type AnnouncementItem = {
   by_avatar: string | null;
   at: string;
   edited_at: string | null;
-  mentees: boolean;
   pinned: boolean;
   requires_ack: boolean;
   read_count: number;
@@ -403,13 +401,6 @@ export type Office = {
     budgets: { id: number; name: string; plan: number; spent: number }[];
   };
   expenses?: Expense[];
-  mentees?: {
-    id: string;
-    week: number[];
-    last: string;
-    flag: string;
-    checkin?: { body: string; at: string };
-  }[];
   applications?: {
     id: string;
     name: string;
@@ -445,7 +436,6 @@ export type AppState = {
     email: string;
     roleKey: Role;
     suspended: boolean;
-    mentor: string | null;
     /** an operator account, not a person */ system: boolean;
   };
   s: S;

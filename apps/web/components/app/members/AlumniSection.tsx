@@ -3,7 +3,7 @@ import { SaveForm } from '@/components/app/SaveBar';
 import Link from 'next/link';
 import { useState } from 'react';
 import { useStore } from '@/components/app/Store';
-import { canFully, isAdmin } from '@fecpc/contracts';
+import { canFully } from '@fecpc/contracts';
 import type { AlumniJob, MemberProfile } from '@fecpc/contracts';
 import { useConfirm } from '@/components/app/shared/PromptDialog';
 
@@ -39,7 +39,7 @@ export function AlumniSection({
   if (!profile.is_alumni) return null;
 
   const isOwner = me.id === profile.id;
-  const admin = isAdmin(s.roles);
+  const admin = canFully(s.roles, 'alumni.job.fetch'); // posts, fetches and removes any listing
   const canPost = (isOwner && canFully(s.roles, 'alumni.job.post')) || admin;
   const canDeleteJob = (j: AlumniJob) => j.alumni_id === me.id || admin;
 

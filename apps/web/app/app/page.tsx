@@ -22,7 +22,7 @@ const dueIn = (d: number) =>
 const questLink = ['/app/sheets', '/app/courses', '/app/community'];
 
 export default function Today() {
-  const { s, me, xp, act, office, who } = useStore();
+  const { s, me, xp, act } = useStore();
   const { synced, isSolved } = useSolved();
   const owed = myInvoices(s.reg).filter((i) => owes(s.pay, i.id));
   const next = sheet.find((p) => !isSolved(p.id));
@@ -292,40 +292,6 @@ export default function Today() {
             ))}
           </ul>
         </section>
-        {office.mentees ? (
-          <section className="panel c6">
-            <p className="label">Your mentees · {office.mentees.length}</p>
-            {office.mentees.length === 0 ? (
-              <p className="body">Nobody is assigned to you yet.</p>
-            ) : (
-              <ul className="list">
-                {office.mentees.slice(0, 4).map((m) => (
-                  <li key={m.id}>
-                    <span className="grow">
-                      <strong>{who(m.id).name}</strong>
-                      <br />
-                      <span className={`label ${m.flag ? 'bad' : ''}`}>
-                        {m.flag || `active ${m.last}`}
-                      </span>
-                    </span>
-                    {m.checkin && <span className="pill">check-in</span>}
-                  </li>
-                ))}
-              </ul>
-            )}
-            <Link href="/app/learn" className="btn sm line">
-              Open mentorship
-            </Link>
-          </section>
-        ) : me.mentor ? (
-          <section className="panel c6">
-            <p className="label">Your mentor</p>
-            <p className="h3">{me.mentor}</p>
-            <Link href="/app/learn" className="btn sm line">
-              Weekly check-in
-            </Link>
-          </section>
-        ) : null}
         <Onboarding />
       </div>
     </Page>

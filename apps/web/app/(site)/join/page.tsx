@@ -11,11 +11,10 @@ const pipeline = [
     'A short online problem set. It checks how you think, not what you have memorised.',
   ],
   ['Interview', '15 min', 'Pick a slot. Two committee members, one conversation, a simple rubric.'],
-  ['Onboard', 'week 1', 'Your account is created with a checklist and a mentor already assigned.'],
+  ['Onboard', 'week 1', 'Your account is created with an onboarding checklist.'],
 ];
 const checklist = [
   'Verify at least one judge handle',
-  'Join a group and pick a mentor',
   'Solve three starter-sheet problems',
   'Pay the admission fee',
   'Install the app and turn on notifications',

@@ -35,8 +35,7 @@ Sign in at <http://localhost:3000/login> as any seeded account with your `SEED_P
 | Treasurer              | `anika`                                                                                               |
 | Secretary              | `nusrat`, `sadia`                                                                                     |
 | CP Head                | `nadia`                                                                                               |
-| Mentor                 | `rahim`, `mehedi`                                                                                     |
-| Member                 | `tasnim`, `priya`, `farhan`, `imran`, `sabbir`, `shuvo`, `zahid`, `mim`, `jannat`                     |
+| Member                 | `rahim`, `mehedi`, `tasnim`, `priya`, `farhan`, `imran`, `sabbir`, `shuvo`, `zahid`, `mim`, `jannat`                     |
 | Alumni                 | `shahriar`, `rifat`, `tahmina`, `tanim`, `fariha`, `sabrina`, `nabila`, `nusrat_al`, `asif`, `mahmud` |
 
 Signing in as different roles is the fastest way to see what each one can do.

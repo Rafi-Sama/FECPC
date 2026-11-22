@@ -17,13 +17,13 @@ test("matrix matches the spec's risky cells", () => {
   assert.equal(can('treasurer', 'expense.approve'), 'propose');
   assert.equal(grantOf('treasurer', 'expense.approve'), 'propose');
 
-  assert.equal(can('mentor', 'mentees.view'), 'scope');
-  assert.equal(grantOf('mentor', 'mentees.view'), 'scope');
+  assert.equal(can('member', 'teams.oversee'), false);
+  assert.equal(can('cp_head', 'teams.oversee'), true);
 
   assert.equal(can('secretary', 'audit.view'), false);
 
   // feed moderation and the contest-day scoreboard are officer powers, never a plain member's
-  for (const r of ['member', 'alumni', 'mentor'] as const) {
+  for (const r of ['member', 'alumni'] as const) {
     assert.equal(can(r, 'feed.moderate'), false);
     assert.equal(can(r, 'contest.run'), false);
   }
@@ -37,10 +37,6 @@ test("matrix matches the spec's risky cells", () => {
 
   assert.deepEqual(
     roles.filter((r) => canFully(r, 'roles.assign')),
-    ['president', 'super_admin'],
-  );
-  assert.deepEqual(
-    roles.filter((r) => canFully(r, 'member.promote')),
     ['president', 'super_admin'],
   );
   assert.deepEqual(
@@ -60,7 +56,6 @@ test("matrix matches the spec's risky cells", () => {
 test('roles classification and admin gates', () => {
   assert.equal(isCommittee('member'), false);
   assert.equal(isCommittee('alumni'), false);
-  assert.equal(isCommittee('mentor'), false);
   assert.equal(isCommittee('treasurer'), true);
   assert.equal(isCommittee('secretary'), true);
   assert.equal(isCommittee('president'), true);
@@ -77,10 +72,10 @@ test('several roles take the strongest grant, and posts never grant rank', async
   const { postableRoles } = await import('../src/roles.ts');
   assert.equal(can(['member', 'treasurer'], 'payments.verify'), true);
   assert.equal(can(['president', 'treasurer'], 'payments.verify'), true);
-  assert.equal(can(['member', 'mentor'], 'mentees.view'), 'scope');
+  assert.equal(can(['member', 'cp_head'], 'teams.oversee'), true);
   assert.equal(can([], 'profile.own'), false);
   assert.equal(isCommittee(['member', 'secretary']), true);
-  assert.equal(isCommittee(['member', 'mentor']), false);
+  assert.equal(isCommittee(['member', 'alumni']), false);
   assert.equal(isAdmin(['member', 'secretary']), true);
   assert.deepEqual(
     roles.filter((r) => !postableRoles.includes(r as never)),

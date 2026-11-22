@@ -94,7 +94,6 @@ export const members: Member[] = [
     'Stack',
     ['CP', 'Data structures'],
     87,
-    'Mentor',
   ),
   m(
     'rahim',
@@ -109,7 +108,6 @@ export const members: Member[] = [
     'Graph',
     ['CP', 'Strings'],
     64,
-    'Mentor',
   ),
   m(
     'anika',
@@ -280,13 +278,6 @@ export const badges = [
     desc: 'A full term with nothing overdue.',
     xp: 150,
     glyph: '৳0',
-  },
-  {
-    id: 'mentor',
-    name: 'Mentor of the Month',
-    desc: 'Most kudos from mentees in a month.',
-    xp: 400,
-    glyph: 'MVP',
   },
 ];
 
@@ -463,7 +454,7 @@ export const timeline = [
   {
     year: '2023',
     title: 'The green sheet',
-    text: "Mentors publish the first curated sheet. Completion becomes the club's shared language for progress.",
+    text: "The committee publishes the first curated sheet. Completion becomes the club's shared language for progress.",
   },
   {
     year: '2025',
@@ -483,7 +474,7 @@ export const committee = [
   { id: 'sadia', role: 'General Secretary' },
   { id: 'anika', role: 'Treasurer' },
   { id: 'nusrat', role: 'Event Secretary' },
-  { id: 'mehedi', role: 'Lead Mentor' },
+  { id: 'mehedi', role: 'Training Lead' },
   { id: 'rahim', role: 'Content and Resources' },
   { id: 'farhan', role: 'PR and Media' },
 ];
@@ -541,7 +532,7 @@ export const lifecycle = [
   },
   {
     step: 'Probationary',
-    text: 'Limited access and an onboarding checklist: verify a handle, pick a mentor, solve three starter problems.',
+    text: 'Limited access and an onboarding checklist: verify a handle, solve three starter problems.',
   },
   { step: 'Member', text: 'Full access: sheets, contests, events, the leaderboard and a vote.' },
   {
@@ -550,7 +541,7 @@ export const lifecycle = [
   },
   {
     step: 'Alumni',
-    text: 'Automatic at graduation. You keep your profile, your hall of fame entry and the right to mentor.',
+    text: 'Automatic at graduation. You keep your profile, your hall of fame entry, and members can ask you questions.',
   },
 ];
 
@@ -623,7 +614,7 @@ export const certificates = [
   {
     code: 'FECPC-2026-0388',
     name: 'Mehedi Hasan',
-    what: 'Mentor of the Term, Spring 2026',
+    what: 'Top Contributor, Spring 2026',
     date: '2026-06-30',
     signedBy: 'Nadia Rahman, CP Head',
   },

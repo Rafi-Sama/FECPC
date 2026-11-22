@@ -5,7 +5,7 @@ import { AvatarRing } from '@/components/app/shared/RatingBadge';
 import { rankFor } from '@fecpc/contracts';
 import { MarkdownBody, relTime } from '@/components/app/shared/MarkdownEditor';
 import { useStore } from '@/components/app/Store';
-import { isAdmin } from '@fecpc/contracts';
+import { canFully } from '@fecpc/contracts';
 import { useConfirm } from '@/components/app/shared/PromptDialog';
 
 const FOCUSABLE =
@@ -25,7 +25,7 @@ export function ExperienceModal({
   const modalRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
 
-  const canDelete = tip.author_id === me.id || isAdmin(s.roles);
+  const canDelete = tip.author_id === me.id || canFully(s.roles, 'interview.roadmap.manage');
 
   // Scroll lock
   useEffect(() => {

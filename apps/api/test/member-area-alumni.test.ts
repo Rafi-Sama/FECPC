@@ -9,6 +9,7 @@ import {
   createInterviewTip,
   createInterviewTopic,
   deleteAlumniJob,
+  fetchAlumniJobs,
   deleteBlogPost,
   deleteInterviewRoadmap,
   deleteInterviewTip,
@@ -22,6 +23,7 @@ import {
   listInterviewTopics,
   saveAlumni,
   saveInterviewRoadmap,
+  listInterviewRoadmaps,
   setAvailableForQuestions,
   toggleInterviewProblem,
   updateBlogPost,
@@ -48,16 +50,16 @@ before(async () => {
 });
 after(() => pool().end());
 
-test('alumni directory: listing, filtering, mentoring toggle & saving', async () => {
+test('alumni directory: listing, filtering, availability toggle & saving', async () => {
   // List all alumni
   const resAll = await listAlumni(db(), 'tasnim', {});
   assert.ok(resAll.total >= 3, 'should have at least 3 seeded alumni');
   assert.ok(resAll.alumni.length <= 16, 'page limit default 16');
 
-  // Mentoring filter
-  const resMentoring = await listAlumni(db(), 'tasnim', { mentoringOnly: true });
-  assert.ok(resMentoring.alumni.every((a) => a.available_for_questions));
-  assert.ok(resMentoring.total <= resAll.total);
+  // Availability filter
+  const resAvailable = await listAlumni(db(), 'tasnim', { availableOnly: true });
+  assert.ok(resAvailable.alumni.every((a) => a.available_for_questions));
+  assert.ok(resAvailable.total <= resAll.total);
 
   // Search filter
   const resSearch = await listAlumni(db(), 'tasnim', { q: 'Northwind' });
@@ -75,7 +77,7 @@ test('alumni directory: listing, filtering, mentoring toggle & saving', async ()
   const saveRes2 = await saveAlumni(db(), 'tasnim', { alumniId: 'shahriar' });
   assert.equal(saveRes2.saved, false);
 
-  // Mentoring availability toggle: non-owner/non-admin refused
+  // Availability toggle: non-owner/non-admin refused
   await refused(
     403,
     setAvailableForQuestions(db(), 'tasnim', { userId: 'shahriar', available: false }),
@@ -144,6 +146,9 @@ test('alumni jobs: listing, filters, create with validation & live preview schem
 
   // Delete job: non-owner refused
   await refused(403, deleteAlumniJob(db(), 'tasnim', { jobId: newJob.id }));
+  // Admin-panel officers (here the Treasurer) get no say over listings; the matrix gives it to the President.
+  await refused(403, deleteAlumniJob(db(), 'anika', { jobId: newJob.id }));
+  await refused(403, fetchAlumniJobs(db(), 'anika', { userId: 'shahriar' }));
   // Owner deletes
   const delRes = await deleteAlumniJob(db(), 'shahriar', { jobId: newJob.id });
   assert.equal(delRes.deleted, true);
@@ -197,6 +202,7 @@ test('interview prep: topics, tree progress, problems, tips & experiences', asyn
 
   // Non-owner cannot delete tip
   await refused(403, deleteInterviewTip(db(), 'tasnim', { tipId: newTip.id }));
+  await refused(403, deleteInterviewTip(db(), 'anika', { tipId: newTip.id }));
   // Owner can delete tip
   const delTip = await deleteInterviewTip(db(), 'shahriar', { tipId: newTip.id });
   assert.equal(delTip.deleted, true);
@@ -422,5 +428,36 @@ test('alumni content: image URLs must be http(s)', async () => {
       body_md: 'Some body text that is long enough.',
       cover_url: 'data:image/svg+xml,<svg/>',
     }),
+  );
+});
+
+test('learning roadmap: one only, kept by the CP Head and President, never listed with interview prep', async () => {
+  const tree = [{ key: 'r', parentKey: null, name: 'C++ basics' }];
+  await refused(
+    403,
+    saveInterviewRoadmap('tasnim', { kind: 'learn', name: 'Learn', topics: tree }),
+  );
+  const { roadmapId } = await saveInterviewRoadmap('nadia', {
+    kind: 'learn',
+    name: 'Learn',
+    topics: tree,
+  });
+  await refused(
+    409,
+    saveInterviewRoadmap('tanvir', { kind: 'learn', name: 'Again', topics: tree }),
+  );
+  const learn = (await listInterviewRoadmaps(db(), 'tasnim', 'learn')).roadmaps;
+  assert.deepEqual(
+    learn.map((r) => r.id),
+    [roadmapId],
+  );
+  assert.ok(
+    !(await listInterviewRoadmaps(db(), 'tasnim')).roadmaps.some((r) => r.id === roadmapId),
+  );
+  // Editing keeps it the learning roadmap.
+  await saveInterviewRoadmap('tanvir', { roadmapId, name: 'Learn v2', topics: tree });
+  assert.equal(
+    (await listInterviewRoadmaps(db(), 'tasnim', 'learn')).roadmaps[0]!.name,
+    'Learn v2',
   );
 });

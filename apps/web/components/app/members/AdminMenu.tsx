@@ -21,14 +21,13 @@ export function AdminMenu({
   const [busy, setBusy] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
-  const canPromote = canFully(s.roles, 'member.promote');
   const canMakeAlumni = canFully(s.roles, 'member.makeAlumni');
   const canDeactivate = canFully(s.roles, 'member.deactivate');
   const target = who(userId);
-  // Rank rules the server applies: only a plain member becomes a Mentor; the top two are the Super Admin's.
+  // Rank rule the server applies: the top two are the Super Admin's.
   const roleKey = 'roleKey' in target ? target.roleKey : undefined,
     locked = (roleKey === 'president' || roleKey === 'super_admin') && s.role !== 'super_admin';
-  const allowed = (canPromote || canMakeAlumni || canDeactivate) && userId !== me.id && !locked;
+  const allowed = (canMakeAlumni || canDeactivate) && userId !== me.id && !locked;
 
   useEffect(() => {
     if (!open) return;
@@ -53,10 +52,7 @@ export function AdminMenu({
 
   if (!allowed) return null;
 
-  const run = async (
-    action: 'promoteMember' | 'makeAlumni' | 'deactivateMember',
-    confirmMsg?: string,
-  ) => {
+  const run = async (action: 'makeAlumni' | 'deactivateMember', confirmMsg?: string) => {
     if (confirmMsg && !(await sure(confirmMsg))) return;
     setBusy(true);
     try {
@@ -92,17 +88,6 @@ export function AdminMenu({
       </button>
       {open && (
         <div className="admin-menu__popover" role="menu" aria-label={`Manage ${memberName}`}>
-          {canPromote && (
-            <button
-              type="button"
-              role="menuitem"
-              className="admin-menu__item"
-              disabled={busy || (roleKey ?? 'member') !== 'member'}
-              onClick={() => run('promoteMember')}
-            >
-              Promote to mentor
-            </button>
-          )}
           {canMakeAlumni && (
             <button
               type="button"

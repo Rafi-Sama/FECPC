@@ -5,22 +5,14 @@ import { useStore } from '@/components/app/Store';
 import { Bars } from '@/components/app/Charts';
 import { cols } from '@fecpc/content/training';
 import { fmtDate } from '@fecpc/content/site';
-import { can, canFully, isAdmin } from '@fecpc/contracts';
+import { isAdmin } from '@fecpc/contracts';
 import { Avatar } from '@/components/pixel/Sprites';
 import { DatePicker } from '@/components/app/shared/DatePicker';
 import { PersonPicker } from '@/components/app/shared/PersonPicker';
 import { SaveForm } from '@/components/app/SaveBar';
 import { useConfirm } from '@/components/app/shared/PromptDialog';
 
-const allTabs = [
-  'Board',
-  'Meetings',
-  'Mentors',
-  'Documents',
-  'Inventory',
-  'Sponsors',
-  'Reports',
-] as const;
+const allTabs = ['Board', 'Meetings', 'Documents', 'Inventory', 'Sponsors', 'Reports'] as const;
 // Assignee picker shared by tasks, action items and equipment; '' means nobody.
 function Who({
   value,
@@ -57,10 +49,8 @@ export default function Ops() {
       </Page>
     );
   const { inventory, meetings, reports, sponsors, tasks, vault } = office.ops;
-  // The sponsor ledger is for finance roles; mentor pairing for whoever holds the full mentoring grant.
-  const tabs = allTabs.filter(
-    (t) => (t !== 'Sponsors' || sponsors) && (t !== 'Mentors' || canFully(s.roles, 'mentees.view')),
-  );
+  // The sponsor ledger is for finance roles.
+  const tabs = allTabs.filter((t) => t !== 'Sponsors' || sponsors);
   const people = members.filter((m) => !m.suspended);
   const admin = isAdmin(s.roles);
   const day = (d: string | null) => (d ? fmtDate(d) : 'no date');
@@ -284,7 +274,6 @@ export default function Ops() {
           </div>
         </div>
       )}
-      {tab === 'Mentors' && <Mentors />}
       {tab === 'Documents' && (
         <div className="scroll-x">
           <table className="tbl">
@@ -431,64 +420,6 @@ export default function Ops() {
         </div>
       )}
     </Page>
-  );
-}
-
-// Pairs members with mentors (users.mentor_id). The API checks the same grant and that the mentor can mentor.
-function Mentors() {
-  const { act, members } = useStore();
-  // Same set the API accepts: real, active people who can mentor (the operator account is not one).
-  const mentors = members.filter(
-    (m) =>
-      m.roleKey && m.roleKey !== 'super_admin' && !m.suspended && can(m.roleKey, 'mentees.view'),
-  );
-  const mentees = members.filter((m) => m.roleKey !== 'alumni' && !m.suspended);
-  return (
-    <div className="stack">
-      <div className="row" style={{ '--g': '8px' } as React.CSSProperties}>
-        {mentors.map((m) => (
-          <span key={m.id} className="tag">
-            {m.name.split(' ')[0]} · {members.filter((x) => x.mentorId === m.id).length}
-          </span>
-        ))}
-      </div>
-      <div className="scroll-x">
-        <table className="tbl cards">
-          <thead>
-            <tr>
-              <th>Member</th>
-              <th>Batch</th>
-              <th className="r">Mentor</th>
-            </tr>
-          </thead>
-          <tbody>
-            {mentees.map((m) => (
-              <tr key={m.id}>
-                <td>
-                  <span
-                    className="row"
-                    style={{ '--g': '10px', flexWrap: 'nowrap' } as React.CSSProperties}
-                  >
-                    <Avatar name={m.name} size={24} />
-                    <strong>{m.name}</strong>
-                  </span>
-                </td>
-                <td className="mono">{m.batch || '—'}</td>
-                <td className="r">
-                  <PersonPicker
-                    label={`Mentor of ${m.name}`}
-                    none="No mentor"
-                    people={mentors.filter((x) => x.id !== m.id)}
-                    value={m.mentorId ?? null}
-                    onPick={(v) => act('assignMentor', { user: m.id, mentor: v })}
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
   );
 }
 

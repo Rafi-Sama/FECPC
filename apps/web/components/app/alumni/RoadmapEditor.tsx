@@ -1,6 +1,11 @@
 'use client';
 import React, { useState } from 'react';
-import type { InterviewProblem, InterviewRoadmap, InterviewTopic } from '@fecpc/contracts';
+import type {
+  InterviewProblem,
+  InterviewRoadmap,
+  InterviewTopic,
+  RoadmapKind,
+} from '@fecpc/contracts';
 import { SaveForm } from '@/components/app/SaveBar';
 import { NODE_H, NODE_W, TreeEdges, TreeFrame, layoutTree } from './RoadmapTreeCanvas';
 import { useConfirm } from '@/components/app/shared/PromptDialog';
@@ -199,7 +204,9 @@ export function RoadmapEditor({
   onCancel,
   onSaved,
   onDeleted,
+  kind = 'prep',
 }: {
+  readonly kind?: RoadmapKind;
   readonly roadmap: InterviewRoadmap | null;
   readonly topics: InterviewTopic[];
   readonly problems: RoadmapProblem[];
@@ -324,6 +331,7 @@ export function RoadmapEditor({
       const data = await post({
         action: 'saveInterviewRoadmap',
         roadmapId: roadmap?.id,
+        kind,
         name: name.trim(),
         description: description.trim(),
         topics: nodes.map((n) => ({

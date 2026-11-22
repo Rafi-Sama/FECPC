@@ -14,7 +14,6 @@ const roleOf: Record<string, Role> = {
   'General Secretary': 'secretary',
   'Event Secretary': 'secretary',
   Treasurer: 'treasurer',
-  Mentor: 'mentor',
 };
 
 export async function setup(db: Db, password: string) {
@@ -23,9 +22,9 @@ export async function setup(db: Db, password: string) {
   if (!seededBefore) {
     const hash = await hashPassword(password),
       base = JSON.stringify({
-        base: { solved: seedSolved.length, done: 1 },
+        base: { solved: seedSolved.length, done: 0 },
         solved: seedSolved,
-        done: ['r1'],
+        done: [],
       });
     for (const m of members)
       await db.query(
@@ -54,9 +53,6 @@ export async function setup(db: Db, password: string) {
       `insert into users (id, email, pass_hash, role, name, batch, dept, title, system) values ('admin', 'admin@fecpc.example', $1, 'super_admin', 'Site Admin', 0, 'CSE', 'Super Admin', true)`,
       [hash],
     );
-    await db.query(`update users set mentor_id = 'mehedi' where id = any($1)`, [
-      data.mentees.map((m) => m.id),
-    ]);
     for (const x of data.expenses)
       await db.query(`insert into expenses (by, what, amount, event) values ($1, $2, $3, $4)`, [
         x.by,
@@ -192,7 +188,7 @@ export async function setup(db: Db, password: string) {
       ],
       [
         'sadia',
-        'Women in CP meetup & mentorship circle',
+        'Women in CP meetup & study circle',
         'Monthly informal problem-solving evening and Q&A with senior female alumni and ICPC regionalists.',
         'idea',
         'shipped',
@@ -268,7 +264,7 @@ export async function setup(db: Db, password: string) {
             period: '2020–2021',
             role: 'President',
             summary:
-              'Established the weekly club ladder and mentored the first ICPC regional qualifying trio.',
+              'Established the weekly club ladder and coached the first ICPC regional qualifying trio.',
           },
           {
             period: '2019–2020',
@@ -301,15 +297,15 @@ export async function setup(db: Db, password: string) {
         streak: 14,
         contests: 51,
         skills: ['CP', 'AI/ML', 'Math'],
-        bio: 'ML Engineer at a healthcare startup in Singapore. Focused on clinical NLP, inference optimization, and mentoring club juniors preparing for SWE interviews.',
+        bio: 'ML Engineer at a healthcare startup in Singapore. Focused on clinical NLP, inference optimization, and coaching club juniors preparing for SWE interviews.',
         github: 'https://github.com/tahmina-akhter',
         linkedin: 'https://linkedin.com/in/tahmina-akhter',
         experience: [
           {
             period: '2021–2022',
-            role: 'Lead Mentor',
+            role: 'Training Lead',
             summary:
-              "Led Batch 20–21 mentorship circles and authored the club's first DP training guide.",
+              "Led Batch 20–21 study circles and authored the club's first DP training guide.",
           },
           {
             period: '2020–2021',
@@ -378,7 +374,7 @@ export async function setup(db: Db, password: string) {
           {
             period: '2019–2020',
             role: 'VP Engineering',
-            summary: 'Mentored systems programming cohorts at FECPC.',
+            summary: 'Coached systems programming cohorts at FECPC.',
           },
         ],
         contestHistory: [
@@ -615,8 +611,8 @@ export async function setup(db: Db, password: string) {
           },
           {
             period: '2024–2025',
-            role: 'Mentor',
-            summary: 'Mentored 12 freshmen from C++ basics to 1400+ rating on Codeforces.',
+            role: 'Trainer',
+            summary: 'Coached 12 freshmen from C++ basics to 1400+ rating on Codeforces.',
           },
         ],
         contestHistory: [
@@ -669,15 +665,15 @@ export async function setup(db: Db, password: string) {
         ],
       },
       mehedi: {
-        bio: 'Lead Mentor from EEE. Segment trees, Fenwick trees, and stress-testing enthusiasts welcome.',
+        bio: 'Training Lead from EEE. Segment trees, Fenwick trees, and stress-testing enthusiasts welcome.',
         contests: 39,
         github: 'https://github.com/mh-segtree',
         linkedin: 'https://linkedin.com/in/mehedi-hasan',
         experience: [
           {
             period: '2025–2026',
-            role: 'Mentor',
-            summary: 'Leads C++ from zero and mentors Batch 24–25 study cohorts.',
+            role: 'Trainer',
+            summary: 'Leads C++ from zero and coaches Batch 24–25 study cohorts.',
           },
         ],
         contestHistory: [

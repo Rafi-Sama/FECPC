@@ -98,5 +98,5 @@ Every form that creates or changes something is a `<SaveForm>` (`components/app/
 - While the bar shows, leaving is refused with a shake (and a vibration on phones): links, `role="tab"`,
   `[data-nav]`, close buttons (`aria-label="Close…"` or `[data-close]`), modal backdrops, Escape and page
   reload. Mark any other section switcher `data-nav`.
-- One-shot actions (search, sign-in, check-in codes, pings, password change) keep their own button.
+- One-shot actions (search, sign-in, check-in codes, password change) keep their own button.
 - Trim text before sending; the API validates every field again and its message is shown as is.

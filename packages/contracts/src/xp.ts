@@ -69,7 +69,7 @@ export function quests(s: Earn) {
     { id: 'q1', text: 'Solve one problem', done: verifiedNew(s) > 0 },
     {
       id: 'q2',
-      text: 'Finish a lesson or resource',
+      text: 'Finish a lesson or read a wiki page',
       done: s.lessons.length + s.done.length > s.base.done,
     },
     { id: 'q3', text: 'Help or cheer someone', done: given(s) > 0 },

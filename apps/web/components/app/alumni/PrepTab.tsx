@@ -4,7 +4,12 @@ import { RoadmapTreeCanvas } from './RoadmapTreeCanvas';
 import { TopicDrawer } from './TopicDrawer';
 import { RoadmapEditor, type RoadmapProblem } from './RoadmapEditor';
 import { HighlightMatch } from './HighlightMatch';
-import type { InterviewProblem, InterviewRoadmap, InterviewTopic } from '@fecpc/contracts';
+import type {
+  InterviewProblem,
+  InterviewRoadmap,
+  InterviewTopic,
+  RoadmapKind,
+} from '@fecpc/contracts';
 import { useStore } from '@/components/app/Store';
 import { canFully } from '@fecpc/contracts';
 import { useConfirm } from '@/components/app/shared/PromptDialog';
@@ -60,12 +65,19 @@ function Progress({ solved, total }: Readonly<{ solved: number; total: number }>
 function PrepSearchInput({
   value,
   onChange,
-}: Readonly<{ value: string; onChange: (value: string) => void }>) {
+  label = 'Search interview prep',
+  placeholder = 'Search roadmaps, topics and problems',
+}: Readonly<{
+  value: string;
+  onChange: (value: string) => void;
+  label?: string;
+  placeholder?: string;
+}>) {
   return (
     <input
       type="search"
-      aria-label="Search interview prep"
-      placeholder="Search roadmaps, topics and problems"
+      aria-label={label}
+      placeholder={placeholder}
       value={value}
       onChange={(event) => onChange(event.target.value)}
       style={{
@@ -81,12 +93,15 @@ function PrepSearchInput({
   );
 }
 
+/** Interview prep: many roadmaps. `kind="learn"`: the club's one learning roadmap, opened directly. */
 export function PrepTab({
   searchQuery,
   onSelectTopicParam,
   onCountChange,
   onShowToast,
+  kind = 'prep',
 }: {
+  readonly kind?: RoadmapKind;
   readonly searchQuery?: string;
   readonly onSelectTopicParam?: (id: number | null) => void;
   readonly onCountChange?: (count: number) => void;
@@ -120,6 +135,15 @@ export function PrepTab({
     setEditing(r);
   };
   const [prepSearch, setPrepSearch] = useState(searchQuery ?? '');
+  const [loaded, setLoaded] = useState(false);
+  const learn = kind === 'learn';
+  const search = (
+    <PrepSearchInput
+      value={prepSearch}
+      onChange={setPrepSearch}
+      {...(learn && { label: 'Search the roadmap', placeholder: 'Search topics and problems' })}
+    />
+  );
   const [drawerTopic, setDrawerTopic] = useState<InterviewTopic | null>(null);
   const [topicProblems, setTopicProblems] = useState<InterviewProblem[]>([]);
 
@@ -135,11 +159,14 @@ export function PrepTab({
   const fetchRoadmaps = useCallback(async () => {
     const data = await query<{ roadmaps: InterviewRoadmap[] }>({
       action: 'listInterviewRoadmaps',
+      kind,
     });
     if (!data) return;
     setRoadmaps(data.roadmaps);
+    if (kind === 'learn') setOpenId(data.roadmaps[0]?.id ?? null);
+    setLoaded(true);
     onCountChangeRef.current?.(data.roadmaps.reduce((n, r) => n + r.topicCount, 0));
-  }, []);
+  }, [kind]);
 
   const fetchTopics = useCallback(async (roadmapId: number) => {
     const data = await query<{ topics: InterviewTopic[] }>({
@@ -242,6 +269,7 @@ export function PrepTab({
   if (editing !== undefined) {
     return (
       <RoadmapEditor
+        kind={kind}
         roadmap={editing}
         topics={editing ? topics : []}
         problems={editing ? editProblems : []}
@@ -267,20 +295,20 @@ export function PrepTab({
     <div className="prep-tab-view">
       {open ? (
         <div>
-          <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
-            <PrepSearchInput value={prepSearch} onChange={setPrepSearch} />
-          </div>
-          <button
-            type="button"
-            className="m"
-            onClick={() => {
-              setOpenId(null);
-              setDrawerTopic(null);
-            }}
-            style={{ ...mono, background: 'none', border: 0, padding: 0, marginBottom: 16 }}
-          >
-            ← All roadmaps
-          </button>
+          <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>{search}</div>
+          {!learn && (
+            <button
+              type="button"
+              className="m"
+              onClick={() => {
+                setOpenId(null);
+                setDrawerTopic(null);
+              }}
+              style={{ ...mono, background: 'none', border: 0, padding: 0, marginBottom: 16 }}
+            >
+              ← All roadmaps
+            </button>
+          )}
           <div
             style={{
               display: 'flex',
@@ -316,6 +344,7 @@ export function PrepTab({
             </div>
           ) : (
             <RoadmapTreeCanvas
+              horizontal={learn}
               topics={visibleTopics}
               activeTopicId={drawerTopic?.id ?? null}
               onSelectTopic={handleSelectTopicNode}
@@ -323,10 +352,25 @@ export function PrepTab({
             />
           )}
         </div>
+      ) : learn ? (
+        <div className="pn" style={{ padding: '48px 24px', textAlign: 'center' }}>
+          <p className="m" style={{ margin: '0 0 16px' }}>
+            {!loaded ? 'Loading…' : 'No roadmap yet.'}
+          </p>
+          {loaded && canManageRoadmaps && (
+            <button
+              type="button"
+              onClick={() => setEditing(null)}
+              style={{ ...btn, background: 'var(--ink, #0B0B0B)', color: 'var(--on, #FFFFFF)' }}
+            >
+              + Create the roadmap
+            </button>
+          )}
+        </div>
       ) : (
         <div>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16 }}>
-            <PrepSearchInput value={prepSearch} onChange={setPrepSearch} />
+            {search}
             {canManageRoadmaps && (
               <button
                 type="button"

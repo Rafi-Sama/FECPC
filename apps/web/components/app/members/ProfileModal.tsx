@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { AvatarRing } from '@/components/app/shared/RatingBadge';
 import { useStore } from '@/components/app/Store';
-import { RANKS, rankFor, isAdmin } from '@fecpc/contracts';
+import { RANKS, rankFor, canFully } from '@fecpc/contracts';
 import type { MemberContestRow, MemberProfile, Rank } from '@fecpc/contracts';
 import { AdminMenu } from './AdminMenu';
 import { AlumniSection } from './AlumniSection';
@@ -28,9 +28,6 @@ export function ProfileModal({
   const [editing, setEditing] = useState(false);
   const [editBusy, setEditBusy] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [pingOpen, setPingOpen] = useState(false);
-  const [pingNote, setPingNote] = useState('');
-  const [pingBusy, setPingBusy] = useState(false);
 
   const modalRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
@@ -62,7 +59,6 @@ export function ProfileModal({
 
   useEffect(() => {
     setEditing(false);
-    setPingOpen(false);
     setCopied(false);
     void loadProfile();
   }, [loadProfile]);
@@ -118,7 +114,6 @@ export function ProfileModal({
   const kudosId = `member:${userId}`;
   const hasKudos = s.kudos.includes(kudosId);
   const kudosTotal = counts.kudos?.[kudosId] ?? 0;
-  const alreadyPinged = s.sent.some((x) => x.startsWith(`${userId}:team:`));
 
   const rank = rankFor(profile && (profile.cf_rating || profile.rating));
   const roleLabel = profile ? profile.role || (profile.is_alumni ? 'Alumni' : 'Member') : '';
@@ -132,20 +127,6 @@ export function ProfileModal({
       },
       () => {},
     );
-  };
-
-  const handleSendPing = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setPingBusy(true);
-    try {
-      const ok = await act('ping', { kind: 'team', to: userId, ref: pingNote.trim() || 'profile' });
-      if (ok) {
-        setPingOpen(false);
-        setPingNote('');
-      }
-    } finally {
-      setPingBusy(false);
-    }
   };
 
   const contests = profile ? [...profile.contest_history].slice(0, 24).reverse() : [];
@@ -307,13 +288,13 @@ export function ProfileModal({
                       </div>
                     )}
                     {profile.is_alumni && (
-                      <div className="dossier__mentor">
+                      <div className="dossier__availability">
                         <span className="dossier__tag">
                           {profile.available_for_questions
                             ? 'Available for questions'
-                            : 'Not mentoring'}
+                            : 'Not taking questions'}
                         </span>
-                        {(isOwner || isAdmin(s.roles)) && (
+                        {(isOwner || canFully(s.roles, 'alumni.toggleQuestions')) && (
                           <button
                             type="button"
                             className="btn xs line"
@@ -337,7 +318,7 @@ export function ProfileModal({
                             }}
                           >
                             {profile.available_for_questions
-                              ? 'Turn off mentoring'
+                              ? 'Stop taking questions'
                               : 'Make available'}
                           </button>
                         )}
@@ -414,27 +395,6 @@ export function ProfileModal({
 
         {profile && (
           <footer className="profile-modal__actionbar">
-            {pingOpen && !isOwner && (
-              <form className="dossier__ping" onSubmit={handleSendPing}>
-                <input
-                  className="input"
-                  value={pingNote}
-                  onChange={(e) => setPingNote(e.target.value)}
-                  placeholder={`Ping ${profile.name.split(' ')[0]} about… (optional)`}
-                  maxLength={80}
-                  pattern="[\w:.&' \/+#\-]*"
-                  title="Letters, digits, spaces and : . & ' / + # - only"
-                  aria-label="Ping note"
-                  autoFocus
-                />
-                <button type="button" className="btn xs line" onClick={() => setPingOpen(false)}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn xs" disabled={pingBusy}>
-                  {pingBusy ? 'Sending…' : 'Send'}
-                </button>
-              </form>
-            )}
             {editing && isOwner ? (
               <button
                 type="button"
@@ -454,22 +414,11 @@ export function ProfileModal({
                       Edit profile
                     </button>
                   ) : (
-                    <>
-                      <KudosButton
-                        on={hasKudos}
-                        total={kudosTotal}
-                        onToggle={() => void act('toggle', { list: 'kudos', id: kudosId })}
-                      />
-                      <button
-                        type="button"
-                        className="btn sm line"
-                        disabled={alreadyPinged}
-                        aria-expanded={pingOpen}
-                        onClick={() => setPingOpen((v) => !v)}
-                      >
-                        {alreadyPinged ? 'Pinged' : 'Ping'}
-                      </button>
-                    </>
+                    <KudosButton
+                      on={hasKudos}
+                      total={kudosTotal}
+                      onToggle={() => void act('toggle', { list: 'kudos', id: kudosId })}
+                    />
                   )}
                   <AdminMenu
                     userId={profile.id}

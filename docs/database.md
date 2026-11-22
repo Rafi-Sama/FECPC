@@ -25,7 +25,7 @@ and extra columns on existing tables.
 
 | Table            | Purpose                                                                                                                                                                                                                                      | FK    |
 | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
-| `users`          | Every account: identity, role, status and `suspended`, title, `post`, profile, Codeforces stats, `vjudge_handle` and `vj_solved`, `progress` (personal JSON state), `mentor_id`, `system` (operator), invite hash, `google_sub`, `github_id` | —     |
+| `users`          | Every account: identity, role, status and `suspended`, title, `post`, profile, Codeforces stats, `vjudge_handle` and `vj_solved`, `progress` (personal JSON state), `system` (operator), invite hash, `google_sub`, `github_id` | —     |
 | `credentials`    | Current password hash (kept in step with `users.pass_hash`)                                                                                                                                                                                  | users |
 | `sessions`       | SHA-256 of each session token, expiry, created and last-seen times                                                                                                                                                                           | users |
 | `invite_tokens`  | One-time set-password tokens (hashed); `users.invite_hash` holds the other form                                                                                                                                                              | users |
@@ -46,8 +46,8 @@ and extra columns on existing tables.
 | `event_feedback`                       | One rating per member per completed event                                  | club_events, users |
 | `cert_templates`, `event_certificates` | Certificate HTML templates per kind; issued certificates by email          | club_events        |
 | `attendance`                           | Event check-ins and volunteer-shift sign-ups (`vol:` keys)                 | users              |
-| `messages`                             | Mentor check-ins, anonymous suggestions (no sender stored), event feedback | users              |
-| `pings`                                | Invites, duel challenges, nudges and team-up requests between members      | users              |
+| `messages`                             | Anonymous suggestions (no sender stored) and event feedback                | users              |
+| `pings`                                | ICPC team invites (`kind = 'invite'`, `ref = team:<id>`)                   | users              |
 | `club`                                 | Shared switches and values (`flag:` and `kv:` keys) changed by officers    | users              |
 | `milestones`                           | Crossed Codeforces ranks, solved thresholds and streaks                    | users              |
 | `post_roles`                           | Which existing roles each club post grants; edited by the Super Admin      | —                  |
@@ -69,7 +69,6 @@ and extra columns on existing tables.
 Invoices, the fund's opening balance and accounts are placeholder content
 (`packages/content/src/member-area.ts`, `apps/api/src/modules/member-area/office-data.ts`). The fund balance and
 ledger add the real movements on top: verified `payments` in, approved `expenses` out (`MONEY` in `state.ts`).
-Mentor pairings are `users.mentor_id`; only the weekly mentee numbers are sample data.
 The opening balance (`accounts` in `office-data.ts`) stays a seeded constant because nothing records the club's money
 before this ledger; replace it with a real opening entry once one exists. Everything else on the transparency tab is
 real and visible to every member: term totals, this term's approved expenses with their approver, and the monthly
@@ -82,7 +81,7 @@ prototype tables `waivers` and `ops_tasks`; nothing uses them.
 
 | Table                | Purpose                                                                                         | FK                |
 | -------------------- | ----------------------------------------------------------------------------------------------- | ----------------- |
-| `announcements`      | Officer announcements (audience: everyone or a mentor's mentees), pinned, needs acknowledgement | users             |
+| `announcements`      | Officer announcements to everyone, pinned, needs acknowledgement                                | users             |
 | `announcement_reads` | Acknowledgements                                                                                | users             |
 | `feed_posts`         | Feed posts with category and score                                                              | users             |
 | `feed_votes`         | Up and down votes on posts                                                                      | feed_posts, users |
@@ -112,7 +111,8 @@ Prefixed `icpc_` because some older databases carry an unrelated, unused `teams`
 | ------------------------- | -------------------------------------------------------- | ------------------------- |
 | `alumni_saves`            | Bookmarked alumni profiles                               | users                     |
 | `alumni_jobs`             | Jobs posted by alumni, or fetched from public job boards | users                     |
-| `interview_topics`        | Interview-prep topics                                    | users                     |
+| `interview_roadmaps`      | Topic trees: interview prep (`kind = 'prep'`) and the one Learn roadmap (`'learn'`) | users |
+| `interview_topics`        | Roadmap topics (tree nodes)                              | interview_roadmaps, users |
 | `interview_problems`      | Problems in a topic                                      | interview_topics, users   |
 | `interview_user_progress` | Which prep problems a member solved                      | interview_problems, users |
 | `interview_tips`          | Tips and interview experiences                           | interview_topics, users   |

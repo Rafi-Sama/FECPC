@@ -12,7 +12,6 @@ export function Onboarding() {
   const starter = sheet.filter((p) => isSolved(p.id)).length;
   const steps: [string, boolean, string][] = [
     ['Link your Codeforces handle', !!s.handle, '/app/profile'],
-    ['Send your mentor a check-in', s.sent.includes('checkin'), '/app/learn'],
     ['Solve three starter problems', starter >= 3, '/app/sheets'],
     ['Clear your dues', myInvoices(s.reg).every((i) => !owes(s.pay, i.id)), '/app/finance'],
     ['Register for an event', s.reg.length > 0, '/app/events'],

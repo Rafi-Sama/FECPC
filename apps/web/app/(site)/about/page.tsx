@@ -17,7 +17,7 @@ const principles = [
   ],
   [
     'Teach what you learned last month',
-    'Second-years mentor first-years. Explaining a segment tree is how you find out whether you understand one.',
+    'Second-years teach first-years. Explaining a segment tree is how you find out whether you understand one.',
   ],
   [
     'Count the money in public',

@@ -17,7 +17,7 @@ export function AlumniTab({
   const [q, setQ] = useState(searchQuery ?? '');
   const [batch, setBatch] = useState('all');
   const [location, setLocation] = useState('all');
-  const [mentoringOnly, setMentoringOnly] = useState(false);
+  const [availableOnly, setAvailableOnly] = useState(false);
 
   const [alumni, setAlumni] = useState<AlumniSummary[]>([]);
   const [total, setTotal] = useState(0);
@@ -56,7 +56,7 @@ export function AlumniTab({
             q: q.trim() || undefined,
             batch: batch !== 'all' ? batch : undefined,
             location: location !== 'all' ? location : undefined,
-            mentoringOnly: mentoringOnly ? true : undefined,
+            availableOnly: availableOnly ? true : undefined,
             page: targetPage,
             pageSize: 16,
           }),
@@ -90,7 +90,7 @@ export function AlumniTab({
         setLoadingMore(false);
       }
     },
-    [q, batch, location, mentoringOnly],
+    [q, batch, location, availableOnly],
   );
 
   // Trigger search on filter change
@@ -126,10 +126,10 @@ export function AlumniTab({
     setQ('');
     setBatch('all');
     setLocation('all');
-    setMentoringOnly(false);
+    setAvailableOnly(false);
   };
 
-  const isFiltered = Boolean(q.trim()) || batch !== 'all' || location !== 'all' || mentoringOnly;
+  const isFiltered = Boolean(q.trim()) || batch !== 'all' || location !== 'all' || availableOnly;
 
   return (
     <div className="alumni-tab-view">
@@ -233,20 +233,20 @@ export function AlumniTab({
           </select>
         </div>
 
-        {/* Segmented Mentoring Filter */}
+        {/* Segmented availability filter */}
         <div className="ty" style={{ display: 'flex', gap: 8, marginLeft: 0 }}>
           <button
             type="button"
-            className={`ch ${!mentoringOnly ? 'on' : ''}`}
-            onClick={() => setMentoringOnly(false)}
+            className={`ch ${!availableOnly ? 'on' : ''}`}
+            onClick={() => setAvailableOnly(false)}
             style={{
               font: '12px ui-monospace, Menlo, monospace',
               textTransform: 'uppercase',
               letterSpacing: 1,
               border: '2px solid var(--line2, #0B0B0B)',
               padding: '10px 14px',
-              background: !mentoringOnly ? 'var(--acc, #1F3BFF)' : 'var(--panel, #F6F4EE)',
-              color: !mentoringOnly ? 'var(--on, #FFFFFF)' : 'var(--ink, #0B0B0B)',
+              background: !availableOnly ? 'var(--acc, #1F3BFF)' : 'var(--panel, #F6F4EE)',
+              color: !availableOnly ? 'var(--on, #FFFFFF)' : 'var(--ink, #0B0B0B)',
               minHeight: 44,
               cursor: 'pointer',
             }}
@@ -255,16 +255,16 @@ export function AlumniTab({
           </button>
           <button
             type="button"
-            className={`ch ${mentoringOnly ? 'on' : ''}`}
-            onClick={() => setMentoringOnly(true)}
+            className={`ch ${availableOnly ? 'on' : ''}`}
+            onClick={() => setAvailableOnly(true)}
             style={{
               font: '12px ui-monospace, Menlo, monospace',
               textTransform: 'uppercase',
               letterSpacing: 1,
               border: '2px solid var(--line2, #0B0B0B)',
               padding: '10px 14px',
-              background: mentoringOnly ? 'var(--acc, #1F3BFF)' : 'var(--panel, #F6F4EE)',
-              color: mentoringOnly ? 'var(--on, #FFFFFF)' : 'var(--ink, #0B0B0B)',
+              background: availableOnly ? 'var(--acc, #1F3BFF)' : 'var(--panel, #F6F4EE)',
+              color: availableOnly ? 'var(--on, #FFFFFF)' : 'var(--ink, #0B0B0B)',
               minHeight: 44,
               cursor: 'pointer',
             }}

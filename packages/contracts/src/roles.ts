@@ -1,7 +1,6 @@
 export const roles = [
   'member',
   'alumni',
-  'mentor',
   'cp_head',
   'treasurer',
   'secretary',
@@ -14,7 +13,6 @@ export type Role = (typeof roles)[number];
 export const roleName: Record<Role, string> = {
   member: 'Member',
   alumni: 'Alumni',
-  mentor: 'Mentor',
   cp_head: 'CP Head',
   treasurer: 'Treasurer',
   secretary: 'Secretary',
@@ -26,9 +24,9 @@ export const roleName: Record<Role, string> = {
 export type Who = Role | readonly Role[];
 export const asRoles = (w: Who): readonly Role[] => (typeof w === 'string' ? [w] : w);
 
-/** Sits on the committee: anyone holding a role other than plain member, alumni or mentor. */
+/** Sits on the committee: anyone holding a role other than plain member or alumni. */
 export const isCommittee = (w: Who): boolean =>
-  asRoles(w).some((r) => r !== 'member' && r !== 'alumni' && r !== 'mentor');
+  asRoles(w).some((r) => r !== 'member' && r !== 'alumni');
 
 /**
  * Club posts. They are aliases, not roles: each one grants a set of the roles above, chosen by the Super Admin

@@ -7,7 +7,7 @@ export const metadata = { title: 'Leaderboard' };
 const rules = [
   ['SOLVE', '+12 XP', 'Any accepted problem on a linked judge.'],
   ['STREAK', '+30 XP / DAY', 'Solve the Problem of the Day. Freeze tokens save one missed day.'],
-  ['HELP', '+8 XP', 'An accepted answer on the doubt board, or a kudos from a member.'],
+  ['HELP', '+8 XP', 'A kudos from a member.'],
   ['ATTEND', '+20 XP', 'Check in to a class or event with the room code.'],
 ];
 

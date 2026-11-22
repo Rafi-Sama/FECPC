@@ -6,7 +6,7 @@ import { site } from '@/lib/site';
 
 export const metadata = { title: 'Alumni' };
 const ways = [
-  ['Mentor', 'One hour a month with a member who wants your job.'],
+  ['Answer', 'One hour a month answering a member who wants your job.'],
   ['Refer', 'Post an opening. We send you people who can pass the interview.'],
   ['Speak', 'A fireside talk each term, with a long Q&A.'],
   ['Fund', 'Donations go to the prize sub-fund, visible on the transparency page.'],
@@ -52,9 +52,9 @@ export default function Alumni() {
                   </div>
                 </div>
                 <p className="body">{a.at}</p>
-                {a.mentor && (
+                {a.open && (
                   <span className="tag on" style={{ alignSelf: 'flex-start' }}>
-                    Mentoring
+                    Open to questions
                   </span>
                 )}
               </li>

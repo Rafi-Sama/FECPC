@@ -52,7 +52,7 @@ export async function alumni(db: Db, id: string, b: In): Promise<unknown> {
       q: typeof b.q === 'string' ? b.q : undefined,
       batch: typeof b.batch === 'number' || typeof b.batch === 'string' ? b.batch : undefined,
       location: typeof b.location === 'string' ? b.location : undefined,
-      mentoringOnly: typeof b.mentoringOnly === 'boolean' ? b.mentoringOnly : undefined,
+      availableOnly: typeof b.availableOnly === 'boolean' ? b.availableOnly : undefined,
       page: typeof b.page === 'number' ? b.page : undefined,
       pageSize: typeof b.pageSize === 'number' ? b.pageSize : undefined,
     });
@@ -109,7 +109,7 @@ export async function alumni(db: Db, id: string, b: In): Promise<unknown> {
 
   // --- INTERVIEW PREP ---
   if (action === 'listInterviewRoadmaps') {
-    return listInterviewRoadmaps(db, id);
+    return listInterviewRoadmaps(db, id, b.kind === 'learn' ? 'learn' : 'prep');
   }
 
   if (action === 'saveInterviewRoadmap') {

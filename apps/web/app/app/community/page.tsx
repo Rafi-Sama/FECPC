@@ -230,7 +230,6 @@ function CommunityContent() {
   const [annFilter, setAnnFilter] = useState<'all' | 'unread' | 'must'>('all');
   const [annTitle, setAnnTitle] = useState('');
   const [annBody, setAnnBody] = useState('');
-  const [annAudience, setAnnAudience] = useState<'all' | 'mentees'>('all');
   const [annPinned, setAnnPinned] = useState(false);
   const [annRequiresAck, setAnnRequiresAck] = useState(false);
   const [activeAnn, setActiveAnn] = useState<UnifiedAnnouncement | null>(null);
@@ -247,7 +246,7 @@ function CommunityContent() {
       by_role: n.by_role,
       by_solved: n.by_solved,
       by_avatar: n.by_avatar,
-      scope: n.mentees ? 'To mentees' : 'Everyone',
+      scope: 'Everyone',
       at: n.at,
       edited_at: n.edited_at,
       pinned: n.pinned,
@@ -317,7 +316,6 @@ function CommunityContent() {
   const resetAnnouncement = () => {
     setAnnTitle('');
     setAnnBody('');
-    setAnnAudience('all');
     setAnnPinned(false);
     setAnnRequiresAck(false);
   };
@@ -325,7 +323,6 @@ function CommunityContent() {
     const ok = await act('announce', {
       title: annTitle.trim(),
       body_md: annBody.trim(),
-      audience: can(s.roles, 'announce.post') === 'scope' ? 'mentees' : annAudience,
       pinned: annPinned,
       requires_ack: annRequiresAck,
     });
@@ -693,12 +690,7 @@ function CommunityContent() {
               onDiscard={resetAnnouncement}
               onSubmit={handlePublishAnnouncement}
             >
-              <p className="label">
-                Publish ·{' '}
-                {can(s.roles, 'announce.post') === 'scope'
-                  ? 'only your mentees see this'
-                  : 'officers'}
-              </p>
+              <p className="label">Publish · everyone sees this</p>
               <label className="field">
                 <span className="label">Title</span>
                 <input
@@ -720,19 +712,6 @@ function CommunityContent() {
                 maxLength={6000}
                 placeholder="Supports @mentions and > Date / Time / Venue lines"
               />
-              {can(s.roles, 'announce.post') === true && (
-                <label className="field">
-                  <span className="label">Audience</span>
-                  <select
-                    className="input"
-                    value={annAudience}
-                    onChange={(e) => setAnnAudience(e.target.value as 'all' | 'mentees')}
-                  >
-                    <option value="all">All members</option>
-                    <option value="mentees">My mentees</option>
-                  </select>
-                </label>
-              )}
               <label
                 className="row"
                 style={{ cursor: 'pointer', '--g': '8px' } as React.CSSProperties}

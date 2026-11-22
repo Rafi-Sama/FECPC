@@ -17,9 +17,12 @@ export type Box = { x: number; y: number };
 /**
  * Tidy tree: leaves take consecutive slots left to right and every parent is centred over its
  * children. Sibling order is array order. A node whose parent is missing (e.g. filtered out by a
- * search) becomes a root.
+ * search) becomes a root. `horizontal`: depth runs left to right and leaves stack top to bottom.
  */
-export function layoutTree(nodes: TreeNode[]): {
+export function layoutTree(
+  nodes: TreeNode[],
+  horizontal = false,
+): {
   pos: Map<string, Box>;
   width: number;
   height: number;
@@ -39,8 +42,9 @@ export function layoutTree(nodes: TreeNode[]): {
           const xs = cs.map((c) => place(c, depth + 1));
           return (xs[0]! + xs[xs.length - 1]!) / 2;
         })()
-      : slot++ * (NODE_W + GAP_X);
-    pos.set(n.key, { x: x + PAD, y: depth * (NODE_H + GAP_Y) + PAD });
+      : slot++ * (horizontal ? NODE_H + GAP_X : NODE_W + GAP_X);
+    const d = depth * (horizontal ? NODE_W + GAP_Y : NODE_H + GAP_Y);
+    pos.set(n.key, horizontal ? { x: d + PAD, y: x + PAD } : { x: x + PAD, y: d + PAD });
     return x;
   };
   for (const r of kids.get(null) ?? []) place(r, 0);
@@ -52,8 +56,13 @@ export function layoutTree(nodes: TreeNode[]): {
   };
 }
 
-/** Parent bottom-centre to child top-centre, as an elbow. */
-export function edgePath(p: Box, c: Box): string {
+/** Parent bottom-centre to child top-centre (horizontal: right-middle to left-middle), as an elbow. */
+export function edgePath(p: Box, c: Box, horizontal = false): string {
+  if (horizontal) {
+    const x1 = p.x + NODE_W;
+    const mid = x1 + GAP_Y / 2;
+    return `M${x1} ${p.y + NODE_H / 2}H${mid}V${c.y + NODE_H / 2}H${c.x}`;
+  }
   const px = p.x + NODE_W / 2;
   const cx = c.x + NODE_W / 2;
   const y1 = p.y + NODE_H;
@@ -160,7 +169,14 @@ export function TreeEdges({
   pos,
   width,
   height,
-}: Readonly<{ nodes: TreeNode[]; pos: Map<string, Box>; width: number; height: number }>) {
+  horizontal = false,
+}: Readonly<{
+  nodes: TreeNode[];
+  pos: Map<string, Box>;
+  width: number;
+  height: number;
+  horizontal?: boolean;
+}>) {
   return (
     <svg
       aria-hidden="true"
@@ -174,7 +190,7 @@ export function TreeEdges({
         return p && c ? (
           <path
             key={n.key}
-            d={edgePath(p, c)}
+            d={edgePath(p, c, horizontal)}
             fill="none"
             stroke="var(--line2, #0B0B0B)"
             strokeWidth="2"
@@ -190,7 +206,9 @@ export function RoadmapTreeCanvas({
   activeTopicId,
   onSelectTopic,
   highlightQuery = '',
+  horizontal = false,
 }: {
+  readonly horizontal?: boolean;
   readonly topics: InterviewTopic[];
   readonly activeTopicId: number | null;
   readonly onSelectTopic: (topic: InterviewTopic) => void;
@@ -201,11 +219,11 @@ export function RoadmapTreeCanvas({
     parentKey: t.parent_id ? String(t.parent_id) : null,
     topic: t,
   }));
-  const { pos, width, height } = layoutTree(nodes);
+  const { pos, width, height } = layoutTree(nodes, horizontal);
 
   return (
     <TreeFrame width={width} height={height}>
-      <TreeEdges nodes={nodes} pos={pos} width={width} height={height} />
+      <TreeEdges nodes={nodes} pos={pos} width={width} height={height} horizontal={horizontal} />
       {nodes.map(({ key, topic }) => {
         const b = pos.get(key);
         if (!b) return null;

@@ -65,11 +65,11 @@ export function progress(raw: Partial<Progress> | null): Progress {
 }
 
 const ROSTER = `json_build_object('id', id, 'no', member_no, 'name', name, 'handle', coalesce(nullif(cf_handle, ''), handle), 'cf_handle', nullif(coalesce(nullif(cf_handle, ''), handle), ''), 'batch', batch, 'dept', dept, 'squad', squad, 'role', title, 'is_alumni', role = 'alumni', 'rating', coalesce(cf_rating, rating), 'cf_rating', coalesce(cf_rating, nullif(rating, 0)), 'peak', peak,
-  'solved', greatest(problems_solved, solved), 'problems_solved', greatest(problems_solved, solved), 'avatar_url', avatar_url, 'streak', greatest(current_streak, streak), 'current_streak', greatest(current_streak, streak), 'contests_participated', contests_participated, 'helper', helper, 'skills', skills, 'xp', solved * 12 + vj_solved * 12 + streak * 30 + helper * 8, 'roleKey', role, 'post', post, 'email', email, 'suspended', suspended, 'system', system, 'mentorId', mentor_id, 'pending', pass_hash is null and google_sub is null)`;
+  'solved', greatest(problems_solved, solved), 'problems_solved', greatest(problems_solved, solved), 'avatar_url', avatar_url, 'streak', greatest(current_streak, streak), 'current_streak', greatest(current_streak, streak), 'contests_participated', contests_participated, 'helper', helper, 'skills', skills, 'xp', solved * 12 + vj_solved * 12 + streak * 30 + helper * 8, 'roleKey', role, 'post', post, 'email', email, 'suspended', suspended, 'system', system, 'pending', pass_hash is null and google_sub is null)`;
 const EXPENSE = `json_build_object('id', 'EXP-' || e.id, 'by', e.by, 'name', w.name, 'what', e.what, 'amount', e.amount, 'event', e.event, 'status', e.status)`;
 const MINE = `
-select u.email, u.progress, u.mentor_id, u.vjudge_handle, u.vj_solved,
-  (select coalesce(json_object_agg(post, roles), '{}') from post_roles) as post_roles, (select name from users where id = u.mentor_id) as mentor_name, (select ${ROSTER} from users m where m.id = u.id) as me,
+select u.email, u.progress, u.vjudge_handle, u.vj_solved,
+  (select coalesce(json_object_agg(post, roles), '{}') from post_roles) as post_roles, (select ${ROSTER} from users m where m.id = u.id) as me,
   (select coalesce(json_agg(distinct event_id), '[]') from event_entries where user_id = $1 and role_id is null and status = 'approved') as reg,
   (select coalesce(json_agg(key), '[]') from attendance where user_id = $1) as present,
   (select coalesce(json_agg(c.problem), '[]') from cf_solves c where c.user_id = $1 and u.progress->'solved' ? c.problem) as verified,
@@ -118,18 +118,14 @@ select u.email, u.progress, u.mentor_id, u.vjudge_handle, u.vj_solved,
      join milestones m on m.id = mk.milestone_id
      join users g on g.id = mk.user_id
      where m.user_id = $1 and mk.user_id <> $1) as milestone_kudos_inbox,
-  (select coalesce(json_agg(to_user || ':' || kind || ':' || ref), '[]') from pings where from_user = $1) as sent,
-  exists (select 1 from messages where kind = 'checkin' and user_id = $1) as checked_in,
   (select coalesce(json_agg(json_build_object('id', x.id, 'eventId', x.event_id, 'title', e.title, 'role', r.title, 'reason', x.reason) order by x.id desc), '[]')
      from event_entries x join club_events e on e.id = x.event_id left join event_roles r on r.id = x.role_id
      where x.user_id = $1 and x.status = 'rejected') as declined_entries,
-  (select coalesce(json_agg(json_build_object('id', p.from_user || ':' || p.kind || ':' || p.ref, 'kind', p.kind, 'from', f.name) order by p.at desc), '[]') from pings p join users f on f.id = p.from_user where p.to_user = $1) as pings,
+  (select coalesce(json_agg(json_build_object('id', p.from_user || ':' || p.kind || ':' || p.ref, 'kind', p.kind, 'from', f.name) order by p.at desc), '[]') from pings p join users f on f.id = p.from_user where p.to_user = $1 and p.kind = 'invite' and p.ref like 'team:%') as team_invites,
   (select coalesce(json_agg(json_build_object('ideaId', ii.idea_id, 'userId', ii.user_id, 'from', w.name, 'title', i.title) order by ii.created_at desc), '[]')
      from idea_interests ii join ideas i on i.id = ii.idea_id join users w on w.id = ii.user_id where i.user_id = $1 and ii.status = 'pending') as incoming_interests,
   (select coalesce(json_agg(json_build_object('ideaId', ii.idea_id, 'status', ii.status, 'title', i.title) order by ii.decided_at desc), '[]')
      from idea_interests ii join ideas i on i.id = ii.idea_id where ii.user_id = $1 and ii.status <> 'pending') as decided_interests,
-  (select coalesce(json_agg(json_build_object('id', m.id, 'from', m.user_id, 'name', w.name, 'body', m.body, 'at', m.created_at) order by m.id desc), '[]')
-     from (select * from messages where kind = 'checkin' and to_user = $1 order by id desc limit 100) m join users w on w.id = m.user_id) as checkins,
   (select coalesce(json_agg(${EXPENSE} order by e.id desc), '[]') from expenses e join users w on w.id = e.by where e.by = $1) as my_exp,
   (select coalesce(json_object_agg(key, n), '{}') from (select key, count(*)::int n from attendance where key like 'vol:%' group by 1) x) as c_vol,
   (select coalesce(json_agg(json_build_array(poll_id, option, n)), '[]') from (select poll_id, option, count(*)::int n from votes where poll_id not like 'fb:%' group by 1, 2) x) as c_votes,
@@ -143,11 +139,11 @@ select u.email, u.progress, u.mentor_id, u.vjudge_handle, u.vj_solved,
   (select coalesce(json_agg(json_build_object(
       'id', 'an:' || a.id, 'user_id', a.user_id, 'title', a.title, 'body_md', coalesce(a.body_md, ''), 'by', w.name,
       'by_role', w.title, 'by_solved', greatest(w.problems_solved, w.solved), 'by_avatar', w.avatar_url,
-      'at', a.created_at, 'edited_at', a.edited_at, 'mentees', a.audience <> 'all', 'pinned', a.pinned,
+      'at', a.created_at, 'edited_at', a.edited_at, 'pinned', a.pinned,
       'requires_ack', a.requires_ack,
       'read_count', (select count(*)::int from announcement_reads ar where ar.announcement_id = 'an:' || a.id)
     ) order by a.id desc), '[]')
-     from (select * from announcements where audience = 'all' or user_id = $1 or audience = 'mentees:' || coalesce(u.mentor_id, '') order by id desc limit 50) a join users w on w.id = a.user_id) as news,
+     from (select * from announcements order by id desc limit 50) a join users w on w.id = a.user_id) as news,
   (select coalesce(json_agg(json_build_object('id', 'poll:' || p.id, 'user_id', p.user_id, 'q', p.question,
       'opts', p.options, 'by', w.name, 'at', p.created_at) order by p.id desc), '[]')
      from (select * from club_polls order by id desc limit 50) p join users w on w.id = p.user_id) as polls,
@@ -208,7 +204,6 @@ select
 
 type Raw = Roster & {
   system: boolean;
-  mentorId: string | null;
   roleKey: Role;
   suspended: boolean;
   pending: boolean;
@@ -278,7 +273,6 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
     ideasCount: row.ideas_count ?? 0,
     acceptedInterests: row.accepted_interests ?? 0,
     milestoneKudosReceived: row.milestone_kudos_received ?? 0,
-    sent: row.checked_in ? [...row.sent, 'checkin'] : row.sent,
     flags,
     kv,
     queue: Object.fromEntries(
@@ -293,19 +287,16 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
 
   // The roster everyone gets: people only, no account-management fields. Officers who manage accounts get those too.
   const everyone = row.members as Raw[];
-  const assigns = canFully(roles, 'mentees.view');
   // The operator account is listed only for a Super Admin, who is the only one able to act on it.
   const members: Roster[] = everyone
     .filter((m) => (admin ? !m.system || role === 'super_admin' : !m.system && !m.suspended))
     // Emails only for the Super Admin, who appoints the President by email.
-    .map(({ system: _s, mentorId, roleKey, suspended, pending, email, ...m }) => ({
+    .map(({ system: _s, roleKey, suspended, pending, email, ...m }) => ({
       ...m,
       ...(admin ? { roleKey, suspended, pending } : {}),
       ...(role === 'super_admin' ? { email } : {}),
-      // Whoever assigns mentors sees every pairing, and who can mentor.
-      ...(assigns ? { mentorId, roleKey } : {}),
     }));
-  const { mentorId: _m, pending: _p, ...me } = raw;
+  const { pending: _p, ...me } = raw;
 
   const money = (await db.query(MONEY, [seesMoney(roles), userId, committee])).rows[0];
   // A waiver granted before the feature was removed settles its invoice, unless a payment already did.
@@ -336,31 +327,6 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
       budgets: money.budgets,
     };
   if (caps.exp) office.expenses = expenses;
-  const view = can(roles, 'mentees.view');
-  if (view) {
-    // A mentor ("scope") gets only the members assigned to them; the CP Head and above get everyone who has a mentor.
-    const mine = new Set(
-      everyone
-        .filter((m) => (view === 'scope' ? m.mentorId === userId : m.mentorId))
-        .map((m) => m.id),
-    );
-    const last = new Map<string, { body: string; at: string }>();
-    for (const c of [...row.checkins].reverse() as { from: string; body: string; at: string }[])
-      last.set(c.from, { body: c.body, at: c.at });
-    // Pairings are real (users.mentor_id); the weekly numbers are sample data where the seed has them.
-    office.mentees = everyone
-      .filter((m) => mine.has(m.id) && !m.suspended)
-      .map((m) => {
-        const d = data.mentees.find((x) => x.id === m.id);
-        return {
-          id: m.id,
-          week: d ? [...d.week] : [],
-          last: d?.last ?? (m.current_streak ? 'today' : 'not recently'),
-          flag: d?.flag ?? '',
-          checkin: last.get(m.id),
-        };
-      });
-  }
   if (caps.apps) office.applications = off.apps;
   if (caps.suggest) office.suggestions = off.suggestions;
   if (caps.feedback) office.feedback = off.feedback;
@@ -407,28 +373,13 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
       text: `${n.by}: ${n.title}`,
       href: '/app/community?tab=announcements',
     });
-  const ping = {
-    invite: 'invited you to their ICPC team',
-    duel: 'challenged you to a duel',
-    nudge: 'nudged you: solve something today',
-    team: 'wants to team up with you',
-  } as Record<string, string>;
-  for (const g of row.pings as { id: string; kind: string; from: string }[])
+  for (const g of row.team_invites as { id: string; from: string }[])
     inbox.push({
       id: `n:ping:${g.id}`,
       cat: 'Social',
-      text: `${g.from} ${ping[g.kind]}`,
-      ...(g.kind === 'invite' && {
-        actions: [{ label: 'Join team', type: 'teamJoin', args: { from: g.id.split(':')[0] } }],
-      }),
-      href:
-        g.kind === 'duel'
-          ? '/app/arena'
-          : g.kind === 'nudge'
-            ? '/app/sheets'
-            : g.kind === 'team'
-              ? '/app/community?tab=ideas'
-              : '/app/teams',
+      text: `${g.from} invited you to their ICPC team`,
+      actions: [{ label: 'Join team', type: 'teamJoin', args: { from: g.id.split(':')[0] } }],
+      href: '/app/teams',
     });
   for (const ii of row.incoming_interests as {
     ideaId: number;
@@ -484,13 +435,6 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
       text: `Your ${d.role ? `application for ${d.role} at` : 'registration for'} "${d.title}" was declined${d.reason ? `: ${d.reason}` : '.'}`,
       href: `/app/events/${d.eventId}`,
     });
-  for (const c of row.checkins as { id: number; name: string }[])
-    inbox.push({
-      id: `n:msg:${c.id}`,
-      cat: 'Mentor',
-      text: `${c.name} sent a weekly check-in`,
-      href: '/app/learn',
-    });
   const waiting = (off.queue ?? []).filter((q: { status: string }) => q.status === 'pending');
   if (canFully(roles, 'payments.verify') && waiting.length)
     inbox.push({
@@ -526,7 +470,7 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
   for (const [poll, opt, n] of row.c_votes as [string, string, number][])
     (votes[poll] ??= {})[opt] = n;
   return {
-    me: { ...me, email: row.email, mentor: row.mentor_name },
+    me: { ...me, email: row.email },
     s,
     members,
     counts: {

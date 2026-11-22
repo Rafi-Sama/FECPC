@@ -76,120 +76,15 @@ export const owes = (pay: Record<string, { status: string }>, id: string) =>
   !pay[id] || pay[id].status === 'rejected';
 export const APPROVAL_THRESHOLD = 5000; // above this the President must approve, not only the Treasurer
 
-export const resources = [
-  {
-    id: 'r1',
-    title: 'A gentle introduction to prefix sums',
-    type: 'Article',
-    topic: 'Data structures',
-    level: 'Beginner',
-    up: 48,
-  },
-  {
-    id: 'r2',
-    title: 'Binary search: the answer is monotone',
-    type: 'Video',
-    topic: 'Binary search',
-    level: 'Beginner',
-    up: 73,
-  },
-  {
-    id: 'r3',
-    title: 'Graphs in 2 weeks (collection, 14 items)',
-    type: 'Collection',
-    topic: 'Graphs',
-    level: 'Intermediate',
-    up: 91,
-  },
-  {
-    id: 'r4',
-    title: 'DP states: how to find them',
-    type: 'Article',
-    topic: 'DP',
-    level: 'Intermediate',
-    up: 64,
-  },
-  {
-    id: 'r5',
-    title: 'Segment tree cheat sheet',
-    type: 'PDF',
-    topic: 'Data structures',
-    level: 'Advanced',
-    up: 39,
-  },
-  {
-    id: 'r6',
-    title: 'Modular arithmetic for contests',
-    type: 'Article',
-    topic: 'Math',
-    level: 'Beginner',
-    up: 27,
-  },
-  {
-    id: 'r7',
-    title: 'ICPC rules and registration, explained',
-    type: 'Wiki',
-    topic: 'ICPC',
-    level: 'Beginner',
-    up: 55,
-  },
-  {
-    id: 'r8',
-    title: 'Interview patterns: two pointers',
-    type: 'Video',
-    topic: 'Interviews',
-    level: 'Intermediate',
-    up: 33,
-  },
-];
-export const doubts = [
-  {
-    id: 'd1',
-    by: 'zahid',
-    q: 'Why does my greedy fail on 1352C for n = 2?',
-    problem: '1352C',
-    answers: 3,
-    solved: true,
-    up: 12,
-  },
-  {
-    id: 'd2',
-    by: 'mim',
-    q: 'TLE on Kefa and Park with recursion depth 1e5',
-    problem: '580C',
-    answers: 2,
-    solved: true,
-    up: 9,
-  },
-  {
-    id: 'd3',
-    by: 'jannat',
-    q: 'How do I pick the DP state in Vacations?',
-    problem: '698A',
-    answers: 1,
-    solved: false,
-    up: 7,
-  },
-  {
-    id: 'd4',
-    by: 'sabbir',
-    q: 'Is sqrt() safe for checking T-primes up to 1e12?',
-    problem: '230B',
-    answers: 0,
-    solved: false,
-    up: 4,
-  },
-];
-
 export const announcements = [
   {
     id: 'a1',
     from: 'sadia',
     scope: 'Everyone',
     title: 'General meeting, Friday 4 pm, Seminar Room',
-    body: 'Agenda: contest day roles, budget vote, new mentor pairs. Attendance is recorded.',
+    body: 'Agenda: contest day roles, budget vote, ICPC team pairings. Attendance is recorded.',
     body_md:
-      'Hey @everyone! We are holding our monthly general meeting this Friday.\n\n**Agenda:**\n- Contest day volunteer roles & desk assignments\n- Autumn term budget & prize pool review\n- New Batch 25 mentor pairings with @mentors\n\n> Date: Friday, 20 November 2026\n> Time: 4:00 PM\n> Venue: Seminar Room, CSE Building\n\nAttendance is recorded. Please arrive five minutes early.',
+      'Hey @everyone! We are holding our monthly general meeting this Friday.\n\n**Agenda:**\n- Contest day volunteer roles & desk assignments\n- Autumn term budget & prize pool review\n- ICPC team pairings for Batch 25\n\n> Date: Friday, 20 November 2026\n> Time: 4:00 PM\n> Venue: Seminar Room, CSE Building\n\nAttendance is recorded. Please arrive five minutes early.',
     must: true,
     pinned: true,
     requires_ack: true,

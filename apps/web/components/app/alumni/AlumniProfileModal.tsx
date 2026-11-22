@@ -1,7 +1,7 @@
 'use client';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AvatarRing, tierText } from '@/components/app/shared/RatingBadge';
-import { canFully, rankFor, isAdmin } from '@fecpc/contracts';
+import { canFully, rankFor } from '@fecpc/contracts';
 import { useStore } from '@/components/app/Store';
 import type { MemberProfile, BlogPost, AlumniJob } from '@fecpc/contracts';
 import { useConfirm } from '@/components/app/shared/PromptDialog';
@@ -19,7 +19,7 @@ export function AlumniProfileModal({
   onMutated?: () => void;
 }) {
   const sure = useConfirm();
-  const { me, s, act, toast } = useStore();
+  const { me, s, toast } = useStore();
   const [profile, setProfile] = useState<MemberProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -29,10 +29,6 @@ export function AlumniProfileModal({
   const [blogPosts, setBlogPosts] = useState<BlogPost[]>([]);
   const [jobsPosted, setJobsPosted] = useState<AlumniJob[]>([]);
   const [kudosCount, setKudosCount] = useState(0);
-  const [pinged, setPinged] = useState(false);
-  const [pingNote, setPingNote] = useState('');
-  const [pingOpen, setPingOpen] = useState(false);
-  const [pingBusy, setPingBusy] = useState(false);
 
   const modalRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
@@ -139,8 +135,8 @@ export function AlumniProfileModal({
   }, [onClose]);
 
   const isOwner = me.id === userId;
-  const canAdmin = isAdmin(s.roles),
-    canToggle = isOwner || canFully(s.roles, 'alumni.toggleMentoring');
+  const canAdmin = canFully(s.roles, 'alumni.job.fetch'),
+    canToggle = isOwner || canFully(s.roles, 'alumni.toggleQuestions');
 
   const handleToggleAvailable = async () => {
     if (!canToggle || togglingAvailable) return;
@@ -168,22 +164,6 @@ export function AlumniProfileModal({
       setAvailable(!next);
     } finally {
       setTogglingAvailable(false);
-    }
-  };
-
-  const handlePingSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (pingBusy) return;
-    setPingBusy(true);
-    try {
-      // act() shows the server's reason itself when it refuses.
-      if (await act('ping', { to: userId, kind: 'invite', ref: pingNote.trim() || undefined })) {
-        setPinged(true);
-        setPingOpen(false);
-        setPingNote('');
-      }
-    } finally {
-      setPingBusy(false);
     }
   };
 
@@ -303,7 +283,6 @@ export function AlumniProfileModal({
   const batchYear = profile.batch ? 2000 + Number(String(profile.batch).slice(-2)) : 2016;
   const joinedYear = batchYear - 4;
   const gradYear = batchYear;
-  const firstName = profile.name.split(' ')[0] || profile.name;
 
   const skills =
     profile.skills && profile.skills.length > 0
@@ -767,7 +746,7 @@ export function AlumniProfileModal({
                     className="t"
                     style={{ fontSize: 14, color: 'var(--mut, #3B3A35)', marginTop: 4 }}
                   >
-                    Active contest competitor and mentor in competitive programming.
+                    Active contest competitor in competitive programming.
                   </p>
                 </div>
               </div>
@@ -928,7 +907,7 @@ export function AlumniProfileModal({
             </div>
 
             <div style={{ padding: 20 }}>
-              {/* Mentoring Status */}
+              {/* Availability for questions */}
               <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 20 }}>
                 <i
                   style={{
@@ -939,7 +918,7 @@ export function AlumniProfileModal({
                   }}
                 />
                 <b className="m" style={{ color: 'var(--ink, #0B0B0B)', fontSize: 13 }}>
-                  {available ? 'Open to questions' : 'Not mentoring'}
+                  {available ? 'Open to questions' : 'Not taking questions'}
                 </b>
               </div>
 
@@ -981,86 +960,8 @@ export function AlumniProfileModal({
               >
                 {available
                   ? 'Usually replies within a few days.'
-                  : 'Currently not taking new mentorship inquiries.'}
+                  : 'Not taking questions right now.'}
               </p>
-
-              {/* Ping Button / Form */}
-              {pingOpen ? (
-                <form onSubmit={handlePingSubmit} style={{ marginBottom: 16 }}>
-                  <input
-                    placeholder={`Short topic for ${firstName} (optional)`}
-                    aria-label="Ping topic"
-                    maxLength={80}
-                    pattern="[\w:.&' \/+#\-]*"
-                    title="Letters, digits, spaces and : . & ' / + # - only"
-                    value={pingNote}
-                    onChange={(e) => setPingNote(e.target.value)}
-                    style={{
-                      width: '100%',
-                      fontSize: 13,
-                      padding: '8px 10px',
-                      border: '2px solid var(--line2, #0B0B0B)',
-                      background: 'var(--bg, #FFFFFF)',
-                      color: 'var(--ink, #0B0B0B)',
-                      marginBottom: 8,
-                    }}
-                  />
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button
-                      type="button"
-                      className="btn sm"
-                      onClick={() => setPingOpen(false)}
-                      style={{ flex: 1 }}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={pingBusy}
-                      className="btn k sm"
-                      style={{ flex: 1 }}
-                    >
-                      {pingBusy ? 'Sending…' : 'Send'}
-                    </button>
-                  </div>
-                </form>
-              ) : pinged ? (
-                <div
-                  style={{
-                    background: 'var(--ink, #0B0B0B)',
-                    color: 'var(--on, #FFFFFF)',
-                    padding: '10px 14px',
-                    fontFamily: 'var(--mono)',
-                    fontSize: 12,
-                    fontWeight: 700,
-                    textAlign: 'center',
-                    marginBottom: 8,
-                  }}
-                >
-                  Ping sent ✓
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  className="btn k"
-                  disabled={isOwner}
-                  title={isOwner ? 'This is your own profile' : undefined}
-                  onClick={() => setPingOpen(true)}
-                  style={{
-                    width: '100%',
-                    marginBottom: 8,
-                    background: 'var(--ink, #0B0B0B)',
-                    color: 'var(--on, #FFFFFF)',
-                    minHeight: 44,
-                    fontFamily: 'var(--mono)',
-                    fontSize: 13,
-                    fontWeight: 700,
-                    textTransform: 'uppercase',
-                  }}
-                >
-                  Ping {firstName}
-                </button>
-              )}
 
               {/* Kudos & Share Buttons */}
               <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>

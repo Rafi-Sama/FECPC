@@ -5,7 +5,6 @@ import { Page, Tabs } from '@/components/app/Shell';
 import { useStore } from '@/components/app/Store';
 import { useSolved } from '@/components/app/Judge';
 import { Avatar, Bug } from '@/components/pixel/Sprites';
-import { PersonPicker } from '@/components/app/shared/PersonPicker';
 import { bounties, cfUrl, duels, myInvoices, owes, potd, shop } from '@fecpc/content/member-area';
 import { badges, byId, squads } from '@fecpc/content/site';
 import { LEVEL, level } from '@fecpc/contracts';
@@ -19,8 +18,6 @@ export default function Arena() {
   const { synced, isSolved } = useSolved();
   const [tab, setTab] = useState<(typeof tabs)[number]>('DAILY');
   const lv = level(xp);
-  const [rival, setRival] = useState('');
-  const [prob, setProb] = useState(potd[1]?.id ?? potd[0]!.id);
   const solvedN = Math.max(me.problems_solved ?? 0, me.solved);
   // Badges follow the member's real record; the rest wait for data the club does not track yet.
   const got: Record<string, boolean> = {
@@ -30,7 +27,6 @@ export default function Arena() {
     contests10: (me.contests_participated ?? 0) >= 10,
     'zero-dues': !me.system && !myInvoices(s.reg).some((i) => owes(s.pay, i.id)),
   };
-  const sentKey = `${rival}:duel:${prob}`;
   return (
     <Page title="ARENA">
       <div className="strip">
@@ -130,39 +126,6 @@ export default function Arena() {
               </p>
             </div>
           ))}
-          <div className="panel">
-            <p className="label">CHALLENGE</p>
-            <div className="row">
-              <PersonPicker
-                className="grow"
-                label="Rival"
-                none={null}
-                placeholder="Pick a rival"
-                people={members.filter((m) => m.id !== me.id && !m.suspended)}
-                value={rival || null}
-                onPick={(v) => setRival(v ?? '')}
-              />
-              <select
-                className="input"
-                aria-label="Problem"
-                value={prob}
-                onChange={(e) => setProb(e.target.value)}
-              >
-                {potd.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.id} · {p.rating}
-                  </option>
-                ))}
-              </select>
-              <button
-                className="btn sm"
-                disabled={!rival || me.system || s.sent.includes(sentKey)}
-                onClick={() => act('ping', { kind: 'duel', to: rival, ref: prob })}
-              >
-                {s.sent.includes(sentKey) ? 'SENT ✓' : 'CHALLENGE'}
-              </button>
-            </div>
-          </div>
           <h2 className="h3 acc">FANTASY</h2>
           <ArenaExtra tab="FANTASY" />
         </div>

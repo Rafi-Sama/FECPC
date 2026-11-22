@@ -78,12 +78,6 @@ export const expenses = [
     event: 'Intra-College Contest',
   },
 ];
-export const mentees = [
-  { id: 'tasnim', week: [5, 4], last: 'today', flag: '' },
-  { id: 'zahid', week: [5, 2], last: 'yesterday', flag: '' },
-  { id: 'mim', week: [5, 0], last: '9 days ago', flag: 'No activity for 7 days' },
-  { id: 'jannat', week: [5, 5], last: 'today', flag: '' },
-];
 export const applications = [
   { id: 'ap1', name: 'Rifat Mahmud', dept: 'CSE', batch: 26, quiz: 82, src: 'Orientation' },
   { id: 'ap2', name: 'Lamia Haque', dept: 'EEE', batch: 26, quiz: 74, src: 'Friend' },

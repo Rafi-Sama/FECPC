@@ -691,14 +691,6 @@
 .node.locked {
   opacity: 0.7;
 }
-.node[role='button']:focus-visible {
-  outline: none;
-}
-.node[role='button']:hover rect,
-.node[role='button']:focus-visible rect {
-  stroke: var(--hi);
-  stroke-width: 3;
-}
 .rm-list {
   display: flex;
   flex-direction: column;

@@ -1,5 +1,5 @@
 // ICPC teams: who is on which team, and each member's own notebook (kept with the person, team or not).
-// Every handler checks its own permission: a team's members act on it; its coach and full `mentees.view`
+// Every handler checks its own permission: a team's members act on it; its coach and full `teams.oversee`
 // holders (CP Head and above) may see and rename it. Nobody else reads a team's notebook.
 import { canFully, type Role } from '@fecpc/contracts';
 import { templates } from '@fecpc/content/training';
@@ -42,7 +42,11 @@ async function access(c: Db, a: Actor, teamId: number): Promise<'member' | 'staf
     )
   ).rows[0];
   if (!t) throw new Fail(404, 'That team does not exist.');
-  return t.mine ? 'member' : t.coach === a.id || canFully(a.roles, 'mentees.view') ? 'staff' : null;
+  return t.mine
+    ? 'member'
+    : t.coach === a.id || canFully(a.roles, 'teams.oversee')
+      ? 'staff'
+      : null;
 }
 const log = (c: Db, teamId: number, a: Actor, what: string) =>
   c.query(`insert into icpc_log (team_id, user_id, what) values ($1, $2, $3)`, [
@@ -258,7 +262,7 @@ export const teamHandlers: Record<
     ]);
   },
   async teamCoach(c, a, _p, i) {
-    need(canFully(a.roles, 'mentees.view'), 'Only the CP Head assigns coaches.');
+    need(canFully(a.roles, 'teams.oversee'), 'Only the CP Head assigns coaches.');
     const id = Number(i.teamId),
       coach = i.user ? String(i.user) : null;
     if (coach)
@@ -287,7 +291,7 @@ export async function getTeam(db: Db, userId: string, input: { teamId?: unknown 
       [userId],
     )
   ).rows[0] as Actor;
-  const oversee = canFully(a.roles, 'mentees.view');
+  const oversee = canFully(a.roles, 'teams.oversee');
   const own = await teamOf(db, userId);
   const id = input.teamId === undefined || input.teamId === null ? own : Number(input.teamId);
   const invites = (

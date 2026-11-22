@@ -291,7 +291,7 @@ export function AlumniCard({
                 color: 'var(--dim, #5F5F5F)',
               }}
             >
-              Not mentoring
+              Not taking questions
             </span>
           )}
 

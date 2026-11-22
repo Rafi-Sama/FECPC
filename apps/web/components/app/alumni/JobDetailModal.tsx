@@ -4,7 +4,7 @@ import { useEffect, useRef, type RefObject } from 'react';
 import type { AlumniJob } from '@fecpc/contracts';
 import { deterministicColor, formatDeadlineStatus } from './JobCard';
 import { useStore } from '@/components/app/Store';
-import { isAdmin } from '@fecpc/contracts';
+import { canFully } from '@fecpc/contracts';
 import { useConfirm } from '@/components/app/shared/PromptDialog';
 
 const FOCUSABLE =
@@ -202,7 +202,7 @@ export function JobDetailModal({
   const closeBtnRef = useRef<HTMLButtonElement>(null);
 
   const isOwner = job.mine || (job.alumni_id && job.alumni_id === me.id);
-  const canDelete = isOwner || isAdmin(s.roles);
+  const canDelete = isOwner || canFully(s.roles, 'alumni.job.fetch');
 
   const { text: deadlineText, isClosed } = formatDeadlineStatus(job.deadline);
   const companyColor = deterministicColor(job.company);
