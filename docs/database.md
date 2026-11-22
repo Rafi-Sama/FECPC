@@ -23,16 +23,17 @@ and extra columns on existing tables.
 
 ### People and access
 
-| Table            | Purpose                                                                                                                                                                                                                         | FK    |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
-| `users`          | Every account: identity, role, status and `suspended`, title, `post`, profile, Codeforces stats, `vjudge_handle` and `vj_solved`, `progress` (personal JSON state), `system` (operator), invite hash, `google_sub`, `github_id` | —     |
-| `credentials`    | Current password hash (kept in step with `users.pass_hash`)                                                                                                                                                                     | users |
-| `sessions`       | SHA-256 of each session token, expiry, created and last-seen times                                                                                                                                                              | users |
-| `invite_tokens`  | One-time set-password tokens (hashed); `users.invite_hash` holds the other form                                                                                                                                                 | users |
-| `login_attempts` | Failed sign-in counters per (email, address) with a 15-minute window                                                                                                                                                            | —     |
-| `applications`   | Membership applications from `/join` and their decisions                                                                                                                                                                        | users |
-| `audit`          | Readable audit lines for the admin panel (who, what, when)                                                                                                                                                                      | —     |
-| `audit_log`      | Structured audit records (actor, action, entity, summary, IP hash); rows cannot be changed                                                                                                                                      | users |
+| Table            | Purpose                                                                                                                                                                                                                                 | FK    |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| `users`          | Every account: identity, role, status and `suspended`, title, `post`, profile, Codeforces stats, `vjudge_handle` and `vj_solved`, `progress` (personal JSON state), `system` (operator), invite hash, `google_sub`, `github_id`         | —     |
+| `credentials`    | Current password hash (kept in step with `users.pass_hash`)                                                                                                                                                                             | users |
+| `sessions`       | SHA-256 of each session token, expiry, created and last-seen times                                                                                                                                                                      | users |
+| `invite_tokens`  | One-time set-password tokens (hashed); `users.invite_hash` holds the other form                                                                                                                                                         | users |
+| `login_attempts` | Failed sign-in counters per (email, address) with a 15-minute window                                                                                                                                                                    | —     |
+| `mail_queue`     | Outgoing email: queued, sent (body cleared) or failed, with retries and an expiry; kept 30 days. See [Deployment](deployment.md#email)                                                                                                  | —     |
+| `applications`   | Applicants from a recruitment link or a CSV import, and their decisions                                                                                                                                                                 | users |
+| `audit`          | Readable audit lines for the admin panel (who, what, when, section). Append-only: a trigger refuses edits and deletes; the section (`area`) comes from the action (`act()` sets `fecpc.area`) or, failing that, from `audit_area(what)` | —     |
+| `audit_log`      | Structured audit records (actor, action, entity, summary, IP hash); rows cannot be changed                                                                                                                                              | users |
 
 ### Member activity
 

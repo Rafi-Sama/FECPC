@@ -6,7 +6,7 @@ import { Bars } from '@/components/app/Charts';
 import { cols } from '@fecpc/content/training';
 import { fmtDate } from '@fecpc/content/site';
 import { isAdmin } from '@fecpc/contracts';
-import { Avatar } from '@/components/pixel/Sprites';
+import { MemberFace } from '@/components/app/shared/MemberFace';
 import { DatePicker } from '@/components/app/shared/DatePicker';
 import { PersonPicker } from '@/components/app/shared/PersonPicker';
 import { SaveForm } from '@/components/app/SaveBar';
@@ -465,7 +465,7 @@ function TaskCard({
         <span className="row task__meta" style={{ '--g': '8px' } as React.CSSProperties}>
           {t.who ? (
             <>
-              <Avatar name={who(t.who).name} size={22} fg="#0D0D0B" bg="#DAD6CB" />
+              <MemberFace id={t.who} name={who(t.who).name} size={22} fg="#0D0D0B" bg="#DAD6CB" />
               <span>{who(t.who).name}</span>
             </>
           ) : (

@@ -27,7 +27,6 @@ const cols = [
   {
     h: 'join',
     links: [
-      ['/join', 'apply'],
       ['/contact', 'sponsor us'],
       ['/contact#contact', 'contact'],
       ['/verify', 'verify a certificate'],

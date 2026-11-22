@@ -41,16 +41,10 @@ export default function Nav() {
           <Link href="/login" className="nav-m in">
             Sign in
           </Link>
-          <Link href="/join" className="nav-m jn">
-            Join
-          </Link>
         </nav>
         <div className="nav-right">
           <Link href="/login" className="nav-in">
             Sign in
-          </Link>
-          <Link href="/join" className="btn sm nav-cta">
-            Join
           </Link>
           <button
             className="burger"

@@ -211,7 +211,7 @@ export default async function Contests() {
             </div>
           </div>
           <div className="row" style={{ marginTop: 40, '--g': '20px' } as React.CSSProperties}>
-            <Link href="/join" className="btn">
+            <Link href="/contact" className="btn">
               &gt; Get the sheets
             </Link>
             <Link href="/leaderboard" className="btn ghost">

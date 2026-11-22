@@ -4,6 +4,7 @@ import { DatabaseModule } from '../../platform/database/database.module.ts';
 import { DbService } from '../../platform/database/db.service.ts';
 import { pool, usePool } from './db.ts';
 import { ensureWeekly } from './sheets.ts';
+import { drainMail } from './mail.ts';
 
 @Module({
   imports: [DatabaseModule],
@@ -19,5 +20,9 @@ export class MemberAreaModule implements OnModuleInit {
     const weekly = () => void ensureWeekly(pool()).catch(() => {});
     weekly();
     setInterval(weekly, 3 * 3600_000).unref();
+    // Queued email: at startup (a sleeping free host wakes with mail waiting) and every minute after.
+    const mail = () => void drainMail().catch(() => {});
+    mail();
+    setInterval(mail, 60_000).unref();
   }
 }

@@ -46,7 +46,7 @@ Paged lists (feed, ideas, members, alumni, jobs, prep, blog) call `fetch('/api/c
 
 ```
 components/
-├── site/            public site: Nav, Footer, FootTheme, JoinForm, LoginForm, Board, EventRow, Faq,
+├── site/            public site: Nav, Footer, FootTheme, ApplyForm, LoginForm, Board, EventRow, Faq,
 │                    ProjectGrid, Roadmap, VerifyBox
 ├── app/
 │   ├── Shell.tsx    member-area frame and primitives: default Shell, Page (title + body), Tabs, Denied

@@ -163,7 +163,7 @@ export default function Leaderboard() {
             ))}
           </ol>
           <p style={{ marginTop: 48 }}>
-            <Link href="/join" className="btn">
+            <Link href="/contact" className="btn">
               <span aria-hidden className="blink">
                 &gt;
               </span>

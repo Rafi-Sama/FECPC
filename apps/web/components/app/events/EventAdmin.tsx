@@ -9,10 +9,14 @@ import { EventSections, FieldsEditor, Method, cleanFields } from './EventForm';
 import { downloadCsv, renderCertificate } from '@/lib/events';
 import { useConfirm, usePrompt } from '../shared/PromptDialog';
 import { CertPreview } from './CertPreview';
+import { MailEditor, MailStatus } from '../shared/MailEditor';
 import {
   CERT_VARS,
   certHeadline,
   DEFAULT_CERT,
+  DEFAULT_MAIL,
+  MAIL_SAMPLE,
+  renderMail,
   fillTemplate,
   parseCsv,
   type EventDetail,
@@ -20,7 +24,7 @@ import {
   type EventRole,
 } from '@fecpc/contracts';
 
-const TABS = ['Responses', 'Details', 'Roles', 'Feedback', 'Certificates'] as const;
+const TABS = ['Responses', 'Details', 'Roles', 'Email', 'Feedback', 'Certificates'] as const;
 
 /** Everything the President and Secretary do with one event. The API checks `event.publish` on each call. */
 export function EventAdmin({ e, reload }: { e: EventDetail; reload: () => void }) {
@@ -32,6 +36,7 @@ export function EventAdmin({ e, reload }: { e: EventDetail; reload: () => void }
       {tab === 'Responses' && <Responses e={e} reload={reload} />}
       {tab === 'Details' && <Details e={e} reload={reload} />}
       {tab === 'Roles' && <Roles e={e} reload={reload} />}
+      {tab === 'Email' && <Email e={e} reload={reload} />}
       {tab === 'Feedback' && <Feedback e={e} />}
       {tab === 'Certificates' && <Certificates e={e} reload={reload} />}
     </section>
@@ -782,6 +787,63 @@ function Certificates({ e, reload }: { e: EventDetail; reload: () => void }) {
           {e.certs ? 'Turn off' : 'Turn on'}
         </button>
       </div>
+    </div>
+  );
+}
+
+/** The email an approved member gets (manual approvals and auto-approved sign-ups alike). */
+function Email({ e, reload }: { e: EventDetail; reload: () => void }) {
+  const { act } = useStore();
+  const [editing, setEditing] = useState(false);
+  const t = e.admin!.mail ?? DEFAULT_MAIL.event;
+  const sample = {
+    ...MAIL_SAMPLE.event,
+    event: e.title,
+    venue: e.place || 'to be announced',
+    date: new Date(e.startsAt).toLocaleString('en-GB', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    }),
+  };
+  const view = renderMail(t, sample);
+  return (
+    <div className="stack">
+      <MailStatus />
+      <div className="row between" style={{ '--g': '12px' } as React.CSSProperties}>
+        <p className="body">
+          Sent when someone is approved, by you or automatically.{' '}
+          {e.admin!.mail ? 'Your design.' : 'The built-in design.'}
+        </p>
+        <button className="btn sm" onClick={() => setEditing(true)}>
+          Edit email
+        </button>
+      </div>
+      <div className="me-inbox">
+        <p className="me-subject">
+          <span className="dim">Subject</span> {view.subject}
+        </p>
+        <iframe title="Approval email" sandbox="" srcDoc={view.html} className="me-frame desktop" />
+      </div>
+      {editing && (
+        <MailEditor
+          kind="event"
+          title={`Approval email · ${e.title}`}
+          current={e.admin!.mail}
+          sample={sample}
+          onSave={async (next) => {
+            const ok = await act('eventMail', {
+              eventId: e.id,
+              ...(next ?? { subject: '', html: '' }),
+            });
+            if (ok) reload();
+            return ok;
+          }}
+          onClose={() => setEditing(false)}
+        />
+      )}
     </div>
   );
 }

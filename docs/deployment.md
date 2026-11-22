@@ -28,22 +28,23 @@ Set real environment variables. Do not ship `.env.local` files.
 
 ### API
 
-| Variable                                                                                | Production value                                                                                                                                                                |
-| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `APP_ENV`                                                                               | `production`. Secure `__Host-fecpc_session` cookie, so the site must be served over HTTPS.                                                                                      |
-| `DATABASE_URL`                                                                          | the production database                                                                                                                                                         |
-| `APP_PUBLIC_URL`                                                                        | the public origin, for example `https://fecpc.example.edu`                                                                                                                      |
-| `CORS_ORIGINS`                                                                          | the public origin(s) only. Also used by the CSRF check.                                                                                                                         |
-| `TRUST_PROXY`                                                                           | number of proxies in front of the API whose `X-Forwarded-For` is trusted. With only the web app in front: `1`.                                                                  |
-| `HOST`, `PORT`                                                                          | bind to a private interface                                                                                                                                                     |
-| `LOG_LEVEL`                                                                             | `info` (JSON logs on stdout)                                                                                                                                                    |
-| `RATE_LIMIT_GLOBAL_PER_MIN`                                                             | `300` unless you have a reason                                                                                                                                                  |
-| `SESSION_IDLE_DAYS`, `SESSION_ABSOLUTE_DAYS`, `SESSION_MAX_PER_USER`                    | 14, 60, 10 by default                                                                                                                                                           |
-| `DB_POOL_MAX`, `DB_STATEMENT_TIMEOUT_MS`, `DB_LOCK_TIMEOUT_MS`, `DB_IDLE_TX_TIMEOUT_MS` | 20, 15000, 5000, 30000 by default                                                                                                                                               |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`                       | optional; the redirect URI must be `https://<public origin>/api/auth/google/callback` and registered in Google Cloud                                                            |
-| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`                                              | optional; a GitHub OAuth app whose callback URL is `https://<public origin>/api/auth/github/callback`                                                                           |
-| `SMTP_URL`, `MAIL_FROM`                                                                 | optional; e.g. `smtps://club%40gmail.com:<app-password>@smtp.gmail.com:465`. Without them, accepting an application shows the invite link to the officer instead of emailing it |
-| `TURNSTILE_SECRET_KEY`                                                                  | optional; Cloudflare Turnstile secret. When set, the join form must pass the human check                                                                                        |
+| Variable                                                                                | Production value                                                                                                                                                                                                                              |
+| --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `APP_ENV`                                                                               | `production`. Secure `__Host-fecpc_session` cookie, so the site must be served over HTTPS.                                                                                                                                                    |
+| `DATABASE_URL`                                                                          | the production database                                                                                                                                                                                                                       |
+| `APP_PUBLIC_URL`                                                                        | the public origin, for example `https://fecpc.example.edu`                                                                                                                                                                                    |
+| `CORS_ORIGINS`                                                                          | the public origin(s) only. Also used by the CSRF check.                                                                                                                                                                                       |
+| `TRUST_PROXY`                                                                           | number of proxies in front of the API whose `X-Forwarded-For` is trusted. With only the web app in front: `1`.                                                                                                                                |
+| `HOST`, `PORT`                                                                          | bind to a private interface                                                                                                                                                                                                                   |
+| `LOG_LEVEL`                                                                             | `info` (JSON logs on stdout)                                                                                                                                                                                                                  |
+| `RATE_LIMIT_GLOBAL_PER_MIN`                                                             | `300` unless you have a reason                                                                                                                                                                                                                |
+| `SESSION_IDLE_DAYS`, `SESSION_ABSOLUTE_DAYS`, `SESSION_MAX_PER_USER`                    | 14, 60, 10 by default                                                                                                                                                                                                                         |
+| `DB_POOL_MAX`, `DB_STATEMENT_TIMEOUT_MS`, `DB_LOCK_TIMEOUT_MS`, `DB_IDLE_TX_TIMEOUT_MS` | 20, 15000, 5000, 30000 by default                                                                                                                                                                                                             |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`                       | optional; the redirect URI must be `https://<public origin>/api/auth/google/callback` and registered in Google Cloud                                                                                                                          |
+| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`                                              | optional; a GitHub OAuth app whose callback URL is `https://<public origin>/api/auth/github/callback`                                                                                                                                         |
+| `SMTP_URL`, `MAIL_FROM`                                                                 | optional; e.g. `smtps://club%40gmail.com:<app-password>@smtp.gmail.com:465` (a Gmail app password, not the account password). Without them, accepting an application shows the invite link to the officer and event approvals are not emailed |
+| `MAIL_DAILY_LIMIT`                                                                      | optional, default `400`: emails sent per rolling 24 h. Free Gmail allows about 500; keep headroom for the account's own mail. See [Email](#email)                                                                                             |
+| `TURNSTILE_SECRET_KEY`                                                                  | optional; Cloudflare Turnstile secret. When set, the join form must pass the human check                                                                                                                                                      |
 
 ### Web
 
@@ -74,6 +75,30 @@ private network.
 | `GET /health/live` (API)  | the process is up                      |
 | `GET /health/ready` (API) | the database answers (`503` otherwise) |
 | `GET /login` (web)        | the web app renders                    |
+
+## Email
+
+All email goes through the `mail_queue` table and is sent by the API itself (a timer every minute, after each
+action, and at startup), so it needs no paid service, worker or cron job:
+
+- **Daily limit.** At most `MAIL_DAILY_LIMIT` messages per rolling 24 hours, at most 20 per minute. Anything over
+  waits in the queue for the window to roll over. If Gmail still answers with a quota error, the whole queue
+  pauses for an hour.
+- **Sleeping hosts.** A free host that sleeps when idle only delays mail; the queue is in the database and is
+  drained when the API starts.
+- **Too late is not sent.** Set-password emails expire with their link (7 days) and event approvals when the
+  event starts. Officers are told at the time when the limit would make mail late, and can send the link
+  themselves.
+- **Failures are visible.** Recruit and each event's Email tab show sent/limit, what is waiting, the latest
+  server error (unreachable, login rejected) and failed messages with a Retry button. A rejected login or an
+  unreachable server keeps mail queued instead of failing it.
+- **SMTP ports.** Some free hosts block outgoing SMTP (ports 465/587). The status strip then shows "Could not
+  reach the mail server"; check this on the host before relying on email.
+
+Templates are HTML + CSS per recruitment and per event (Admin → Recruit → a recruitment → Acceptance email;
+an event → Organise → Email), checked by `checkMailTemplate` in `@fecpc/contracts`: at most 100 KB (Gmail clips
+above 102 KB), recruitment emails must keep `{{link}}`, scripts, forms and event handlers are removed. A new
+recruitment or event starts from the latest saved design.
 
 ## Operations
 

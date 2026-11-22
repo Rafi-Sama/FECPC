@@ -8,3 +8,7 @@ export * from './notifications.ts';
 export * from './errors.ts';
 export * from './auth.ts';
 export * from './events.ts';
+export * from './recruit.ts';
+export * from './mail.ts';
+export * from './profile.ts';
+export * from './audit.ts';

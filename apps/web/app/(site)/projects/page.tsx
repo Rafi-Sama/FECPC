@@ -76,7 +76,7 @@ export default function Projects() {
             ))}
           </ol>
           <p style={{ marginTop: 56 }}>
-            <Link href="/join" className="btn">
+            <Link href="/contact" className="btn">
               Join and pitch yours
             </Link>
           </p>

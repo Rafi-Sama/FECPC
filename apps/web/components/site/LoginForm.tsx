@@ -1,5 +1,4 @@
 'use client';
-import Link from 'next/link';
 import { useState } from 'react';
 
 // One form for both doors: email + password, or an invite link that sets the first password.
@@ -118,10 +117,7 @@ export default function LoginForm({ invite, error }: { invite?: string; error?: 
             </a>
           </div>
           <p className="auth-foot body">
-            Not a member yet?{' '}
-            <Link className="link" href="/join">
-              Apply to join
-            </Link>
+            Not a member yet? Apply through the recruitment link the committee shares each intake.
           </p>
         </>
       )}

@@ -46,13 +46,23 @@ import type {
   MilestoneDTO,
 } from '@fecpc/contracts';
 import { newToken, sha } from './tokens.ts';
-import { sendMail } from './mail.ts';
 import * as data from './office-data.ts';
 import { Fail, tx, type Db } from './db.ts';
 import { teamHandlers } from './teams.ts';
 import { eventHandlers } from './events.ts';
+import { decideApplication, inviteNotice, recruitHandlers } from './recruit.ts';
+import { mailHandlers } from './mail.ts';
+import { AUDIT_AREAS, type AuditArea, type AuditEntry, type AuditPage } from '@fecpc/contracts';
+import {
+  checkProfile,
+  PROFILE_FIELDS,
+  PROFILE_LABEL,
+  profileDiff,
+  type ProfileChanges,
+  type ProfileField,
+} from '@fecpc/contracts';
 import { challengeHandlers, sheetHandlers } from './sheets.ts';
-import { DAILY_KUDOS_CAP, detectCrossovers, MILESTONE_FRESHNESS_DAYS } from './milestones.ts';
+import { DAILY_KUDOS_CAP, MILESTONE_FRESHNESS_DAYS } from './milestones.ts';
 import { isAdmin, isCommittee, loadState, progress, today, TZ, type Progress } from './state.ts';
 
 type Actor = { id: string; role: Role; roles: Role[]; name: string; system: boolean };
@@ -105,15 +115,6 @@ const optionalUrl = (v: unknown, what: string): string | null => {
   if (t.length > 400 || !/^https?:\/\/[^\s]+$/i.test(t))
     throw new Fail(400, `${what} must be a valid http(s) URL.`);
   return t;
-};
-const optionalAvatar = (v: unknown): string | null => {
-  if (v === undefined || v === null) return null;
-  const t = typeof v === 'string' ? v.trim() : '';
-  if (!t) return null;
-  if (/^https?:\/\/[^\s]{4,480}$/i.test(t)) return t;
-  if (/^data:image\/(?:png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$/.test(t) && t.length <= 450_000)
-    return t;
-  throw new Fail(400, 'Avatar must be a PNG, JPEG, or WebP image under 300KB.');
 };
 // A posted job, from either entry point. Every field is bounded; the logo must be an http(s) URL like the link.
 const jobFields = (i: In) => {
@@ -273,19 +274,70 @@ const isoDay = (v: unknown, what: string) => {
 async function opsDelete(c: Db, a: Actor, table: string, id: unknown, what: string) {
   need(isCommittee(a.roles), 'Only the committee manages the workspace.');
   const n = posInt(id, what);
-  const row = (await c.query(`select created_by from ${table} where id = $1`, [n])).rows[0];
+  const row = (
+    await c.query(`select created_by, to_jsonb(t) ->> $2 as label from ${table} t where id = $1`, [
+      n,
+      table === 'inventory' ? 'name' : 'title',
+    ])
+  ).rows[0];
   if (!row) throw new Fail(404, `That ${what} does not exist.`);
   need(
     row.created_by === a.id || isAdmin(a.roles),
     `Only whoever added the ${what}, or an admin, deletes it.`,
   );
   await c.query(`delete from ${table} where id = $1`, [n]);
-  await audit(c, a, `deleted ${what} #${n}`);
+  await audit(c, a, `deleted ${what} "${row.label ?? `#${n}`}"`);
+}
+
+/** The account an officer may edit: not their own, not the operator, and the top two only by the Super Admin. */
+async function editTarget(c: Db, a: Actor, user: unknown) {
+  need(
+    canFully(a.roles, 'member.editDetails'),
+    'Only the Secretary or President edits member details.',
+  );
+  const t = (
+    await c.query(`select id, name, role from users where id = $1 and not system for update`, [
+      key(user),
+    ])
+  ).rows[0] as { id: string; name: string; role: Role } | undefined;
+  if (!t) throw new Fail(404, 'That member does not exist.');
+  need(t.id !== a.id, 'Ask another officer to change your own details.');
+  need(
+    !['president', 'super_admin'].includes(t.role) || a.roles.includes('super_admin'),
+    'Only the Super Admin edits that account.',
+  );
+  return t;
+}
+const PROFILE_COLS = PROFILE_FIELDS.map(([k]) => k);
+/** The values a change is compared against. */
+const currentProfile = async (c: Db, userId: string): Promise<ProfileChanges> =>
+  (await c.query(`select ${PROFILE_COLS.join(', ')} from users where id = $1`, [userId])).rows[0];
+const fieldList = (ch: ProfileChanges) =>
+  Object.keys(ch)
+    .map((k) => PROFILE_LABEL[k as ProfileField] ?? k)
+    .join(', ');
+/** Writes checked changes. A new judge handle also resets what was synced from the old one. */
+async function applyProfile(c: Db, userId: string, ch: ProfileChanges) {
+  const cols = (Object.keys(ch) as ProfileField[]).filter((k) => PROFILE_COLS.includes(k));
+  if (!cols.length) return;
+  const at = (k: ProfileField) => `$${cols.indexOf(k) + 2}`;
+  const sets = cols.map((k) => (k === 'skills' ? `skills = ${at(k)}::text[]` : `${k} = ${at(k)}`));
+  if (cols.includes('cf_handle')) sets.push(`handle = coalesce(${at('cf_handle')}, '')`);
+  if (cols.includes('vjudge_handle'))
+    sets.push(
+      `vj_solved = case when vjudge_handle is distinct from ${at('vjudge_handle')} then 0 else vj_solved end`,
+    );
+  await c.query(`update users set ${sets.join(', ')}, updated_at = now() where id = $1`, [
+    userId,
+    ...cols.map((k) => ch[k]),
+  ]);
 }
 
 const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<string | void>> = {
   ...teamHandlers,
   ...eventHandlers,
+  ...recruitHandlers,
+  ...mailHandlers,
   ...sheetHandlers,
   ...challengeHandlers,
   async toggle(c, a, p, i) {
@@ -712,6 +764,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
       `update ideas set title = $2, body_md = $3, status = $4, updated_at = now() where id = $1`,
       [ideaId, title, bodyMd, status],
     );
+    if (cur.user_id !== a.id) await audit(c, a, `edited ${cur.user_id}'s idea "${title}"`);
   },
   async closeIdea(c, a, _p, i) {
     person(a);
@@ -722,7 +775,14 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
       cur.user_id === a.id || canFully(a.roles, 'idea.manage'),
       'Only the poster or an admin can close this idea.',
     );
-    await c.query(`update ideas set status = 'closed', updated_at = now() where id = $1`, [ideaId]);
+    const t = (
+      await c.query(
+        `update ideas set status = 'closed', updated_at = now() where id = $1 returning title`,
+        [ideaId],
+      )
+    ).rows[0];
+    // A member closing their own idea is their business; a moderator closing someone else's is logged.
+    if (cur.user_id !== a.id) await audit(c, a, `closed ${cur.user_id}'s idea "${t.title}"`);
   },
   async markIdeaViewed(c, a, _p, i) {
     const ideaId = posInt(i.ideaId, 'idea');
@@ -866,37 +926,14 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
       need(can(a.roles, 'application.approve'));
       pick(to, ['accepted', 'declined'], 'decision');
       need(/^\d{1,9}$/.test(id), 'That application does not exist.');
-      const app = (
-        await c.query(
-          `update applications set status = $2 where id = $1 and status = 'pending' returning name, email, dept, batch, cf`,
-          [+id, to],
-        )
-      ).rows[0];
-      if (!app) throw new Fail(409, 'That application has already been decided.');
-      if (to === 'declined') return void (await audit(c, a, `declined applicant ${app.name}`));
-      const slug =
-          app.name
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, '_')
-            .replace(/^_+|_+$/g, '')
-            .slice(0, 30) || 'member',
-        token = newToken();
-      const made = await c.query(
-        `insert into users (id, email, invite_hash, invite_expires, name, handle, batch, dept) select $1 || case when exists (select 1 from users where id = $1) then '_' || $2 else '' end, $3, $4, now() + interval '7 days', $5, $6, $7, $8
-         where not exists (select 1 from users where email = $3) returning id`,
-        [slug, id, app.email, sha(token), app.name, app.cf, app.batch, app.dept],
-      );
-      if (!made.rows[0]) throw new Fail(409, 'A member already uses that email address.');
-      await audit(c, a, `accepted applicant ${app.name}; account created`);
-      const site = process.env.APP_PUBLIC_URL || 'http://localhost:3000';
-      const mailed = await sendMail(
-        app.email,
-        'Welcome to FECPC: set your password',
-        `Hi ${app.name},\n\nYour FECPC membership application was accepted.\n\nSign-in email: ${app.email}\nSet your password (works once, expires in 7 days): ${site}/login?invite=${token}\n\nYou can also use "Sign in with Google" with this same address.\n\nFECPC`,
-      );
-      return mailed
-        ? `Account created for ${app.name}. Their sign-in link was emailed to ${app.email}.`
-        : `Account created for ${app.name}. Email is not set up, so send them this link to set a password. It works once and expires in 7 days: /login?invite=${token}`;
+      const reason = to === 'declined' && i.reason ? text(i.reason, 3, 200, 'The reason') : null;
+      const done = await decideApplication(c, a, +id, to as 'accepted' | 'declined', reason);
+      if (!done)
+        throw new Fail(
+          409,
+          'That application is already decided, or a member already uses its email.',
+        );
+      return to === 'accepted' ? inviteNotice(c, [done]) : undefined;
     }
     // Expenses: two-person rules. Nobody decides their own request.
     {
@@ -997,24 +1034,30 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
       done = Boolean(i.done);
     if (i.id === undefined || i.id === null) {
       const r = await c.query(
-        `insert into meeting_actions (meeting_id, what, who) select id, $2, $3 from meetings where id = $1 returning id`,
+        `insert into meeting_actions (meeting_id, what, who) select id, $2, $3 from meetings where id = $1 returning (select title from meetings where id = $1) as meeting`,
         [posInt(i.meeting, 'meeting'), what, who],
       );
       if (!r.rowCount) throw new Fail(404, 'That meeting does not exist.');
-      return;
+      return void (await audit(
+        c,
+        a,
+        `added action item "${what}"${who ? ` for ${who}` : ''} to meeting "${r.rows[0].meeting}"`,
+      ));
     }
     const r = await c.query(
       `update meeting_actions set what = $2, who = $3, done = $4 where id = $1`,
       [posInt(i.id, 'action item'), what, who, done],
     );
     if (!r.rowCount) throw new Fail(404, 'That action item does not exist.');
+    await audit(c, a, `${done ? 'completed' : 'updated'} action item "${what}"`);
   },
   async deleteMeetingAction(c, a, _p, i) {
     need(isCommittee(a.roles), 'Only the committee manages the workspace.');
-    const r = await c.query(`delete from meeting_actions where id = $1`, [
+    const r = await c.query(`delete from meeting_actions where id = $1 returning what`, [
       posInt(i.id, 'action item'),
     ]);
     if (!r.rowCount) throw new Fail(404, 'That action item does not exist.');
+    await audit(c, a, `deleted action item "${r.rows[0].what}"`);
   },
   async saveItem(c, a, _p, i) {
     need(isCommittee(a.roles), 'Only the committee manages the workspace.');
@@ -1196,134 +1239,77 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     await audit(c, a, `issued a ${t.joined ? 'password reset' : 'new invite'} link for ${t.name}`);
     return `${t.joined ? 'Password reset' : 'Invite'} link for ${t.name}. It works once and expires in 7 days: /login?invite=${token}`;
   },
-  async updateProfile(c, a, p, i) {
+  /** An officer edits another member's profile directly. Members ask with `profileRequest` instead. */
+  async updateProfile(c, a, _p, i) {
+    const t = await editTarget(c, a, i.user);
+    const { value, errors } = checkProfile(i);
+    const err = Object.values(errors)[0];
+    if (err) throw new Fail(400, err);
+    const ch = profileDiff(value, await currentProfile(c, t.id));
+    if (!Object.keys(ch).length) return 'Nothing changed.';
+    await applyProfile(c, t.id, ch);
+    await audit(c, a, `edited ${t.name}'s profile: ${fieldList(ch)}`);
+  },
+  /** A member asks for new values (anything but judge handles, which they change themselves). */
+  async profileRequest(c, a, _p, i) {
     person(a);
-    need(can(a.roles, 'profile.editOwn'));
-    const sets: string[] = [];
-    const params: unknown[] = [a.id];
-    let idx = 2;
-
-    if ('bio' in i) {
-      const rawBio = i.bio === null || i.bio === undefined ? '' : String(i.bio);
-      const cleanBio = rawBio.trim() === '' ? null : mdText(rawBio, 1, 400, 'Bio');
-      sets.push(`bio = $${idx++}`);
-      params.push(cleanBio);
+    const raw = (i.changes && typeof i.changes === 'object' ? i.changes : {}) as In;
+    if ('cf_handle' in raw || 'vjudge_handle' in raw)
+      throw new Fail(400, 'Change your judge handles yourself, on your profile.');
+    const { value, errors } = checkProfile(raw);
+    const err = Object.values(errors)[0];
+    if (err) throw new Fail(400, err);
+    const ch = profileDiff(value, await currentProfile(c, a.id));
+    if (!Object.keys(ch).length) throw new Fail(400, 'Nothing differs from your current details.');
+    const note = i.note ? text(i.note, 0, 300, 'The note') || null : null;
+    // One open request per member: asking again replaces it.
+    await c.query(
+      `insert into profile_requests (user_id, changes, note) values ($1, $2, $3)
+       on conflict (user_id) where status = 'pending' do update set changes = excluded.changes, note = excluded.note, created_at = now()`,
+      [a.id, JSON.stringify(ch), note],
+    );
+    await audit(c, a, `requested a profile change: ${fieldList(ch)}`);
+    return 'Request sent. The Secretary or President will review it.';
+  },
+  async profileRequestCancel(c, a) {
+    const r = await c.query(
+      `update profile_requests set status = 'cancelled' where user_id = $1 and status = 'pending'`,
+      [a.id],
+    );
+    if (!r.rowCount) throw new Fail(409, 'There is no open request.');
+  },
+  /** Approving applies the requested values (checked again now); rejecting needs a reason the member sees. */
+  async profileRequestDecide(c, a, _p, i) {
+    const id = posInt(i.id, 'request'),
+      to = pick(i.to, ['approved', 'rejected'] as const, 'decision');
+    const r = (
+      await c.query(
+        `select user_id, changes from profile_requests where id = $1 and status = 'pending' for update`,
+        [id],
+      )
+    ).rows[0];
+    if (!r) throw new Fail(409, 'That request is no longer open.');
+    const t = await editTarget(c, a, r.user_id);
+    const reason = to === 'rejected' ? text(i.reason, 3, 300, 'The reason') : null;
+    let ch: ProfileChanges = {};
+    if (to === 'approved') {
+      const { value, errors } = checkProfile(r.changes);
+      const err = Object.values(errors)[0];
+      if (err) throw new Fail(400, `That request can no longer be applied: ${err}`);
+      ch = profileDiff(value, await currentProfile(c, t.id));
+      await applyProfile(c, t.id, ch);
     }
-    if ('cf_handle' in i) {
-      const h = typeof i.cf_handle === 'string' ? i.cf_handle.trim() : '';
-      if (h && !/^[\w.-]{3,24}$/.test(h))
-        throw new Fail(400, 'That is not a valid Codeforces handle.');
-      sets.push(`cf_handle = $${idx++}`);
-      params.push(h || null);
-      sets.push(`handle = $${idx++}`);
-      params.push(h);
-      p.handle = h;
-    }
-    // Rating and solve counts are never taken from the client: syncCodeforces fetches them from Codeforces.
-    if ('github_url' in i) {
-      sets.push(`github_url = $${idx++}`);
-      params.push(optionalUrl(i.github_url, 'GitHub URL'));
-    }
-    if ('linkedin_url' in i) {
-      sets.push(`linkedin_url = $${idx++}`);
-      params.push(optionalUrl(i.linkedin_url, 'LinkedIn URL'));
-    }
-    if ('skills' in i) {
-      if (!Array.isArray(i.skills)) throw new Fail(400, 'Skills must be a list.');
-      const cleanSkills = [
-        ...new Set(
-          i.skills
-            .map((x) =>
-              typeof x === 'string' ? x.replace(/[\u0000-\u001f\u007f]/g, ' ').trim() : '',
-            )
-            .filter(Boolean),
-        ),
-      ].slice(0, 15);
-      for (const sk of cleanSkills)
-        if (sk.length > 40) throw new Fail(400, 'Each skill must be at most 40 characters.');
-      sets.push(`skills = $${idx++}::text[]`);
-      params.push(cleanSkills);
-    }
-    if ('avatar_url' in i) {
-      sets.push(`avatar_url = $${idx++}`);
-      params.push(optionalAvatar(i.avatar_url));
-    }
-
-    if (sets.length > 0) {
-      let prevStats: {
-        cf_rating: number | null;
-        rating: number;
-        problems_solved: number;
-        solved: number;
-        current_streak: number;
-        streak: number;
-        cf_handle: string | null;
-        handle: string;
-      } | null = null;
-      if ('cf_rating' in i || 'problems_solved' in i) {
-        prevStats =
-          (
-            await c.query(
-              `select cf_rating, rating, problems_solved, solved, current_streak, streak, cf_handle, handle from users where id = $1`,
-              [a.id],
-            )
-          ).rows[0] ?? null;
-      }
-      await c.query(`update users set ${sets.join(', ')} where id = $1`, params);
-      if (prevStats) {
-        const after = (
-          await c.query(
-            `select cf_rating, rating, problems_solved, solved, current_streak, streak, cf_handle, handle from users where id = $1`,
-            [a.id],
-          )
-        ).rows[0];
-        if (after) {
-          const detected = detectCrossovers(
-            {
-              cf_rating:
-                prevStats.cf_rating !== null
-                  ? Number(prevStats.cf_rating)
-                  : prevStats.rating > 0
-                    ? Number(prevStats.rating)
-                    : null,
-              problems_solved: Math.max(
-                Number(prevStats.problems_solved || 0),
-                Number(prevStats.solved || 0),
-              ),
-              current_streak: Math.max(
-                Number(prevStats.current_streak || 0),
-                Number(prevStats.streak || 0),
-              ),
-            },
-            {
-              cf_rating:
-                after.cf_rating !== null
-                  ? Number(after.cf_rating)
-                  : after.rating > 0
-                    ? Number(after.rating)
-                    : null,
-              problems_solved: Math.max(
-                Number(after.problems_solved || 0),
-                Number(after.solved || 0),
-              ),
-              current_streak: Math.max(
-                Number(after.current_streak || 0),
-                Number(after.streak || 0),
-              ),
-            },
-            { cf_handle: after.cf_handle || after.handle || null, source: 'profile_update' },
-          );
-          for (const m of detected) {
-            await c.query(
-              `insert into milestones (user_id, type, from_value, to_value, threshold, meta)
-               values ($1, $2, $3, $4, $5, $6::jsonb)
-               on conflict (user_id, type, to_value) do nothing`,
-              [a.id, m.type, m.from_value, m.to_value, m.threshold, JSON.stringify(m.meta)],
-            );
-          }
-        }
-      }
-    }
+    await c.query(
+      `update profile_requests set status = $2, reason = $3, decided_by = $4, decided_at = now() where id = $1`,
+      [id, to, reason, a.id],
+    );
+    await audit(
+      c,
+      a,
+      to === 'approved'
+        ? `approved ${t.name}'s profile change: ${fieldList(ch) || 'already up to date'}`
+        : `rejected ${t.name}'s profile change: ${fieldList(r.changes)}. Reason: ${reason}`,
+    );
   },
   async kudosMilestone(c, a, _p, i) {
     person(a);
@@ -1643,6 +1629,112 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
   },
 };
 
+// Which audit section each action's entries go under. Unlisted actions fall back to the wording (schema).
+const AREA: Record<string, AuditArea> = {};
+const area = (name: AuditArea, ...types: string[]) => types.forEach((t) => (AREA[t] = name));
+area(
+  'Recruitment',
+  'recruitCreate',
+  'recruitUpdate',
+  'recruitClose',
+  'recruitDelete',
+  'recruitImport',
+  'recruitDecide',
+  'recruitMail',
+);
+area(
+  'Members & roles',
+  'role',
+  'post',
+  'postRole',
+  'appointPresident',
+  'invite',
+  'suspend',
+  'deactivateMember',
+  'makeAlumni',
+  'profile',
+  'updateProfile',
+  'profileRequest',
+  'profileRequestCancel',
+  'profileRequestDecide',
+  'handle',
+  'vjudge',
+);
+area('Finance', 'pay', 'expense', 'saveBudget', 'deleteBudget');
+area(
+  'Events',
+  'eventSave',
+  'eventDelete',
+  'roleSave',
+  'roleDelete',
+  'register',
+  'unregister',
+  'entryStatus',
+  'entryPlace',
+  'eventFeedback',
+  'certTemplate',
+  'certIssue',
+  'certDistribute',
+  'attend',
+  'eventMail',
+  'contestDay',
+);
+area(
+  'Community',
+  'announce',
+  'deleteAnnouncement',
+  'createPoll',
+  'deletePoll',
+  'moderateFeedPost',
+  'reportFeedPost',
+  'deleteFeedPost',
+  'closeIdea',
+  'updateIdea',
+  'redeem',
+);
+area(
+  'Workspace',
+  'saveTask',
+  'deleteTask',
+  'saveMeeting',
+  'deleteMeeting',
+  'saveMeetingAction',
+  'deleteMeetingAction',
+  'saveItem',
+  'deleteItem',
+  'holdItem',
+);
+area(
+  'Training',
+  'sheetSave',
+  'sheetDelete',
+  'challenge',
+  'challengeDelete',
+  'teamCoach',
+  'teamRename',
+  'teamInvite',
+  'teamJoin',
+  'teamLeave',
+);
+area(
+  'Alumni',
+  'createAlumniJob',
+  'deleteAlumniJob',
+  'createBlogPost',
+  'updateBlogPost',
+  'deleteBlogPost',
+  'createInterviewTip',
+  'deleteInterviewTip',
+  'createInterviewProblem',
+  'deleteInterviewProblem',
+  'setAvailableForQuestions',
+);
+area('Email', 'mailTest', 'mailRetry');
+area('Security & settings', 'flag', 'kv');
+/** `decide` covers three officer queues; its section follows the kind. */
+const areaOf = (type: string, i: In): AuditArea | '' =>
+  type === 'decide' ? (i.kind === 'application' ? 'Recruitment' : 'Finance') : (AREA[type] ?? '');
+
 /** Runs one action for `userId`. Throws Fail for anything the caller got wrong; returns an optional one-time notice. */
 export async function act(userId: string, input: unknown): Promise<string | void> {
   const i = (input && typeof input === 'object' ? input : {}) as In,
@@ -1656,6 +1748,8 @@ export async function act(userId: string, input: unknown): Promise<string | void
       )
     ).rows[0];
     if (!u) throw new Fail(401, 'Sign in again.');
+    // Every audit line this action writes is filed under its section (read by the audit insert trigger).
+    await c.query(`select set_config('fecpc.area', $1, true)`, [areaOf(String(i.type), i)]);
     const p = progress(u.progress),
       before = JSON.stringify(p);
     const info = await run(
@@ -1669,68 +1763,6 @@ export async function act(userId: string, input: unknown): Promise<string | void
       await c.query(`update users set progress = $2 where id = $1`, [userId, after]);
     return info;
   });
-}
-
-// A whole lab on one campus address may apply together, so this is a ceiling for bots, not for people.
-const APPLY_PER_IP_PER_HOUR = 10;
-
-/** Cloudflare Turnstile: the token the widget put in the form must verify with our secret. */
-async function humanCheck(token: unknown, ip: string): Promise<boolean> {
-  if (typeof token !== 'string' || !token || token.length > 2048) return false;
-  const r = (await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-    method: 'POST',
-    signal: AbortSignal.timeout(10_000),
-    body: new URLSearchParams({
-      secret: process.env.TURNSTILE_SECRET_KEY!,
-      response: token,
-      ...(ip && { remoteip: ip }),
-    }),
-  })
-    .then((res) => res.json())
-    .catch(() => ({}))) as { success?: boolean };
-  return r.success === true;
-}
-
-/** The public join form. Anyone can call it, so it is strict about what it accepts. */
-export async function apply(db: Db, i: In, ip = '') {
-  if (i.website) return; // honeypot: hidden from people, so only bots fill it; they get a fake success
-  const email = text(i.email, 5, 200, 'Email').toLowerCase(),
-    batch = Number(i.batch);
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
-    throw new Fail(400, 'Enter a valid email address.');
-  if (!Number.isInteger(batch) || batch < 0 || batch > 99)
-    throw new Fail(400, 'Batch is a two-digit number, like 24.');
-  const cf = typeof i.cf === 'string' && /^[\w.-]{3,24}$/.test(i.cf.trim()) ? i.cf.trim() : '';
-  const row = [
-    text(i.name, 2, 80, 'Your name'),
-    text(i.sid, 3, 40, 'Student ID'),
-    text(i.dept, 2, 20, 'Department'),
-    batch,
-    email,
-    cf,
-    text(i.track, 2, 10, 'Track'),
-    text(i.why, 10, 1000, 'Your answer'),
-  ];
-  const ipHash = sha(ip);
-  const recent = (
-    await db.query(
-      `select count(*)::int as n from applications where ip_hash = $1 and created_at > now() - interval '1 hour'`,
-      [ipHash],
-    )
-  ).rows[0].n;
-  if (recent >= APPLY_PER_IP_PER_HOUR)
-    throw new Fail(429, 'Too many applications from this network. Try again in an hour.');
-  if (process.env.TURNSTILE_SECRET_KEY && !(await humanCheck(i['cf-turnstile-response'], ip)))
-    throw new Fail(400, 'The human check failed. Complete it and submit again.');
-  const taken = (await db.query(`select 1 from users where email = $1`, [email])).rowCount;
-  const r = taken
-    ? { rowCount: 0 }
-    : await db.query(
-        `insert into applications (name, sid, dept, batch, email, cf, track, why, ip_hash) values ($1, $2, $3, $4, $5, $6, $7, $8, $9) on conflict do nothing`,
-        [...row, ipHash],
-      );
-  if (!r.rowCount)
-    throw new Fail(409, 'An application or an account already exists for that email address.');
 }
 
 /** Member export for officers. The download itself is the audited event. */
@@ -2175,7 +2207,8 @@ export async function listMembers(
 
 /**
  * Full resume payload for a single member profile modal.
- * Returns private fields (e.g. `email`) ONLY when `viewerId === userId`.
+ * Returns private fields (email, phone, student ID) only to the member and to officers with full
+ * `member.editDetails`.
  */
 export async function getMemberProfile(
   db: Db,
@@ -2204,7 +2237,11 @@ export async function getMemberProfile(
        u.experience,
        u.contest_history,
        u.available_for_questions,
-       u.location
+       u.location,
+       u.vjudge_handle,
+       u.created_at as joined,
+       u.student_id,
+       u.phone
      from users u
      where u.id = $1 and not u.system and not u.suspended`,
       [userId],
@@ -2294,18 +2331,28 @@ export async function getMemberProfile(
     bio: row.bio ?? null,
     github_url: row.github_url ?? null,
     linkedin_url: row.linkedin_url ?? null,
+    vjudge_handle: row.vjudge_handle ?? null,
+    location: row.location ?? null,
+    joined: row.joined,
     experience,
     contest_history,
     recent_activity,
   };
 
-  if (viewerId === userId) {
+  // Contact details: for the member, and for the officers who keep member records.
+  const officer =
+    viewerId !== userId &&
+    (
+      await db.query(`select ${ROLES} from users where id = $1 and not suspended`, [viewerId])
+    ).rows.some((v: { roles: Role[] }) => canFully(v.roles, 'member.editDetails'));
+  if (viewerId === userId || officer) {
     profile.email = row.email;
+    profile.student_id = row.student_id ?? null;
+    profile.phone = row.phone ?? null;
   }
 
   if (profile.is_alumni) {
     profile.available_for_questions = Boolean(row.available_for_questions ?? true);
-    profile.location = row.location ?? null;
     profile.interview_prep = prepRes.rows as { id: number; title: string; created_at: string }[];
     profile.interview_tips = tipsRes.rows as InterviewTip[];
     profile.blogs = blogsRes.rows.map((b: any) => ({
@@ -4117,4 +4164,49 @@ export async function deleteBlogPost(
     await audit(conn, actor, `deleted blog post #${id}: ${post.title}`);
     return { success: true, deleted: true };
   });
+}
+
+/** The photo in a pending profile change request, for the officers who review it. */
+export async function profileRequestPhoto(db: Db, viewerId: string, id: string) {
+  const v = (
+    await db.query(`select ${ROLES} from users where id = $1 and not suspended`, [viewerId])
+  ).rows[0];
+  need(v && canFully(v.roles, 'member.editDetails'), 'Your role cannot review profile changes.');
+  const p = /^\d{1,12}$/.test(id)
+    ? (await db.query(`select changes->>'avatar_url' p from profile_requests where id = $1`, [id]))
+        .rows[0]?.p
+    : null;
+  const m = typeof p === 'string' ? /^data:(image\/(?:png|jpeg|webp));base64,(.+)$/.exec(p) : null;
+  if (!m) throw new Fail(404, 'No photo.');
+  return { type: m[1]!, body: Buffer.from(m[2]!, 'base64') };
+}
+
+/**
+ * The audit log for officers with `audit.view`: newest first, 100 at a time, optionally one section and a
+ * search over who and what. `counts` are per section for the whole log.
+ */
+export async function auditQuery(db: Db, userId: string, b: In): Promise<AuditPage> {
+  const u = (await db.query(`select ${ROLES} from users where id = $1 and not suspended`, [userId]))
+    .rows[0];
+  need(u && can(u.roles, 'audit.view'), 'Your role cannot read the audit log.');
+  const area = (AUDIT_AREAS as readonly string[]).includes(String(b.area)) ? String(b.area) : null;
+  const q = typeof b.q === 'string' ? b.q.trim().slice(0, 80) : '';
+  const before = /^\d{1,18}$/.test(String(b.before ?? '')) ? String(b.before) : null;
+  // Ordered by the number: the text id would sort '99' above '147'.
+  const rows = (
+    await db.query(
+      `select x.id::text as id, x.at, x.who, x.what, coalesce(x.area, 'Other') as area from audit x
+       where ($1::text is null or coalesce(x.area, 'Other') = $1)
+         and ($2 = '' or x.who ilike $3 or x.what ilike $3)
+         and ($4::bigint is null or x.id < $4)
+       order by x.id desc limit 101`,
+      [area, q, `%${q.replace(/[\\%_]/g, '\\$&')}%`, before],
+    )
+  ).rows as AuditEntry[];
+  const counts = Object.fromEntries(
+    (
+      await db.query(`select coalesce(area, 'Other') a, count(*)::int n from audit group by 1`)
+    ).rows.map((r: { a: string; n: number }) => [r.a, r.n]),
+  );
+  return { rows: rows.slice(0, 100), counts, more: rows.length > 100 };
 }

@@ -7,7 +7,7 @@ import { RANKS, rankFor, canFully } from '@fecpc/contracts';
 import type { MemberContestRow, MemberProfile, Rank } from '@fecpc/contracts';
 import { AdminMenu } from './AdminMenu';
 import { AlumniSection } from './AlumniSection';
-import { ProfileEditMode } from './ProfileEditMode';
+import { ProfileForm } from './ProfileForm';
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -21,12 +21,11 @@ export function ProfileModal({
   onClose: () => void;
   onMutated: () => Promise<void> | void;
 }) {
-  const { s, me, act, counts } = useStore();
+  const { s, me, act, counts, members } = useStore();
   const [profile, setProfile] = useState<MemberProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState(false);
-  const [editBusy, setEditBusy] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const modalRef = useRef<HTMLDivElement>(null);
@@ -74,6 +73,7 @@ export function ProfileModal({
 
   // Initial focus to close button (×) and focus trap + Esc close
   useEffect(() => {
+    if (editing) return; // the form on top handles its own keys
     closeBtnRef.current?.focus();
 
     const onKeyDown = (e: KeyboardEvent) => {
@@ -108,9 +108,15 @@ export function ProfileModal({
 
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
+  }, [onClose, editing]);
 
   const isOwner = me.id === userId;
+  // Officers edit others; the President's and Super Admin's accounts are the Super Admin's (the API checks).
+  const targetRole = members.find((m) => m.id === userId)?.roleKey;
+  const canEdit =
+    !isOwner &&
+    !!canFully(s.roles, 'member.editDetails') &&
+    (!['president', 'super_admin'].includes(targetRole ?? '') || s.role === 'super_admin');
   const kudosId = `member:${userId}`;
   const hasKudos = s.kudos.includes(kudosId);
   const kudosTotal = counts.kudos?.[kudosId] ?? 0;
@@ -189,20 +195,6 @@ export function ProfileModal({
           ) : error || !profile ? (
             <div className="dossier__state">
               <p className="body bad">{error || 'Member not found.'}</p>
-            </div>
-          ) : editing && isOwner ? (
-            <div className="dossier__edit">
-              <ProfileEditMode
-                profile={profile}
-                formId="profile-edit-form"
-                onCancel={() => setEditing(false)}
-                onBusyChange={setEditBusy}
-                onSaved={async () => {
-                  setEditing(false);
-                  await loadProfile();
-                  await onMutated();
-                }}
-              />
             </div>
           ) : (
             <>
@@ -395,23 +387,12 @@ export function ProfileModal({
 
         {profile && (
           <footer className="profile-modal__actionbar">
-            {editing && isOwner ? (
-              <button
-                type="button"
-                className="btn sm line"
-                style={{ marginLeft: 'auto' }}
-                data-close
-                disabled={editBusy}
-                onClick={() => setEditing(false)}
-              >
-                Close editor
-              </button>
-            ) : (
+            {
               <>
                 <div className="row" style={{ '--g': '8px' } as CSSProperties}>
                   {isOwner ? (
                     <button type="button" className="btn sm" onClick={() => setEditing(true)}>
-                      Edit profile
+                      Request a change
                     </button>
                   ) : (
                     <KudosButton
@@ -419,6 +400,11 @@ export function ProfileModal({
                       total={kudosTotal}
                       onToggle={() => void act('toggle', { list: 'kudos', id: kudosId })}
                     />
+                  )}
+                  {canEdit && (
+                    <button type="button" className="btn sm line" onClick={() => setEditing(true)}>
+                      Edit profile
+                    </button>
                   )}
                   <AdminMenu
                     userId={profile.id}
@@ -434,10 +420,22 @@ export function ProfileModal({
                   {copied ? 'Link copied' : 'Share'}
                 </button>
               </>
-            )}
+            }
           </footer>
         )}
       </div>
+      {editing && profile && (
+        <ProfileForm
+          profile={profile}
+          mode={isOwner ? 'request' : 'edit'}
+          onClose={async (saved) => {
+            setEditing(false);
+            if (!saved) return;
+            await loadProfile();
+            await onMutated();
+          }}
+        />
+      )}
     </div>
   );
 }

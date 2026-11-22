@@ -220,7 +220,7 @@ export function StoreProvider({
       {children}
       {notice && (
         <Notice
-          text={notice.replace(/\/login\?invite=\S+/, (path) => location.origin + path)}
+          text={notice.replace(/\/login\?invite=\S+/g, (path) => location.origin + path)}
           close={() => setNotice('')}
         />
       )}
@@ -237,10 +237,11 @@ export function StoreProvider({
 // A one-time message from the server, usually an invite or reset link the officer has to pass on.
 function Notice({ text, close }: { text: string; close: () => void }) {
   const [copied, setCopied] = useState(false),
-    link = /https?:\/\/\S+/.exec(text)?.[0];
+    links = text.match(/https?:\/\/\S+/g) ?? [],
+    link = links.length > 1 ? text : links[0]; // several links (a bulk accept): copy the whole list
   return (
     <div className="notice t-b" role="alertdialog" aria-label="Notice">
-      <p className="body" style={{ overflowWrap: 'anywhere' }}>
+      <p className="body" style={{ overflowWrap: 'anywhere', whiteSpace: 'pre-line' }}>
         {text}
       </p>
       <div className="row" style={{ '--g': '8px' } as React.CSSProperties}>
@@ -254,7 +255,7 @@ function Notice({ text, close }: { text: string; close: () => void }) {
               )
             }
           >
-            {copied ? 'Copied ✓' : 'Copy link'}
+            {copied ? 'Copied ✓' : links.length > 1 ? 'Copy all' : 'Copy link'}
           </button>
         )}
         <button className={`btn sm ${link ? 'line' : ''}`} onClick={close}>

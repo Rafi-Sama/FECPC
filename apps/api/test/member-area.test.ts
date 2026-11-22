@@ -11,7 +11,6 @@ import {
 } from '@fecpc/contracts';
 import {
   act,
-  apply,
   exportMembers,
   getFeedPostDetail,
   getIdeaDetail,
@@ -25,7 +24,10 @@ import {
   listRecentMilestones,
 } from '../src/modules/member-area/actions.ts';
 import { getTeam, lineDiff } from '../src/modules/member-area/teams.ts';
+import { auditQuery } from '../src/modules/member-area/actions.ts';
 import { eventsQuery, verifyCertificate } from '../src/modules/member-area/events.ts';
+import { apply, recruitPublic } from '../src/modules/member-area/recruit.ts';
+import { drainMail, enqueue } from '../src/modules/member-area/mail.ts';
 import { HttpException } from '@nestjs/common';
 import { AuthService } from '../src/modules/auth/auth.service.ts';
 import { AuditService } from '../src/modules/audit/audit.service.ts';
@@ -52,6 +54,7 @@ const PW = 'test-password-123';
 const db = () => pool();
 
 // The API's real sign-in service, on the same pool as the member-area actions.
+process.env.SMTP_URL = ''; // never send real mail from tests, even when .env.local configures it
 process.env.GOOGLE_CLIENT_ID = 'test-client';
 process.env.GOOGLE_CLIENT_SECRET = 'test-secret';
 process.env.GITHUB_CLIENT_ID = 'test-client';
@@ -81,6 +84,9 @@ const googleSays = (profile: object) => {
     )) as typeof fetch;
 };
 const st = async (id: string) => (await loadState(db(), id))!;
+/** The newest audit entries, as the President sees them. */
+const logOf = async (id: string, b: Record<string, unknown> = {}) =>
+  (await auditQuery(db(), id, b)).rows;
 /** Asserts the action is refused with this HTTP status. */
 const refused = (status: number, p: Promise<unknown>) =>
   assert.rejects(
@@ -189,7 +195,8 @@ test('visibility: each role receives only the datasets it has a capability for',
     president = await st('tanvir'),
     cpHead = await st('nadia');
   assert.deepEqual(Object.keys(member.office), []);
-  assert.deepEqual([member.s.log, member.s.queue, member.s.exp, member.s.apps], [[], {}, {}, {}]);
+  assert.deepEqual([member.s.queue, member.s.exp, member.s.apps], [{}, {}, {}]);
+  await refused(403, auditQuery(db(), 'tasnim', {}));
   assert.deepEqual(Object.keys(cpHead.office).sort(), ['ops']);
   assert.deepEqual(Object.keys(treasurer.office).sort(), [
     'expenses',
@@ -201,18 +208,17 @@ test('visibility: each role receives only the datasets it has a capability for',
   assert.equal(treasurer.office.queue!.length, 4);
   assert.match(treasurer.office.queue![0]!.sender, /^\d{3}••••\d{4}$/, 'sender numbers are masked');
   assert.deepEqual(Object.keys(secretary.office).sort(), [
-    'applications',
     'feedback',
+    'mail',
     'ops',
+    'profileRequests',
+    'recruit',
     'suggestions',
   ]);
-  assert.deepEqual(secretary.s.log, [], 'the Secretary cannot read the audit log');
-  assert.ok(
-    Array.isArray(president.s.log) && president.office.queue,
-    'the President sees the log and the payment queue',
-  );
+  await refused(403, auditQuery(db(), 'sadia', {})); // the Secretary cannot read the audit log
+  assert.ok(president.office.queue, 'the President sees the payment queue');
   assert.equal(
-    president.s.log.some((l) => /PAY-897|EXP-069/.test(l.what)),
+    (await logOf('tanvir')).some((l) => /PAY-897|EXP-069/.test(l.what)),
     false,
     'the audit log starts empty: nothing fabricated is seeded into it',
   );
@@ -738,24 +744,73 @@ test('waivers: requests are gone; a waiver granted earlier still settles its inv
   );
 });
 
-test('applications: the public form is validated; accepting creates an account with a one-time invite', async () => {
+const PHOTO = 'data:image/webp;base64,UklGRg==';
+const inDays = (n: number) => new Date(Date.now() + n * 864e5).toISOString();
+/** Opens a recruitment link as the Secretary and returns its token. */
+const openLink = async (batch: number, form: unknown = undefined) => {
+  await act('sadia', {
+    type: 'recruitCreate',
+    title: `Batch ${batch} intake`,
+    batch,
+    closes: inDays(7),
+    form,
+  });
+  return (await st('sadia')).office.recruit!.links.find((l) => l.batch === batch)!;
+};
+
+test('recruitment: links are officer-only; the form is validated; batch comes from the link; accepting creates an account', async () => {
+  await refused(
+    403,
+    act('tasnim', {
+      type: 'recruitCreate',
+      title: 'Batch 26 intake',
+      batch: 26,
+      closes: inDays(7),
+    }),
+  );
+  await refused(
+    400,
+    act('sadia', { type: 'recruitCreate', title: 'Batch 26', batch: 26, closes: inDays(120) }),
+  );
+  await refused(
+    400,
+    act('sadia', {
+      type: 'recruitCreate',
+      title: 'Batch 26',
+      batch: 26,
+      closes: '2026-01-01T00:00',
+    }),
+  );
+  const link = await openLink(26, { cf: true, why: true, questions: [{ label: 'Own a laptop?' }] });
+  const pub = (await recruitPublic(db(), link.token))!;
+  assert.equal(pub.open, true);
+  const qid = pub.form.questions[0]!.id;
   const form = {
+    token: link.token,
     name: 'Rina Akter',
     sid: '2026-331-077',
     dept: 'CSE',
-    batch: '26',
+    batch: '99', // ignored: the link decides
     email: 'Rina@Example.com',
+    phone: '01712-345678',
+    photo: PHOTO,
     cf: 'rina_a',
-    track: 'cp',
     why: 'I want to learn graphs properly.',
+    answers: { [qid]: 'yes', nope: 'dropped' },
   };
+  await refused(404, apply(db(), { ...form, token: 'nope' }));
   await refused(400, apply(db(), { ...form, email: 'not-an-email' }));
-  await refused(400, apply(db(), { ...form, batch: 'twenty' }));
-  await refused(400, apply(db(), { ...form, why: 'x' }));
+  await refused(400, apply(db(), { ...form, photo: '' }));
+  await refused(400, apply(db(), { ...form, phone: '12' }));
+  await refused(400, apply(db(), { ...form, photo: 'data:text/html;base64,PGI+' }));
   await refused(409, apply(db(), { ...form, email: 'tasnim@fecpc.example' })); // already a member
   await apply(db(), form);
   await refused(409, apply(db(), form));
-  const row = (await st('sadia')).office.applications!.find((a) => a.name === 'Rina Akter')!;
+  const row = (await st('sadia')).office.recruit!.applicants.find((a) => a.name === 'Rina Akter')!;
+  assert.deepEqual(
+    [row.batch, row.phone, row.email, row.photo, row.answers],
+    [26, '01712345678', 'rina@example.com', true, [{ q: 'Own a laptop?', a: 'yes' }]],
+  );
   await refused(
     403,
     act('tasnim', { type: 'decide', kind: 'application', id: row.id, to: 'accepted' }),
@@ -787,21 +842,139 @@ test('applications: the public form is validated; accepting creates an account w
     [rina.s.role, rina.s.solved, earned(rina.s), Object.keys(rina.office)],
     ['member', [], 0, []],
   );
-  assert.ok(
-    (await st('tasnim')).members.some((m) => m.id === 'rina_akter'),
-    "the new member appears in everyone's roster",
+  assert.equal(
+    (await db().query(`select avatar_url, batch from users where id = 'rina_akter'`)).rows[0].batch,
+    26,
+  );
+  // the form's student ID and phone stay with the account, for the member's own eyes
+  const own = await getMemberProfile(db(), 'rina_akter', { userId: 'rina_akter' });
+  assert.deepEqual(
+    [own.student_id, own.phone, own.avatar_url],
+    ['2026-331-077', '01712345678', PHOTO],
+  );
+  const other = await getMemberProfile(db(), 'tasnim', { userId: 'rina_akter' });
+  assert.deepEqual([other.student_id, other.phone, other.email], [undefined, undefined, undefined]);
+  const log = (
+    await db().query(`select what from audit where what like 'accepted applicant Rina%'`)
+  ).rows[0].what;
+  assert.match(
+    log,
+    /accepted applicant Rina Akter \(ID 2026-331-077, CSE batch 26, from "Batch 26 intake"\)/,
+  );
+  // The batch is locked once someone applied; closing stops the form.
+  await refused(
+    409,
+    act('sadia', {
+      type: 'recruitUpdate',
+      id: link.id,
+      title: 'x intake',
+      batch: 27,
+      closes: inDays(3),
+    }),
+  );
+  await act('sadia', { type: 'recruitClose', id: link.id });
+  await refused(410, apply(db(), { ...form, email: 'late@example.com' }));
+  assert.equal((await recruitPublic(db(), link.token))!.open, false);
+});
+
+test('recruitment: CSV rows become pending applicants, deduplicated; a rejection reason is logged', async () => {
+  const link = await openLink(25);
+  const row = (n: number, email = `csv${n}@example.com`) => ({
+    name: `Csv Person ${'abcdefghij'[n]}`,
+    sid: `S-${1000 + n}`,
+    dept: 'EEE',
+    email,
+    phone: '01811111111',
+  });
+  await refused(403, act('tasnim', { type: 'recruitImport', id: link.id, rows: [row(1)] }));
+  await refused(
+    400,
+    act('sadia', { type: 'recruitImport', id: link.id, rows: [row(1), { ...row(2), phone: 'x' }] }),
+  );
+  await refused(400, act('sadia', { type: 'recruitImport', id: link.id, rows: [] }));
+  const info = (await act('sadia', {
+    type: 'recruitImport',
+    id: link.id,
+    rows: [row(1), row(2), row(3, 'CSV1@example.com'), row(4, 'tasnim@fecpc.example')],
+  })) as string;
+  assert.match(info, /^2 applicants added for review\. 2 skipped/);
+  const mine = (await st('sadia')).office.recruit!.applicants.filter((a) => a.link === link.id);
+  assert.deepEqual(
+    mine.map((a) => [a.status, a.batch, a.src, a.photo]),
+    [
+      ['pending', 25, 'CSV import', false],
+      ['pending', 25, 'CSV import', false],
+    ],
+  );
+  await act('sadia', {
+    type: 'decide',
+    kind: 'application',
+    id: mine[0]!.id,
+    to: 'declined',
+    reason: 'not enrolled',
+  });
+  const log = (await db().query(`select what from audit order by id desc limit 1`)).rows[0].what;
+  assert.match(
+    log,
+    /^rejected applicant Csv Person .+ batch 25, from "Batch 25 intake"\)\. Reason: not enrolled$/,
   );
 });
 
-test('applications: bots fill the honeypot for nothing; one address is capped at 10 an hour', async () => {
+test("recruitment: bulk decisions skip decided applicants; deleting a link keeps accepted members' records", async () => {
+  const link = await openLink(23);
+  const row = (n: number) => ({
+    name: `Bulk Person ${'abcdefgh'[n]}`,
+    sid: `B-${2000 + n}`,
+    dept: 'CSE',
+    email: `bulk${n}@example.com`,
+    phone: '01811111111',
+  });
+  await act('sadia', { type: 'recruitImport', id: link.id, rows: [1, 2, 3, 4].map(row) });
+  const ids = (await st('sadia')).office
+    .recruit!.applicants.filter((a) => a.link === link.id)
+    .map((a) => a.id);
+  await refused(403, act('tasnim', { type: 'recruitDecide', ids, to: 'accepted' }));
+  await refused(400, act('sadia', { type: 'recruitDecide', ids: [], to: 'accepted' }));
+  const note = (await act('sadia', {
+    type: 'recruitDecide',
+    ids: ids.slice(0, 2),
+    to: 'accepted',
+  })) as string;
+  assert.equal(note.match(/invite=/g)?.length, 2, 'without email, every link is shown');
+  const again = (await act('sadia', {
+    type: 'recruitDecide',
+    ids: ids.slice(1),
+    to: 'declined',
+    reason: 'class clash',
+  })) as string;
+  assert.match(again, /^Rejected 2 applicants\. 1 skipped/);
+  await refused(409, act('sadia', { type: 'recruitDecide', ids: ids.slice(0, 1), to: 'declined' }));
+  await refused(403, act('tasnim', { type: 'recruitDelete', id: link.id }));
+  await act('sadia', { type: 'recruitDelete', id: link.id });
+  const left = (await st('sadia')).office.recruit!;
+  assert.equal(
+    left.links.some((l) => l.id === link.id),
+    false,
+  );
+  assert.deepEqual(
+    left.applicants.filter((a) => a.name.startsWith('Bulk')).map((a) => [a.status, a.link]),
+    [
+      ['accepted', null],
+      ['accepted', null],
+    ],
+  );
+});
+
+test('recruitment: bots fill the honeypot for nothing; one address is capped at 10 an hour', async () => {
+  const link = await openLink(24);
   const form = (n: number) => ({
-    name: `Bot ${n}`,
+    token: link.token,
+    name: `Bot ${'abcdefghijklm'[n]}`,
     sid: `2026-000-${n}`,
     dept: 'CSE',
-    batch: '26',
     email: `bot${n}@example.com`,
-    track: 'cp',
-    why: 'Just here to flood the form.',
+    phone: '01700000000',
+    photo: PHOTO,
   });
   await apply(db(), { ...form(0), website: 'spam.example' }, '203.0.113.9');
   const count = async () =>
@@ -833,11 +1006,11 @@ test('roles: only the Super Admin assigns roles; never to oneself; the operator 
   const z = await st('zahid');
   assert.equal(z.s.role, 'secretary');
   assert.ok(
-    z.office.applications,
+    z.office.recruit,
     'new capabilities apply on the next request, without signing in again',
   );
   assert.match(
-    (await st('tanvir')).s.log[0]!.what,
+    (await logOf('tanvir'))[0]!.what,
     /assigned role Secretary to Zahid Hasan \(reason: term roster\)/,
   );
   assert.equal(z.me.role, 'Secretary', 'the public title follows the role');
@@ -959,7 +1132,7 @@ test('export: capability-gated, audited, and safe to open in a spreadsheet', asy
   assert.match(csv, /^name,handle,batch,dept,rating,solved,status\n/);
   assert.equal(csv.includes('Site Admin'), false, 'the operator account is not a member');
   assert.ok(csv.includes(`"'=HYPERLINK(""http://x"",""click"")"`), 'formula cells are neutralised');
-  assert.match((await st('tanvir')).s.log[0]!.what, /exported member data/);
+  assert.match((await logOf('tanvir'))[0]!.what, /exported member data/);
 });
 test('the action endpoint refuses anything it does not know', async () => {
   for (const bad of [
@@ -1085,7 +1258,7 @@ test('reset links: issued only by someone who outranks the account, single-use, 
   );
   await refused(410, acceptInvite(again, 'expired-link-password'));
   assert.ok(
-    (await st('tanvir')).s.log.some((l) => /invite\.accepted/.test(l.what)),
+    (await logOf('tanvir')).some((l) => /accepted their invite and set a password/.test(l.what)),
     'auth events are in the audit log',
   );
 });
@@ -1330,11 +1503,21 @@ test('members redesign: getMemberProfile privacy, updateProfile, alumni jobs, an
   const ownProfile = await getMemberProfile(db(), 'tasnim', { userId: 'tasnim' });
   assert.equal(ownProfile.email, 'tasnim@fecpc.example');
 
-  // Owner updates own profile
-  await refused(400, act('tasnim', { type: 'updateProfile', github_url: 'javascript:alert(1)' }));
-  await refused(400, act('tasnim', { type: 'updateProfile', bio: 'x'.repeat(401) }));
-  await act('tasnim', {
+  // Members cannot edit their own profile; the Secretary edits it for them
+  await refused(403, act('tasnim', { type: 'updateProfile', user: 'tasnim', bio: 'mine' }));
+  await refused(403, act('sadia', { type: 'updateProfile', user: 'sadia', bio: 'mine' })); // not your own
+  await refused(
+    403,
+    act('sadia', { type: 'updateProfile', user: 'tanvir', bio: 'x' }), // the President: Super Admin only
+  );
+  await refused(
+    400,
+    act('sadia', { type: 'updateProfile', user: 'tasnim', github_url: 'javascript:alert(1)' }),
+  );
+  await refused(400, act('sadia', { type: 'updateProfile', user: 'tasnim', bio: 'x'.repeat(401) }));
+  await act('sadia', {
     type: 'updateProfile',
+    user: 'tasnim',
     bio: 'Batch 24 CSE, grinding DP and graphs.',
     cf_handle: 'tasnim_cf',
     github_url: 'https://github.com/tasnim-a',
@@ -1347,6 +1530,12 @@ test('members redesign: getMemberProfile privacy, updateProfile, alumni jobs, an
   assert.equal(updated.cf_handle, 'tasnim_cf');
   assert.equal(updated.github_url, 'https://github.com/tasnim-a');
   assert.deepEqual(updated.skills, ['CP', 'DP', 'Web']);
+  assert.equal((await st('tasnim')).s.handle, 'tasnim_cf', "the member's own judge link follows");
+  assert.equal(
+    (await getMemberProfile(db(), 'sadia', { userId: 'tasnim' })).email,
+    'tasnim@fecpc.example',
+    'officers who keep records see contact details',
+  );
 
   // Kudos with member:<id>
   await act('tasnim', { type: 'toggle', list: 'kudos', id: 'member:nadia' });
@@ -1661,11 +1850,18 @@ test('codeforces sync: uses the handle stored for the member, never one from the
   }
 });
 
-test('profile: a member cannot set their own Codeforces rating or solve count', async () => {
+test('profile: Codeforces rating and solve count never come from a client', async () => {
   const before = (
     await db().query(`select cf_rating, problems_solved, rating from users where id = 'farhan'`)
   ).rows[0];
-  await act('farhan', { type: 'updateProfile', bio: 'hi', cf_rating: 3999, problems_solved: 9999 });
+  await act('sadia', {
+    type: 'updateProfile',
+    user: 'farhan',
+    bio: 'hi',
+    cf_rating: 3999,
+    problems_solved: 9999,
+  });
+  await act('farhan', { type: 'profileRequest', changes: { location: 'X', cf_rating: 3999 } });
   const after = (
     await db().query(
       `select cf_rating, problems_solved, rating, bio from users where id = 'farhan'`,
@@ -1722,9 +1918,9 @@ test('appointPresident: Super Admin only, email re-checked, the old President st
 test('a post grants the powers of its ticked roles, and loses them when unticked', async () => {
   await act('tanvir', { type: 'post', user: 'tasnim', post: 'vice_president' });
   const vp = await st('tasnim');
-  assert.ok(vp.office.applications && vp.office.feedback, 'Secretary powers from the post');
+  assert.ok(vp.office.recruit && vp.office.feedback, 'Secretary powers from the post');
   await act('admin', { type: 'postRole', post: 'vice_president', role: 'secretary', on: false });
-  assert.equal((await st('tasnim')).office.applications, undefined);
+  assert.equal((await st('tasnim')).office.recruit, undefined);
   await act('admin', { type: 'postRole', post: 'vice_president', role: 'secretary', on: true });
   await act('tanvir', { type: 'post', user: 'tasnim', post: null });
 });
@@ -2171,4 +2367,272 @@ test('challenges: one Codeforces link, ranked by who solved it first, removable 
   } finally {
     globalThis.fetch = realFetch;
   }
+});
+
+/** Runs `fn` as if SMTP were configured; tests never reach a real server (drainMail gets a fake sender). */
+const withMail = async (fn: () => Promise<void>, limit = '') => {
+  const was = [process.env.SMTP_URL, process.env.MAIL_DAILY_LIMIT];
+  process.env.SMTP_URL = 'smtp://test.invalid';
+  process.env.MAIL_DAILY_LIMIT = limit;
+  try {
+    await db().query(`delete from mail_queue`);
+    await fn();
+  } finally {
+    process.env.SMTP_URL = was[0];
+    process.env.MAIL_DAILY_LIMIT = was[1];
+  }
+};
+const queue = async () =>
+  (
+    await db().query(
+      `select to_email, subject, html, status, attempts, error, next_at from mail_queue order by id`,
+    )
+  ).rows;
+
+test('mail queue: sends within the rolling daily limit, clears bodies, pauses on quota, drops late mail', async () => {
+  await withMail(async () => {
+    const m = (n: number, expires: Date | null = null) =>
+      enqueue(db(), {
+        to: `q${n}@example.com`,
+        subject: `S${n}`,
+        html: '<p>x</p>',
+        text: 'x',
+        kind: 'test',
+        expires,
+      });
+    for (let n = 1; n <= 4; n++) await m(n);
+    await m(5, new Date(Date.now() - 1000)); // already too late
+    const sent: string[] = [];
+    await drainMail(async (x) => void sent.push(x.to));
+    assert.deepEqual(sent, ['q1@example.com', 'q2@example.com', 'q3@example.com'], 'limit 3 a day');
+    let q = await queue();
+    assert.deepEqual(
+      q.map((r) => r.status),
+      ['sent', 'sent', 'sent', 'queued', 'failed'],
+    );
+    assert.equal(q[0].html, null, 'a sent body is cleared: it may hold a one-time link');
+    assert.match(q[4].error, /too late/);
+    // the next day's room is used, then Gmail answers with its quota error: the whole queue waits an hour
+    await db().query(
+      `update mail_queue set sent_at = now() - interval '25 hours' where status = 'sent'`,
+    );
+    await m(6);
+    await drainMail(async () => {
+      throw Object.assign(new Error('550 5.4.5 Daily user sending quota exceeded'), {
+        responseCode: 550,
+      });
+    });
+    q = await queue();
+    assert.deepEqual(
+      q.slice(3).map((r) => [r.status, r.attempts]),
+      [
+        ['queued', 0],
+        ['failed', 0],
+        ['queued', 0],
+      ],
+    );
+    assert.ok(
+      q
+        .slice(3)
+        .filter((r) => r.status === 'queued')
+        .every((r) => +r.next_at > Date.now() + 50 * 6e4),
+    );
+    // a refused address fails on its own and can be retried by an officer
+    await db().query(`update mail_queue set next_at = now() where status = 'queued'`);
+    await drainMail(async (x) => {
+      if (x.to === 'q4@example.com')
+        throw Object.assign(new Error('550 5.1.1 no such user'), { responseCode: 550 });
+    });
+    q = await queue();
+    assert.deepEqual(
+      q.slice(3).map((r) => r.status),
+      ['failed', 'failed', 'sent'],
+    );
+    assert.match((await act('sadia', { type: 'mailRetry' })) as string, /^1 email back/);
+    await refused(403, act('tasnim', { type: 'mailRetry' }));
+  }, '3');
+});
+
+test('mail: acceptances and event approvals are emailed with the saved designs; templates are checked', async () => {
+  await withMail(async () => {
+    const link = await openLink(22);
+    await refused(
+      400,
+      act('sadia', {
+        type: 'recruitMail',
+        id: link.id,
+        subject: 'Welcome!',
+        html: '<p>no link in here, sorry</p>',
+      }),
+    );
+    await refused(
+      403,
+      act('tasnim', {
+        type: 'recruitMail',
+        id: link.id,
+        subject: 'Welcome!',
+        html: '<p>{{link}}</p>',
+      }),
+    );
+    await act('sadia', {
+      type: 'recruitMail',
+      id: link.id,
+      subject: 'Hello {{name}}',
+      html: '<p onclick="x()">Hi {{name}}, <a href="{{link}}">set it</a></p><script>bad()</script>',
+    });
+    assert.equal(
+      (await st('sadia')).office.recruit!.links.find((l) => l.id === link.id)!.mail!.html,
+      '<p>Hi {{name}}, <a href="{{link}}">set it</a></p>',
+    );
+    await act('sadia', {
+      type: 'recruitImport',
+      id: link.id,
+      rows: [
+        {
+          name: 'Mail Person',
+          sid: 'M-1',
+          dept: 'CSE',
+          email: 'mailp@example.com',
+          phone: '01811111111',
+        },
+      ],
+    });
+    const app = (await st('sadia')).office.recruit!.applicants.find(
+      (a) => a.name === 'Mail Person',
+    )!;
+    const note = (await act('sadia', {
+      type: 'decide',
+      kind: 'application',
+      id: app.id,
+      to: 'accepted',
+    })) as string;
+    assert.match(note, /set-password email is on its way to mailp@example\.com/);
+    assert.doesNotMatch(note, /invite=/, 'no link to pass on when the email goes out');
+    const [mail] = await queue();
+    assert.equal(mail.subject, 'Hello Mail Person');
+    assert.match(
+      mail.html,
+      /^<p>Hi Mail Person, <a href="http[^"]+\/login\?invite=[\w-]+">set it<\/a><\/p>$/,
+    );
+    // a new recruitment starts from that design
+    const next = await openLink(21);
+    assert.equal(next.mail!.subject, 'Hello {{name}}');
+
+    // events: a manual approval and an auto-approved sign-up each email the member
+    await act('nusrat', {
+      type: 'eventSave',
+      title: 'Mail Night',
+      eventType: 'Workshop',
+      startsAt: '2027-03-01T18:00',
+      status: 'open',
+      approval: 'manual',
+      newId: 'mail-night-0001',
+    });
+    await refused(
+      403,
+      act('priya', {
+        type: 'eventMail',
+        eventId: 'mail-night-0001',
+        subject: 'In!',
+        html: '<p>{{event}} for {{name}}</p>',
+      }),
+    );
+    await act('nusrat', {
+      type: 'eventMail',
+      eventId: 'mail-night-0001',
+      subject: 'In: {{event}}',
+      html: '<p>{{event}} for {{name}} at {{venue}}</p>',
+    });
+    await act('priya', { type: 'register', eventId: 'mail-night-0001', phone: '01711111111' });
+    const ev = (await eventsQuery(db(), 'nusrat', {
+      action: 'event',
+      id: 'mail-night-0001',
+    })) as EventDetail;
+    assert.equal(ev.admin!.mail!.subject, 'In: {{event}}');
+    const entry = ev.admin!.entries.find((x) => x.status === 'pending')!;
+    const said = (await act('nusrat', {
+      type: 'entryStatus',
+      ids: [entry.id],
+      status: 'approved',
+    })) as string;
+    assert.match(said, /^Approved 1; their email is on the way\.$/);
+    await act('nusrat', { type: 'entryStatus', ids: [entry.id], status: 'approved' }); // no second email
+    const ev2 = (await queue()).filter((r) => r.subject === 'In: Mail Night');
+    assert.equal(ev2.length, 1);
+    assert.equal(ev2[0].html, '<p>Mail Night for Priya Saha at to be announced</p>');
+  });
+});
+
+test('profile change requests: members ask, officers approve (applied) or reject (with a reason)', async () => {
+  const ask = (u: string, changes: object, note?: string) =>
+    act(u, { type: 'profileRequest', changes, ...(note ? { note } : {}) });
+  await refused(400, ask('nadia', { cf_handle: 'someone' })); // judge handles are self-service
+  await refused(400, ask('nadia', { phone: '12' }));
+  const nadia = await getMemberProfile(db(), 'nadia', { userId: 'nadia' });
+  await refused(400, ask('nadia', { name: nadia.name })); // nothing differs
+  await ask('nadia', { location: 'Dhaka' });
+  await ask('nadia', { location: 'Faridpur', phone: '01711112222' }, 'moved back home'); // replaces the open one
+  let mine = (await st('nadia')).profileRequest!;
+  assert.deepEqual(
+    [mine.status, mine.changes, mine.note],
+    ['pending', { location: 'Faridpur', phone: '01711112222' }, 'moved back home'],
+  );
+  const review = (await st('sadia')).office.profileRequests!.find((r) => r.user === 'nadia')!;
+  assert.equal(review.current.location ?? null, nadia.location ?? null);
+  assert.equal((await st('tasnim')).office.profileRequests, undefined, 'members do not review');
+  assert.ok((await st('sadia')).inbox.some((n) => n.text.includes('profile change request')));
+  await refused(
+    403,
+    act('tasnim', { type: 'profileRequestDecide', id: review.id, to: 'approved' }),
+  );
+  await refused(400, act('sadia', { type: 'profileRequestDecide', id: review.id, to: 'rejected' })); // reason needed
+  await act('sadia', { type: 'profileRequestDecide', id: review.id, to: 'approved' });
+  const after = await getMemberProfile(db(), 'nadia', { userId: 'nadia' });
+  assert.deepEqual([after.location, after.phone], ['Faridpur', '01711112222']);
+  await refused(409, act('sadia', { type: 'profileRequestDecide', id: review.id, to: 'approved' }));
+  assert.ok((await st('nadia')).inbox.some((n) => n.text === 'Your profile change was approved.'));
+
+  // rejected with a reason the member sees; and a member can withdraw an open request
+  await ask('nadia', { bio: 'New bio' });
+  const r2 = (await st('sadia')).office.profileRequests!.find((r) => r.user === 'nadia')!;
+  await act('sadia', {
+    type: 'profileRequestDecide',
+    id: r2.id,
+    to: 'rejected',
+    reason: 'Please keep it professional',
+  });
+  mine = (await st('nadia')).profileRequest!;
+  assert.deepEqual([mine.status, mine.reason], ['rejected', 'Please keep it professional']);
+  await ask('nadia', { bio: 'Another bio' });
+  await act('nadia', { type: 'profileRequestCancel' });
+  await refused(409, act('nadia', { type: 'profileRequestCancel' }));
+  // the Secretary's own request goes to someone else
+  await ask('sadia', { location: 'Dhaka' });
+  const own = (await st('sadia')).office.profileRequests!.find((r) => r.user === 'sadia')!;
+  await refused(403, act('sadia', { type: 'profileRequestDecide', id: own.id, to: 'approved' }));
+  await act('tanvir', { type: 'profileRequestDecide', id: own.id, to: 'approved' });
+});
+
+test('audit log: sections, search, paging, and it cannot be edited or deleted', async () => {
+  await act('sadia', {
+    type: 'recruitCreate',
+    title: 'Audit intake',
+    batch: 30,
+    closes: new Date(Date.now() + 864e5).toISOString(),
+  });
+  await act('sadia', { type: 'saveTask', title: 'Book the lab' });
+  const all = await auditQuery(db(), 'tanvir', {});
+  assert.equal(all.rows[0]!.area, 'Workspace');
+  assert.equal(all.rows[1]!.area, 'Recruitment');
+  assert.ok((all.counts.Recruitment ?? 0) > 0);
+  const rec = await auditQuery(db(), 'tanvir', { area: 'Recruitment', q: 'audit intake' });
+  assert.ok(rec.rows.length >= 1 && rec.rows.every((r) => r.area === 'Recruitment'));
+  const next = await auditQuery(db(), 'tanvir', { before: all.rows[0]!.id });
+  assert.equal(next.rows[0]!.id, all.rows[1]!.id);
+  // sign-in events land under security, in plain words
+  const sec = await auditQuery(db(), 'tanvir', { area: 'Security & settings' });
+  assert.ok(sec.rows.every((r) => !/\(users /.test(r.what)));
+  // append-only
+  await assert.rejects(db().query(`delete from audit`), /append-only/);
+  await assert.rejects(db().query(`update audit set what = 'nothing happened'`), /append-only/);
 });

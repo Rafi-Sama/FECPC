@@ -26,7 +26,7 @@ A pnpm workspace orchestrated by Turborepo: two apps, two shared packages, three
 │       │   ├── api/                route handlers: one-line proxies to the API, plus /api/cf and /api/vjudge
 │       │   ├── layout.tsx, globals.css, manifest.ts, icon.svg
 │       ├── components/
-│       │   ├── site/               public-site components (Nav, Footer, JoinForm, LoginForm, Board, …)
+│       │   ├── site/               public-site components (Nav, Footer, ApplyForm, LoginForm, Board, …)
 │       │   ├── app/                member-area components
 │       │   │   ├── Shell.tsx       the member-area frame: nav, page header (Page), Tabs, Denied
 │       │   │   ├── Store.tsx       the client store: AppState, act(), giveKudos(), tab-focus refresh
