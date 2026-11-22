@@ -9216,8 +9216,9 @@ textarea.tm-code {
 }
 
 .cm-ideas-toolbar {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
   gap: 24px;
   padding-bottom: 16px;
   border-bottom: 2px solid var(--line2);
@@ -9228,6 +9229,18 @@ textarea.tm-code {
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.cm-ideas-filter:nth-child(1) {
+  justify-content: flex-start;
+}
+
+.cm-ideas-filter:nth-child(2) {
+  justify-content: center;
+}
+
+.cm-ideas-filter:nth-child(3) {
+  justify-content: flex-end;
 }
 
 .cm-ideas-pill {
@@ -9511,6 +9524,18 @@ textarea.tm-code {
   color: var(--bg);
 }
 
+.cm-idea-action .cm-idea-card-join {
+  background: var(--acc);
+  border: 2px solid var(--acc);
+  color: var(--on);
+}
+
+.cm-idea-action .cm-idea-card-join:hover {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--bg);
+}
+
 /* Idea detail modal */
 .cm-modal.cm-idea-modal {
   max-width: 750px;
@@ -9579,6 +9604,12 @@ textarea.tm-code {
 
 .cm-idea-modal-meta .cm-idea-tag {
   background: var(--panel);
+}
+
+.cm-idea-tags .cm-idea-accepted-badge {
+  padding: 1px 6px;
+  font-size: 11px;
+  line-height: 1.5;
 }
 
 .cm-idea-modal-close {
@@ -9651,6 +9682,32 @@ textarea.tm-code {
   font-size: 12px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
+}
+
+.cm-idea-actionbar-left {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.cm-idea-actionbar-actions {
+  margin-left: auto;
+}
+
+.cm-idea-actionbar .cm-idea-join-btn {
+  min-width: 140px;
+  min-height: 40px;
+}
+
+.cm-idea-accepted-badge,
+.cm-idea-status-badge {
+  padding: 2px 7px;
+  font-family: var(--f-label);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.4;
+  white-space: nowrap;
 }
 
 .cm-idea-actionbar .cm-idea-manage-short {
@@ -9877,8 +9934,9 @@ button.cm-idea-applicant-name:focus-visible {
   color: var(--bg);
 }
 
-/* Submit idea modal */
-.cm-idea-submit {
+/* Submit idea + join idea modals */
+.cm-idea-submit,
+.cm-idea-join-modal {
   padding: 0;
   gap: 0;
   border: 2px solid var(--line2);
@@ -9886,8 +9944,28 @@ button.cm-idea-applicant-name:focus-visible {
   box-shadow: 8px 8px 0 rgba(13, 13, 11, 0.2);
 }
 
-.t-d .cm-idea-submit {
+.t-d .cm-idea-submit,
+.t-d .cm-idea-join-modal {
   box-shadow: 8px 8px 0 rgba(0, 0, 0, 0.8);
+}
+
+.cm-modal.cm-idea-join-modal {
+  max-width: 560px;
+}
+
+.cm-idea-join-kicker {
+  margin: 0 0 6px;
+  color: var(--dim);
+  font-family: var(--f-label);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.cm-idea-join-questions {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
 .cm-idea-submit-title {
@@ -9947,9 +10025,12 @@ button.cm-idea-applicant-name:focus-visible {
   }
 
   .cm-ideas-toolbar {
-    flex-direction: column;
-    align-items: stretch;
+    grid-template-columns: minmax(0, 1fr);
     gap: 12px;
+  }
+
+  .cm-ideas-filter:nth-child(n) {
+    justify-content: flex-start;
   }
 
   .cm-idea-card {

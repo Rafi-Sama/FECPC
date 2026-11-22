@@ -6,6 +6,7 @@ import { MarkdownBody, MarkdownEditor, relTime } from '@/components/app/shared/M
 import { TierName } from '@/components/app/shared/SolvedTier';
 import { AvatarRing } from '@/components/app/shared/RatingBadge';
 import { ideaTypeLabel } from '@/components/app/ideas/NewIdeaModal';
+import { JoinIdeaModal, type JoinIdeaTarget } from '@/components/app/ideas/JoinIdeaModal';
 import { canFully, rankFor } from '@fecpc/contracts';
 import type { IdeaDetail, IdeaStatus } from '@fecpc/contracts';
 import { useConfirm } from '@/components/app/shared/PromptDialog';
@@ -25,8 +26,7 @@ export function IdeaModal({
   const { s, me, act } = useStore();
   const [detail, setDetail] = useState<IdeaDetail | null>(null);
   const [loading, setLoading] = useState(false);
-  const [showApplySheet, setShowApplySheet] = useState(false);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [joinIdea, setJoinIdea] = useState<JoinIdeaTarget | null>(null);
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [editBody, setEditBody] = useState('');
@@ -56,13 +56,11 @@ export function IdeaModal({
   useEffect(() => {
     if (!ideaId) {
       setDetail(null);
-      setShowApplySheet(false);
-      setAnswers({});
+      setJoinIdea(null);
       setEditing(false);
       return;
     }
-    setShowApplySheet(false);
-    setAnswers({});
+    setJoinIdea(null);
     setEditing(false);
     load(ideaId);
   }, [ideaId, load]);
@@ -70,11 +68,12 @@ export function IdeaModal({
   useEffect(() => {
     if (!ideaId) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      // Escape belongs to the join form while it is open.
+      if (e.key === 'Escape' && !joinIdea) onClose();
     };
     addEventListener('keydown', onKey);
     return () => removeEventListener('keydown', onKey);
-  }, [ideaId, onClose]);
+  }, [ideaId, onClose, joinIdea]);
 
   if (!ideaId) return null;
 
@@ -91,34 +90,36 @@ export function IdeaModal({
     }
   };
 
-  const handleImInClick = async () => {
-    if (!detail || busy || isPoster || detail.status === 'closed') return;
-    if (detail.roles.length > 0 && !showApplySheet) {
-      setShowApplySheet(true);
-      return;
-    }
+  const handleImIn = async () => {
+    if (!detail || busy || isPoster || detail.status === 'closed' || detail.my_interest) return;
     setBusy(true);
-    const ok = await act('expressInterest', { ideaId: detail.id, response: answers });
+    const ok = await act('expressInterest', { ideaId: detail.id, response: {} });
     setBusy(false);
     if (ok) {
-      setShowApplySheet(false);
-      setAnswers({});
       await load(detail.id);
       onMutated();
     }
   };
 
-  const handleApplySubmit = async () => {
-    if (!detail) return false;
-    const response = Object.fromEntries(Object.entries(answers).map(([k, v]) => [k, v.trim()]));
-    const ok = await act('expressInterest', { ideaId: detail.id, response });
-    if (ok) {
-      setShowApplySheet(false);
-      setAnswers({});
-      await load(detail.id);
-      onMutated();
+  const handleJoinClick = () => {
+    if (!detail || busy || isPoster || detail.status === 'closed' || detail.my_interest) return;
+    // No questions to answer: join straight away instead of opening a form.
+    if (detail.roles.length === 0) {
+      void handleImIn();
+      return;
     }
-    return ok;
+    setJoinIdea({
+      id: detail.id,
+      title: detail.title,
+      author_name: detail.author_name,
+      roles: detail.roles,
+    });
+  };
+
+  const handleJoinSubmitted = async () => {
+    if (!detail) return;
+    await load(detail.id);
+    onMutated();
   };
 
   const handleSaveEdit = async () => {
@@ -151,288 +152,248 @@ export function IdeaModal({
   };
 
   return (
-    <div
-      className="cm-backdrop"
-      role="dialog"
-      aria-modal="true"
-      aria-label={detail?.title ?? 'Idea'}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div className="cm-modal wide cm-idea-modal">
-        {loading && !detail ? (
-          <p className="body" style={{ padding: 24 }}>
-            Loading…
-          </p>
-        ) : detail ? (
-          <>
-            <header className="cm-modal-head cm-idea-modal-head">
-              <div className="cm-idea-detail-heading">
-                <div className="cm-idea-meta cm-idea-modal-meta">
-                  <AvatarRing
-                    name={detail.author_name}
-                    avatarUrl={detail.author_avatar}
-                    size={36}
-                    ringWidth={2}
-                    ringOffset={2}
-                    rank={rankFor(detail.author_rating)}
-                  />
-                  <span className="cm-idea-author">
-                    <TierName name={detail.author_name} solved={detail.author_solved} />
-                  </span>
-                  <span className="cm-idea-time">{relTime(detail.created_at)}</span>
-                  <div className="cm-idea-tags">
-                    <span className="cm-idea-tag">{ideaTypeLabel(detail.type)}</span>
-                    <span className={`cm-idea-tag status-${detail.status}`}>{detail.status}</span>
+    <>
+      <div
+        className="cm-backdrop"
+        role="dialog"
+        aria-modal="true"
+        aria-label={detail?.title ?? 'Idea'}
+        onClick={(e) => e.target === e.currentTarget && onClose()}
+      >
+        <div className="cm-modal wide cm-idea-modal">
+          {loading && !detail ? (
+            <p className="body" style={{ padding: 24 }}>
+              Loading…
+            </p>
+          ) : detail ? (
+            <>
+              <header className="cm-modal-head cm-idea-modal-head">
+                <div className="cm-idea-detail-heading">
+                  <div className="cm-idea-meta cm-idea-modal-meta">
+                    <AvatarRing
+                      name={detail.author_name}
+                      avatarUrl={detail.author_avatar}
+                      size={36}
+                      ringWidth={2}
+                      ringOffset={2}
+                      rank={rankFor(detail.author_rating)}
+                    />
+                    <span className="cm-idea-author">
+                      <TierName name={detail.author_name} solved={detail.author_solved} />
+                    </span>
+                    <span className="cm-idea-time">{relTime(detail.created_at)}</span>
+                    <div className="cm-idea-tags">
+                      <span className="cm-idea-tag">{ideaTypeLabel(detail.type)}</span>
+                      <span className={`cm-idea-tag status-${detail.status}`}>{detail.status}</span>
+                      {detail.my_interest === 'accepted' && (
+                        <span className="pill ok cm-idea-accepted-badge">✓ Accepted</span>
+                      )}
+                    </div>
                   </div>
+                  <h2 className="cm-idea-detail-title">{editing ? 'Edit idea' : detail.title}</h2>
                 </div>
-                <h2 className="cm-idea-detail-title">{editing ? 'Edit idea' : detail.title}</h2>
-              </div>
-              <button
-                type="button"
-                className="cm-modal-close cm-idea-modal-close"
-                aria-label="Close"
-                onClick={onClose}
-              >
-                ×
-              </button>
-            </header>
-
-            <div className="cm-idea-modal-body">
-              {editing ? (
-                <SaveForm
-                  className="stack"
-                  style={{ '--g': '14px' } as React.CSSProperties}
-                  label="Unsaved changes to this idea"
-                  onDiscard={() => {
-                    setEditTitle(detail.title);
-                    setEditBody(detail.body_md);
-                    setEditStatus(detail.status);
-                    setEditing(false);
-                  }}
-                  onSubmit={handleSaveEdit}
+                <button
+                  type="button"
+                  className="cm-modal-close cm-idea-modal-close"
+                  aria-label="Close"
+                  onClick={onClose}
                 >
-                  <label className="field">
-                    <span className="label">Title</span>
-                    <input
-                      className="input"
-                      value={editTitle}
-                      onChange={(e) => setEditTitle(e.target.value)}
+                  ×
+                </button>
+              </header>
+
+              <div className="cm-idea-modal-body">
+                {editing ? (
+                  <SaveForm
+                    className="stack"
+                    style={{ '--g': '14px' } as React.CSSProperties}
+                    label="Unsaved changes to this idea"
+                    onDiscard={() => {
+                      setEditTitle(detail.title);
+                      setEditBody(detail.body_md);
+                      setEditStatus(detail.status);
+                      setEditing(false);
+                    }}
+                    onSubmit={handleSaveEdit}
+                  >
+                    <label className="field">
+                      <span className="label">Title</span>
+                      <input
+                        className="input"
+                        value={editTitle}
+                        onChange={(e) => setEditTitle(e.target.value)}
+                        required
+                        minLength={3}
+                        maxLength={160}
+                      />
+                    </label>
+                    <MarkdownEditor
+                      id="edit-idea-body"
+                      label="Description (Markdown)"
+                      value={editBody}
+                      onChange={setEditBody}
                       required
                       minLength={3}
-                      maxLength={160}
+                      maxLength={10000}
+                      rows={6}
                     />
-                  </label>
-                  <MarkdownEditor
-                    id="edit-idea-body"
-                    label="Description (Markdown)"
-                    value={editBody}
-                    onChange={setEditBody}
-                    required
-                    minLength={3}
-                    maxLength={10000}
-                    rows={6}
-                  />
-                  <label className="field" style={{ maxWidth: 220 }}>
-                    <span className="label">Status</span>
-                    <select
-                      className="input"
-                      value={editStatus}
-                      onChange={(e) => setEditStatus(e.target.value as IdeaStatus)}
-                    >
-                      <option value="open">Open</option>
-                      <option value="planned">Planned</option>
-                      <option value="shipped">Shipped</option>
-                      <option value="closed">Closed</option>
-                    </select>
-                  </label>
-                  <div className="row" style={{ '--g': '8px' } as React.CSSProperties}>
-                    <button
-                      type="button"
-                      className="btn sm line"
-                      data-close
-                      onClick={() => setEditing(false)}
-                    >
-                      Close editor
-                    </button>
-                  </div>
-                </SaveForm>
-              ) : (
-                <>
-                  <div className="cm-idea-detail-content">
-                    <MarkdownBody markdown={detail.body_md} />
-                  </div>
-                  {detail.roles.length > 0 && (
-                    <div className="cm-side-box cm-idea-role-box" style={{ gap: 8 }}>
-                      <p className="label">Open roles / applicant questions</p>
-                      <ul
-                        style={{
-                          listStyle: 'disc',
-                          paddingLeft: 18,
-                          margin: 0,
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: 4,
-                        }}
+                    <label className="field" style={{ maxWidth: 220 }}>
+                      <span className="label">Status</span>
+                      <select
+                        className="input"
+                        value={editStatus}
+                        onChange={(e) => setEditStatus(e.target.value as IdeaStatus)}
                       >
-                        {detail.roles.map((r, i) => (
-                          <li key={i} className="body" style={{ fontSize: 14 }}>
-                            {r}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </>
-              )}
-
-              {/* Action bar */}
-              <div
-                className="row between cm-idea-actionbar"
-                style={{ '--g': '10px' } as React.CSSProperties}
-              >
-                <div className="row" style={{ '--g': '8px' } as React.CSSProperties}>
-                  <button
-                    type="button"
-                    className={`btn xs ${upvoted ? '' : 'line'}`}
-                    aria-pressed={upvoted}
-                    disabled={isPoster}
-                    onClick={handleUpvote}
-                  >
-                    ▲ {detail.upvotes}
-                  </button>
-                  <span className="cm-idea-interested-label">
-                    INTERESTED ({detail.interested_count})
-                  </span>
-                </div>
-
-                <div className="row" style={{ '--g': '8px' } as React.CSSProperties}>
-                  {isPoster && onManage && !editing && (
-                    <button
-                      type="button"
-                      className="btn xs cm-idea-manage-short"
-                      onClick={onManage}
-                    >
-                      Manage Interested ({detail.interested_count})
-                    </button>
-                  )}
-                  {canManage && !editing && (
-                    <>
+                        <option value="open">Open</option>
+                        <option value="planned">Planned</option>
+                        <option value="shipped">Shipped</option>
+                        <option value="closed">Closed</option>
+                      </select>
+                    </label>
+                    <div className="row" style={{ '--g': '8px' } as React.CSSProperties}>
                       <button
                         type="button"
-                        className="btn xs line"
-                        onClick={() => setEditing(true)}
-                        disabled={busy}
+                        className="btn sm line"
+                        data-close
+                        onClick={() => setEditing(false)}
                       >
-                        Edit
+                        Close editor
                       </button>
-                      {detail.status !== 'closed' && (
+                    </div>
+                  </SaveForm>
+                ) : (
+                  <>
+                    <div className="cm-idea-detail-content">
+                      <MarkdownBody markdown={detail.body_md} />
+                    </div>
+                    {detail.roles.length > 0 && (
+                      <div className="cm-side-box cm-idea-role-box" style={{ gap: 8 }}>
+                        <p className="label">Open roles / applicant questions</p>
+                        <ul
+                          style={{
+                            listStyle: 'disc',
+                            paddingLeft: 18,
+                            margin: 0,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 4,
+                          }}
+                        >
+                          {detail.roles.map((r, i) => (
+                            <li key={i} className="body" style={{ fontSize: 14 }}>
+                              {r}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Action bar */}
+                <div
+                  className="row between cm-idea-actionbar"
+                  style={{ '--g': '10px' } as React.CSSProperties}
+                >
+                  <div className="cm-idea-actionbar-left">
+                    <div className="row" style={{ '--g': '8px' } as React.CSSProperties}>
+                      <button
+                        type="button"
+                        className={`btn xs ${upvoted ? '' : 'line'}`}
+                        aria-pressed={upvoted}
+                        disabled={isPoster}
+                        onClick={handleUpvote}
+                      >
+                        ▲ {detail.upvotes}
+                      </button>
+                      <span className="cm-idea-interested-label">
+                        INTERESTED ({detail.interested_count})
+                      </span>
+                      {detail.my_interest === 'declined' && (
+                        <span className="pill bad cm-idea-status-badge">✗ Declined</span>
+                      )}
+                      {detail.my_interest === 'pending' && (
+                        <span className="pill warn cm-idea-status-badge">Interest sent</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div
+                    className="row cm-idea-actionbar-actions"
+                    style={{ '--g': '8px' } as React.CSSProperties}
+                  >
+                    {!detail.my_interest &&
+                      !isPoster &&
+                      !me.system &&
+                      detail.status !== 'closed' && (
+                        <button
+                          type="button"
+                          className="btn xs cm-idea-apply-btn cm-idea-join-btn"
+                          disabled={busy}
+                          onClick={handleJoinClick}
+                        >
+                          {detail.roles.length > 0 ? 'Apply to Join' : "I'm in"}
+                        </button>
+                      )}
+                    {isPoster && onManage && !editing && (
+                      <button
+                        type="button"
+                        className="btn xs cm-idea-manage-short"
+                        onClick={onManage}
+                      >
+                        Manage Interested ({detail.interested_count})
+                      </button>
+                    )}
+                    {canManage && !editing && (
+                      <>
                         <button
                           type="button"
                           className="btn xs line"
-                          onClick={handleClosePost}
+                          onClick={() => setEditing(true)}
                           disabled={busy}
                         >
-                          Close post
+                          Edit
                         </button>
-                      )}
-                    </>
-                  )}
-
-                  {/* I'M IN button: strictly hidden for poster */}
-                  {!isPoster &&
-                    !me.system &&
-                    detail.status !== 'closed' &&
-                    (detail.my_interest ? (
-                      <span
-                        className={`pill ${
-                          detail.my_interest === 'accepted'
-                            ? 'ok'
-                            : detail.my_interest === 'declined'
-                              ? 'bad'
-                              : 'warn'
-                        }`}
-                      >
-                        {detail.my_interest === 'accepted'
-                          ? 'Accepted ✓'
-                          : detail.my_interest === 'declined'
-                            ? 'Declined'
-                            : 'Interest sent'}
-                      </span>
-                    ) : (
-                      <button
-                        type="button"
-                        className="btn sm cm-idea-apply-btn"
-                        disabled={busy}
-                        onClick={handleImInClick}
-                      >
-                        {detail.roles.length > 0 ? 'Apply to Join' : "I'm in"}
-                      </button>
-                    ))}
+                        {detail.status !== 'closed' && (
+                          <button
+                            type="button"
+                            className="btn xs line"
+                            onClick={handleClosePost}
+                            disabled={busy}
+                          >
+                            Close post
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
-
-              {/* Inline application sheet when poster configured open roles */}
-              {!isPoster && showApplySheet && detail.roles.length > 0 && (
-                <SaveForm
-                  className="cm-interest-panel cm-idea-apply"
-                  label="Unsent answers"
-                  saveLabel="Send I'm in"
-                  onDiscard={() => {
-                    setAnswers({});
-                    setShowApplySheet(false);
-                  }}
-                  onSubmit={handleApplySubmit}
+            </>
+          ) : (
+            <div className="stack" style={{ padding: 24 }}>
+              <div className="cm-modal-head">
+                <strong>Idea not found</strong>
+                <button
+                  type="button"
+                  className="cm-modal-close"
+                  aria-label="Close"
+                  onClick={onClose}
                 >
-                  <p className="cm-idea-apply-note">
-                    ANSWER BEFORE JOINING · VISIBLE ONLY TO {detail.author_name.toUpperCase()}
-                  </p>
-                  {detail.roles.map((promptText, idx) => (
-                    <label key={idx} className="field">
-                      <span className="label">
-                        {idx + 1}. {promptText}
-                      </span>
-                      <input
-                        className="input"
-                        required
-                        maxLength={500}
-                        value={answers[promptText] ?? ''}
-                        onChange={(e) =>
-                          setAnswers((prev) => ({ ...prev, [promptText]: e.target.value }))
-                        }
-                        placeholder="Your answer"
-                      />
-                    </label>
-                  ))}
-                  <div className="cm-idea-apply-foot">
-                    <button
-                      type="button"
-                      className="btn sm line"
-                      data-close
-                      onClick={() => setShowApplySheet(false)}
-                    >
-                      Cancel
-                    </button>
-                    <button type="submit" className="btn sm cm-idea-submit-application">
-                      Submit Application
-                    </button>
-                  </div>
-                </SaveForm>
-              )}
+                  ×
+                </button>
+              </div>
+              <p className="body">This post may have been removed.</p>
             </div>
-          </>
-        ) : (
-          <div className="stack" style={{ padding: 24 }}>
-            <div className="cm-modal-head">
-              <strong>Idea not found</strong>
-              <button type="button" className="cm-modal-close" aria-label="Close" onClick={onClose}>
-                ×
-              </button>
-            </div>
-            <p className="body">This post may have been removed.</p>
-          </div>
-        )}
+          )}
+        </div>
       </div>
-    </div>
+      <JoinIdeaModal
+        idea={joinIdea}
+        onClose={() => setJoinIdea(null)}
+        onSubmitted={handleJoinSubmitted}
+      />
+    </>
   );
 }
 

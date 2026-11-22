@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation';
-import { cookies } from 'next/headers';
 import LoginForm from '@/components/site/LoginForm';
-import { SESSION_COOKIES } from '@/lib/api.ts';
+import { serverState } from '@/lib/api.ts';
 
 export const metadata = { title: 'Sign in' };
 export const dynamic = 'force-dynamic';
@@ -12,10 +11,9 @@ export default async function Login({
   searchParams: Promise<{ invite?: string; error?: string }>;
 }) {
   const { invite, error } = await searchParams;
-  if (!invite) {
-    const jar = await cookies();
-    if (SESSION_COOKIES.some((c) => jar.has(c))) redirect('/app');
-  }
+  // A stale cookie is not a session: redirecting on cookie presence alone loops
+  // between /login and /app, since /app sends unauthenticated visitors back here.
+  if (!invite && (await serverState())) redirect('/app');
   return (
     <main id="main" className="t-b" data-t="b">
       <section className="section page-head">

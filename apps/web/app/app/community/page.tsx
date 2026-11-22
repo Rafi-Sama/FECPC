@@ -15,6 +15,7 @@ import { PostModal } from '@/components/app/feed/PostModal';
 import { ReportsPanel } from '@/components/app/feed/ReportsPanel';
 import { VoteWidget } from '@/components/app/feed/VoteWidget';
 import { IdeaModal } from '@/components/app/ideas/IdeaModal';
+import { JoinIdeaModal, type JoinIdeaTarget } from '@/components/app/ideas/JoinIdeaModal';
 import { ManageInterestedModal } from '@/components/app/ideas/ManageInterestedModal';
 import { ideaTypeLabel, NewIdeaModal } from '@/components/app/ideas/NewIdeaModal';
 import { ProfileModal } from '@/components/app/members/ProfileModal';
@@ -358,6 +359,8 @@ function CommunityContent() {
   const [newIdeaOpen, setNewIdeaOpen] = useState(false);
   const [activeIdeaId, setActiveIdeaId] = useState<number | null>(null);
   const [manageIdeaId, setManageIdeaId] = useState<number | null>(null);
+  const [joinIdea, setJoinIdea] = useState<JoinIdeaTarget | null>(null);
+  const [joiningIdeaId, setJoiningIdeaId] = useState<number | null>(null);
   const ideaSentinelRef = useRef<HTMLDivElement>(null);
   const ideaReqSeq = useRef(0);
 
@@ -448,6 +451,23 @@ function CommunityContent() {
     );
     const ok = await act('toggle', { list: 'kudos', id: key });
     if (!ok) await fetchIdeas(null, false);
+  };
+
+  const handleCardJoin = async (idea: IdeaSummary) => {
+    if (joiningIdeaId !== null || idea.my_interest || idea.status === 'closed' || me.system) return;
+    if (idea.roles.length > 0) {
+      setJoinIdea({
+        id: idea.id,
+        title: idea.title,
+        author_name: idea.author_name,
+        roles: idea.roles,
+      });
+      return;
+    }
+    setJoiningIdeaId(idea.id);
+    const ok = await act('expressInterest', { ideaId: idea.id, response: {} });
+    setJoiningIdeaId(null);
+    if (ok) await fetchIdeas(null, false);
   };
 
   /* ────────── POLLS STATE ────────── */
@@ -942,6 +962,9 @@ function CommunityContent() {
                         <div className="cm-idea-tags">
                           <span className="cm-idea-tag">{ideaTypeLabel(it.type)}</span>
                           <span className={`cm-idea-tag status-${it.status}`}>{it.status}</span>
+                          {it.my_interest === 'accepted' && (
+                            <span className="pill ok cm-idea-accepted-badge">✓ Accepted</span>
+                          )}
                         </div>
                         {mine && <span className="cm-idea-you">You</span>}
                       </div>
@@ -966,16 +989,34 @@ function CommunityContent() {
                           </button>
                         </>
                       ) : (
-                        <button
-                          type="button"
-                          className="btn xs line"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActiveIdeaId(it.id);
-                          }}
-                        >
-                          Interested ({it.interested_count})
-                        </button>
+                        <>
+                          <span className="cm-idea-interested-label">
+                            Interested ({it.interested_count})
+                          </span>
+                          {it.my_interest === 'declined' && (
+                            <span className="pill bad cm-idea-status-badge">✗ Declined</span>
+                          )}
+                          {it.my_interest === 'pending' && (
+                            <span className="pill warn cm-idea-status-badge">Interest sent</span>
+                          )}
+                          {!it.my_interest && !me.system && it.status !== 'closed' && (
+                            <button
+                              type="button"
+                              className="btn xs cm-idea-card-join"
+                              disabled={joiningIdeaId === it.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void handleCardJoin(it);
+                              }}
+                            >
+                              {joiningIdeaId === it.id
+                                ? 'Joining…'
+                                : it.roles.length > 0
+                                  ? 'Apply to Join'
+                                  : "I'm in"}
+                            </button>
+                          )}
+                        </>
                       )}
                     </div>
                   </article>
@@ -1135,6 +1176,12 @@ function CommunityContent() {
         onClose={() => setManageIdeaId(null)}
         onMutated={() => fetchIdeas(null, false)}
         onOpenProfile={handleOpenProfile}
+      />
+
+      <JoinIdeaModal
+        idea={joinIdea}
+        onClose={() => setJoinIdea(null)}
+        onSubmitted={() => fetchIdeas(null, false)}
       />
 
       <IdeaModal
