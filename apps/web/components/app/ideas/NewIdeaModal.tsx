@@ -6,8 +6,8 @@ import type { IdeaType } from '@fecpc/contracts';
 
 export const IDEA_TYPE_OPTIONS: { value: IdeaType; label: string; short: string }[] = [
   { value: 'idea', label: 'Idea', short: 'Idea' },
-  { value: 'teammate', label: 'Teammate request', short: 'Teammate' },
-  { value: 'study', label: 'Study partner', short: 'Study' },
+  { value: 'teammate', label: 'Teammate Request', short: 'Teammate' },
+  { value: 'study', label: 'Study Partner', short: 'Study' },
 ];
 
 export function ideaTypeLabel(type: IdeaType): string {
@@ -94,8 +94,8 @@ export function NewIdeaModal({
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <SaveForm
-        className="cm-modal"
-        style={{ maxWidth: 700 }}
+        className="cm-modal cm-idea-submit"
+        style={{ maxWidth: 750 }}
         label="Unsubmitted idea"
         saveLabel="Submit idea"
         onDiscard={() => {
@@ -104,126 +104,140 @@ export function NewIdeaModal({
         }}
         onSubmit={handleSubmit}
       >
-        <div className="cm-modal-head">
-          <h2 className="h3">Submit idea</h2>
+        <div className="cm-modal-head cm-idea-submit-head">
+          <h2 className="h3 cm-idea-submit-title">Submit Idea</h2>
           <button type="button" className="cm-modal-close" aria-label="Close" onClick={onClose}>
             ×
           </button>
         </div>
 
-        <label className="field">
-          <span className="label">Title</span>
-          <input
-            className="input"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            required
-            minLength={3}
-            maxLength={160}
-            placeholder="Workshop idea, hackathon teammate request, or study group"
-            autoFocus
-          />
-        </label>
-
-        <div className="field">
-          <span className="label">Type</span>
-          <div className="cm-chips" role="radiogroup" aria-label="Idea type">
-            {IDEA_TYPE_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                role="radio"
-                aria-checked={type === opt.value}
-                className={`tag ${type === opt.value ? 'on' : ''}`}
-                onClick={() => {
-                  setType(opt.value);
-                  if (opt.value === 'teammate') setWantsRoles(true);
-                }}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <MarkdownEditor
-          id="new-idea-body"
-          label="Description (Markdown)"
-          value={bodyMd}
-          onChange={setBodyMd}
-          required
-          minLength={3}
-          maxLength={10000}
-          rows={6}
-          placeholder="Explain the idea, project scope, or what you're looking for…"
-        />
-
-        <div className="cm-side-box">
-          <label
-            className="row"
-            style={{ cursor: 'pointer', '--g': '10px' } as React.CSSProperties}
-          >
+        <div className="cm-idea-submit-body">
+          <label className="field">
+            <span className="label">Title</span>
             <input
-              type="checkbox"
-              className="check"
-              checked={wantsRoles}
-              onChange={(e) => setWantsRoles(e.target.checked)}
+              className="input"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              required
+              minLength={3}
+              maxLength={160}
+              placeholder="Workshop idea, hackathon teammate request, or study group"
+              autoFocus
             />
-            <span>
-              <strong>Open roles / questions for interested members</strong>
-              <span className="label" style={{ display: 'block', fontSize: 11, marginTop: 2 }}>
-                Optional (1–3 fields). Responses are visible only to you.
-              </span>
-            </span>
           </label>
 
-          {wantsRoles && (
-            <div className="stack" style={{ '--g': '10px', marginTop: 4 } as React.CSSProperties}>
-              {roles.map((r, idx) => (
-                <div
-                  key={idx}
-                  className="row"
-                  style={{ '--g': '8px', flexWrap: 'nowrap' } as React.CSSProperties}
-                >
-                  <input
-                    className="input grow"
-                    style={{ minHeight: 40 }}
-                    value={r}
-                    onChange={(e) => setRoleAt(idx, e.target.value)}
-                    maxLength={140}
-                    placeholder={
-                      idx === 0
-                        ? 'e.g. What skills or topics are you strongest in?'
-                        : idx === 1
-                          ? 'e.g. What is your Codeforces rating?'
-                          : 'e.g. Availability before contest day?'
-                    }
-                    aria-label={`Open role prompt ${idx + 1}`}
-                  />
-                  {roles.length > 1 && (
-                    <button
-                      type="button"
-                      className="btn xs line"
-                      onClick={() => removeRole(idx)}
-                      aria-label="Remove prompt"
-                    >
-                      ×
-                    </button>
-                  )}
-                </div>
-              ))}
-              {roles.length < 3 && (
+          <div className="field">
+            <span className="label">Type</span>
+            <div className="cm-chips" role="radiogroup" aria-label="Idea type">
+              {IDEA_TYPE_OPTIONS.map((opt) => (
                 <button
+                  key={opt.value}
                   type="button"
-                  className="btn xs line"
-                  style={{ alignSelf: 'flex-start' }}
-                  onClick={addRole}
+                  role="radio"
+                  aria-checked={type === opt.value}
+                  className={`tag ${type === opt.value ? 'on' : ''}`}
+                  onClick={() => {
+                    setType(opt.value);
+                    if (opt.value === 'teammate') setWantsRoles(true);
+                  }}
                 >
-                  + Add prompt ({roles.length}/3)
+                  {opt.label}
                 </button>
-              )}
+              ))}
             </div>
-          )}
+          </div>
+
+          <MarkdownEditor
+            id="new-idea-body"
+            label="Description (Markdown)"
+            value={bodyMd}
+            onChange={setBodyMd}
+            required
+            minLength={3}
+            maxLength={10000}
+            rows={6}
+            placeholder="Explain the idea, project scope, or what you're looking for…"
+          />
+
+          <div className="cm-side-box cm-idea-questions">
+            <label
+              className="row"
+              style={{ cursor: 'pointer', '--g': '10px' } as React.CSSProperties}
+            >
+              <input
+                type="checkbox"
+                className="check"
+                checked={wantsRoles}
+                onChange={(e) => setWantsRoles(e.target.checked)}
+              />
+              <span>
+                <strong>Ask questions to interested members</strong>
+                <span className="label" style={{ display: 'block', fontSize: 11, marginTop: 2 }}>
+                  Optional (1–3 fields). Responses are visible only to you.
+                </span>
+              </span>
+            </label>
+
+            {wantsRoles && (
+              <div className="stack" style={{ '--g': '10px', marginTop: 4 } as React.CSSProperties}>
+                {roles.map((r, idx) => (
+                  <label key={idx} className="field">
+                    <span className="label">
+                      Question {idx + 1}
+                      {idx === 0 ? '' : ' (Optional)'}
+                    </span>
+                    <div
+                      className="row"
+                      style={{ '--g': '8px', flexWrap: 'nowrap' } as React.CSSProperties}
+                    >
+                      <input
+                        className="input grow"
+                        style={{ minHeight: 40 }}
+                        value={r}
+                        onChange={(e) => setRoleAt(idx, e.target.value)}
+                        maxLength={140}
+                        placeholder={
+                          idx === 0
+                            ? 'e.g. What is your Codeforces handle?'
+                            : idx === 1
+                              ? 'e.g. How many hours can you commit per week?'
+                              : 'e.g. Availability before contest day?'
+                        }
+                        aria-label={`Question ${idx + 1}`}
+                      />
+                      {roles.length > 1 && (
+                        <button
+                          type="button"
+                          className="btn xs line"
+                          onClick={() => removeRole(idx)}
+                          aria-label="Remove prompt"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                  </label>
+                ))}
+                {roles.length < 3 && (
+                  <button
+                    type="button"
+                    className="btn xs line"
+                    style={{ alignSelf: 'flex-start' }}
+                    onClick={addRole}
+                  >
+                    + Add prompt ({roles.length}/3)
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="cm-idea-submit-foot">
+            <span className="cm-idea-submit-note">Responses visible only to you.</span>
+            <button type="submit" className="btn sm cm-idea-publish">
+              Publish Idea
+            </button>
+          </div>
         </div>
       </SaveForm>
     </div>
