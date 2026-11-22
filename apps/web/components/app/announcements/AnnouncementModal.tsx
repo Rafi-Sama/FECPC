@@ -23,8 +23,7 @@ function formatFullTimestamp(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
   const date = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-  const time = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
-  return `${date}, ${time}`;
+  return `${date}`;
 }
 
 export function AnnouncementModal({
@@ -65,70 +64,76 @@ export function AnnouncementModal({
 
   if (!item) return null;
 
-  const channelLabel = item.by_role
-    ? `#announcements · ${item.by_role}`
-    : `#announcements · ${item.scope}`;
+  const roleOrScope = item.by_role || item.scope || 'Everyone';
+  const metaLine = `#Announcements · ${roleOrScope} · ${formatFullTimestamp(item.at)}`;
   const hasLeadingEmoji = /^\p{Extended_Pictographic}/u.test(item.title.trim());
   const titlePrefix = hasLeadingEmoji ? '' : item.pinned ? '📌 ' : '🎯 ';
 
   return (
     <div
-      className="cm-backdrop"
+      className="cm-backdrop ann-modal-backdrop"
       role="dialog"
       aria-modal="true"
       aria-label={item.title}
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <article className="cm-modal discord">
-        <header className="cm-modal-head">
-          <TierAvatar name={item.by} solved={item.by_solved} avatarUrl={item.by_avatar} size={40} />
-          <div className="grow" style={{ minWidth: 0 }}>
-            <div className="row" style={{ '--g': '8px' } as React.CSSProperties}>
-              <TierName name={item.by} solved={item.by_solved} />
-              {item.pinned && (
-                <span className="pill" style={{ fontSize: 11, padding: '1px 6px' }}>
-                  Pinned
-                </span>
-              )}
-              {item.requires_ack && (
-                <span className="pill warn" style={{ fontSize: 11, padding: '1px 6px' }}>
-                  Must read
-                </span>
-              )}
-            </div>
-            <div className="cm-meta" style={{ marginTop: 2 }}>
-              <span>{channelLabel}</span>
-              <span>· {formatFullTimestamp(item.at)}</span>
+      <article className="ann-modal read-modal">
+        <div className="ann-modal-header">
+          <div className="card-author" style={{ marginBottom: 0 }}>
+            <TierAvatar
+              name={item.by}
+              solved={item.by_solved}
+              avatarUrl={item.by_avatar}
+              size={48}
+            />
+            <div>
+              <div className="author-name" style={{ fontSize: '1.1rem' }}>
+                <TierName name={item.by} solved={item.by_solved} />
+              </div>
+              <div className="mono ann-modal-meta" style={{ marginTop: '0.25rem' }}>
+                {metaLine}
+              </div>
             </div>
           </div>
-          {onDelete && (
-            <button type="button" className="btn xs line" onClick={onDelete}>
-              Delete
+          <div className="ann-modal-actions">
+            {onDelete && (
+              <button type="button" className="ann-btn-del" onClick={onDelete}>
+                Delete
+              </button>
+            )}
+            <button type="button" className="ann-close-btn" aria-label="Close" onClick={onClose}>
+              &times;
             </button>
-          )}
-          <button type="button" className="cm-modal-close" aria-label="Close" onClick={onClose}>
-            ×
-          </button>
-        </header>
+          </div>
+        </div>
 
-        <h2 className="h2" style={{ fontSize: 'clamp(22px, 2.4vw, 28px)', lineHeight: 1.2 }}>
-          {titlePrefix}
-          {item.title}
-        </h2>
+        <div className="ann-modal-body">
+          <div className="card-meta-top mono" style={{ marginBottom: '1rem' }}>
+            {item.pinned && <span className="badge-pinned">Pinned</span>}
+            {item.requires_ack && <span className="badge-must-read">Must Read</span>}
+          </div>
 
-        <hr className="rule" />
+          <h2 className="read-title">
+            {titlePrefix}
+            {item.title}
+          </h2>
 
-        <div className="stack" style={{ '--g': '12px' } as React.CSSProperties}>
-          {item.body_md.trim() ? (
-            <MarkdownBody markdown={item.body_md} />
-          ) : (
-            <p className="body">{item.title}</p>
-          )}
-          {item.edited_at && (
-            <span className="label" style={{ fontSize: 11 }}>
-              (edited)
-            </span>
-          )}
+          <div className="read-content">
+            {item.body_md.trim() ? <MarkdownBody markdown={item.body_md} /> : <p>{item.title}</p>}
+            {item.edited_at && (
+              <span
+                className="mono"
+                style={{
+                  fontSize: '0.75rem',
+                  marginTop: '1rem',
+                  color: 'var(--ann-muted)',
+                  display: 'block',
+                }}
+              >
+                (edited)
+              </span>
+            )}
+          </div>
         </div>
       </article>
     </div>

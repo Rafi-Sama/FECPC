@@ -234,8 +234,20 @@ function CommunityContent() {
   const [annRequiresAck, setAnnRequiresAck] = useState(false);
   const [activeAnn, setActiveAnn] = useState<UnifiedAnnouncement | null>(null);
   const canAnnounce = !!can(s.roles, 'announce.post');
-  const [composeOpen, setComposeOpen] = useState(canAnnounce);
+  const [composeOpen, setComposeOpen] = useState(false);
   const [optimisticReadIds, setOptimisticReadIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!composeOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        resetAnnouncement();
+        setComposeOpen(false);
+      }
+    };
+    addEventListener('keydown', onKey);
+    return () => removeEventListener('keydown', onKey);
+  }, [composeOpen]);
 
   const allAnnouncements = useMemo<UnifiedAnnouncement[]>(() => {
     const dbItems: UnifiedAnnouncement[] = news.map((n) => ({
@@ -473,8 +485,15 @@ function CommunityContent() {
           <span className="acc">.</span>
         </>
       }
+      aside={
+        tab === 'Announcements' && canAnnounce ? (
+          <button type="button" className="ann-btn-primary" onClick={() => setComposeOpen(true)}>
+            + Publish
+          </button>
+        ) : undefined
+      }
     >
-      <Tabs tabs={tabs} value={tab} onChange={handleTabChange} />
+      {tab !== 'Announcements' && <Tabs tabs={tabs} value={tab} onChange={handleTabChange} />}
 
       {/* ────────── TAB 1: FEED ────────── */}
       {tab === 'Feed' && (
@@ -629,46 +648,40 @@ function CommunityContent() {
 
       {/* ────────── TAB 2: ANNOUNCEMENTS ────────── */}
       {tab === 'Announcements' && (
-        <div className={`ann-layout${composeOpen ? ' open' : ''}`}>
-          <div className="cm-chips ann-chips" role="group" aria-label="Filter announcements">
-            <button
-              type="button"
-              className={`tag ${annFilter === 'all' ? 'on' : ''}`}
-              aria-pressed={annFilter === 'all'}
-              onClick={() => setAnnFilter('all')}
-            >
-              All
-            </button>
-            <button
-              type="button"
-              className={`tag ${annFilter === 'unread' ? 'on' : ''}`}
-              aria-pressed={annFilter === 'unread'}
-              onClick={() => setAnnFilter('unread')}
-            >
-              Unread {unreadAnnCount}
-            </button>
-            <button
-              type="button"
-              className={`tag ${annFilter === 'must' ? 'on' : ''}`}
-              aria-pressed={annFilter === 'must'}
-              onClick={() => setAnnFilter('must')}
-            >
-              Must read
-            </button>
+        <div className="ann-container">
+          <div className="ann-nav-group">
+            <div className="ann-nav-tabs">
+              <Tabs tabs={tabs} value={tab} onChange={handleTabChange} />
+            </div>
+            <div className="ann-filter-tabs" role="group" aria-label="Filter announcements">
+              <button
+                type="button"
+                className={`ann-filter-btn ${annFilter === 'all' ? 'active' : ''}`}
+                aria-pressed={annFilter === 'all'}
+                onClick={() => setAnnFilter('all')}
+              >
+                All
+              </button>
+              <button
+                type="button"
+                className={`ann-filter-btn ${annFilter === 'unread' ? 'active' : ''}`}
+                aria-pressed={annFilter === 'unread'}
+                onClick={() => setAnnFilter('unread')}
+              >
+                Unread {unreadAnnCount}
+              </button>
+              <button
+                type="button"
+                className={`ann-filter-btn ${annFilter === 'must' ? 'active' : ''}`}
+                aria-pressed={annFilter === 'must'}
+                onClick={() => setAnnFilter('must')}
+              >
+                Must Read
+              </button>
+            </div>
           </div>
 
-          {canAnnounce && (
-            <button
-              type="button"
-              data-nav
-              className="btn sm ann-compose-btn"
-              aria-expanded={composeOpen}
-              onClick={() => setComposeOpen(!composeOpen)}
-            >
-              + Publish
-            </button>
-          )}
-          <section className="ann-list">
+          <main>
             <AnnouncementBoard
               items={filteredAnnouncements}
               isRead={isAnnRead}
@@ -680,66 +693,104 @@ function CommunityContent() {
               isOfficer={isOfficer}
               memberTotal={activeMemberTotal}
             />
-          </section>
+          </main>
+
           {composeOpen && (
-            <SaveForm
-              className="panel stack ann-compose"
-              style={{ '--g': '18px' } as React.CSSProperties}
-              label="Unpublished announcement"
-              saveLabel="Publish"
-              onDiscard={resetAnnouncement}
-              onSubmit={handlePublishAnnouncement}
+            <div
+              className="cm-backdrop ann-modal-backdrop"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Publish Announcement"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) {
+                  resetAnnouncement();
+                  setComposeOpen(false);
+                }
+              }}
             >
-              <p className="label">Publish · everyone sees this</p>
-              <label className="field">
-                <span className="label">Title</span>
-                <input
-                  className="input"
-                  value={annTitle}
-                  onChange={(e) => setAnnTitle(e.target.value)}
-                  required
-                  minLength={3}
-                  maxLength={140}
-                  placeholder="Headline for the announcement"
-                />
-              </label>
-              <MarkdownEditor
-                id="ann-body-md"
-                label="Message (Markdown)"
-                value={annBody}
-                onChange={setAnnBody}
-                rows={5}
-                maxLength={6000}
-                placeholder="Supports @mentions and > Date / Time / Venue lines"
-              />
-              <label
-                className="row"
-                style={{ cursor: 'pointer', '--g': '8px' } as React.CSSProperties}
-              >
-                <input
-                  type="checkbox"
-                  className="check"
-                  checked={annPinned}
-                  onChange={(e) => setAnnPinned(e.target.checked)}
-                />
-                Pin to top
-              </label>
-              <label
-                className="row"
-                style={{ cursor: 'pointer', '--g': '8px' } as React.CSSProperties}
-              >
-                <input
-                  type="checkbox"
-                  className="check"
-                  checked={annRequiresAck}
-                  onChange={(e) => setAnnRequiresAck(e.target.checked)}
-                />
-                Require acknowledgement
-              </label>
-              <button className="btn sm" style={{ alignSelf: 'flex-start' }}>
-                Publish
-              </button>
-            </SaveForm>
+              <div className="ann-modal publish-modal">
+                <div className="ann-modal-header">
+                  <div className="mono ann-modal-subtitle">Publish · Everyone sees this</div>
+                  <button
+                    type="button"
+                    className="ann-close-btn"
+                    aria-label="Close"
+                    onClick={() => {
+                      resetAnnouncement();
+                      setComposeOpen(false);
+                    }}
+                  >
+                    &times;
+                  </button>
+                </div>
+                <div className="ann-modal-body">
+                  <SaveForm
+                    label="Unpublished announcement"
+                    saveLabel="Publish"
+                    onDiscard={() => {
+                      resetAnnouncement();
+                      setComposeOpen(false);
+                    }}
+                    onSubmit={async () => {
+                      const ok = await handlePublishAnnouncement();
+                      if (ok) setComposeOpen(false);
+                    }}
+                  >
+                    <div className="ann-form-group">
+                      <label htmlFor="ann-title">Title</label>
+                      <input
+                        id="ann-title"
+                        type="text"
+                        className="ann-form-control"
+                        value={annTitle}
+                        onChange={(e) => setAnnTitle(e.target.value)}
+                        required
+                        minLength={3}
+                        maxLength={140}
+                        placeholder="e.g., Codeforces Round #800 Div 2"
+                      />
+                    </div>
+
+                    <div className="ann-form-group">
+                      <MarkdownEditor
+                        id="ann-body-md"
+                        label="Message (Markdown Supported)"
+                        value={annBody}
+                        onChange={setAnnBody}
+                        rows={5}
+                        maxLength={6000}
+                        placeholder="Supports @mentions and > Date / Time / Venue lines"
+                      />
+                    </div>
+
+                    <div style={{ marginBottom: '2rem' }}>
+                      <div className="ann-checkbox-group">
+                        <input
+                          type="checkbox"
+                          id="pin-top"
+                          checked={annPinned}
+                          onChange={(e) => setAnnPinned(e.target.checked)}
+                        />
+                        <label htmlFor="pin-top">Pin to top of feed</label>
+                      </div>
+                      <div className="ann-checkbox-group">
+                        <input
+                          type="checkbox"
+                          id="req-ack"
+                          checked={annRequiresAck}
+                          onChange={(e) => setAnnRequiresAck(e.target.checked)}
+                        />
+                        <label htmlFor="req-ack">Require acknowledgement (Must Read)</label>
+                      </div>
+                    </div>
+
+                    <button type="submit" className="ann-btn-primary" style={{ width: '100%' }}>
+                      Publish Announcement
+                    </button>
+                  </SaveForm>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       )}
@@ -1030,8 +1081,16 @@ function CommunityContent() {
           (can(s.roles, 'announce.post') === true ||
             news.some((n) => n.id === activeAnn.id && n.user_id === me.id))
             ? async () => {
-                if (!(await sure('Delete this announcement for everyone?'))) return;
-                if (await act('deleteAnnouncement', { id: activeAnn.id })) setActiveAnn(null);
+                const target = activeAnn;
+                setActiveAnn(null);
+                const confirmed = await sure(
+                  'Delete this announcement for everyone?',
+                  'This cannot be undone.',
+                  'Delete',
+                  true,
+                );
+                if (!confirmed) return;
+                await act('deleteAnnouncement', { id: target.id });
               }
             : undefined
         }
