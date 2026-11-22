@@ -171,7 +171,7 @@ document or item needs whoever added it, or an admin.
 | ------------------------------------------ | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | `saveTask`, `deleteTask`                   | `id?`, `title`, `who?`, `due?` (YYYY-MM-DD), `col` (`To do`/`Doing`/`Done`) | Creates or updates a board task.                                                                                    |
 | `saveDoc`, `deleteDoc`                     | `title`, `about?` (≤ 300), `url` (http/https) / `id`                        | Adds a committee document link; shows who added it and when. Audited.                                               |
-| `saveItem`, `deleteItem`                   | `id?`, `name`                                                               | Adds or renames equipment.                                                                                          |
+| `saveItem`, `deleteItem`                   | `id?`, `name`, `holder?` (new items)                                        | Adds or renames equipment. A new item may start with yourself, or (admins) anyone, holding it.                      |
 | `holdItem`                                 | `id`, `to` (member or `null`)                                               | Check out to yourself (only when free), return (the holder or an admin), or hand to someone else (admins). Audited. |
 
 ### Accounts (officers)

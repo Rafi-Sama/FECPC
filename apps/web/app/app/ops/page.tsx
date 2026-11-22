@@ -37,7 +37,7 @@ function Who({
 
 export default function Ops() {
   const sure = useConfirm();
-  const [addingDoc, setAddingDoc] = useState(false);
+  const [adding, setAdding] = useState<'doc' | 'item' | null>(null);
   const { s, me, act, office, who, members } = useStore();
   const [tab, setTab] = useState<(typeof allTabs)[number]>('Board');
   // Drag a card onto a column to move it; `moving` shows it there until the server confirms.
@@ -145,11 +145,43 @@ export default function Ops() {
           <button
             className="btn sm b"
             style={{ alignSelf: 'flex-end' }}
-            onClick={() => setAddingDoc(true)}
+            onClick={() => setAdding('doc')}
           >
             + Add document
           </button>
-          {addingDoc && <DocModal onClose={() => setAddingDoc(false)} />}
+          {adding === 'doc' && (
+            <AddModal
+              title="Add document"
+              onClose={() => setAdding(null)}
+              save={(d) =>
+                act('saveDoc', {
+                  title: String(d.get('title')).trim(),
+                  about: String(d.get('about')).trim(),
+                  url: String(d.get('url')).trim(),
+                })
+              }
+            >
+              <label className="field">
+                <span className="label">Title</span>
+                <input
+                  name="title"
+                  className="input"
+                  required
+                  minLength={3}
+                  maxLength={120}
+                  autoFocus
+                />
+              </label>
+              <label className="field">
+                <span className="label">Short description</span>
+                <textarea name="about" className="input" rows={2} maxLength={300} />
+              </label>
+              <label className="field">
+                <span className="label">Link</span>
+                <input name="url" type="url" className="input" placeholder="https://…" required />
+              </label>
+            </AddModal>
+          )}
           {docs.length === 0 && <p className="body">No documents yet.</p>}
           <div className="list">
             {docs.map((doc) => (
@@ -187,28 +219,47 @@ export default function Ops() {
       )}
       {tab === 'Inventory' && (
         <div className="stack">
-          <SaveForm
-            className="row ops-add"
-            label="New item"
-            saveLabel="Add item"
-            onSubmit={async (e) => {
-              const f = e.currentTarget;
-              const ok = await act('saveItem', {
-                name: String(new FormData(f).get('name')).trim(),
-              });
-              if (ok) f.reset();
-              return ok;
-            }}
+          <button
+            className="btn sm b"
+            style={{ alignSelf: 'flex-end' }}
+            onClick={() => setAdding('item')}
           >
-            <input
-              name="name"
-              className="input"
-              placeholder="New item"
-              aria-label="New item"
-              required
-              minLength={2}
-            />
-          </SaveForm>
+            + Add item
+          </button>
+          {adding === 'item' && (
+            <AddModal
+              title="Add item"
+              onClose={() => setAdding(null)}
+              save={(d) =>
+                act('saveItem', {
+                  name: String(d.get('name')).trim(),
+                  holder: d.get('holder') || null,
+                })
+              }
+            >
+              <label className="field">
+                <span className="label">Item</span>
+                <input
+                  name="name"
+                  className="input"
+                  required
+                  minLength={2}
+                  maxLength={80}
+                  autoFocus
+                />
+              </label>
+              <div className="field">
+                <span className="label">Who has it</span>
+                {/* Only an admin hands equipment to someone else; anyone else can take it themselves. */}
+                <PersonPicker
+                  name="holder"
+                  people={admin ? people : people.filter((p) => p.id === me.id)}
+                  label="Who has it"
+                  none="Nobody (in the club room)"
+                />
+              </div>
+            </AddModal>
+          )}
           <div className="list">
             {inventory.map((it) => (
               <div key={it.id}>
@@ -216,11 +267,8 @@ export default function Ops() {
                   <strong>{it.name}</strong>
                   <br />
                   <span className="label">
-                    {it.holder ? `with ${who(it.holder).name}` : 'in the cupboard'}
+                    {it.holder ? `with ${who(it.holder).name}` : 'in the club room'}
                   </span>
-                </span>
-                <span className={`pill ${it.holder ? 'warn' : 'ok'}`}>
-                  {it.holder ? 'out' : 'available'}
                 </span>
                 {admin ? (
                   <Who
@@ -436,9 +484,18 @@ const host = (url: string) => {
   }
 };
 
-/** Adds a committee document: title, short description and link. */
-function DocModal({ onClose }: { onClose: () => void }) {
-  const { act } = useStore();
+/** The workspace's "add" dialog: the fields come as children; `save` returns true to close. */
+function AddModal({
+  title,
+  onClose,
+  save,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  save: (d: FormData) => Promise<boolean>;
+  children: React.ReactNode;
+}) {
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -451,7 +508,7 @@ function DocModal({ onClose }: { onClose: () => void }) {
       className="cm-backdrop"
       role="dialog"
       aria-modal="true"
-      aria-label="Add document"
+      aria-label={title}
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <form
@@ -461,33 +518,18 @@ function DocModal({ onClose }: { onClose: () => void }) {
           e.preventDefault();
           const d = new FormData(e.currentTarget);
           setBusy(true);
-          const ok = await act('saveDoc', {
-            title: String(d.get('title')).trim(),
-            about: String(d.get('about')).trim(),
-            url: String(d.get('url')).trim(),
-          });
+          const ok = await save(d);
           setBusy(false);
           if (ok) onClose();
         }}
       >
         <div className="cm-modal-head">
-          <h2 className="h3">Add document</h2>
+          <h2 className="h3">{title}</h2>
           <button type="button" className="cm-modal-close" aria-label="Close" onClick={onClose}>
             ×
           </button>
         </div>
-        <label className="field">
-          <span className="label">Title</span>
-          <input name="title" className="input" required minLength={3} maxLength={120} autoFocus />
-        </label>
-        <label className="field">
-          <span className="label">Short description</span>
-          <textarea name="about" className="input" rows={2} maxLength={300} />
-        </label>
-        <label className="field">
-          <span className="label">Link</span>
-          <input name="url" type="url" className="input" placeholder="https://…" required />
-        </label>
+        {children}
         <div
           className="row"
           style={{ justifyContent: 'flex-end', '--g': '8px' } as React.CSSProperties}
@@ -496,7 +538,7 @@ function DocModal({ onClose }: { onClose: () => void }) {
             Cancel
           </button>
           <button type="submit" className="btn sm" disabled={busy}>
-            Add document
+            {title}
           </button>
         </div>
       </form>

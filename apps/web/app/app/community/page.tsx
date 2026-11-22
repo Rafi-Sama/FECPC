@@ -302,6 +302,14 @@ function CommunityContent() {
     });
   }, [news, counts.annReads, who]);
 
+  // `?tab=announcements&open=<id>` (from Today and the inbox) opens that announcement.
+  const openParam = searchParams.get('open');
+  useEffect(() => {
+    if (!openParam) return;
+    const hit = allAnnouncements.find((a) => a.id === openParam);
+    if (hit) setActiveAnn(hit);
+  }, [openParam, allAnnouncements]);
+
   const isAnnRead = useCallback(
     (id: string) => s.read.includes(id) || optimisticReadIds.includes(id),
     [s.read, optimisticReadIds],
@@ -1144,7 +1152,11 @@ function CommunityContent() {
         item={activeAnn}
         alreadyRead={activeAnn ? isAnnRead(activeAnn.id) : false}
         onMarkRead={handleMarkAnnRead}
-        onClose={() => setActiveAnn(null)}
+        onClose={() => {
+          setActiveAnn(null);
+          // Drop `open` so the effect above does not reopen it.
+          if (openParam) router.replace('/app/community?tab=announcements', { scroll: false });
+        }}
         onDelete={
           activeAnn?.id.startsWith('an:') &&
           (can(s.roles, 'announce.post') === true ||
