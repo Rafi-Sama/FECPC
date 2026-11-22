@@ -2,27 +2,29 @@
 import { useState } from 'react';
 import { Denied, Page, Tabs } from '@/components/app/Shell';
 import { useStore } from '@/components/app/Store';
-import { can, matrix, roleName, roles, type Cap } from '@fecpc/contracts';
+import { can, canFully, matrix, roleName, roles, type Cap } from '@fecpc/contracts';
 import { AdminExtra } from '@/components/app/admin/AdminExtra';
-import { useConfirm } from '@/components/app/shared/PromptDialog';
+import { Recruit } from '@/components/app/admin/Recruit';
+import { ProfileRequests } from '@/components/app/admin/ProfileRequests';
+import { AuditLog } from '@/components/app/admin/AuditLog';
 
 const hues = ['#3de1ff', '#ff8a3d', '#7ce38b', '#ff4d8d'];
 const cell = (v: unknown) => (v === true ? '✓' : v ? String(v) : '–');
 
 export default function Admin() {
-  const sure = useConfirm();
-  const { s, act, office, members, toast } = useStore();
-  const applications = office.applications ?? [];
+  const { s, office, members, toast } = useStore();
   const caps = {
     apps: can(s.roles, 'application.approve'),
     roles: can(s.roles, 'roles.assign'),
     audit: can(s.roles, 'audit.view'),
     exp: can(s.roles, 'data.export'),
+    edit: canFully(s.roles, 'member.editDetails'),
   };
   const tabs = [
     'Dashboard',
-    ...(caps.apps ? ['Applications'] : []),
+    ...(caps.apps ? ['Recruit'] : []),
     ...(caps.apps || caps.roles ? ['Members'] : []),
+    ...(caps.edit ? ['Requests'] : []),
     'Permissions',
     ...(caps.audit ? ['Audit log'] : []),
   ];
@@ -35,7 +37,7 @@ export default function Admin() {
     );
   const cur = tabs.includes(tab) ? tab : 'Dashboard';
   const people = members.filter((m) => m.id !== 'admin'),
-    pendingApps = applications.filter((a) => s.apps[a.id] === 'pending').length;
+    pendingApps = (office.recruit?.applicants ?? []).filter((a) => a.status === 'pending').length;
   // Every tile is counted from live records; a role only gets the tiles it has the authority to act on.
   const tiles: [string, number, string][] = [
     [
@@ -44,7 +46,16 @@ export default function Admin() {
       `${people.filter((m) => m.suspended).length} suspended · ${people.filter((m) => m.pending).length} invited, not joined`,
     ],
     ...(caps.apps
-      ? [['Applications', pendingApps, 'waiting for a decision'] as [string, number, string]]
+      ? [['Applicants', pendingApps, 'waiting for a decision'] as [string, number, string]]
+      : []),
+    ...(office.profileRequests
+      ? [
+          ['Profile changes', office.profileRequests.length, 'waiting for a decision'] as [
+            string,
+            number,
+            string,
+          ],
+        ]
       : []),
     ...(office.queue
       ? [
@@ -132,85 +143,8 @@ export default function Admin() {
           )}
         </section>
       )}
-      {cur === 'Applications' && applications.length === 0 && (
-        <p className="body">No applications yet.</p>
-      )}
-      {cur === 'Applications' && (
-        <div className="scroll-x">
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Applicant · open for their answers</th>
-                <th>Dept · Batch</th>
-                <th>Source</th>
-                <th className="r">Decision</th>
-              </tr>
-            </thead>
-            <tbody>
-              {applications.map((a) => {
-                const st = s.apps[a.id] === 'pending' ? '' : s.apps[a.id];
-                return (
-                  <tr key={a.id}>
-                    <td>
-                      <details>
-                        <summary>
-                          <strong>{a.name}</strong>
-                        </summary>
-                        <p className="body" style={{ marginTop: 8, maxWidth: '52ch' }}>
-                          {a.why}
-                        </p>
-                        <p className="label" style={{ marginTop: 6 }}>
-                          {a.email} · ID {a.sid}
-                          {a.cf ? ` · @${a.cf}` : ''} · track {a.track}
-                        </p>
-                      </details>
-                    </td>
-                    <td>
-                      {a.dept} · {a.batch}
-                    </td>
-                    <td>{a.src}</td>
-                    <td className="r">
-                      {st ? (
-                        <span className={`pill ${st === 'accepted' ? 'ok' : 'bad'}`}>{st}</span>
-                      ) : (
-                        <span
-                          className="row"
-                          style={
-                            {
-                              '--g': '6px',
-                              justifyContent: 'flex-end',
-                              flexWrap: 'nowrap',
-                            } as React.CSSProperties
-                          }
-                        >
-                          <button
-                            className="btn xs"
-                            onClick={async () =>
-                              (await sure(`Accept ${a.name}? This creates their account.`)) &&
-                              act('decide', { kind: 'application', id: a.id, to: 'accepted' })
-                            }
-                          >
-                            Accept
-                          </button>
-                          <button
-                            className="btn xs line"
-                            onClick={async () =>
-                              (await sure(`Decline ${a.name}? This cannot be undone.`)) &&
-                              act('decide', { kind: 'application', id: a.id, to: 'declined' })
-                            }
-                          >
-                            Decline
-                          </button>
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {cur === 'Recruit' && <Recruit />}
+      {cur === 'Requests' && <ProfileRequests />}
       {cur === 'Permissions' && (
         <div className="stack">
           <p className="body" style={{ maxWidth: '70ch' }}>
@@ -245,30 +179,7 @@ export default function Admin() {
           </div>
         </div>
       )}
-      {cur === 'Audit log' && (
-        <div className="scroll-x">
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>When</th>
-                <th>Who</th>
-                <th>What</th>
-              </tr>
-            </thead>
-            <tbody>
-              {s.log.map((l, i) => (
-                <tr key={i}>
-                  <td className="mono" style={{ whiteSpace: 'nowrap' }}>
-                    {l.t}
-                  </td>
-                  <td>{l.who}</td>
-                  <td>{l.what}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {cur === 'Audit log' && <AuditLog />}
       <AdminExtra tab={cur} />
     </Page>
   );

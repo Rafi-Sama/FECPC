@@ -4,7 +4,7 @@ import { PromptProvider } from './shared/PromptDialog';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { Avatar } from '@/components/pixel/Sprites';
+import { MemberFace } from './shared/MemberFace';
 import { myInvoices, owes } from '@fecpc/content/member-area';
 import { can, canFully, isAdmin, isCommittee, roleName, LEVEL, level } from '@fecpc/contracts';
 import type { AppState } from '@fecpc/contracts';
@@ -404,7 +404,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             </details>
             <details className="me" key={path}>
               <summary>
-                <Avatar name={me.name} size={28} />
+                <MemberFace url={me.avatar_url} name={me.name} size={28} />
                 <span>
                   <strong>{me.name}</strong>
                   <span className="label">{me.role || roleName[s.role]}</span>

@@ -248,9 +248,14 @@ export const challengeHandlers: Record<
   },
   async challengeDelete(c, a, _p, i) {
     const r = await c.query(
-      `delete from challenges where id = $1 and (by = $2 or $3) returning id`,
+      `delete from challenges where id = $1 and (by = $2 or $3) returning by, problem`,
       [Number(i.id) || 0, a.id, !!canFully(a.roles, 'sheet.curate')],
     );
     if (!r.rowCount) throw new Fail(404, 'That challenge does not exist or is not yours.');
+    if (r.rows[0].by !== a.id)
+      await c.query(`insert into audit (who, what) values ($1, $2)`, [
+        a.name,
+        `deleted ${r.rows[0].by}'s challenge ${r.rows[0].problem}`,
+      ]);
   },
 };

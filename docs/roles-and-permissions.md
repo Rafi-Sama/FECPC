@@ -22,42 +22,41 @@ information as a string: `'full' | 'scope' | 'view' | 'propose' | 'none'`.
 
 Generated from `packages/contracts/src/capabilities.ts`.
 
-| Capability                  | What it allows                                            | Member | Alumni | CP Head | Treasurer | Secretary | President | Super Admin |
-| --------------------------- | --------------------------------------------------------- | :----: | :----: | :-----: | :-------: | :-------: | :-------: | :---------: |
-| `profile.own`               | Edit own profile, see own dues                            |   ✓    |   ✓    |    ✓    |     ✓     |     ✓     |     ✓     |      ✓      |
-| `profile.editOwn`           | Edit own public profile                                   |   ✓    |   ✓    |    ✓    |     ✓     |     ✓     |     ✓     |      ✓      |
-| `directory.view`            | View member directory                                     |   ✓    |   ✓    |    ✓    |     ✓     |     ✓     |     ✓     |      ✓      |
-| `teams.oversee`             | Oversee ICPC teams and assign coaches                     |        |        |    ✓    |           |           |     ✓     |      ✓      |
-| `sheet.stats`               | See sheet completion statistics                           |        |        |    ✓    |           |           |     ✓     |      ✓      |
-| `sheet.curate`              | Publish curated problem sheets                            |        |        |    ✓    |           |           |     ✓     |      ✓      |
-| `payments.verify`           | Verify member payments                                    |        |        |         |     ✓     |           |   view    |      ✓      |
-| `expense.approve`           | Approve expenses                                          |        |        |         |  propose  |           |     ✓     |      ✓      |
-| `event.publish`             | Run events: create, registrations, feedback, certificates |        |        |         |           |     ✓     |     ✓     |      ✓      |
-| `contest.run`               | Choose the contests on the contest-day scoreboard         |        |        |    ✓    |           |     ✓     |     ✓     |      ✓      |
-| `announce.post`             | Post announcements                                        |        |        |    ✓    |     ✓     |     ✓     |     ✓     |      ✓      |
-| `poll.create`               | Create and close polls                                    |        |        |    ✓    |           |     ✓     |     ✓     |      ✓      |
-| `feed.post`                 | Create community feed posts                               |   ✓    |   ✓    |    ✓    |     ✓     |     ✓     |     ✓     |      ✓      |
-| `feed.moderate`             | Review reported feed posts                                |        |        |         |           |     ✓     |     ✓     |      ✓      |
-| `idea.create`               | Submit community ideas                                    |   ✓    |   ✓    |    ✓    |     ✓     |     ✓     |     ✓     |      ✓      |
-| `idea.manage`               | Manage community ideas                                    | scope  | scope  |  scope  |   scope   |   scope   |     ✓     |      ✓      |
-| `alumni.save`               | Save alumni profile                                       |   ✓    |   ✓    |    ✓    |     ✓     |     ✓     |     ✓     |      ✓      |
-| `alumni.toggleQuestions`    | Toggle availability for questions                         |        | scope  |         |           |           |     ✓     |      ✓      |
-| `alumni.job.post`           | Post alumni job listings                                  |        |   ✓    |         |           |           |     ✓     |      ✓      |
-| `alumni.job.fetch`          | Fetch job listings; remove or post any listing            |        | scope  |         |           |           |     ✓     |      ✓      |
-| `interview.roadmap.manage`  | Create, edit and delete interview roadmaps                |        |        |    ✓    |           |           |     ✓     |      ✓      |
-| `interview.topic.create`    | Create interview prep topic                               |        |        |    ✓    |           |           |     ✓     |      ✓      |
-| `interview.problem.create`  | Add problem to topic                                      |        |        |    ✓    |           |           |     ✓     |      ✓      |
-| `interview.tip.create`      | Post interview tip                                        |        |   ✓    |         |           |           |     ✓     |      ✓      |
-| `interview.progress.toggle` | Toggle problem solved                                     |   ✓    |   ✓    |    ✓    |     ✓     |     ✓     |     ✓     |      ✓      |
-| `blog.post.create`          | Write blog post                                           |        |   ✓    |         |           |           |     ✓     |      ✓      |
-| `blog.post.delete`          | Delete blog post                                          |        | scope  |         |           |           |     ✓     |      ✓      |
-| `application.approve`       | Approve applications                                      |        |        |         |           |     ✓     |     ✓     |      ✓      |
-| `roles.assign`              | Assign roles                                              |        |        |         |           |           |     ✓     |      ✓      |
-| `member.editDetails`        | Edit a member's name, department and batch (audited)      |        |        |         |           |     ✓     |     ✓     |      ✓      |
-| `member.makeAlumni`         | Transition member to alumni                               |        |        |         |           |           |     ✓     |      ✓      |
-| `member.deactivate`         | Deactivate member account                                 |        |        |         |           |           |     ✓     |      ✓      |
-| `audit.view`                | View audit log                                            |        |        |         |           |           |     ✓     |      ✓      |
-| `data.export`               | Export the member list                                    |        |        |         |     ✓     |     ✓     |     ✓     |      ✓      |
+| Capability                  | What it allows                                                   | Member | Alumni | CP Head | Treasurer | Secretary | President | Super Admin |
+| --------------------------- | ---------------------------------------------------------------- | :----: | :----: | :-----: | :-------: | :-------: | :-------: | :---------: |
+| `profile.own`               | Edit own profile, see own dues                                   |   ✓    |   ✓    |    ✓    |     ✓     |     ✓     |     ✓     |      ✓      |
+| `directory.view`            | View member directory                                            |   ✓    |   ✓    |    ✓    |     ✓     |     ✓     |     ✓     |      ✓      |
+| `teams.oversee`             | Oversee ICPC teams and assign coaches                            |        |        |    ✓    |           |           |     ✓     |      ✓      |
+| `sheet.stats`               | See sheet completion statistics                                  |        |        |    ✓    |           |           |     ✓     |      ✓      |
+| `sheet.curate`              | Publish curated problem sheets                                   |        |        |    ✓    |           |           |     ✓     |      ✓      |
+| `payments.verify`           | Verify member payments                                           |        |        |         |     ✓     |           |   view    |      ✓      |
+| `expense.approve`           | Approve expenses                                                 |        |        |         |  propose  |           |     ✓     |      ✓      |
+| `event.publish`             | Run events: create, registrations, feedback, certificates        |        |        |         |           |     ✓     |     ✓     |      ✓      |
+| `contest.run`               | Choose the contests on the contest-day scoreboard                |        |        |    ✓    |           |     ✓     |     ✓     |      ✓      |
+| `announce.post`             | Post announcements                                               |        |        |    ✓    |     ✓     |     ✓     |     ✓     |      ✓      |
+| `poll.create`               | Create and close polls                                           |        |        |    ✓    |           |     ✓     |     ✓     |      ✓      |
+| `feed.post`                 | Create community feed posts                                      |   ✓    |   ✓    |    ✓    |     ✓     |     ✓     |     ✓     |      ✓      |
+| `feed.moderate`             | Review reported feed posts                                       |        |        |         |           |     ✓     |     ✓     |      ✓      |
+| `idea.create`               | Submit community ideas                                           |   ✓    |   ✓    |    ✓    |     ✓     |     ✓     |     ✓     |      ✓      |
+| `idea.manage`               | Manage community ideas                                           | scope  | scope  |  scope  |   scope   |   scope   |     ✓     |      ✓      |
+| `alumni.save`               | Save alumni profile                                              |   ✓    |   ✓    |    ✓    |     ✓     |     ✓     |     ✓     |      ✓      |
+| `alumni.toggleQuestions`    | Toggle availability for questions                                |        | scope  |         |           |           |     ✓     |      ✓      |
+| `alumni.job.post`           | Post alumni job listings                                         |        |   ✓    |         |           |           |     ✓     |      ✓      |
+| `alumni.job.fetch`          | Fetch job listings; remove or post any listing                   |        | scope  |         |           |           |     ✓     |      ✓      |
+| `interview.roadmap.manage`  | Create, edit and delete interview roadmaps                       |        |        |    ✓    |           |           |     ✓     |      ✓      |
+| `interview.topic.create`    | Create interview prep topic                                      |        |        |    ✓    |           |           |     ✓     |      ✓      |
+| `interview.problem.create`  | Add problem to topic                                             |        |        |    ✓    |           |           |     ✓     |      ✓      |
+| `interview.tip.create`      | Post interview tip                                               |        |   ✓    |         |           |           |     ✓     |      ✓      |
+| `interview.progress.toggle` | Toggle problem solved                                            |   ✓    |   ✓    |    ✓    |     ✓     |     ✓     |     ✓     |      ✓      |
+| `blog.post.create`          | Write blog post                                                  |        |   ✓    |         |           |           |     ✓     |      ✓      |
+| `blog.post.delete`          | Delete blog post                                                 |        | scope  |         |           |           |     ✓     |      ✓      |
+| `application.approve`       | Approve applications                                             |        |        |         |           |     ✓     |     ✓     |      ✓      |
+| `roles.assign`              | Assign roles                                                     |        |        |         |           |           |     ✓     |      ✓      |
+| `member.editDetails`        | Edit a member's profile; approve their change requests (audited) |        |        |         |           |     ✓     |     ✓     |      ✓      |
+| `member.makeAlumni`         | Transition member to alumni                                      |        |        |         |           |           |     ✓     |      ✓      |
+| `member.deactivate`         | Deactivate member account                                        |        |        |         |           |           |     ✓     |      ✓      |
+| `audit.view`                | View audit log                                                   |        |        |         |           |           |     ✓     |      ✓      |
+| `data.export`               | Export the member list                                           |        |        |         |     ✓     |     ✓     |     ✓     |      ✓      |
 
 ## Posts
 

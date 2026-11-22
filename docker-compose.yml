@@ -1,4 +1,4 @@
-# Local development database: PostgreSQL 16 with the dev database (fecpc) and the test database (fecpc_test).
+# Local development: PostgreSQL 16 with the dev database (fecpc) and the test database (fecpc_test), and a mail catcher.
 # Production reads DATABASE_URL from the host's secrets instead.
 services:
   db:
@@ -18,6 +18,13 @@ services:
     volumes:
       - fecpc_pg:/var/lib/postgresql/data
       - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
+  # Catches every email the API sends in development (set-password links); read them at http://localhost:8026.
+  mail:
+    image: axllent/mailpit:v1.21
+    container_name: fecpc_mail
+    restart: unless-stopped
+    ports: ['127.0.0.1:1026:1025', '127.0.0.1:8026:8025']
 
 volumes:
   fecpc_pg:

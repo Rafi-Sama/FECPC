@@ -339,16 +339,26 @@ export class AuthService {
     ).rows[0];
     if (!row || row.system || row.status !== 'active' || isSuspended(row)) {
       throw new DomainException(
-        'No member account uses that address. Apply to join first, or sign in with your password.',
+        'No member account uses that address. Apply through a recruitment link first, or sign in with your password.',
         HttpStatus.FORBIDDEN,
         ErrorCodes.FORBIDDEN_RESOURCE,
       );
     }
-    if (!row.linked)
-      await this.db.query(`UPDATE users SET ${col} = $1 WHERE id = $2 AND ${col} IS NULL`, [
-        sub,
-        row.id,
-      ]);
+    if (!row.linked) {
+      const linked = await this.db.query(
+        `UPDATE users SET ${col} = $1 WHERE id = $2 AND ${col} IS NULL`,
+        [sub, row.id],
+      );
+      // From now on this Google/GitHub account signs in as this member: worth a line in the log.
+      if (linked.rowCount)
+        await this.audit.record({
+          actorId: row.id,
+          actorRole: row.role,
+          action: col === 'google_sub' ? 'auth.google_linked' : 'auth.github_linked',
+          entityType: 'users',
+          entityId: row.id,
+        });
+    }
     return { token: await this.createSession(row.id), user: toUser(row) };
   }
 }

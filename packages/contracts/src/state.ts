@@ -1,5 +1,7 @@
 // The shape of everything the server sends a signed-in member. Built by the API's loadState (modules/member-area/state.ts), read by the web store.
 import type { Post, Role } from './roles.ts';
+import type { Applicant, RecruitLink } from './recruit.ts';
+import type { ProfileRequest, ProfileRequestReview } from './profile.ts';
 
 /** A club member as the roster shows them. */
 export type Member = {
@@ -66,7 +68,6 @@ export type S = {
   ideasCount: number;
   acceptedInterests: number;
   milestoneKudosReceived: number;
-  log: { t: string; who: string; what: string }[];
 };
 /** A member as everyone sees them. `roleKey` and `suspended` are present only for officers who manage accounts. */
 export type Roster = Member & {
@@ -256,11 +257,17 @@ export type MemberProfile = MemberSummary & {
   bio: string | null;
   github_url: string | null;
   linkedin_url: string | null;
+  vjudge_handle: string | null;
+  /** When the account was created. */
+  joined: string;
   experience: MemberExperience[];
   contest_history: MemberContestRow[];
   recent_activity: MemberActivityItem[];
   /** Only included when viewerId === userId */
   email?: string;
+  /** From the recruitment form; only for the member themselves. */
+  student_id?: string | null;
+  phone?: string | null;
   /** Alumni-only payloads */
   available_for_questions?: boolean;
   location?: string | null;
@@ -403,19 +410,19 @@ export type Office = {
     budgets: { id: number; name: string; plan: number; spent: number }[];
   };
   expenses?: Expense[];
-  applications?: {
-    id: string;
-    name: string;
-    dept: string;
-    batch: number;
-    quiz: number;
-    src: string;
-    email: string;
-    sid: string;
-    cf: string;
-    track: string;
-    why: string;
-  }[];
+  recruit?: { links: RecruitLink[]; applicants: Applicant[] };
+  /** Open profile change requests, for officers with full `member.editDetails`. */
+  profileRequests?: ProfileRequestReview[];
+  /** The email queue, for officers who send email (recruitment, events). */
+  mail?: {
+    ready: boolean;
+    limit: number;
+    sent: number;
+    queued: number;
+    /** The latest error on mail still waiting (server unreachable, login rejected, limit reached). */
+    problem: string | null;
+    failed: { id: string; to: string; subject: string; error: string; at: string }[];
+  };
   suggestions?: { body: string; at: string }[];
   feedback?: { body: string; at: string }[];
   ops?: {
@@ -482,6 +489,8 @@ export type AppState = {
     flow: { month: string; in: number; out: number }[];
   };
   office: Office;
+  /** The member's own latest profile change request: open, or decided in the last 14 days. */
+  profileRequest: ProfileRequest | null;
   /** The current weekly sheet first, then curated sheets, newest first. `club` = members Codeforces says solved it. */
   sheets: Sheet[];
   /** Arena challenges from the last 30 days, newest first. `solvers[].at` is the first accept on Codeforces. */

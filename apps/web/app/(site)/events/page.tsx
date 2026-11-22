@@ -151,7 +151,7 @@ export default async function Events() {
               judging stays on a real judge.
             </p>
             <p>
-              <Link href="/join" className="btn">
+              <Link href="/contact" className="btn">
                 Register a team
               </Link>
             </p>

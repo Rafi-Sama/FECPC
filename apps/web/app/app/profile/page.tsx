@@ -1,12 +1,60 @@
 'use client';
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Page } from '@/components/app/Shell';
 import { useStore } from '@/components/app/Store';
 import { HandleBox, useJudge, VjudgeBox } from '@/components/app/Judge';
 import { Heatmap, Line, Radar } from '@/components/app/Charts';
 import { cfTitle } from '@fecpc/content/site';
 import { sheet } from '@fecpc/content/member-area';
-import { level, rankFor, roleName } from '@fecpc/contracts';
+import {
+  level,
+  PROFILE_LABEL,
+  rankFor,
+  roleName,
+  type MemberProfile,
+  type ProfileField,
+} from '@fecpc/contracts';
+import { MemberFace } from '@/components/app/shared/MemberFace';
+import { ProfileForm } from '@/components/app/members/ProfileForm';
+import { printCv } from '@/lib/cv';
+
+/** The member's full profile (with their private details), from the same read the Members page uses. */
+function useMyProfile(id: string) {
+  const [p, setP] = useState<MemberProfile | null>(null);
+  const load = useCallback(async () => {
+    const res = await fetch('/api/members', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'getMemberProfile', userId: id }),
+    }).catch(() => null);
+    if (res?.ok) setP((await res.json()) as MemberProfile);
+  }, [id]);
+  useEffect(() => void load(), [load]);
+  return [p, load] as const;
+}
+
+const since = (iso?: string) =>
+  iso ? new Date(iso).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }) : '—';
+
+/** One labelled detail; empty ones say so, so the member knows what is missing. */
+function Detail({ k, v, href }: { k: string; v?: string | null; href?: string }) {
+  return (
+    <div className="pd">
+      <dt>{k}</dt>
+      <dd>
+        {!v ? (
+          <span className="dim">Not added</span>
+        ) : href ? (
+          <a href={href} target={href.startsWith('http') ? '_blank' : undefined} rel="noreferrer">
+            {v}
+          </a>
+        ) : (
+          v
+        )}
+      </dd>
+    </div>
+  );
+}
 
 function Password() {
   const [msg, setMsg] = useState<[boolean, string] | null>(null);
@@ -68,11 +116,14 @@ function Password() {
 }
 
 export default function Profile() {
-  const { s, me, counts, xp } = useStore();
+  const { s, me, counts, xp, act, profileRequest } = useStore();
+  const [p, reload] = useMyProfile(me.id);
+  useEffect(() => void reload(), [me, reload]); // an approved change arrives with fresh state
+  const [editing, setEditing] = useState(false);
   // kudos on the profile itself, plus kudos on the member's milestones in the feed
   const profileKudos = counts.kudos?.[`member:${me.id}`] ?? 0;
   const kudos = profileKudos + s.milestoneKudosReceived;
-  const { data } = useJudge();
+  const { data, err } = useJudge();
   const days = data
     ? Array.from(
         { length: 364 },
@@ -114,13 +165,88 @@ export default function Profile() {
     <Page
       title={me.name}
       aside={
-        <button className="btn sm line no-print" onClick={() => print()}>
-          Export CV as PDF
-        </button>
+        <span className="row no-print" style={{ '--g': '8px' } as React.CSSProperties}>
+          <button className="btn sm" disabled={!p} onClick={() => setEditing(true)}>
+            Request a change
+          </button>
+          <button
+            className="btn sm line"
+            onClick={() =>
+              printCv({
+                name: me.name,
+                photo: me.avatar_url ?? null,
+                headline: `${me.role || roleName[s.role]} · ${me.dept} · Batch ${me.batch}`,
+                member: `FECPC member FEC-${String(me.no).padStart(4, '0')} · since ${since(p?.joined)}`,
+                accent: '#1f3bff', // the club's colour; tier colours like grey print poorly
+                contact: [
+                  ...(p?.email ? [{ label: p.email, href: `mailto:${p.email}` }] : []),
+                  ...(p?.phone ? [{ label: p.phone, href: `tel:${p.phone}` }] : []),
+                  ...(p?.location ? [{ label: p.location }] : []),
+                  ...(p?.github_url ? [{ label: 'GitHub', href: p.github_url }] : []),
+                  ...(p?.linkedin_url ? [{ label: 'LinkedIn', href: p.linkedin_url }] : []),
+                ],
+                bio: p?.bio ?? null,
+                skills: p?.skills ?? [],
+                experience: p?.experience ?? [],
+                stats: stats.map(([k, v, sub]) => [k, String(v), sub]),
+                handle: s.handle || null,
+                history: hist,
+                contests: data?.contests ?? [],
+                club: 'FEC Programming Club',
+              })
+            }
+          >
+            Export CV as PDF
+          </button>
+        </span>
       }
     >
+      {profileRequest && (
+        <div className={`preq no-print ${profileRequest.status}`} role="status">
+          <span>
+            {profileRequest.status === 'pending' ? (
+              <>
+                <b>Change requested:</b>{' '}
+                {Object.keys(profileRequest.changes)
+                  .map((k) => PROFILE_LABEL[k as ProfileField] ?? k)
+                  .join(', ')}
+                . Waiting for the Secretary or President.
+              </>
+            ) : profileRequest.status === 'approved' ? (
+              <>
+                <b>Your change was approved</b> and is on your profile.
+              </>
+            ) : (
+              <>
+                <b>Your change was not approved:</b> {profileRequest.reason}
+              </>
+            )}
+          </span>
+          {profileRequest.status === 'pending' && (
+            <button className="btn xs line" onClick={() => act('profileRequestCancel', {})}>
+              Withdraw
+            </button>
+          )}
+        </div>
+      )}
       <div className="bento fill profile">
         <section className="c5 idcard" style={{ '--r': tier.color } as React.CSSProperties}>
+          <button
+            type="button"
+            className="idcard-photo"
+            onClick={() => setEditing(true)}
+            disabled={!p}
+            title={me.avatar_url ? 'Ask for a new photo' : 'Add a photo'}
+          >
+            <MemberFace
+              url={me.avatar_url}
+              name={me.name}
+              size={132}
+              fg={tier.color}
+              bg="#1a1a17"
+            />
+            {!me.avatar_url && <span className="idcard-add no-print">+ Add photo</span>}
+          </button>
           <div>
             <p className="label" style={{ opacity: 0.7 }}>
               FECPC · Member card
@@ -130,7 +256,7 @@ export default function Profile() {
               {me.role || roleName[s.role]} · {me.dept} · Batch {me.batch}
             </p>
             <p className="mono" style={{ fontSize: 14, marginTop: 4, opacity: 0.8 }}>
-              FEC-{String(me.no).padStart(4, '0')}
+              FEC-{String(me.no).padStart(4, '0')} · since {since(p?.joined)}
             </p>
             <p className="idcard-cf">
               {data ? (
@@ -141,6 +267,8 @@ export default function Profile() {
                 >
                   {data.handle} · {data.rank}
                 </a>
+              ) : s.handle ? (
+                `${s.handle} · ${err ? 'not found on Codeforces' : 'syncing…'}`
               ) : (
                 'Codeforces not linked'
               )}
@@ -152,6 +280,29 @@ export default function Profile() {
               ♥ {kudos} kudos
             </p>
           </div>
+          <dl className="idcard-dl">
+            <Detail k="Email" v={p?.email} href={p?.email ? `mailto:${p.email}` : undefined} />
+            <Detail k="Phone" v={p?.phone} href={p?.phone ? `tel:${p.phone}` : undefined} />
+            <Detail k="Student ID" v={p?.student_id} />
+            <Detail k="Location" v={p?.location} />
+          </dl>
+          {(p?.github_url || p?.linkedin_url) && (
+            <p className="idcard-links">
+              {p.github_url && (
+                <a href={p.github_url} target="_blank" rel="noreferrer">
+                  GitHub ↗
+                </a>
+              )}
+              {p.linkedin_url && (
+                <a href={p.linkedin_url} target="_blank" rel="noreferrer">
+                  LinkedIn ↗
+                </a>
+              )}
+            </p>
+          )}
+          <p className="idcard-private no-print">
+            Email, phone and student ID: only you and the Secretary and President see these.
+          </p>
         </section>
         <section className="panel c7">
           <div className="pstats">
@@ -180,6 +331,32 @@ export default function Profile() {
             </p>
           )}
         </section>
+        {p && (p.bio || p.skills.length > 0 || p.experience.length > 0) && (
+          <section className="panel pdetails">
+            <p className="label">About</p>
+            {p.bio ? <p className="body pbio">{p.bio}</p> : null}
+            {p.skills.length > 0 && (
+              <div className="pskills">
+                {p.skills.map((x) => (
+                  <span key={x} className="tag">
+                    {x}
+                  </span>
+                ))}
+              </div>
+            )}
+            {p.experience.length > 0 && (
+              <ul className="pexp">
+                {p.experience.map((x, i) => (
+                  <li key={i}>
+                    <span className="label">{x.period}</span>
+                    <strong>{x.role}</strong>
+                    {x.summary && <span className="body">{x.summary}</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
         <section className="panel c8">
           <div className="row between">
             <p className="label">Solves, last 52 weeks</p>
@@ -245,6 +422,7 @@ export default function Profile() {
         </div>
         <Password />
       </div>
+      {editing && p && <ProfileForm profile={p} mode="request" onClose={() => setEditing(false)} />}
     </Page>
   );
 }

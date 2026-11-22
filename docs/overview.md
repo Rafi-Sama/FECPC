@@ -48,7 +48,7 @@ The full rules are in [Roles and permissions](roles-and-permissions.md).
 | Finance        | `/app/finance`                    | Own dues and payments, receipts, transparency; officers: payment verification, expense requests and decisions, club fund                                                                                                                             |
 | Notifications  | `/app/notifications`              | Inbox built from real records (dues, decisions, team invites, kudos); latest six in the topbar bell; team invites and idea interests answer in one click (`actions` on the item)                                                                     |
 | Profile        | `/app/profile`                    | Own details, Codeforces handle, password change                                                                                                                                                                                                      |
-| Admin          | `/app/admin`                      | Dashboard (counts, member export, suggestions), applications, members (role, post, suspend/reinstate, invite and reset links), permissions matrix, audit log                                                                                         |
+| Admin          | `/app/admin`                      | Dashboard (counts, member export, suggestions), recruit (links, QR posters, CSV import, applicant review), members (role, post, suspend/reinstate, invite and reset links), permissions matrix, audit log                                            |
 | Ops            | `/app/ops`                        | Committee workspace: task board, meetings, documents, inventory, sponsors (finance roles), reports                                                                                                                                                   |
 
 `/app/members` and `/app/alumni` are old URLs that redirect to `/app/directory` and `/app/career`.
@@ -56,13 +56,15 @@ The full rules are in [Roles and permissions](roles-and-permissions.md).
 ## Public site
 
 `/`, `/about`, `/events`, `/contests`, `/leaderboard`, `/alumni`, `/projects`, `/blog`, `/gallery`,
-`/contact`, `/verify` (certificate checker), `/join` (membership application), `/login` (sign in, set a
+`/contact`, `/verify` (certificate checker), `/apply/<token>` (a recruitment link's form), `/login` (sign in, set a
 password from an invite link, or Google sign-in).
 
 ## Core flows
 
-- **Joining.** A visitor submits `/join`. An officer with `application.approve` accepts it in Admin, which
-  creates the account and shows a one-time invite link (valid 7 days). The applicant opens it, sets a
+- **Joining.** There is no standing join page. For each intake an officer with `application.approve` opens a
+  recruitment link in Admin → Recruit (batch, closing time, optional questions) and shares the link or its QR
+  poster. Applicants submit `/apply/<token>` while it is open; officers can also import a CSV, whose rows
+  arrive as pending applicants. Accepting an applicant in Admin creates the account and shows a one-time invite link (valid 7 days). The applicant opens it, sets a
   password, and is signed in.
 - **Paying dues.** A member sends money by bKash or Nagad and submits the transaction ID. The Treasurer checks
   it against the wallet statement and verifies or rejects it (never their own). The member's inbox shows the

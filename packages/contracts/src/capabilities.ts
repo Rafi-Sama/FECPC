@@ -16,16 +16,6 @@ export const matrix = {
     president: Y,
     super_admin: Y,
   },
-  'profile.editOwn': {
-    label: 'Edit own public profile',
-    member: Y,
-    alumni: Y,
-    cp_head: Y,
-    treasurer: Y,
-    secretary: Y,
-    president: Y,
-    super_admin: Y,
-  },
   'directory.view': {
     label: 'View member directory',
     member: Y,
@@ -211,7 +201,7 @@ export const matrix = {
     super_admin: Y,
   },
   'member.editDetails': {
-    label: "Edit a member's name, department and batch",
+    label: "Edit a member's profile and approve their change requests",
     secretary: Y,
     president: Y,
     super_admin: Y,

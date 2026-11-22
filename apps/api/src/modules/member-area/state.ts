@@ -1,11 +1,14 @@
 // Builds everything one member's screens need, in one query (two for officers).
 // This is the only place that decides what a role may SEE: a dataset the role has no capability for is never sent.
+import { mailStatus } from './mail.ts';
 import { myInvoices } from '@fecpc/content/member-area';
 import {
   formatMilestoneTitle,
   milestoneKudosNotification,
   can,
   canFully,
+  PROFILE_FIELDS,
+  type ProfileRequest,
   isAdmin,
   isCommittee,
   type Role,
@@ -68,7 +71,7 @@ const ROSTER = `json_build_object('id', id, 'no', member_no, 'name', name, 'hand
   'solved', greatest(problems_solved, solved), 'problems_solved', greatest(problems_solved, solved), 'avatar_url', avatar_url, 'cf_contests', cf_contests, 'streak', greatest(current_streak, streak), 'current_streak', greatest(current_streak, streak), 'contests_participated', contests_participated, 'helper', helper, 'skills', skills, 'xp', solved * 12 + vj_solved * 12 + streak * 30 + helper * 8, 'roleKey', role, 'post', post, 'email', email, 'suspended', suspended, 'system', system, 'pending', pass_hash is null and google_sub is null)`;
 const EXPENSE = `json_build_object('id', 'EXP-' || e.id, 'by', e.by, 'name', w.name, 'what', e.what, 'amount', e.amount, 'event', e.event, 'status', e.status)`;
 const MINE = `
-select u.email, u.progress, u.vjudge_handle, u.vj_solved,
+select u.email, u.progress, u.vjudge_handle, u.vj_solved, nullif(coalesce(nullif(u.cf_handle, ''), u.handle), '') as cf_handle,
   (select coalesce(json_object_agg(post, roles), '{}') from post_roles) as post_roles, (select ${ROSTER} from users m where m.id = u.id) as me,
   (select coalesce(json_agg(distinct event_id), '[]') from event_entries where user_id = $1 and role_id is null and status = 'approved') as reg,
   (select coalesce(json_agg(key), '[]') from attendance where user_id = $1) as present,
@@ -121,6 +124,9 @@ select u.email, u.progress, u.vjudge_handle, u.vj_solved,
   (select coalesce(json_agg(json_build_object('id', x.id, 'eventId', x.event_id, 'title', e.title, 'role', r.title, 'reason', x.reason) order by x.id desc), '[]')
      from event_entries x join club_events e on e.id = x.event_id left join event_roles r on r.id = x.role_id
      where x.user_id = $1 and x.status = 'rejected') as declined_entries,
+  (select json_build_object('id', r.id::text, 'status', r.status, 'changes', r.changes, 'note', r.note, 'reason', r.reason, 'at', coalesce(r.decided_at, r.created_at))
+     from profile_requests r where r.user_id = $1 and (r.status = 'pending' or (r.status in ('approved','rejected') and r.decided_at > now() - interval '14 days'))
+     order by r.id desc limit 1) as profile_request,
   (select coalesce(json_agg(json_build_object('id', p.from_user || ':' || p.kind || ':' || p.ref, 'kind', p.kind, 'from', f.name) order by p.at desc), '[]') from pings p join users f on f.id = p.from_user where p.to_user = $1 and p.kind = 'invite' and p.ref like 'team:%') as team_invites,
   (select coalesce(json_agg(json_build_object('ideaId', ii.idea_id, 'userId', ii.user_id, 'from', w.name, 'title', i.title) order by ii.created_at desc), '[]')
      from idea_interests ii join ideas i on i.id = ii.idea_id join users w on w.id = ii.user_id where i.user_id = $1 and ii.status = 'pending') as incoming_interests,
@@ -170,15 +176,22 @@ from users u where u.id = $1 and not u.suspended`;
 const OFFICE = `
 select
   case when $1 then (select coalesce(json_agg(json_build_object('id', 'PAY-' || p.id, 'name', u.name, 'label', p.label, 'amount', p.amount, 'via', p.via, 'trx', p.trx,
-      'sender', left(p.sender, 3) || '••••' || right(p.sender, 4), 'status', p.status, 'mine', p.user_id = $7, 'at', p.created_at) order by (p.status <> 'pending'), case when p.status = 'pending' then p.id end, p.id desc), '[]')
+      'sender', left(p.sender, 3) || '••••' || right(p.sender, 4), 'status', p.status, 'mine', p.user_id = $6, 'at', p.created_at) order by (p.status <> 'pending'), case when p.status = 'pending' then p.id end, p.id desc), '[]')
     from (select * from payments order by (status <> 'pending'), id desc limit 500) p join users u on u.id = p.user_id) end as queue,
   case when $2 then (select coalesce(json_agg(${EXPENSE} order by e.id desc), '[]') from (select * from expenses order by id desc limit 200) e join users w on w.id = e.by) end as expenses,
-  case when $3 then (select coalesce(json_agg(json_build_object('id', id::text, 'name', name, 'dept', dept, 'batch', batch, 'quiz', quiz, 'src', src, 'status', status, 'email', email, 'sid', sid, 'cf', cf, 'track', track, 'why', why) order by id desc), '[]')
-    from (select * from applications order by id desc limit 200) a) end as apps,
-  case when $4 then (select coalesce(json_agg(json_build_object('t', to_char(at at time zone '${TZ}', 'YYYY-MM-DD HH24:MI'), 'who', who, 'what', what) order by id desc), '[]')
-    from (select * from audit order by id desc limit 200) a) end as log,
-  case when $5 then (select coalesce(json_agg(json_build_object('body', body, 'at', created_at) order by id desc), '[]') from (select * from messages where kind = 'suggest' order by id desc limit 100) m) end as suggestions,
-  case when $6 then (select coalesce(json_agg(json_build_object('body', body, 'at', created_at) order by id desc), '[]') from (select * from messages where kind = 'feedback' order by id desc limit 100) m) end as feedback`;
+  case when $3 then (select coalesce(json_agg(json_build_object('id', a.id::text, 'link', a.link_id, 'name', a.name, 'sid', a.sid, 'dept', a.dept, 'batch', a.batch,
+      'email', a.email, 'phone', a.phone, 'cf', a.cf, 'why', a.why, 'answers', a.answers, 'src', a.src, 'status', a.status, 'reason', a.decline_reason,
+      'decidedBy', d.name, 'photo', a.photo is not null, 'at', a.created_at) order by (a.status <> 'pending'), a.id desc), '[]')
+    from (select * from applications order by (status <> 'pending'), id desc limit 1000) a left join users d on d.id = a.decided_by) end as apps,
+  case when $3 then (select coalesce(json_agg(json_build_object('id', l.id, 'token', l.token, 'title', l.title, 'batch', l.batch, 'form', l.form,
+      'closes', l.closes_at, 'open', l.closes_at > now(), 'by', w.name, 'at', l.created_at,
+      'mail', case when l.mail_html is null then null else json_build_object('subject', l.mail_subject, 'html', l.mail_html) end,
+      'pending', (select count(*) from applications x where x.link_id = l.id and x.status = 'pending')::int,
+      'accepted', (select count(*) from applications x where x.link_id = l.id and x.status = 'accepted')::int,
+      'declined', (select count(*) from applications x where x.link_id = l.id and x.status = 'declined')::int) order by l.id desc), '[]')
+    from recruit_links l join users w on w.id = l.by) end as links,
+  case when $4 then (select coalesce(json_agg(json_build_object('body', body, 'at', created_at) order by id desc), '[]') from (select * from messages where kind = 'suggest' order by id desc limit 100) m) end as suggestions,
+  case when $5 then (select coalesce(json_agg(json_build_object('body', body, 'at', created_at) order by id desc), '[]') from (select * from messages where kind = 'feedback' order by id desc limit 100) m) end as feedback`;
 
 // Real money movements: verified payments in, approved expenses out. The ledger rows only for finance roles.
 // Real money and the committee's own records. $1 finance roles, $2 the member, $3 committee.
@@ -242,7 +255,6 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
     queue: !!can(roles, 'payments.verify'),
     exp: !!can(roles, 'expense.approve'),
     apps: !!can(roles, 'application.approve'),
-    log: !!can(roles, 'audit.view'),
     suggest: admin,
     feedback: !!can(roles, 'event.publish'),
   };
@@ -267,7 +279,7 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
   const s: S = {
     role,
     roles,
-    handle: p.handle,
+    handle: row.cf_handle ?? '', // the account's column is the one copy officers and the member both write
     vjudge: row.vjudge_handle ?? '',
     vjSolved: row.vj_solved ?? 0,
     base: p.base,
@@ -299,7 +311,6 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
     apps: Object.fromEntries(
       (off.apps ?? []).map((a: { id: string; status: string }) => [a.id, a.status]),
     ),
-    log: off.log ?? [],
   };
 
   // The roster everyone gets: people only, no account-management fields. Officers who manage accounts get those too.
@@ -344,7 +355,22 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
       budgets: money.budgets,
     };
   if (caps.exp) office.expenses = expenses;
-  if (caps.apps) office.applications = off.apps;
+  if (caps.apps) office.recruit = { links: off.links, applicants: off.apps };
+  if (caps.apps || caps.feedback) office.mail = await mailStatus(db);
+  if (canFully(roles, 'member.editDetails'))
+    office.profileRequests = (
+      await db.query(
+        // The new photo stays out of state (it is fetched on its own); `true` marks that there is one.
+        `select r.id::text, r.user_id "user", u.name, r.note, r.created_at at,
+           case when r.changes ? 'avatar_url' and r.changes->>'avatar_url' is not null
+             then jsonb_set(r.changes, '{avatar_url}', 'true') else r.changes end changes,
+           jsonb_build_object(${PROFILE_FIELDS.filter(([k]) => k !== 'avatar_url')
+             .map(([k]) => `'${k}', u.${k}`)
+             .join(', ')}, 'avatar_url', u.avatar_url is not null) current
+         from profile_requests r join users u on u.id = r.user_id
+         where r.status = 'pending' order by r.id limit 200`,
+      )
+    ).rows;
   if (caps.suggest) office.suggestions = off.suggestions;
   if (caps.feedback) office.feedback = off.feedback;
   if (committee)
@@ -452,6 +478,24 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
       text: `Your ${d.role ? `application for ${d.role} at` : 'registration for'} "${d.title}" was declined${d.reason ? `: ${d.reason}` : '.'}`,
       href: `/app/events/${d.eventId}`,
     });
+  const pr = row.profile_request as ProfileRequest | null;
+  if (pr && pr.status !== 'pending')
+    inbox.push({
+      id: `n:preq:${pr.id}`,
+      cat: 'Profile',
+      text:
+        pr.status === 'approved'
+          ? 'Your profile change was approved.'
+          : `Your profile change was rejected: ${pr.reason}`,
+      href: '/app/profile',
+    });
+  if (office.profileRequests?.length)
+    inbox.push({
+      id: `n:preqs:${office.profileRequests[0]!.id}`,
+      cat: 'Admin',
+      text: `${office.profileRequests.length} profile change request${office.profileRequests.length > 1 ? 's' : ''} to review`,
+      href: '/app/admin',
+    });
   const waiting = (off.queue ?? []).filter((q: { status: string }) => q.status === 'pending');
   if (canFully(roles, 'payments.verify') && waiting.length)
     inbox.push({
@@ -535,6 +579,7 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
     // The seeded opening balance plus every verified payment, minus every approved expense.
     fundTotal: data.accounts.reduce((a, x) => a + x[1], 0) + money.net,
     office,
+    profileRequest: (row.profile_request as ProfileRequest | null) ?? null,
     sheets: row.sheets,
     fantasy: row.fantasy,
     challenges: row.challenges,

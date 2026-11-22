@@ -4,7 +4,8 @@ import { cfUrl, myInvoices, owes } from '@fecpc/content/member-area';
 import { can, rankFor, type CfRound, type Roster } from '@fecpc/contracts';
 import { toggle, useStore } from '../Store';
 import { HandleBox, useJudge, useSolved } from '../Judge';
-import { Avatar, Trophy } from '@/components/pixel/Sprites';
+import { Trophy } from '@/components/pixel/Sprites';
+import { MemberFace } from '../shared/MemberFace';
 import { SolveCheck } from '../home/Daily';
 import { useConfirm } from '../shared/PromptDialog';
 
@@ -150,7 +151,13 @@ export function Fantasy() {
                     <tr key={m.id} className={on ? 'you' : ''}>
                       <td>
                         <span className="row" style={css({ '--g': '10px', flexWrap: 'nowrap' })}>
-                          <Avatar name={m.name} size={30} fg="#FFD23F" bg="#3A1D6E" />
+                          <MemberFace
+                            url={m.avatar_url}
+                            name={m.name}
+                            size={30}
+                            fg="#FFD23F"
+                            bg="#3A1D6E"
+                          />
                           <strong>{m.name}</strong>
                         </span>
                       </td>
@@ -454,7 +461,13 @@ export function Challenges() {
                     <span className="arcade" style={{ width: 32, color: MEDAL[i] ?? undefined }}>
                       {String(i + 1).padStart(2, '0')}
                     </span>
-                    <Avatar name={name(x.id)} size={28} fg={MEDAL[i] ?? '#8E84C9'} bg="#1D1145" />
+                    <MemberFace
+                      id={x.id}
+                      name={name(x.id)}
+                      size={28}
+                      fg={MEDAL[i] ?? '#8E84C9'}
+                      bg="#1D1145"
+                    />
                     <strong className="grow">{name(x.id)}</strong>
                     <span className="label">in {ago(Date.parse(x.at!) - t0)}</span>
                   </li>

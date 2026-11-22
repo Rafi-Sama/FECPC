@@ -1,6 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { DbService } from '../../platform/database/db.service.ts';
 
+const READABLE: Record<string, string> = {
+  'invite.accepted': 'accepted their invite and set a password',
+  'auth.password_changed': 'changed their password',
+  'auth.google_linked': 'linked a Google account for signing in',
+  'auth.github_linked': 'linked a GitHub account for signing in',
+};
+
 @Injectable()
 export class AuditService {
   constructor(private readonly db: DbService) {}
@@ -31,9 +38,12 @@ export class AuditService {
     );
     // The admin panel's log reads `audit`; mirror a readable line there so every event is visible.
     await this.db.query(
-      `INSERT INTO audit (who, what)
-       VALUES (coalesce((SELECT name FROM users WHERE id = $1), 'System'), $2)`,
-      [params.actorId ?? null, `${params.action} (${params.entityType} ${params.entityId})`],
+      `INSERT INTO audit (who, what, area)
+       VALUES (coalesce((SELECT name FROM users WHERE id = $1), 'System'), $2, 'Security & settings')`,
+      [
+        params.actorId ?? null,
+        READABLE[params.action] ?? `${params.action} (${params.entityType} ${params.entityId})`,
+      ],
     );
   }
 }

@@ -3,7 +3,7 @@ import { usePrompt, useConfirm } from '@/components/app/shared/PromptDialog';
 import { SaveForm } from '@/components/app/SaveBar';
 import { useState } from 'react';
 import { useStore } from '../Store';
-import { Avatar } from '@/components/pixel/Sprites';
+import { MemberFace } from '../shared/MemberFace';
 import {
   can,
   canFully,
@@ -90,7 +90,7 @@ function Accounts() {
                       className="row"
                       style={{ '--g': '10px', flexWrap: 'nowrap' } as React.CSSProperties}
                     >
-                      <Avatar name={m.name} size={28} />
+                      <MemberFace url={m.avatar_url} name={m.name} size={28} />
                       <span>
                         <strong>{m.name}</strong>
                         <br />

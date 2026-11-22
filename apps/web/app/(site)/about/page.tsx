@@ -43,7 +43,7 @@ export default function About() {
               good at programming, by solving problems, building things and teaching each other.
             </p>
             <div className="row" style={{ '--g': '28px' } as React.CSSProperties}>
-              <Link href="/join" className="btn">
+              <Link href="/contact" className="btn">
                 Join the club
               </Link>
               <Link href="#team" className="btn ghost">
@@ -151,7 +151,7 @@ export default function About() {
               You can stay involved from your first application to long after you graduate.
             </p>
             <p>
-              <Link href="/join" className="btn">
+              <Link href="/contact" className="btn">
                 Apply to join
               </Link>
             </p>

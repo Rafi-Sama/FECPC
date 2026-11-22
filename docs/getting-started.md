@@ -11,11 +11,12 @@
 ```sh
 pnpm install
 
-# 1. Database: PostgreSQL on 127.0.0.1:5433 with databases fecpc (dev) and fecpc_test (tests).
+# 1. Database: PostgreSQL on 127.0.0.1:5433 with databases fecpc (dev) and fecpc_test (tests),
+#    plus Mailpit, which catches outgoing email (inbox: http://localhost:8026).
 docker compose up -d
 
 # 2. Configuration. The API works with no file at all except for seeding; the web app needs its own file.
-cp apps/api/.env.example apps/api/.env.local      # set SEED_PASSWORD (10+ characters)
+cp apps/api/.env.example apps/api/.env.local      # set SEED_PASSWORD (10+ characters); SMTP_URL=smtp://127.0.0.1:1026 to use Mailpit
 cp apps/web/.env.example apps/web/.env.local      # `pnpm dev` also does this when it is missing
 
 # 3. Schema + placeholder club (27 accounts). Safe to re-run: it never touches a non-empty database.
@@ -35,7 +36,7 @@ Sign in at <http://localhost:3000/login> as any seeded account with your `SEED_P
 | Treasurer              | `anika`                                                                                               |
 | Secretary              | `nusrat`, `sadia`                                                                                     |
 | CP Head                | `nadia`                                                                                               |
-| Member                 | `rahim`, `mehedi`, `tasnim`, `priya`, `farhan`, `imran`, `sabbir`, `shuvo`, `zahid`, `mim`, `jannat`                     |
+| Member                 | `rahim`, `mehedi`, `tasnim`, `priya`, `farhan`, `imran`, `sabbir`, `shuvo`, `zahid`, `mim`, `jannat`  |
 | Alumni                 | `shahriar`, `rifat`, `tahmina`, `tanim`, `fariha`, `sabrina`, `nabila`, `nusrat_al`, `asif`, `mahmud` |
 
 Signing in as different roles is the fastest way to see what each one can do.

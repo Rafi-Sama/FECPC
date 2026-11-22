@@ -5,6 +5,10 @@ import { randomBytes } from 'node:crypto';
 import {
   can,
   certHeadline,
+  checkMailTemplate,
+  DEFAULT_MAIL,
+  MAIL_CLUB,
+  renderMail,
   DEFAULT_CERT,
   EVENT_STATUSES,
   EVENT_ID,
@@ -18,6 +22,7 @@ import {
   type Role,
 } from '@fecpc/contracts';
 import { Fail, type Db } from './db.ts';
+import { enqueue, mailOutlook, mailReady } from './mail.ts';
 import { TZ } from './state.ts';
 
 type Actor = { id: string; roles: Role[]; name: string; system: boolean };
@@ -198,6 +203,64 @@ async function issue(
   return all.length;
 }
 
+/**
+ * Queues the approval email for these entries. Returns how many were queued and how many would, at the
+ * current daily email limit, only arrive after the event has started (the organiser should tell those
+ * another way). Such late mail is dropped by the queue rather than sent after the event.
+ */
+async function approvalMails(
+  c: Db,
+  e: {
+    id: string;
+    title: string;
+    place: string;
+    starts_at: Date;
+    mail_subject: string | null;
+    mail_html: string | null;
+  },
+  entryIds: number[],
+) {
+  if (!mailReady() || !entryIds.length) return { queued: 0, late: 0 };
+  const rows = (
+    await c.query(
+      `select x.name, u.email, r.title as role from event_entries x join users u on u.id = x.user_id
+       left join event_roles r on r.id = x.role_id where x.id = any($1) order by x.id`,
+      [entryIds],
+    )
+  ).rows as { name: string; email: string; role: string | null }[];
+  const t = e.mail_html ? { subject: e.mail_subject!, html: e.mail_html } : DEFAULT_MAIL.event;
+  const site = process.env.APP_PUBLIC_URL || 'http://localhost:3000';
+  const date = new Date(e.starts_at).toLocaleString('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: TZ,
+  });
+  for (const r of rows)
+    await enqueue(c, {
+      to: r.email,
+      kind: 'event',
+      expires: e.starts_at,
+      ...renderMail(t, {
+        name: r.name,
+        event: e.title,
+        date,
+        venue: e.place || 'to be announced',
+        role: r.role ?? '',
+        link: `${site}/app/events/${e.id}`,
+        club: MAIL_CLUB,
+      }),
+    });
+  const o = await mailOutlook(c);
+  const hours = (new Date(e.starts_at).getTime() - Date.now()) / 36e5;
+  let late = 0;
+  for (let k = 0; k < rows.length; k++)
+    if (o.waitHours(o.queued - rows.length + k) >= hours) late++;
+  return { queued: rows.length, late };
+}
+
 export const eventHandlers: Record<
   string,
   (c: Db, a: Actor, p: unknown, i: In) => Promise<string | void>
@@ -276,6 +339,14 @@ export const eventHandlers: Record<
     );
     if (!made.rowCount) throw new Fail(409, 'That event id is taken. Save again.');
     await c.query(`update club_events set ${set} where id = $1`, [id, ...v]);
+    // The approval email carries over from the copied event, or else from the latest designed one.
+    await c.query(
+      `update club_events set (mail_subject, mail_html) = (
+         select mail_subject, mail_html from club_events
+         where id <> $1 and mail_html is not null order by (id = $2) desc, created_at desc limit 1)
+       where id = $1`,
+      [id, typeof i.copyOf === 'string' ? i.copyOf : ''],
+    );
     if (typeof i.copyOf === 'string' && i.copyOf) {
       const from = await eventRow(c, i.copyOf);
       await c.query(
@@ -380,17 +451,17 @@ export const eventHandlers: Record<
       JSON.stringify(answers(how.fields, i.answers)),
       how.approval === 'auto' ? 'approved' : 'pending',
     ];
-    if (prev)
-      await c.query(
-        `update event_entries set name = $4, phone = $5, answers = $6, status = $7, place = null, at = now()
-         where event_id = $1 and coalesce(role_id, 0) = coalesce($2, 0) and user_id = $3`,
-        row,
-      );
-    else
-      await c.query(
-        `insert into event_entries (event_id, role_id, user_id, name, phone, answers, status) values ($1, $2, $3, $4, $5, $6, $7)`,
-        row,
-      );
+    const saved = prev
+      ? await c.query(
+          `update event_entries set name = $4, phone = $5, answers = $6, status = $7, place = null, at = now()
+           where event_id = $1 and coalesce(role_id, 0) = coalesce($2, 0) and user_id = $3 returning id`,
+          row,
+        )
+      : await c.query(
+          `insert into event_entries (event_id, role_id, user_id, name, phone, answers, status) values ($1, $2, $3, $4, $5, $6, $7) returning id`,
+          row,
+        );
+    if (row[6] === 'approved') await approvalMails(c, e, [saved.rows[0].id]);
     return row[6] === 'pending' ? 'Sent. The organisers will review it.' : undefined;
   },
   /** Withdraw your own registration or application before the event completes. */
@@ -420,8 +491,9 @@ export const eventHandlers: Record<
     if (!evs.length) throw new Fail(404, 'Nothing to change.');
     const e = await eventRow(c, evs[0].event_id, true); // same lock as register, so seats cannot be oversold
     const r = await c.query(
-      `update event_entries set status = $2, place = case when $2 = 'approved' then place end, reason = $3
-       where id = any($1) and status <> 'cancelled'`,
+      `with old as (select id, status from event_entries where id = any($1) and status <> 'cancelled' for update)
+       update event_entries x set status = $2, place = case when $2 = 'approved' then x.place end, reason = $3
+       from old where x.id = old.id returning x.id, old.status as was`,
       [ids, status, reason],
     );
     if (!r.rowCount) throw new Fail(404, 'Nothing to change.');
@@ -434,11 +506,41 @@ export const eventHandlers: Record<
       ).rows[0].n;
       if (n > e.seats) throw new Fail(409, `That would fill ${n} of ${e.seats} seats.`);
     }
+    const fresh = (r.rows as { id: string; was: string }[])
+      .filter((x) => status === 'approved' && x.was !== 'approved')
+      .map((x) => Number(x.id));
+    const m = await approvalMails(c, e, fresh);
     await audit(
       c,
       a,
-      `${status} ${r.rowCount} entr${r.rowCount === 1 ? 'y' : 'ies'} on event ${e.id}`,
+      `${status} ${r.rowCount} entr${r.rowCount === 1 ? 'y' : 'ies'} on event ${e.id}${m.queued ? `; ${m.queued} approval email${m.queued === 1 ? '' : 's'} queued` : ''}`,
     );
+    if (!fresh.length) return;
+    if (!mailReady()) return 'Approved. Email is not set up, so nobody was emailed.';
+    return `Approved ${fresh.length}; ${fresh.length === 1 ? 'their email is' : 'emails are'} on the way.${m.late ? ` Because of the daily email limit, ${m.late} would only arrive after the event starts, so they will not be sent: tell them another way.` : ''}`;
+  },
+  /** Saves this event's approval email; an empty body goes back to the built-in design. */
+  async eventMail(c, a, _p, i) {
+    need(organiser(a.roles));
+    const e = await eventRow(c, i.eventId, true);
+    if (!i.html) {
+      await c.query(`update club_events set mail_subject = null, mail_html = null where id = $1`, [
+        e.id,
+      ]);
+      return void (await audit(
+        c,
+        a,
+        `reset the approval email of event ${e.id} to the built-in design`,
+      ));
+    }
+    const t = checkMailTemplate('event', { subject: i.subject, html: i.html });
+    if (t.error) throw new Fail(400, t.error);
+    await c.query(`update club_events set mail_subject = $2, mail_html = $3 where id = $1`, [
+      e.id,
+      t.value.subject,
+      t.value.html,
+    ]);
+    await audit(c, a, `edited the approval email of event ${e.id}`);
   },
   /** Mark an approved participant 1st, 2nd or 3rd (`place` null clears it). */
   async entryPlace(c, a, _p, i) {
@@ -670,7 +772,7 @@ export async function eventsQuery(db: Db, userId: string, b: In): Promise<unknow
   ]);
   const out: EventDetail = { ...e, feedback: fb.rows[0] ?? null, certificates: certs.rows };
   if (admin) {
-    const [entries, feedback, templates, issued, checkin] = await Promise.all([
+    const [entries, feedback, templates, issued, checkin, mail] = await Promise.all([
       db.query(
         `select coalesce(json_agg(${ENTRY(true)} order by x.id), '[]') j from event_entries x join users u on u.id = x.user_id where x.event_id = $1`,
         [e.id],
@@ -691,6 +793,9 @@ export async function eventsQuery(db: Db, userId: string, b: In): Promise<unknow
         `select checkin code, (select count(*)::int from attendance where key = $1) arrived from club_events where id = $1`,
         [e.id],
       ),
+      db.query(`select mail_subject subject, mail_html html from club_events where id = $1`, [
+        e.id,
+      ]),
     ]);
     out.admin = {
       entries: entries.rows[0].j,
@@ -698,6 +803,7 @@ export async function eventsQuery(db: Db, userId: string, b: In): Promise<unknow
       templates: templates.rows[0].j,
       issued: issued.rows[0].j,
       checkin: checkin.rows[0],
+      mail: mail.rows[0]?.html ? mail.rows[0] : null,
     };
   }
   return out;

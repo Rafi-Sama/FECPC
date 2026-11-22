@@ -5,7 +5,7 @@ import { SaveForm } from '@/components/app/SaveBar';
 import { useStore } from '@/components/app/Store';
 import { templates } from '@fecpc/content/training';
 import { rankFor } from '@fecpc/contracts';
-import { Avatar } from '@/components/pixel/Sprites';
+import { MemberFace } from '@/components/app/shared/MemberFace';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 // `other`: a teammate's hand in this change (who edited this page, or whose page this was).
@@ -1596,7 +1596,7 @@ function TeamOverview({
             style={{ '--rk': rank.color, '--mc': color(m.id) } as React.CSSProperties}
           >
             <div className="tov-who">
-              <Avatar name={names(m.id)} size={44} fg={color(m.id)} />
+              <MemberFace id={m.id} name={names(m.id)} size={44} fg={color(m.id)} />
               <span>
                 <strong>{names(m.id)}</strong>
                 <span className="label">

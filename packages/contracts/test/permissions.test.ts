@@ -32,7 +32,10 @@ test("matrix matches the spec's risky cells", () => {
 
   for (const r of roles) {
     assert.equal(can(r, 'profile.own'), true);
-    assert.equal(can(r, 'profile.editOwn'), true);
+    assert.equal(
+      !!can(r, 'member.editDetails'),
+      ['secretary', 'president', 'super_admin'].includes(r),
+    );
   }
 
   assert.deepEqual(

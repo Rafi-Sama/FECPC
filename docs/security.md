@@ -82,7 +82,8 @@ everyone at once. See [Deployment](deployment.md).
 There is also a global limit of `RATE_LIMIT_GLOBAL_PER_MIN` (300) requests per minute per address on every
 route.
 
-The public join form (`POST /v1/applications`) also has a honeypot field (`website`: filled means a bot,
+The public recruitment form (`POST /v1/applications`) only accepts a known, open link token, re-checks every
+field with the shared `checkApplicant` (photos must be PNG, JPEG or WebP data URLs), and has a honeypot field (`website`: filled means a bot,
 which gets a fake success), a limit of 10 applications per client address per hour (counted in the database
 by hashed address), and, when `TURNSTILE_SECRET_KEY` is set, a Cloudflare Turnstile check. An application
 gives no sign-in: the account exists only after a President or Secretary accepts it.

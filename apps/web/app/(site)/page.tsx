@@ -80,7 +80,7 @@ export default async function Home() {
               together. Workshops, contests and hack nights, all semester.
             </p>
             <div className="row" style={{ '--g': '20px' } as React.CSSProperties}>
-              <Link href="/join" className="btn">
+              <Link href="/contact" className="btn">
                 &gt; Join the club
               </Link>
               <Link href="/events" className="btn ghost">
@@ -108,7 +108,7 @@ export default async function Home() {
               </div>
               <div className="prompt" style={{ animationDelay: `${0.6 + boot.length * 0.28}s` }}>
                 <span className="dim">guest@{site.short.toLowerCase()}:~$</span>{' '}
-                <Link href="/join" className="hi">
+                <Link href="/contact" className="hi">
                   ./join.sh
                 </Link>
                 <i aria-hidden className="blink cursor" />
@@ -329,7 +329,7 @@ export default async function Home() {
             className="row"
             style={{ '--g': '28px', justifyContent: 'center' } as React.CSSProperties}
           >
-            <Link href="/join" className="btn">
+            <Link href="/contact" className="btn">
               PRESS START
             </Link>
             <Link href="/leaderboard" className="btn ghost">
@@ -478,7 +478,7 @@ export default async function Home() {
               {site.uniShort} students learn them, then build what nobody predicted.
             </p>
             <div className="row" style={{ '--g': '28px' } as React.CSSProperties}>
-              <Link href="/join" className="btn">
+              <Link href="/contact" className="btn">
                 Join the club
               </Link>
               <Link href="/projects" className="btn ghost">
@@ -600,7 +600,7 @@ export default async function Home() {
                 <i aria-hidden className="blink cursor" style={{ marginLeft: 12 }} />
               </h2>
               <div className="row" style={{ '--g': '20px', marginTop: 28 } as React.CSSProperties}>
-                <Link href="/join" className="btn">
+                <Link href="/contact" className="btn">
                   &gt; Apply now
                 </Link>
                 <Link href="/about" className="btn ghost">

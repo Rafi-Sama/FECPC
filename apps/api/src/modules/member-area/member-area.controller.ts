@@ -1,11 +1,13 @@
-import { Body, Controller, Get, Header, HttpCode, Param, Post, Req } from '@nestjs/common';
-import type { FastifyRequest } from 'fastify';
-import { act, apply, exportMembers } from './actions.ts';
+import { Body, Controller, Get, Header, HttpCode, Param, Post, Req, Res } from '@nestjs/common';
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import { act, auditQuery, exportMembers, profileRequestPhoto } from './actions.ts';
+import { applicantPhoto, apply, recruitPublic } from './recruit.ts';
 import { Fail, pool } from './db.ts';
 import * as queries from './queries.ts';
 import { eventsQuery, publicEvents, verifyCertificate } from './events.ts';
 import { syncCodeforces, syncVjudge } from './milestones.ts';
 import { loadState } from './state.ts';
+import { drainMail } from './mail.ts';
 import { CurrentUser, type RequestUser } from '../auth/decorators.ts';
 import { Public } from '../auth/decorators.ts';
 
@@ -15,6 +17,7 @@ const AREAS = {
   community: queries.community,
   members: queries.members,
   events: eventsQuery,
+  audit: auditQuery,
 };
 
 // shortcut: per-process throttle, reset on restart and not shared between instances; move it to the DB if the API scales out.
@@ -38,6 +41,7 @@ export class MemberAreaController {
   @HttpCode(200)
   async act(@CurrentUser() user: RequestUser, @Body() body: unknown) {
     const info = await act(user.id, object(body));
+    void drainMail().catch(() => {}); // after the commit: mail queued by this action goes out now
     return { state: await loadState(pool(), user.id), info: info ?? null };
   }
 
@@ -67,7 +71,40 @@ export class MemberAreaController {
     return { synced: !!(cf || vj), milestonesCreated: cf?.milestonesCreated ?? 0 };
   }
 
-  /** The public join form. Anyone may call it, so `apply` validates every field strictly. */
+  /** A recruitment link's public form: title, batch, closing time and the optional questions. */
+  @Public()
+  @Get('recruit/:token')
+  async recruit(@Param('token') token: string) {
+    const r = await recruitPublic(pool(), token);
+    if (!r) throw new Fail(404, 'This recruitment link does not exist.');
+    return r;
+  }
+
+  /** An applicant's photo, for officers who review applications. Never cached by shared caches. */
+  @Get('applications/:id/photo')
+  async photo(
+    @CurrentUser() user: RequestUser,
+    @Param('id') id: string,
+    @Res({ passthrough: true }) res: FastifyReply,
+  ) {
+    const p = await applicantPhoto(pool(), user.id, id);
+    res.header('content-type', p.type).header('cache-control', 'private, max-age=86400');
+    return p.body;
+  }
+
+  /** The new photo in a profile change request, for the officers who review it. */
+  @Get('profile-requests/:id/photo')
+  async requestPhoto(
+    @CurrentUser() user: RequestUser,
+    @Param('id') id: string,
+    @Res({ passthrough: true }) res: FastifyReply,
+  ) {
+    const p = await profileRequestPhoto(pool(), user.id, id);
+    res.header('content-type', p.type).header('cache-control', 'private, no-store');
+    return p.body;
+  }
+
+  /** The form behind a recruitment link. Anyone may call it, so `apply` validates every field strictly. */
   @Public()
   @Post('applications')
   @HttpCode(200)

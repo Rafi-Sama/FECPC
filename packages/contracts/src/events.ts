@@ -1,4 +1,5 @@
 // Events: shapes shared by the API and the web app, plus the certificate template filler and CSV reader.
+import type { MailTemplate } from './mail.ts';
 
 export const EVENT_STATUSES = [
   'draft',
@@ -116,6 +117,8 @@ export type EventDetail = ClubEvent & {
     issued: Record<string, number>;
     /** The room code members type to check in, and how many have. */
     checkin: { code: string; arrived: number };
+    /** The approval email; null = the built-in design. */
+    mail: MailTemplate | null;
   };
 };
 

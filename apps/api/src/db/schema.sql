@@ -882,3 +882,108 @@ create table if not exists challenges (
   at timestamptz not null default now()
 );
 create index if not exists challenges_at on challenges (at desc);
+
+-- Recruitment links: each intake gets its own shareable form at /apply/<token>, open until closes_at.
+-- Batch is fixed by the link; applicants never send it. The form jsonb holds only the optional parts.
+create table if not exists recruit_links (
+  id int generated always as identity primary key,
+  token text not null unique,
+  title text not null,
+  batch int not null check (batch between 0 and 99),
+  form jsonb not null default '{"cf":true,"why":true,"questions":[]}',
+  closes_at timestamptz not null,
+  by text not null references users,
+  created_at timestamptz not null default now()
+);
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS link_id int REFERENCES recruit_links;
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS phone text NOT NULL DEFAULT '';
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS photo text;
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS answers jsonb NOT NULL DEFAULT '[]';
+CREATE INDEX IF NOT EXISTS ix_applications__link ON applications (link_id, status);
+
+-- Outgoing email. Written in the same transaction as the decision it reports, sent later by drainMail under
+-- MAIL_DAILY_LIMIT (rolling 24 h, the way Gmail counts). Bodies are cleared once sent: they can hold one-time links.
+create table if not exists mail_queue (
+  id bigint generated always as identity primary key,
+  to_email text not null,
+  subject text not null,
+  html text,
+  text_body text,
+  kind text not null,
+  status text not null default 'queued' check (status in ('queued','sent','failed')),
+  attempts int not null default 0,
+  next_at timestamptz not null default now(),
+  expires_at timestamptz,                        -- not worth sending after this (invite expiry, event start)
+  error text,
+  created_at timestamptz not null default now(),
+  sent_at timestamptz
+);
+create index if not exists mail_queue_due on mail_queue (status, next_at);
+create index if not exists mail_queue_sent on mail_queue (sent_at) where status = 'sent';
+-- Officer-designed emails; null means the built-in design.
+ALTER TABLE recruit_links ADD COLUMN IF NOT EXISTS mail_subject text;
+ALTER TABLE recruit_links ADD COLUMN IF NOT EXISTS mail_html text;
+ALTER TABLE club_events ADD COLUMN IF NOT EXISTS mail_subject text;
+ALTER TABLE club_events ADD COLUMN IF NOT EXISTS mail_html text;
+
+-- Student ID and phone from the recruitment form, kept on the account. Private: shown only to the member.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS student_id text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone text;
+UPDATE users u SET student_id = a.sid, phone = nullif(a.phone, '')
+FROM applications a
+WHERE a.status = 'accepted' AND a.email = u.email AND u.student_id IS NULL;
+
+-- Members ask for profile changes; the Secretary or President approves (which applies them) or rejects.
+-- Judge handles are not here: members change those themselves.
+create table if not exists profile_requests (
+  id bigint generated always as identity primary key,
+  user_id text not null references users on delete cascade,
+  changes jsonb not null,
+  note text,
+  status text not null default 'pending' check (status in ('pending','approved','rejected','cancelled')),
+  reason text,
+  decided_by text references users on delete set null,
+  decided_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create unique index if not exists profile_requests_one_pending on profile_requests (user_id) where status = 'pending';
+
+-- Audit sections. `act()` names the section for its transaction (set_config 'fecpc.area'); anything written
+-- elsewhere (sign-in, query routes, entries from before sections) is placed by its wording.
+CREATE OR REPLACE FUNCTION audit_area(what text) RETURNS text LANGUAGE sql IMMUTABLE AS $$
+  SELECT CASE
+    WHEN what ~* 'applicant|recruitment' THEN 'Recruitment'
+    WHEN what ~* 'payment|expense|budget|invoice|waive|৳' THEN 'Finance'
+    WHEN what ~* 'event |certificate|entr(y|ies) on|approval email|contest-day' THEN 'Events'
+    WHEN what ~* 'email' THEN 'Email'
+    WHEN what ~* 'password|signed in|sign-in|export|google|github|invite\.|switch' THEN 'Security & settings'
+    WHEN what ~* 'role |post |president|suspend|reinstat|deactivat|alumni|invite|profile|details|handle|mentor' THEN 'Members & roles'
+    WHEN what ~* 'announcement|poll|feed post|idea|redeemed' THEN 'Community'
+    WHEN what ~* 'task|meeting|inventory|equipment|gave |returned |item' THEN 'Workspace'
+    WHEN what ~* 'sheet|challenge|team|coach|roadmap|topic|problem' THEN 'Training'
+    WHEN what ~* 'job|blog|interview tip|questions' THEN 'Alumni'
+    ELSE 'Other'
+  END $$;
+ALTER TABLE audit ADD COLUMN IF NOT EXISTS area text;
+CREATE INDEX IF NOT EXISTS audit_area_at ON audit (area, id DESC);
+CREATE OR REPLACE FUNCTION audit_set_area() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  NEW.area := coalesce(NEW.area, nullif(current_setting('fecpc.area', true), ''), audit_area(NEW.what));
+  RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS trg_audit_area ON audit;
+CREATE TRIGGER trg_audit_area BEFORE INSERT ON audit FOR EACH ROW EXECUTE FUNCTION audit_set_area();
+-- The officers' log is append-only: nothing in it can be edited or deleted. Only an entry's section may be
+-- filled in, or moved out of 'Other' when the section rules improve.
+CREATE OR REPLACE FUNCTION audit_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'DELETE' OR coalesce(OLD.area, 'Other') <> 'Other' OR NEW.who IS DISTINCT FROM OLD.who
+     OR NEW.what IS DISTINCT FROM OLD.what OR NEW.at IS DISTINCT FROM OLD.at THEN
+    RAISE EXCEPTION 'audit is append-only';
+  END IF;
+  RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS trg_audit_guard ON audit;
+CREATE TRIGGER trg_audit_guard BEFORE UPDATE OR DELETE ON audit FOR EACH ROW EXECUTE FUNCTION audit_guard();
+-- After the guard is in place, so re-filing out of 'Other' goes through its rules.
+UPDATE audit SET area = audit_area(what) WHERE area IS NULL OR area = 'Other';

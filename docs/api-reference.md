@@ -30,29 +30,32 @@ The browser calls the **web routes** (same origin). Each one forwards to an **AP
 
 ## Route map
 
-| Web route (browser)                      | API route                               | Auth                    | Purpose                                                                             |
-| ---------------------------------------- | --------------------------------------- | ----------------------- | ----------------------------------------------------------------------------------- |
-| `POST /api/auth/login`                   | `POST /v1/auth/login`                   | public                  | Sign in with email and password                                                     |
-| `POST /api/auth/logout`                  | `POST /v1/auth/logout`                  | session                 | End this session                                                                    |
-| `POST /api/auth/invite`                  | `POST /v1/auth/invite/accept`           | public                  | Set a password from an invite or reset link, and sign in                            |
-| —                                        | `GET /v1/auth/invite/:token`            | public                  | Name and masked email for an invite link                                            |
-| `POST /api/auth/password`                | `POST /v1/auth/password/change`         | session                 | Change password; signs out every other session                                      |
-| —                                        | `POST /v1/auth/password/forgot`         | public                  | Always `202`; placeholder, sends nothing (see [Decisions](decisions.md#known-gaps)) |
-| `GET /api/auth/{google,github}`          | —                                       | public                  | Redirects to Google or GitHub with a `state` cookie                                 |
-| `GET /api/auth/{google,github}/callback` | `POST /v1/auth/{google,github}`         | public                  | Exchanges the provider's code for a session                                         |
-| `GET /api/state`                         | `GET /v1/me/state`                      | session                 | The member's full `AppState`                                                        |
-| `POST /api/act`                          | `POST /v1/me/actions`                   | session                 | One change; answers with fresh state                                                |
-| `POST /api/community`                    | `POST /v1/queries/community`            | session                 | Feed, ideas, milestones, kudos                                                      |
-| `POST /api/members`                      | `POST /v1/queries/members`              | session                 | Directory, profiles, job-board sync                                                 |
-| `POST /api/alumni`                       | `POST /v1/queries/alumni`               | session                 | Alumni, jobs, interview prep, blog                                                  |
-| `POST /api/events`                       | `POST /v1/queries/events`               | session                 | Event list and one event (with responses for organisers)                            |
-| `GET /api/events`                        | `GET /v1/events`                        | public                  | Upcoming events for the public site                                                 |
-| `POST /api/codeforces/sync`              | `POST /v1/me/codeforces/sync`           | session                 | Refresh own Codeforces stats and milestones                                         |
-| `POST /api/apply`                        | `POST /v1/applications`                 | public                  | Membership application                                                              |
-| `GET /api/export/members`                | `GET /v1/exports/members`               | session + `data.export` | Member list as CSV (audited)                                                        |
-| `GET /api/cf/:handle`                    | — (web only)                            | public                  | Codeforces profile, rating history, solves; cached 10 min                           |
-| `GET /api/vjudge?id=`                    | — (web only)                            | public                  | VJudge contest standings; cached 30 s                                               |
-| —                                        | `GET /health/live`, `GET /health/ready` | public                  | Liveness; readiness checks the database                                             |
+| Web route (browser)                      | API route                               | Auth                            | Purpose                                                                                        |
+| ---------------------------------------- | --------------------------------------- | ------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `POST /api/auth/login`                   | `POST /v1/auth/login`                   | public                          | Sign in with email and password                                                                |
+| `POST /api/auth/logout`                  | `POST /v1/auth/logout`                  | session                         | End this session                                                                               |
+| `POST /api/auth/invite`                  | `POST /v1/auth/invite/accept`           | public                          | Set a password from an invite or reset link, and sign in                                       |
+| —                                        | `GET /v1/auth/invite/:token`            | public                          | Name and masked email for an invite link                                                       |
+| `POST /api/auth/password`                | `POST /v1/auth/password/change`         | session                         | Change password; signs out every other session                                                 |
+| —                                        | `POST /v1/auth/password/forgot`         | public                          | Always `202`; placeholder, sends nothing (see [Decisions](decisions.md#known-gaps))            |
+| `GET /api/auth/{google,github}`          | —                                       | public                          | Redirects to Google or GitHub with a `state` cookie                                            |
+| `GET /api/auth/{google,github}/callback` | `POST /v1/auth/{google,github}`         | public                          | Exchanges the provider's code for a session                                                    |
+| `GET /api/state`                         | `GET /v1/me/state`                      | session                         | The member's full `AppState`                                                                   |
+| `POST /api/act`                          | `POST /v1/me/actions`                   | session                         | One change; answers with fresh state                                                           |
+| `POST /api/community`                    | `POST /v1/queries/community`            | session                         | Feed, ideas, milestones, kudos                                                                 |
+| `POST /api/members`                      | `POST /v1/queries/members`              | session                         | Directory, profiles, job-board sync                                                            |
+| `POST /api/alumni`                       | `POST /v1/queries/alumni`               | session                         | Alumni, jobs, interview prep, blog                                                             |
+| `POST /api/events`                       | `POST /v1/queries/events`               | session                         | Event list and one event (with responses for organisers)                                       |
+| `GET /api/events`                        | `GET /v1/events`                        | public                          | Upcoming events for the public site                                                            |
+| `POST /api/codeforces/sync`              | `POST /v1/me/codeforces/sync`           | session                         | Refresh own Codeforces stats and milestones                                                    |
+| `POST /api/apply`                        | `POST /v1/applications`                 | public                          | Application through a recruitment link                                                         |
+| —                                        | `GET /v1/recruit/:token`                | public                          | A recruitment link's title, batch, closing time and optional questions; `404` if unknown       |
+| `GET /api/recruit/photo/:id`             | `GET /v1/applications/:id/photo`        | session + `application.approve` | An applicant's photo                                                                           |
+| `GET /api/export/members`                | `GET /v1/exports/members`               | session + `data.export`         | Member list as CSV (audited)                                                                   |
+| `POST /api/audit`                        | `POST /v1/queries/audit`                | session + `audit.view`          | The audit log: `{ area?, q?, before? }` → `{ rows, counts, more }`, 100 per page, newest first |
+| `GET /api/cf/:handle`                    | — (web only)                            | public                          | Codeforces profile, rating history, solves; cached 10 min                                      |
+| `GET /api/vjudge?id=`                    | — (web only)                            | public                          | VJudge contest standings; cached 30 s                                                          |
+| —                                        | `GET /health/live`, `GET /health/ready` | public                          | Liveness; readiness checks the database                                                        |
 
 ## Auth
 
@@ -101,15 +104,15 @@ Google, and links or signs in the matching active member. `403` if no member use
 `{ state: AppState }`, or `{ state: null }` if the account was suspended mid-session. The shape is
 `AppState` in `packages/contracts/src/state.ts`:
 
-| Field                                          | Contents                                                                                                                                                                                                                                                                                                                      |
-| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `me`                                           | the member's roster entry plus email                                                                                                                                                                                                                                                                                          |
-| `s`                                            | personal progress: role, effective `roles` (role plus post grants), Codeforces and VJudge handles, solved/done/lessons/read lists, quiz scores, XP spent, check-in, kudos, registrations, attendance, votes, payments, preference flags and values, and the officer decision maps (`queue`, `exp`, `apps`, `log`) |
-| `members`                                      | the roster (roles with an admin capability also see suspended and not-yet-joined accounts)                                                                                                                                                                                                                                    |
-| `counts`                                       | live totals: volunteers, kudos, votes, solves per problem, announcement reads, kudos given today, recent milestones                                                                                                                                                                                                           |
-| `news`, `inbox`                                | announcements, and notifications built from real records                                                                                                                                                                                                                                                                      |
-| `myExpenses`, `fundTotal`, `term` | own expense requests;   club fund total; this term's real incoming and spent (since 1 Jan or 1 Jul)                                                                                                                                                                                                                  |
-| `office`                                       | only the officer datasets this role has a capability for: payment queue, fund, expenses, applications, suggestions, feedback, the event room code, ops                                                                                                                                                      |
+| Field                             | Contents                                                                                                                                                                                                                                                                                                          |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `me`                              | the member's roster entry plus email                                                                                                                                                                                                                                                                              |
+| `s`                               | personal progress: role, effective `roles` (role plus post grants), Codeforces and VJudge handles, solved/done/lessons/read lists, quiz scores, XP spent, check-in, kudos, registrations, attendance, votes, payments, preference flags and values, and the officer decision maps (`queue`, `exp`, `apps`, `log`) |
+| `members`                         | the roster (roles with an admin capability also see suspended and not-yet-joined accounts)                                                                                                                                                                                                                        |
+| `counts`                          | live totals: volunteers, kudos, votes, solves per problem, announcement reads, kudos given today, recent milestones                                                                                                                                                                                               |
+| `news`, `inbox`                   | announcements, and notifications built from real records                                                                                                                                                                                                                                                          |
+| `myExpenses`, `fundTotal`, `term` | own expense requests; club fund total; this term's real incoming and spent (since 1 Jan or 1 Jul)                                                                                                                                                                                                                 |
+| `office`                          | only the officer datasets this role has a capability for: payment queue, fund, expenses, recruitment (`recruit`: links and applicants, without photo data), email queue status (`mail`), suggestions, feedback, the event room code, ops                                                                          |
 
 ### `POST /v1/me/actions`
 
@@ -132,19 +135,22 @@ otherwise `{ synced: false }`. Answer: `{ synced, milestonesCreated }`. The web 
 
 ```json
 {
+  "token": "the link's 16-character token",
   "name": "…",
   "sid": "student ID",
   "dept": "CSE",
-  "batch": "24",
   "email": "…",
-  "cf": "optional handle",
-  "track": "cp",
-  "why": "10 to 1000 characters"
+  "phone": "10 to 15 digits, optional leading +",
+  "photo": "data:image/(png|jpeg|webp);base64,… (≤ 450 000 characters)",
+  "cf": "optional, when the link asks for it",
+  "why": "optional, ≤ 1000, when the link asks for it",
+  "answers": { "<question id>": "optional, ≤ 200 (short) or 1000 (paragraph)" }
 }
 ```
 
-`200 { ok: true }`. `400` with a message for invalid input. `409` if an application or account already uses
-that email.
+The batch comes from the link, never from the body. Fields are checked with `checkApplicant` from
+`@fecpc/contracts`, the same function the form uses. `200 { ok: true }`. `400` with a message for invalid
+input. `404` unknown link, `410` closed link. `409` if an application or account already uses that email.
 
 ### `GET /v1/exports/members`
 

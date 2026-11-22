@@ -5,7 +5,7 @@ import { canFully, type Role } from '@fecpc/contracts';
 import { templates } from '@fecpc/content/training';
 import { Fail, type Db } from './db.ts';
 
-type Actor = { id: string; roles: Role[]; system: boolean };
+type Actor = { id: string; roles: Role[]; name: string; system: boolean };
 type In = Record<string, unknown>;
 export const TEAM_SIZE = 3;
 
@@ -274,11 +274,17 @@ export const teamHandlers: Record<
         ).rowCount,
         'That member does not exist.',
       );
-    const r = await c.query(`update icpc_teams set coach = $2 where id = $1 returning id`, [
-      id,
-      coach,
-    ]);
+    const r = await c.query(
+      `update icpc_teams set coach = $2 where id = $1 returning name, (select name from users where id = $2) as coach`,
+      [id, coach],
+    );
     if (!r.rows[0]) throw new Fail(404, 'That team does not exist.');
+    await c.query(`insert into audit (who, what) values ($1, $2)`, [
+      a.name,
+      r.rows[0].coach
+        ? `assigned ${r.rows[0].coach} as coach of team ${r.rows[0].name}`
+        : `removed the coach of team ${r.rows[0].name}`,
+    ]);
     await log(c, id, a, coach ? 'assigned a coach' : 'removed the coach');
   },
 };
