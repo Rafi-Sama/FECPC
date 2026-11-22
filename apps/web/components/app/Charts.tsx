@@ -58,7 +58,7 @@ export function Radar({ data }: { data: [string, number][] }) {
   ];
   return (
     <svg
-      viewBox="0 0 260 260"
+      viewBox="-40 0 340 260"
       className="radar"
       role="img"
       aria-label={'Solved by tag: ' + data.map(([k, v]) => `${k} ${v}`).join(', ')}

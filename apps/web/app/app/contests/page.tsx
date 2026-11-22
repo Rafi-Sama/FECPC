@@ -1,4 +1,4 @@
-import { upcomingContests, localTime } from '@/lib/cf';
+import { localTime, upcomingContests } from '@/lib/cf';
 import ContestsClient from './client';
 
 export default async function Contests() {

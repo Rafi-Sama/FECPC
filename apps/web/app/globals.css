@@ -1235,3 +1235,35 @@ select.input {
     display: none;
   }
 }
+
+/* password field with a show/hide eye */
+.pw {
+  position: relative;
+  display: block;
+}
+.pw .input {
+  width: 100%;
+  padding-right: 48px;
+}
+.pw-eye {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  background: none;
+  border: 0;
+  color: var(--dim);
+  cursor: pointer;
+}
+.pw-eye:hover,
+.pw-eye[aria-pressed='true'] {
+  color: var(--hi, currentColor);
+}
+.pw-eye svg {
+  width: 20px;
+  height: 20px;
+}

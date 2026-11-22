@@ -253,6 +253,21 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     document.title = `${cur.label} — ${site.short}`;
   }, [cur.label]);
+  // Topbar menus are <details>: close them on a click outside or Escape.
+  useEffect(() => {
+    const close = (e: Event) => {
+      if (e instanceof KeyboardEvent && e.key !== 'Escape') return;
+      document.querySelectorAll<HTMLDetailsElement>('.topbar details[open]').forEach((d) => {
+        if (e instanceof KeyboardEvent || !d.contains(e.target as Node)) d.open = false;
+      });
+    };
+    document.addEventListener('pointerdown', close);
+    document.addEventListener('keydown', close);
+    return () => {
+      document.removeEventListener('pointerdown', close);
+      document.removeEventListener('keydown', close);
+    };
+  }, []);
   const rail = !!s.flags.rail,
     dark = !!s.flags.dark;
   const th = dark ? 'd' : 'b'; // light = the paper skin, dark = the charcoal one; Arena keeps its arcade skin, the sidebar stays dark

@@ -6,6 +6,7 @@ import { useState } from 'react';
 export default function LoginForm({ invite, error }: { invite?: string; error?: string }) {
   const [err, setErr] = useState(error ?? '');
   const [busy, setBusy] = useState(false);
+  const [show, setShow] = useState(false);
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const d = Object.fromEntries(new FormData(e.currentTarget));
@@ -47,16 +48,31 @@ export default function LoginForm({ invite, error }: { invite?: string; error?: 
         <span className="label">
           {invite ? 'New password · at least 10 characters' : 'Password'}
         </span>
-        <input
-          className="input"
-          name="password"
-          type="password"
-          required
-          minLength={invite ? 10 : 1}
-          maxLength={200}
-          autoComplete={invite ? 'new-password' : 'current-password'}
-          autoFocus={!!invite}
-        />
+        <span className="pw">
+          <input
+            className="input"
+            name="password"
+            type={show ? 'text' : 'password'}
+            required
+            minLength={invite ? 10 : 1}
+            maxLength={200}
+            autoComplete={invite ? 'new-password' : 'current-password'}
+            autoFocus={!!invite}
+          />
+          <button
+            type="button"
+            className="pw-eye"
+            aria-label={show ? 'Hide password' : 'Show password'}
+            aria-pressed={show}
+            onClick={() => setShow(!show)}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+              <circle cx="12" cy="12" r="3" />
+              {show && <path d="M3 3l18 18" />}
+            </svg>
+          </button>
+        </span>
       </label>
       {err && (
         <p className="body bad" role="alert">

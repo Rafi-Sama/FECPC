@@ -1,14 +1,12 @@
 'use client';
-import { useRef, useState } from 'react';
-import { useSaveBar } from '@/components/app/SaveBar';
+import { useState } from 'react';
 import { Page } from '@/components/app/Shell';
 import { useStore } from '@/components/app/Store';
 import { HandleBox, useJudge, VjudgeBox } from '@/components/app/Judge';
 import { Heatmap, Line, Radar } from '@/components/app/Charts';
 import { cfTitle } from '@fecpc/content/site';
 import { sheet } from '@fecpc/content/member-area';
-import { roleName } from '@fecpc/contracts';
-import QR from '@/components/app/QR';
+import { level, rankFor, roleName } from '@fecpc/contracts';
 
 function Password() {
   const [msg, setMsg] = useState<[boolean, string] | null>(null);
@@ -33,7 +31,7 @@ function Password() {
     }
   };
   return (
-    <form className="panel c6 no-print" onSubmit={submit}>
+    <form className="panel c4 no-print" onSubmit={submit}>
       <p className="label">Change password</p>
       <label className="field">
         <span className="label">Current password</span>
@@ -70,9 +68,10 @@ function Password() {
 }
 
 export default function Profile() {
-  const { s, me, act, counts } = useStore();
+  const { s, me, counts, xp } = useStore();
   // kudos on the profile itself, plus kudos on the member's milestones in the feed
   const profileKudos = counts.kudos?.[`member:${me.id}`] ?? 0;
+  const kudos = profileKudos + s.milestoneKudosReceived;
   const { data } = useJudge();
   const days = data
     ? Array.from(
@@ -87,14 +86,30 @@ export default function Profile() {
     ? Object.entries(data.tags)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 6)
+        .map(([t, n]): [string, number] => [t.length > 14 ? t.split(' ')[0]! : t, n])
     : [...new Set(sheet.map((x) => x.topic))].map((t) => [
         t.toLowerCase(),
         sheet.filter((x) => x.topic === t && s.solved.includes(x.id)).length,
       ]);
-  const details = useRef<HTMLFormElement>(null);
-  const { markSaved } = useSaveBar(details, { label: 'Unsaved profile details' });
   const rating = data?.rating ?? me.rating,
-    solved = data?.solved.length ?? me.solved;
+    peak = data?.maxRating ?? me.peak,
+    solved = data?.solved.length ?? me.solved,
+    tier = rankFor(rating),
+    lv = level(xp),
+    active = days.filter(Boolean).length;
+  const stats: [string, React.ReactNode, string, string?][] = [
+    ['Rating', rating || '—', data?.rank ?? cfTitle(rating), rating ? tier.color : undefined],
+    [
+      'Peak',
+      peak || '—',
+      peak ? rankFor(peak).title : 'unrated',
+      peak ? rankFor(peak).color : undefined,
+    ],
+    ['Solved', solved, 'problems'],
+    ['Rated rounds', hist.length, data ? 'on Codeforces' : 'link a handle'],
+    ['Streak', me.streak + (s.checkin ? 1 : 0), 'days'],
+    ['Level', lv.lv, `${lv.title} · ${xp} XP`],
+  ];
   return (
     <Page
       title={me.name}
@@ -104,58 +119,52 @@ export default function Profile() {
         </button>
       }
     >
-      <div className="bento">
-        <section className="c6" style={{ gap: 16 }}>
-          <div className="idcard">
-            <QR text={`FECPC member ${me.id}`} size={96} fg="#0D0D0B" bg="#ECE9E1" />
-            <div>
-              <p className="label" style={{ opacity: 0.7 }}>
-                FECPC · Member card
-              </p>
-              <strong>{me.name}</strong>
-              <p className="mono" style={{ fontSize: 14, marginTop: 6 }}>
-                {me.dept} · Batch {me.batch} · FEC-{String(me.no).padStart(4, '0')}
-              </p>
-              <p className="mono" style={{ fontSize: 14, opacity: 0.7, marginTop: 10 }}>
-                fecpc.example/u/{me.handle}
-              </p>
-            </div>
-          </div>
-          <div className="panel">
-            <p className="label">Judge handles</p>
-            <HandleBox />
-            <VjudgeBox />
+      <div className="bento fill profile">
+        <section className="c5 idcard" style={{ '--r': tier.color } as React.CSSProperties}>
+          <div>
+            <p className="label" style={{ opacity: 0.7 }}>
+              FECPC · Member card
+            </p>
+            <strong>{me.name}</strong>
+            <p className="mono" style={{ fontSize: 14, marginTop: 6 }}>
+              {me.role || roleName[s.role]} · {me.dept} · Batch {me.batch}
+            </p>
+            <p className="mono" style={{ fontSize: 14, marginTop: 4, opacity: 0.8 }}>
+              FEC-{String(me.no).padStart(4, '0')}
+            </p>
+            <p className="idcard-cf">
+              {data ? (
+                <a
+                  href={`https://codeforces.com/profile/${data.handle}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {data.handle} · {data.rank}
+                </a>
+              ) : (
+                'Codeforces not linked'
+              )}
+            </p>
+            <p
+              className="idcard-kudos"
+              title={`${profileKudos} on profile · ${s.milestoneKudosReceived} on milestones`}
+            >
+              ♥ {kudos} kudos
+            </p>
           </div>
         </section>
-        <section className="panel c6">
-          <div className="grid" style={{ '--min': '110px', '--g': '16px' } as React.CSSProperties}>
-            <div className="kv">
-              <span className="label">Rating</span>
-              <span className="stat">{rating}</span>
-              <span className="label">{data?.rank ?? cfTitle(rating)}</span>
-            </div>
-            <div className="kv">
-              <span className="label">Solved</span>
-              <span className="stat">{solved}</span>
-              <span className="label">problems</span>
-            </div>
-            <div className="kv">
-              <span className="label">Streak</span>
-              <span className="stat">{me.streak + (s.checkin ? 1 : 0)}</span>
-              <span className="label">days</span>
-            </div>
-            <div className="kv">
-              <span className="label">Kudos</span>
-              <span className="stat">♥ {profileKudos + s.milestoneKudosReceived}</span>
-              <span className="label">
-                {profileKudos} profile · {s.milestoneKudosReceived} milestones
-              </span>
-            </div>
+        <section className="panel c7">
+          <div className="pstats">
+            {stats.map(([k, v, sub, c]) => (
+              <div key={k} style={c ? ({ '--r': c } as React.CSSProperties) : undefined}>
+                <span className="label">{k}</span>
+                <span className="stat">{v}</span>
+                <span className="label">{sub}</span>
+              </div>
+            ))}
           </div>
-          <p className="label" style={{ marginTop: 12 }}>
-            Rating history{data ? ` · ${data.handle}` : ''}
-          </p>
-          {data ? (
+          <p className="label">Rating history{data ? ` · ${data.handle}` : ''}</p>
+          {data && hist.length > 1 ? (
             <>
               <Line pts={hist} />
               <div className="bars-x">
@@ -164,13 +173,21 @@ export default function Profile() {
               </div>
             </>
           ) : (
-            <p className="body empty">Link a Codeforces handle to draw your rating history.</p>
+            <p className="body dim">
+              {data
+                ? 'Rated rounds will draw a line here.'
+                : 'Link a Codeforces handle to draw your rating history.'}
+            </p>
           )}
         </section>
         <section className="panel c8">
           <div className="row between">
             <p className="label">Solves, last 52 weeks</p>
-            {data && <span className="label">{days.reduce((a, b) => a + b, 0)} total</span>}
+            {data && (
+              <span className="label">
+                {days.reduce((a, b) => a + b, 0)} accepted · {active} active days
+              </span>
+            )}
           </div>
           {data ? (
             <>
@@ -182,70 +199,50 @@ export default function Profile() {
               </div>
             </>
           ) : (
-            <p className="body empty">Link a handle to fill this in from the judge.</p>
+            <p className="body dim">Link a handle to fill this in from the judge.</p>
           )}
         </section>
         <section className="panel c4" style={{ alignItems: 'center' }}>
           <p className="label" style={{ alignSelf: 'flex-start' }}>
-            Solved by tag{data ? '' : ' · club record'}
+            Strongest topics{data ? '' : ' · club sheet'}
           </p>
           <Radar data={tags} />
         </section>
-        <form
-          ref={details}
-          className="panel c6"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const d = new FormData(e.currentTarget);
-            act('profile', {
-              name: String(d.get('name')).trim(),
-              dept: String(d.get('dept')).trim(),
-              batch: Number(d.get('batch')),
-            }).then((ok) => ok && markSaved());
-          }}
-        >
-          <p className="label">Your details</p>
-          <label className="field">
-            <span className="label">Name</span>
-            <input
-              name="name"
-              className="input"
-              defaultValue={me.name}
-              required
-              minLength={2}
-              maxLength={80}
-              autoComplete="name"
-            />
-          </label>
-          <div className="grid" style={{ '--min': '120px', '--g': '12px' } as React.CSSProperties}>
-            <label className="field">
-              <span className="label">Department</span>
-              <input
-                name="dept"
-                className="input"
-                defaultValue={me.dept}
-                required
-                minLength={2}
-                maxLength={20}
-              />
-            </label>
-            <label className="field">
-              <span className="label">Batch</span>
-              <input
-                name="batch"
-                className="input"
-                type="number"
-                defaultValue={me.batch}
-                required
-                min={0}
-                max={99}
-              />
-            </label>
-          </div>
-          <p className="label">
-            {me.email} · {me.role || roleName[s.role]}
-          </p>
-        </form>
+        {data && data.contests.length > 0 && (
+          <section className="panel" style={{ gridColumn: '1 / -1' }}>
+            <p className="label">Recent rated rounds</p>
+            <ul className="list">
+              {data.contests.map((c) => (
+                <li key={c.id}>
+                  <span className="grow">
+                    <strong>{c.name}</strong>
+                    <br />
+                    <span className="label">
+                      {new Date(c.at).toLocaleDateString('en-GB', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                      })}
+                    </span>
+                  </span>
+                  <span className="num">#{c.rank.toLocaleString()}</span>
+                  <b
+                    className={`num ${c.delta >= 0 ? 'ok' : 'bad'}`}
+                    style={{ width: 56, textAlign: 'right' }}
+                  >
+                    {c.delta >= 0 ? '+' : ''}
+                    {c.delta}
+                  </b>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+        <div className="panel c8 no-print">
+          <p className="label">Judge handles</p>
+          <HandleBox />
+          <VjudgeBox />
+        </div>
         <Password />
       </div>
     </Page>

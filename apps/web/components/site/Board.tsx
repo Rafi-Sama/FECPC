@@ -7,12 +7,11 @@ const tabs: { k: keyof Member; label: string; unit: string }[] = [
   { k: 'rating', label: 'RATING', unit: '' },
   { k: 'solved', label: 'SOLVES', unit: '' },
   { k: 'streak', label: 'STREAK', unit: 'D' },
-  { k: 'helper', label: 'HELPERS', unit: '' },
   { k: 'xp', label: 'XP', unit: '' },
 ];
 const medal = ['#FFD23F', '#3DE1FF', '#FF4D8D'];
 
-export default function Board({ list = members }: { list?: Member[] }) {
+export default function Board({ list = members, me }: { list?: Member[]; me?: string }) {
   const [k, setK] = useState<keyof Member>('rating');
   const [batch, setBatch] = useState(0);
   const tab = tabs.find((t) => t.k === k)!;
@@ -49,23 +48,30 @@ export default function Board({ list = members }: { list?: Member[] }) {
             onChange={(e) => setBatch(+e.target.value)}
           >
             <option value={0}>ALL</option>
-            {[20, 21, 22, 23, 24, 25].map((b) => (
-              <option key={b} value={b}>
-                {b}
-              </option>
-            ))}
+            {[...new Set(list.map((m) => m.batch))]
+              .filter(Boolean)
+              .sort((a, b) => a - b)
+              .map((b) => (
+                <option key={b} value={b}>
+                  {b}
+                </option>
+              ))}
           </select>
         </label>
       </div>
       <ol className="scores big">
         {rows.map((x, i) => (
-          <li key={x.id}>
+          <li
+            key={x.id}
+            aria-current={x.id === me || undefined}
+            style={x.id === me ? { outline: '2px solid var(--acc)' } : undefined}
+          >
             <span className="rk arcade">{String(i + 1).padStart(2, '0')}</span>
             <Avatar name={x.name} size={36} fg={medal[i] ?? '#8E84C9'} bg="#1D1145" />
             <span className="nm">
               {x.name}
               <small>
-                @{x.handle} · {cfTitle(x.rating)} · Batch {x.batch} · {x.squad}
+                @{x.handle} · {cfTitle(x.rating)} · Batch {x.batch}
               </small>
             </span>
             <span className="arcade sc">

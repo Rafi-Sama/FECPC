@@ -48,6 +48,12 @@ export const matrix = {
     president: Y,
     super_admin: Y,
   },
+  'sheet.curate': {
+    label: 'Publish curated problem sheets',
+    cp_head: Y,
+    president: Y,
+    super_admin: Y,
+  },
   'payments.verify': {
     label: 'Verify member payments',
     treasurer: Y,
@@ -200,6 +206,12 @@ export const matrix = {
   },
   'application.approve': {
     label: 'Approve applications',
+    secretary: Y,
+    president: Y,
+    super_admin: Y,
+  },
+  'member.editDetails': {
+    label: "Edit a member's name, department and batch",
     secretary: Y,
     president: Y,
     super_admin: Y,

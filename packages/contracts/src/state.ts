@@ -74,6 +74,8 @@ export type Roster = Member & {
   problems_solved: number;
   cf_rating?: number | null;
   cf_handle?: string | null;
+  /** Last five rated Codeforces rounds, newest first, from the server's sync. */
+  cf_contests?: CfRound[];
   current_streak?: number;
   contests_participated?: number;
   avatar_url?: string | null;
@@ -480,6 +482,47 @@ export type AppState = {
     flow: { month: string; in: number; out: number }[];
   };
   office: Office;
+  /** The current weekly sheet first, then curated sheets, newest first. `club` = members Codeforces says solved it. */
+  sheets: Sheet[];
+  /** Arena challenges from the last 30 days, newest first. `solvers[].at` is the first accept on Codeforces. */
+  challenges: {
+    id: number;
+    problem: string;
+    name: string;
+    rating: number | null;
+    by: string;
+    at: string;
+    solvers: { id: string; at: string | null }[];
+  }[];
+  /** Fantasy league: this week's and next week's Mondays, and every team picked for last, this or next week. */
+  fantasy: { week: string; next: string; teams: { by: string; week: string; picks: string }[] };
   /** Which roles each club post grants. Set by the Super Admin. */
   postRoles: Partial<Record<Post, Role[]>>;
+};
+
+export type SheetProblem = {
+  id: string;
+  name: string;
+  rating: number | null;
+  tags: string[];
+  club: number;
+};
+export type Sheet = {
+  id: number;
+  kind: 'weekly' | 'custom';
+  title: string;
+  note: string;
+  week: string | null;
+  by: string | null;
+  at: string;
+  problems: SheetProblem[];
+};
+
+export type CfRound = {
+  id: number;
+  name: string;
+  rank: number;
+  delta: number;
+  at: number;
+  /** problems accepted during the round */ solved: number;
 };

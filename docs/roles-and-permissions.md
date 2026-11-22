@@ -7,13 +7,13 @@ enforces them inside every action handler. The web app uses the same matrix only
 
 Each cell of the matrix is one of:
 
-| Cell      | Meaning                                                                         | `can(role, cap)` | `canFully(role, cap)` |
-| --------- | ------------------------------------------------------------------------------- | ---------------- | --------------------- |
-| ✓         | full authority                                                                  | `true`           | `true`                |
+| Cell      | Meaning                                                                           | `can(role, cap)` | `canFully(role, cap)` |
+| --------- | --------------------------------------------------------------------------------- | ---------------- | --------------------- |
+| ✓         | full authority                                                                    | `true`           | `true`                |
 | `scope`   | only within the role's own reach (a poster's own items, an alumnus's own profile) | `'scope'`        | `false`               |
-| `view`    | can see, cannot act                                                             | `'view'`         | `false`               |
-| `propose` | can start a two-person decision, a second officer completes it                  | `'propose'`      | `false`               |
-| empty     | nothing                                                                         | `false`          | `false`               |
+| `view`    | can see, cannot act                                                               | `'view'`         | `false`               |
+| `propose` | can start a two-person decision, a second officer completes it                    | `'propose'`      | `false`               |
+| empty     | nothing                                                                           | `false`          | `false`               |
 
 Money-moving and account-changing actions require `canFully`. `grantOf(role, cap)` returns the same
 information as a string: `'full' | 'scope' | 'view' | 'propose' | 'none'`.
@@ -29,6 +29,7 @@ Generated from `packages/contracts/src/capabilities.ts`.
 | `directory.view`            | View member directory                                     |   ✓    |   ✓    |    ✓    |     ✓     |     ✓     |     ✓     |      ✓      |
 | `teams.oversee`             | Oversee ICPC teams and assign coaches                     |        |        |    ✓    |           |           |     ✓     |      ✓      |
 | `sheet.stats`               | See sheet completion statistics                           |        |        |    ✓    |           |           |     ✓     |      ✓      |
+| `sheet.curate`              | Publish curated problem sheets                            |        |        |    ✓    |           |           |     ✓     |      ✓      |
 | `payments.verify`           | Verify member payments                                    |        |        |         |     ✓     |           |   view    |      ✓      |
 | `expense.approve`           | Approve expenses                                          |        |        |         |  propose  |           |     ✓     |      ✓      |
 | `event.publish`             | Run events: create, registrations, feedback, certificates |        |        |         |           |     ✓     |     ✓     |      ✓      |
@@ -52,6 +53,7 @@ Generated from `packages/contracts/src/capabilities.ts`.
 | `blog.post.delete`          | Delete blog post                                          |        | scope  |         |           |           |     ✓     |      ✓      |
 | `application.approve`       | Approve applications                                      |        |        |         |           |     ✓     |     ✓     |      ✓      |
 | `roles.assign`              | Assign roles                                              |        |        |         |           |           |     ✓     |      ✓      |
+| `member.editDetails`        | Edit a member's name, department and batch (audited)      |        |        |         |           |     ✓     |     ✓     |      ✓      |
 | `member.makeAlumni`         | Transition member to alumni                               |        |        |         |           |           |     ✓     |      ✓      |
 | `member.deactivate`         | Deactivate member account                                 |        |        |         |           |           |     ✓     |      ✓      |
 | `audit.view`                | View audit log                                            |        |        |         |           |           |     ✓     |      ✓      |

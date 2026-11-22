@@ -65,7 +65,7 @@ export function progress(raw: Partial<Progress> | null): Progress {
 }
 
 const ROSTER = `json_build_object('id', id, 'no', member_no, 'name', name, 'handle', coalesce(nullif(cf_handle, ''), handle), 'cf_handle', nullif(coalesce(nullif(cf_handle, ''), handle), ''), 'batch', batch, 'dept', dept, 'squad', squad, 'role', title, 'is_alumni', role = 'alumni', 'rating', coalesce(cf_rating, rating), 'cf_rating', coalesce(cf_rating, nullif(rating, 0)), 'peak', peak,
-  'solved', greatest(problems_solved, solved), 'problems_solved', greatest(problems_solved, solved), 'avatar_url', avatar_url, 'streak', greatest(current_streak, streak), 'current_streak', greatest(current_streak, streak), 'contests_participated', contests_participated, 'helper', helper, 'skills', skills, 'xp', solved * 12 + vj_solved * 12 + streak * 30 + helper * 8, 'roleKey', role, 'post', post, 'email', email, 'suspended', suspended, 'system', system, 'pending', pass_hash is null and google_sub is null)`;
+  'solved', greatest(problems_solved, solved), 'problems_solved', greatest(problems_solved, solved), 'avatar_url', avatar_url, 'cf_contests', cf_contests, 'streak', greatest(current_streak, streak), 'current_streak', greatest(current_streak, streak), 'contests_participated', contests_participated, 'helper', helper, 'skills', skills, 'xp', solved * 12 + vj_solved * 12 + streak * 30 + helper * 8, 'roleKey', role, 'post', post, 'email', email, 'suspended', suspended, 'system', system, 'pending', pass_hash is null and google_sub is null)`;
 const EXPENSE = `json_build_object('id', 'EXP-' || e.id, 'by', e.by, 'name', w.name, 'what', e.what, 'amount', e.amount, 'event', e.event, 'status', e.status)`;
 const MINE = `
 select u.email, u.progress, u.vjudge_handle, u.vj_solved,
@@ -136,6 +136,23 @@ select u.email, u.progress, u.vjudge_handle, u.vj_solved,
   (select count(*)::int from alumni_jobs where (source = 'manual' or fetched_at > now() - interval '30 days') and (deadline is null or deadline >= current_date)) as c_jobs,
   (select count(*)::int from interview_topics) as c_prep_topics,
   (select count(*)::int from blog_posts where status = 'published') as c_blogs,
+  (select coalesce(json_agg(json_build_object('id', ch.id, 'problem', ch.problem, 'name', ch.name, 'rating', ch.rating,
+      'by', ch.by, 'at', ch.at,
+      'solvers', (select coalesce(json_agg(json_build_object('id', s.user_id, 'at', s.at) order by s.at nulls last), '[]')
+        from cf_solves s join users su on su.id = s.user_id
+        where s.problem = ch.problem and not su.system and not su.suspended)) order by ch.at desc), '[]')
+     from challenges ch where ch.at > now() - interval '30 days') as challenges,
+  (select json_build_object('week', w::text, 'next', (w + 7)::text, 'teams', coalesce((
+      select json_agg(json_build_object('by', f.id, 'week', substr(kv.k, 9), 'picks', kv.v))
+      from users f, jsonb_each_text(coalesce(f.progress->'kv', '{}')) kv(k, v)
+      where kv.k like 'fantasy:%' and substr(kv.k, 9) >= (w - 7)::text and not f.system and not f.suspended), '[]'))
+     from (select date_trunc('week', now() at time zone '${TZ}')::date as w) wk) as fantasy,
+  (select coalesce(json_agg(json_build_object('id', sh.id, 'kind', sh.kind, 'title', sh.title, 'note', sh.note, 'week', sh.week, 'by', w.name, 'at', sh.at,
+      'problems', (select coalesce(json_agg(pr || jsonb_build_object('club', (select count(*)::int from cf_solves cs join users cu on cu.id = cs.user_id
+          where cs.problem = pr->>'id' and not cu.system and not cu.suspended)) order by o), '[]') from jsonb_array_elements(sh.problems) with ordinality x(pr, o)))
+      order by sh.kind = 'weekly' desc, sh.at desc), '[]')
+     from sheets sh left join users w on w.id = sh.by
+     where sh.kind = 'custom' or sh.week = (select max(week) from sheets)) as sheets,
   (select coalesce(json_agg(json_build_object(
       'id', 'an:' || a.id, 'user_id', a.user_id, 'title', a.title, 'body_md', coalesce(a.body_md, ''), 'by', w.name,
       'by_role', w.title, 'by_solved', greatest(w.problems_solved, w.solved), 'by_avatar', w.avatar_url,
@@ -466,6 +483,24 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
       href: '/app/admin',
     });
 
+  // New challenges from others in the last three days that this member has not solved yet.
+  const open = (row.challenges as AppState['challenges']).filter(
+    (c) =>
+      c.by !== userId &&
+      Date.parse(c.at) > Date.now() - 3 * 864e5 &&
+      !c.solvers.some((x) => x.id === userId),
+  );
+  if (open.length)
+    inbox.push({
+      id: `n:ch:${open[0]!.id}`,
+      cat: 'Arena',
+      text:
+        open.length > 1
+          ? `${open.length} open challenges in the Arena`
+          : `New challenge: ${open[0]!.name}`,
+      href: '/app/arena',
+    });
+
   const votes: AppState['counts']['votes'] = {};
   for (const [poll, opt, n] of row.c_votes as [string, string, number][])
     (votes[poll] ??= {})[opt] = n;
@@ -500,6 +535,9 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
     // The seeded opening balance plus every verified payment, minus every approved expense.
     fundTotal: data.accounts.reduce((a, x) => a + x[1], 0) + money.net,
     office,
+    sheets: row.sheets,
+    fantasy: row.fantasy,
+    challenges: row.challenges,
     postRoles,
   };
 }

@@ -912,13 +912,18 @@ test('shared switches: members cannot flip them and do not see committee state',
 });
 test('preferences are validated', async () => {
   await refused(400, act('tasnim', { type: 'kv', key: 'conf:4A', value: 'certain' }));
-  await refused(
-    403,
-    act('tasnim', { type: 'kv', key: 'fantasy', value: 'nadia,tanvir,sadia,rahim' }),
+  const { week, next } = (await st('tasnim')).fantasy;
+  const team = `fantasy:${next}`;
+  await refused(403, act('tasnim', { type: 'kv', key: `fantasy:${week}`, value: 'nadia' })); // this week is locked
+  await refused(403, act('tasnim', { type: 'kv', key: 'fantasy', value: 'nadia' }));
+  await refused(403, act('tasnim', { type: 'kv', key: team, value: 'nadia,tanvir,sadia,rahim' }));
+  await refused(403, act('tasnim', { type: 'kv', key: team, value: 'nadia,ghost' }));
+  await act('tasnim', { type: 'kv', key: team, value: 'nadia,tanvir,nadia' });
+  assert.equal((await st('tasnim')).s.kv[team], 'nadia,tanvir');
+  assert.ok(
+    (await st('nadia')).fantasy.teams.some((t) => t.by === 'tasnim' && t.week === next),
+    'every member sees the league',
   );
-  await refused(403, act('tasnim', { type: 'kv', key: 'fantasy', value: 'nadia,ghost' }));
-  await act('tasnim', { type: 'kv', key: 'fantasy', value: 'nadia,tanvir,nadia' });
-  assert.equal((await st('tasnim')).s.kv.fantasy, 'nadia,tanvir');
   await refused(400, act('tasnim', { type: 'kv', key: 'note', value: 'x'.repeat(201) }));
   await refused(400, act('tasnim', { type: 'handle', value: 'a b' }));
   await act('tasnim', { type: 'handle', value: 'tourist' });
@@ -1009,14 +1014,36 @@ test('inbox is built from real records and can be cleared', async () => {
   assert.ok(after.inbox.every((n) => after.s.read.includes(n.id)));
   await refused(403, act('rahim', { type: 'toggle', list: 'read', id: 'x'.repeat(79) }));
 });
-test('profile: a member edits their own details, within limits', async () => {
-  await refused(400, act('imran', { type: 'profile', name: '', dept: 'CE', batch: 23 }));
+test('profile: only the Secretary or President edits member details, audited, within limits', async () => {
+  await refused(
+    403,
+    act('imran', { type: 'profile', user: 'imran', name: 'Imran C', dept: 'CE', batch: 23 }),
+  );
+  await refused(
+    403,
+    act('sadia', { type: 'profile', user: 'sadia', name: 'Sadia I', dept: 'CE', batch: 23 }),
+  );
+  await refused(
+    403,
+    act('sadia', { type: 'profile', user: 'tanvir', name: 'T A', dept: 'CE', batch: 20 }),
+  );
   await refused(
     400,
-    act('imran', { type: 'profile', name: 'Imran Chowdhury', dept: 'CE', batch: 123 }),
+    act('sadia', { type: 'profile', user: 'imran', name: '', dept: 'CE', batch: 23 }),
   );
-  await act('imran', {
+  await refused(
+    400,
+    act('sadia', {
+      type: 'profile',
+      user: 'imran',
+      name: 'Imran Chowdhury',
+      dept: 'CE',
+      batch: 123,
+    }),
+  );
+  await act('sadia', {
     type: 'profile',
+    user: 'imran',
     name: 'Imran  Chowdhury\u0007',
     dept: 'CSE',
     batch: 24,
@@ -1029,6 +1056,8 @@ test('profile: a member edits their own details, within limits', async () => {
     ['Imran  Chowdhury', 'CSE', 24, 'member'],
     'only name, department and batch change',
   );
+  const log = (await db().query(`select what from audit order by id desc limit 1`)).rows[0].what;
+  assert.match(log, /edited .*'s details: name .* → Imran {2}Chowdhury/);
 });
 test('reset links: issued only by someone who outranks the account, single-use, expiring, and they sign the old sessions out', async () => {
   const old = await login('priya@fecpc.example', PW);
@@ -1556,26 +1585,40 @@ test('codeforces sync: uses the handle stored for the member, never one from the
     return Response.json(
       String(url).includes('user.info')
         ? { status: 'OK', result: [{ handle: 'priya_cf', rating: 1650, maxRating: 1700 }] }
-        : {
-            status: 'OK',
-            result: [
-              {
-                verdict: 'OK',
-                creationTimeSeconds: Date.now() / 1000,
-                problem: { contestId: 1, index: 'A', rating: 800, tags: ['math', 'greedy'] },
-              },
-              {
-                verdict: 'OK',
-                creationTimeSeconds: Date.now() / 1000,
-                problem: { contestId: 1, index: 'A' },
-              },
-              {
-                verdict: 'WRONG_ANSWER',
-                creationTimeSeconds: 1,
-                problem: { contestId: 2, index: 'B' },
-              },
-            ],
-          },
+        : String(url).includes('user.rating')
+          ? {
+              status: 'OK',
+              result: [
+                {
+                  contestId: 1,
+                  contestName: 'Round 1',
+                  rank: 99,
+                  oldRating: 1600,
+                  newRating: 1650,
+                  ratingUpdateTimeSeconds: 9,
+                },
+              ],
+            }
+          : {
+              status: 'OK',
+              result: [
+                {
+                  verdict: 'OK',
+                  creationTimeSeconds: Date.now() / 1000,
+                  problem: { contestId: 1, index: 'A', rating: 800, tags: ['math', 'greedy'] },
+                },
+                {
+                  verdict: 'OK',
+                  creationTimeSeconds: Date.now() / 1000,
+                  problem: { contestId: 1, index: 'A' },
+                },
+                {
+                  verdict: 'WRONG_ANSWER',
+                  creationTimeSeconds: 1,
+                  problem: { contestId: 2, index: 'B' },
+                },
+              ],
+            },
     );
   }) as typeof fetch;
   try {
@@ -1597,6 +1640,18 @@ test('codeforces sync: uses the handle stored for the member, never one from the
     const stored = (await db().query(`select rating, tags from cf_solves where user_id = 'priya'`))
       .rows;
     assert.deepEqual(stored, [{ rating: 800, tags: ['math', 'greedy'] }]); // kept for the team solve map
+    const ticked = (await db().query(`select progress->'solved' s from users where id = 'priya'`))
+      .rows[0].s;
+    assert.equal(
+      ticked.filter((x: string) => x === '1A').length,
+      1,
+      'a confirmed sheet problem is ticked once',
+    );
+    const rounds = (await db().query(`select cf_contests c from users where id = 'priya'`)).rows[0]
+      .c;
+    assert.deepEqual(rounds, [
+      { id: 1, name: 'Round 1', rank: 99, delta: 50, at: 9000, solved: 0 },
+    ]); // practice accepts do not count
 
     globalThis.fetch = (async () => Response.json({ status: 'FAILED' })) as typeof fetch;
     assert.equal(await syncCodeforces(db(), 'priya'), null, 'a failed fetch changes nothing');
@@ -2041,4 +2096,79 @@ test('events: a banner must really be the image format it claims', async () => {
   await save(
     'data:image/png;base64,' + Buffer.from('\x89PNG\r\n\x1a\n0000', 'latin1').toString('base64'),
   );
+});
+
+test('sheets: only the CP Head or President curates; links become problems', async () => {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async () => {
+    throw new Error('offline');
+  }) as typeof fetch;
+  try {
+    const links =
+      'https://codeforces.com/problemset/problem/1352/C https://codeforces.com/contest/455/problem/A';
+    await refused(403, act('tasnim', { type: 'sheetSave', title: 'DP drill', links }));
+    await refused(400, act('nadia', { type: 'sheetSave', title: 'DP drill', links: 'nothing' }));
+    await act('nadia', { type: 'sheetSave', title: 'DP drill', links });
+    const sh = (await st('tasnim')).sheets.find((x) => x.title === 'DP drill')!;
+    assert.deepEqual(
+      sh.problems.map((p) => p.id),
+      ['1352C', '455A'],
+    );
+    await refused(403, act('tasnim', { type: 'sheetDelete', id: sh.id }));
+    await act('tanvir', { type: 'sheetDelete', id: sh.id });
+    assert.equal(
+      (await st('tasnim')).sheets.some((x) => x.id === sh.id),
+      false,
+    );
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('challenges: one Codeforces link, ranked by who solved it first, removable by the poster', async () => {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async () => {
+    throw new Error('offline');
+  }) as typeof fetch;
+  try {
+    await refused(400, act('tasnim', { type: 'challenge', link: 'no link here' }));
+    await refused(
+      400,
+      act('tasnim', {
+        type: 'challenge',
+        link: 'https://codeforces.com/contest/1/problem/A https://codeforces.com/contest/2/problem/B',
+      }),
+    );
+    await act('tasnim', {
+      type: 'challenge',
+      link: 'https://codeforces.com/problemset/problem/4/A',
+    });
+    await refused(
+      409,
+      act('nadia', { type: 'challenge', link: 'codeforces.com/contest/4/problem/A' }),
+    );
+    await db().query(
+      `insert into cf_solves (user_id, problem, at) values ('nadia', '4A', now()), ('rahim', '4A', now() - interval '1 hour')
+       on conflict (user_id, problem) do update set at = excluded.at`,
+    );
+    const ch = (await st('priya')).challenges.find((x) => x.problem === '4A')!;
+    assert.equal(ch.by, 'tasnim');
+    assert.deepEqual(
+      ch.solvers.filter((x) => x.id === 'nadia' || x.id === 'rahim').map((x) => x.id),
+      ['rahim', 'nadia'],
+      'first accept first',
+    );
+    assert.ok(
+      (await st('priya')).inbox.some((n) => n.id === `n:ch:${ch.id}`),
+      'others are told',
+    );
+    await refused(404, act('priya', { type: 'challengeDelete', id: ch.id }));
+    await act('tasnim', { type: 'challengeDelete', id: ch.id });
+    assert.equal(
+      (await st('priya')).challenges.some((x) => x.id === ch.id),
+      false,
+    );
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 });

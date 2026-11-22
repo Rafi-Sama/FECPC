@@ -5,6 +5,7 @@
 // - Sidebar freshness window: 14 days (older milestones stay on the member's profile only).
 import { previousRankTitle, rankFor } from '@fecpc/contracts';
 import type { MilestoneType } from '@fecpc/contracts';
+import { sheet } from '@fecpc/content/member-area';
 import { tx, type Db } from './db.ts';
 
 export const DAILY_KUDOS_CAP = 20;
@@ -221,42 +222,96 @@ export async function syncCodeforces(
     return json?.status === 'OK' ? (json.result ?? null) : null;
   };
   const h = encodeURIComponent(handle);
-  const [info, subs] = await Promise.all([
+  const [info, subs, rated] = await Promise.all([
     get<{ handle?: string; rating?: number; maxRating?: number }[]>(`user.info?handles=${h}`),
     get<
       {
         verdict?: string;
         creationTimeSeconds: number;
+        contestId?: number;
+        author?: { participantType?: string };
         problem: { contestId?: number; index?: string; rating?: number; tags?: string[] };
       }[]
     >(`user.status?handle=${h}&from=1&count=5000`),
+    get<
+      {
+        contestId?: number;
+        contestName?: string;
+        rank?: number;
+        oldRating?: number;
+        newRating?: number;
+        ratingUpdateTimeSeconds?: number;
+      }[]
+    >(`user.rating?handle=${h}`),
   ]);
   if (!info?.[0] || !subs) return null;
 
-  const solved = new Map<string, { p: string; r: number | null; t: string[] }>();
+  const solved = new Map<string, { p: string; r: number | null; t: string[]; a: number }>();
   const days: Record<string, number> = {};
+  // The first accept of each problem (seconds), so challenges can rank who solved first.
+  const firstAc = new Map<string, number>();
+  for (const sub of subs) {
+    const pid = `${sub.problem.contestId ?? ''}${sub.problem.index ?? ''}`;
+    if (sub.verdict === 'OK')
+      firstAc.set(pid, Math.min(firstAc.get(pid) ?? Infinity, sub.creationTimeSeconds));
+  }
   for (const sub of subs) {
     const pid = `${sub.problem.contestId ?? ''}${sub.problem.index ?? ''}`;
     if (sub.verdict !== 'OK' || solved.has(pid)) continue;
     solved.set(pid, {
       p: pid,
+      a: firstAc.get(pid)!,
       r: typeof sub.problem.rating === 'number' ? sub.problem.rating : null,
       t: (sub.problem.tags ?? []).filter((t) => typeof t === 'string').slice(0, 20),
     });
     const day = new Date(sub.creationTimeSeconds * 1000).toISOString().slice(0, 10);
     days[day] = (days[day] ?? 0) + 1;
   }
+  // The last five rated rounds, with how many problems were accepted during the round itself.
+  const rounds = (rated ?? [])
+    .filter((r) => typeof r.contestId === 'number')
+    .slice(-5)
+    .reverse()
+    .map((r) => ({
+      id: r.contestId!,
+      name: String(r.contestName ?? '').slice(0, 120),
+      rank: r.rank ?? 0,
+      delta: (r.newRating ?? 0) - (r.oldRating ?? 0),
+      at: (r.ratingUpdateTimeSeconds ?? 0) * 1000,
+      solved: new Set(
+        subs
+          .filter(
+            (x) =>
+              x.contestId === r.contestId &&
+              x.verdict === 'OK' &&
+              x.author?.participantType === 'CONTESTANT',
+          )
+          .map((x) => x.problem.index),
+      ).size,
+    }));
   const cfHandle = info[0].handle ?? handle,
     rating = info[0].rating;
   // The accepted set replaces the stored one in the same transaction as the stats, so sheet XP never sees half a sync.
   const res = await tx(async (c) => {
     await c.query(`delete from cf_solves where user_id = $1`, [userId]);
     await c.query(
-      `insert into cf_solves (user_id, problem, rating, tags)
-       select $1, x.p, x.r, array(select jsonb_array_elements_text(x.t))
-       from jsonb_to_recordset($2::jsonb) as x(p text, r int, t jsonb) on conflict do nothing`,
+      `insert into cf_solves (user_id, problem, rating, tags, at)
+       select $1, x.p, x.r, array(select jsonb_array_elements_text(x.t)), to_timestamp(x.a)
+       from jsonb_to_recordset($2::jsonb) as x(p text, r int, t jsonb, a float8) on conflict do nothing`,
       [userId, JSON.stringify([...solved.values()].filter((s) => /^\d+[A-Z]\d?$/.test(s.p)))],
     );
+    // Sheet problems Codeforces confirms count as ticked: their box is locked, so this is the only way they earn XP.
+    await c.query(
+      `update users set progress = jsonb_set(progress, '{solved}', coalesce(progress->'solved', '[]') ||
+         coalesce((select jsonb_agg(x) from unnest($2::text[]) x where not coalesce(progress->'solved', '[]') ? x), '[]'))
+       where id = $1`,
+      [userId, sheet.map((p) => p.id).filter((id) => solved.has(id))],
+    );
+    if (rated)
+      await c.query(`update users set cf_contests = $2 where id = $1`, [
+        userId,
+        JSON.stringify(rounds),
+      ]);
     return syncUserCodeforcesStats(c, userId, {
       cf_handle: cfHandle,
       cf_rating: typeof rating === 'number' ? rating : null,

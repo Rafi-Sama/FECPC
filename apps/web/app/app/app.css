@@ -7560,3 +7560,372 @@ textarea.tm-code {
     animation: none !important;
   }
 }
+
+/* sheets: one row per problem, difficulty coloured by the Codeforces tier */
+.sheet-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.sheet-score {
+  text-align: right;
+}
+.sheet-list {
+  margin-top: 20px;
+}
+.sh-row {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 140px 88px;
+  gap: 16px;
+  align-items: center;
+  padding: 12px 8px;
+  border-bottom: 1px solid var(--line);
+  font-size: 15px;
+}
+.sh-th {
+  padding-top: 0;
+  padding-bottom: 8px;
+}
+.sh-row.done {
+  background: color-mix(in srgb, #12a150 8%, transparent);
+}
+.done .sheet-mark {
+  background: #12a150;
+  border-color: #12a150;
+}
+.sh-row:not(.sh-th) {
+  border-left: 4px solid var(--r);
+}
+.sheet-mark {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid var(--line2, var(--dim));
+  border-radius: 50%;
+  font-size: 14px;
+  color: var(--dim);
+}
+.done .sheet-mark {
+  color: #fff;
+}
+.sheet-name {
+  min-width: 0;
+}
+.sheet-name a {
+  color: var(--hi);
+  text-decoration: none;
+  font-weight: 600;
+}
+.sheet-name a:hover {
+  color: var(--acc);
+}
+.sheet-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.sheet-tags span {
+  font-size: 14px;
+  color: color-mix(in oklab, var(--t, var(--dim)), var(--ink) 30%);
+  border: 1px solid color-mix(in srgb, var(--t, var(--line)) 55%, transparent);
+  background: color-mix(in srgb, var(--t, transparent) 10%, transparent);
+  padding: 1px 8px;
+}
+.sheet-mix {
+  display: flex;
+  gap: 3px;
+  height: 12px;
+}
+.sheet-mix i {
+  flex: 1;
+  background: color-mix(in srgb, var(--r) 22%, transparent);
+}
+.sheet-mix i.on {
+  background: var(--r);
+}
+.sheet-club {
+  display: grid;
+  gap: 6px;
+}
+.sheet-club .meter {
+  height: 4px;
+}
+.sheet-r {
+  justify-self: end;
+  color: color-mix(in oklab, var(--r), var(--ink) 20%);
+  background: color-mix(in srgb, var(--r) 14%, transparent);
+  font-weight: 600;
+  border: 1.5px solid var(--r);
+  padding: 2px 10px;
+  font-size: 14px;
+}
+.sheet-cards {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+.sheet-card {
+  border-top: 5px solid var(--r, var(--line)) !important;
+  display: grid;
+  gap: 8px;
+  text-align: left;
+  padding: 16px;
+  background: var(--panel);
+  border: 2px solid var(--line);
+  color: var(--hi);
+  font-size: 15px;
+  cursor: pointer;
+}
+.sheet-card:hover,
+.sheet-card.on {
+  border-color: var(--acc);
+}
+.sheet-card.on {
+  box-shadow: 4px 4px 0 var(--acc);
+}
+.sheet-card.add {
+  border-style: dashed;
+  align-content: center;
+}
+.sheet-card:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 2px;
+}
+@media (max-width: 640px) {
+  .sh-row {
+    grid-template-columns: 32px minmax(0, 1fr) 72px;
+  }
+  .sheet-club,
+  .sh-th span:nth-child(3) {
+    display: none;
+  }
+}
+
+/* rows of panels share one height, so a short panel leaves no hole */
+.bento.fill {
+  align-items: stretch;
+}
+
+/* contests: one colour per kind of round (--k), difficulty colour per problem (--r) */
+.cf-up {
+  display: grid;
+  gap: 10px;
+}
+.cf-up a {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-left: 5px solid var(--k);
+  background: color-mix(in srgb, var(--k) 7%, transparent);
+  color: var(--hi);
+  text-decoration: none;
+  font-size: 15px;
+}
+.cf-up a:hover {
+  background: color-mix(in srgb, var(--k) 14%, transparent);
+}
+.cf-kind {
+  justify-self: start;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--k);
+  padding: 1px 8px;
+}
+.cf-when {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 14px;
+  color: var(--dim);
+}
+.cf-when b {
+  color: color-mix(in oklab, var(--k), var(--ink) 25%);
+}
+.cf-ups {
+  display: grid;
+  gap: 12px;
+}
+.cf-ups > div {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border-left: 5px solid var(--k);
+  background: color-mix(in srgb, var(--k) 6%, transparent);
+  font-size: 15px;
+}
+.cf-ups a {
+  text-decoration: none;
+}
+.cf-probs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.cf-probs a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1.5px solid var(--r);
+  background: color-mix(in srgb, var(--r) 10%, var(--panel));
+  color: var(--hi);
+  font-size: 14px;
+}
+.cf-probs a:hover {
+  background: color-mix(in srgb, var(--r) 22%, var(--panel));
+}
+.cf-probs b {
+  color: color-mix(in oklab, var(--r), var(--ink) 20%);
+}
+.cf-probs i {
+  font-style: normal;
+  color: color-mix(in oklab, var(--r), var(--ink) 20%);
+}
+
+/* profile: member card, stat tiles, and a one-page CV when printed */
+@media (min-width: 760px) {
+  .bento > .c5,
+  .bento > .c7 {
+    grid-column: span 12;
+  }
+}
+@media (min-width: 1100px) {
+  .bento > .c5 {
+    grid-column: span 5;
+  }
+  .bento > .c7 {
+    grid-column: span 7;
+  }
+}
+.profile .idcard {
+  border-left: 8px solid var(--r);
+  align-content: center;
+  grid-template-columns: minmax(0, 1fr);
+}
+.idcard-cf {
+  margin-top: 12px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.idcard-cf a {
+  color: var(--r);
+  text-decoration: none;
+}
+.idcard-kudos {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 3px 10px;
+  font-size: 15px;
+  background: #e5413a;
+  color: #fff;
+}
+.pstats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.pstats > div {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border-top: 4px solid var(--r, var(--line2));
+  background: color-mix(in srgb, var(--r, var(--ink)) 6%, transparent);
+}
+.pstats .stat {
+  font-size: 28px;
+  line-height: 1.1;
+  color: color-mix(in oklab, var(--r, var(--hi)), var(--ink) 15%);
+}
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+  body,
+  .main,
+  .page {
+    background: #fff !important;
+  }
+  .profile {
+    gap: 10px;
+  }
+  .profile .panel,
+  .profile .idcard {
+    break-inside: avoid;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  .profile > .c5 {
+    grid-column: span 5 !important;
+  }
+  .profile > .c7 {
+    grid-column: span 7 !important;
+  }
+  .profile > .c8 {
+    grid-column: span 8 !important;
+  }
+  .profile > .c4 {
+    grid-column: span 4 !important;
+  }
+  .subnav,
+  .savebar {
+    display: none !important;
+  }
+}
+.profile .idcard strong {
+  font-size: 32px;
+}
+.profile .idcard {
+  padding: 32px;
+  gap: 28px;
+}
+
+/* arena badges: real records with progress toward each */
+.arena-badges {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: 12px;
+}
+.arena-badges li {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 14px;
+  border: 2px solid color-mix(in srgb, var(--b) 35%, var(--line));
+  opacity: 0.72;
+}
+.arena-badges li.got {
+  border-color: var(--b);
+  opacity: 1;
+  box-shadow: 4px 4px 0 var(--b);
+}
+.arena-badges .glyph {
+  display: grid;
+  place-items: center;
+  height: 56px;
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--b);
+  border: 2px solid var(--b);
+}
+.arena-badges .meter {
+  display: block;
+  margin-top: 8px;
+  height: 6px;
+}
+.arena-badges .meter i {
+  background: var(--b);
+}

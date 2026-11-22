@@ -4,7 +4,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Page, Tabs } from '@/components/app/Shell';
 import { useStore } from '@/components/app/Store';
 import { can, isCommittee } from '@fecpc/contracts';
-import { balloonColor, balloons, prints } from '@fecpc/content/training';
+import { balloonColor } from '@fecpc/content/training';
+import { VjudgeBox } from '@/components/app/Judge';
 import type { VjudgeContestData } from '@/app/api/vjudge/route';
 
 type ConfiguredContest = {
@@ -44,7 +45,7 @@ export default function ContestDay() {
     : (['RUNNING CONTEST', 'PREVIOUS CONTESTS'] as const);
   const runner =
     isCommittee(s.roles) || s.present.some((k) => /^vol:(Balloon|Print) runner$/.test(k));
-  const logisticsTabs = ['BALLOONS', 'PRINTS'] as const;
+  const logisticsTabs = ['BALLOONS'] as const;
   const allTabs = runner ? [...baseTabs, ...logisticsTabs] : baseTabs;
 
   const [tab, setTab] = useState<(typeof allTabs)[number]>('RUNNING CONTEST');
@@ -163,6 +164,23 @@ export default function ContestDay() {
   };
 
   const done = (id: string) => s.flags['cd:' + id];
+  // One balloon per accepted problem on the running board, newest first; delivery is a shared committee switch.
+  const balloons =
+    runningData && !('error' in runningData)
+      ? runningData.standings
+          .flatMap((r) =>
+            Object.entries(r.problems)
+              .filter(([, c]) => c.solved)
+              .map(([p, c]) => ({
+                id: `b:${runningData.id}:${r.userId}:${p}`,
+                team: r.nickname || r.username,
+                p,
+                first: !!c.isFirst,
+                time: c.time ?? 0,
+              })),
+          )
+          .sort((a, b) => b.time - a.time)
+      : [];
 
   // Helper to render Leaderboard Table
   const renderLeaderboard = (data: Board, isLoading: boolean) => {
@@ -315,7 +333,16 @@ export default function ContestDay() {
                 const rankColor = medal && readable(medal);
 
                 return (
-                  <tr key={row.userId} style={{ borderBottom: '1px solid var(--line)' }}>
+                  <tr
+                    key={row.userId}
+                    style={{
+                      borderBottom: '1px solid var(--line)',
+                      background:
+                        s.vjudge && row.username.toLowerCase() === s.vjudge.toLowerCase()
+                          ? 'color-mix(in srgb, var(--acc) 10%, transparent)'
+                          : undefined,
+                    }}
+                  >
                     {/* Rank */}
                     <td
                       style={{
@@ -581,6 +608,12 @@ export default function ContestDay() {
       <Tabs tabs={allTabs} value={tab} onChange={setTab} />
 
       {/* Tab 1: Running Club Contest */}
+      {!s.vjudge && (tab === 'RUNNING CONTEST' || tab === 'PREVIOUS CONTESTS') && (
+        <div className="panel" style={{ marginBottom: 16 }}>
+          <p className="body">Link your VJudge handle to find yourself on the board.</p>
+          <VjudgeBox />
+        </div>
+      )}
       {tab === 'RUNNING CONTEST' && <div>{renderLeaderboard(runningData, runningLoading)}</div>}
 
       {/* Tab 2: Previous Contests */}
@@ -818,17 +851,27 @@ export default function ContestDay() {
         </div>
       )}
 
-      {/* Logistics Tab: Balloons */}
+      {/* Logistics Tab: Balloons, from the running board */}
       {tab === 'BALLOONS' && (
         <div className="list">
+          {balloons.length === 0 && (
+            <p className="body dim">
+              {runningConfig ? 'No accepted problems yet.' : 'No running contest is set.'}
+            </p>
+          )}
           {balloons.map((b) => (
             <div key={b.id} style={{ opacity: done(b.id) ? 0.45 : 1 }}>
-              <i aria-hidden className="balloon" style={{ background: balloonColor[b.p] }} />
+              <i
+                aria-hidden
+                className="balloon"
+                style={{ background: balloonColor[b.p] ?? 'var(--acc)' }}
+              />
               <span className="grow">
                 <strong>{b.team}</strong>
                 <br />
                 <span className="label">
-                  Problem {b.p} · desk {b.desk}
+                  Problem {b.p}
+                  {b.first ? ' · first solve' : ''} · {b.time} min
                 </span>
               </span>
               {isCommittee(s.roles) && (
@@ -838,32 +881,6 @@ export default function ContestDay() {
                   onClick={() => act('flag', { key: 'cd:' + b.id, on: !done(b.id) })}
                 >
                   {done(b.id) ? 'DELIVERED · UNDO' : 'DELIVER'}
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Logistics Tab: Prints */}
-      {tab === 'PRINTS' && (
-        <div className="list">
-          {prints.map((p) => (
-            <div key={p.id} style={{ opacity: done(p.id) ? 0.45 : 1 }}>
-              <span className="grow">
-                <strong>{p.team}</strong>
-                <br />
-                <span className="label">
-                  {p.pages} pages · desk {p.desk}
-                </span>
-              </span>
-              {isCommittee(s.roles) && (
-                <button
-                  className={`btn xs ${done(p.id) ? 'line' : ''}`}
-                  aria-pressed={!!done(p.id)}
-                  onClick={() => act('flag', { key: 'cd:' + p.id, on: !done(p.id) })}
-                >
-                  {done(p.id) ? 'DELIVERED · UNDO' : 'DELIVER'}
                 </button>
               )}
             </div>

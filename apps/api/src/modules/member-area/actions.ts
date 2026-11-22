@@ -51,8 +51,9 @@ import * as data from './office-data.ts';
 import { Fail, tx, type Db } from './db.ts';
 import { teamHandlers } from './teams.ts';
 import { eventHandlers } from './events.ts';
+import { challengeHandlers, sheetHandlers } from './sheets.ts';
 import { DAILY_KUDOS_CAP, detectCrossovers, MILESTONE_FRESHNESS_DAYS } from './milestones.ts';
-import { isAdmin, isCommittee, loadState, progress, today, type Progress } from './state.ts';
+import { isAdmin, isCommittee, loadState, progress, today, TZ, type Progress } from './state.ts';
 
 type Actor = { id: string; role: Role; roles: Role[]; name: string; system: boolean };
 // A member's effective roles: their own role plus what their post grants. For queries on an unaliased `users`.
@@ -285,6 +286,8 @@ async function opsDelete(c: Db, a: Actor, table: string, id: unknown, what: stri
 const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<string | void>> = {
   ...teamHandlers,
   ...eventHandlers,
+  ...sheetHandlers,
+  ...challengeHandlers,
   async toggle(c, a, p, i) {
     const id = key(i.id),
       list = String(i.list),
@@ -370,11 +373,20 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
       pick(v, ['shaky', 'ok', 'solid'], 'confidence');
     }
     if (k === 'rate') pick(v, ['1', '2', '3', '4', '5'], 'rating');
-    if (k === 'fantasy') {
+    if (k.startsWith('fantasy')) {
+      // A fantasy team is only ever picked for next week (keyed by its Monday, club time): this week's is locked,
+      // so nobody picks after seeing the results.
+      const next = (
+        await c.query(
+          `select (date_trunc('week', now() at time zone '${TZ}') + interval '7 days')::date::text as d`,
+        )
+      ).rows[0].d;
+      need(k === `fantasy:${next}`, "This week's team is locked. Pick for next week.");
       const ids = [...new Set(v.split(',').filter(Boolean))];
       need(ids.length <= 3, 'Pick at most three members.');
-      const n = (await c.query(`select count(*)::int n from users where id = any($1)`, [ids]))
-        .rows[0].n;
+      const n = (
+        await c.query(`select count(*)::int n from users where id = any($1) and not system`, [ids])
+      ).rows[0].n;
       need(n === ids.length, 'One of those members does not exist.');
       return void (p.kv[k] = ids.join(','));
     }
@@ -780,19 +792,50 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     );
     await audit(c, a, `requested expense EXP-${r.rows[0].id} (${tk(amount)}): ${what}`);
   },
+  // A member's name, department and batch are club records: only the Secretary or President changes them, never
+  // the member, and every change is audited with what it was before.
   async profile(c, a, _p, i) {
-    const name = text(i.name, 2, 80, 'Your name'),
+    need(
+      canFully(a.roles, 'member.editDetails'),
+      'Only the Secretary or President edits member details.',
+    );
+    const name = text(i.name, 2, 80, 'The name'),
       dept = text(i.dept, 2, 20, 'Department'),
       batch = Number(i.batch);
     if (!Number.isInteger(batch) || batch < 0 || batch > 99)
       throw new Fail(400, 'Batch is a two-digit number, like 24.');
+    const t = (
+      await c.query(
+        `select id, name, dept, batch, role from users where id = $1 and not system for update`,
+        [key(i.user)],
+      )
+    ).rows[0];
+    if (!t) throw new Fail(404, 'That member does not exist.');
+    need(t.id !== a.id, 'Ask another officer to change your own details.');
+    // The top two are the Super Admin's, as with every other account change.
+    need(
+      !['president', 'super_admin'].includes(t.role) || a.roles.includes('super_admin'),
+      'Only the Super Admin edits that account.',
+    );
     await c.query(`update users set name = $2, dept = $3, batch = $4 where id = $1`, [
-      a.id,
+      t.id,
       name,
       dept,
       batch,
     ]);
-    if (name !== a.name) await audit(c, a, `changed their name to ${name}`);
+    const changed = (
+      [
+        ['name', t.name, name],
+        ['department', t.dept, dept],
+        ['batch', t.batch, batch],
+      ] as const
+    ).filter(([, x, y]) => x !== y);
+    if (changed.length)
+      await audit(
+        c,
+        a,
+        `edited ${t.name}'s details: ${changed.map(([k, x, y]) => `${k} ${x} → ${y}`).join(', ')}`,
+      );
   },
   async decide(c, a, _p, i) {
     const kind = pick(i.kind, ['payment', 'expense', 'application'] as const, 'decision'),

@@ -9,11 +9,33 @@ export type Judge = {
   maxRating: number;
   rank: string;
   history: number[];
+  /** when each rating in `history` was set (ms) */
+  historyAt: number[];
   solved: string[];
   tags: Record<string, number>;
   days: Record<string, number>;
+  /** The last three rated rounds, newest first, with every problem in them. */
+  contests: {
+    id: number;
+    name: string;
+    rank: number;
+    delta: number;
+    at: number;
+    problems: { id: string; index: string; name: string; rating: number | null }[];
+  }[];
 };
 const cache = new Map<string, Judge>();
+const listeners = new Set<() => void>();
+
+/** Asks Codeforces again, past the cache; every useJudge() picks up the new data. Null when it did not answer. */
+export async function recheck(handle: string): Promise<Judge | null> {
+  const r = await fetch(`/api/cf/${encodeURIComponent(handle)}?fresh=1`).catch(() => null);
+  if (!r?.ok) return null;
+  const j = (await r.json()) as Judge;
+  cache.set(handle, j);
+  listeners.forEach((f) => f());
+  return j;
+}
 
 /** Live Codeforces data for the linked handle, or null while unlinked/loading. */
 export function useJudge() {
@@ -21,6 +43,11 @@ export function useJudge() {
   const [data, setData] = useState<Judge | null>(cache.get(s.handle) ?? null);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    const f = () => setData(cache.get(s.handle) ?? null);
+    listeners.add(f);
+    return () => void listeners.delete(f);
+  }, [s.handle]);
   useEffect(() => {
     if (!s.handle) {
       setData(null);

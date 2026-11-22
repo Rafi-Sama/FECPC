@@ -851,3 +851,34 @@ alter table pings add constraint pings_kind_check check (kind = 'invite');
 -- Roadmaps are either interview prep (many) or the club's learning roadmap on Learn (at most one).
 alter table interview_roadmaps add column if not exists kind text not null default 'prep' check (kind in ('prep','learn'));
 create unique index if not exists interview_roadmaps_one_learn on interview_roadmaps (kind) where kind = 'learn';
+
+-- Problem sheets: one auto-built 'weekly' sheet per week (Monday, club time), and 'custom' sheets the CP Head or
+-- President curates from pasted Codeforces links. problems = [{id, name, rating, tags}] as Codeforces gave them.
+create table if not exists sheets (
+  id serial primary key,
+  kind text not null check (kind in ('weekly', 'custom')),
+  title text not null,
+  note text not null default '',
+  week date unique,
+  problems jsonb not null default '[]',
+  by text references users on delete set null,
+  at timestamptz not null default now()
+);
+
+-- A member's last five rated Codeforces rounds (rank, rating change, problems solved in the round), written by the
+-- Codeforces sync. Read by the contests page's club report.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS cf_contests jsonb NOT NULL DEFAULT '[]';
+
+-- When Codeforces first accepted each problem for the member, so a challenge can rank who solved it first.
+ALTER TABLE cf_solves ADD COLUMN IF NOT EXISTS at timestamptz;
+
+-- Arena challenges: a member posts one Codeforces problem for the whole club; solves come from cf_solves.
+create table if not exists challenges (
+  id serial primary key,
+  problem text not null,
+  name text not null,
+  rating int,
+  by text not null references users on delete cascade,
+  at timestamptz not null default now()
+);
+create index if not exists challenges_at on challenges (at desc);

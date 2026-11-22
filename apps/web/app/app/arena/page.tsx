@@ -4,50 +4,40 @@ import Board from '@/components/site/Board';
 import { Page, Tabs } from '@/components/app/Shell';
 import { useStore } from '@/components/app/Store';
 import { useSolved } from '@/components/app/Judge';
-import { Avatar, Bug } from '@/components/pixel/Sprites';
-import { bounties, cfUrl, duels, myInvoices, owes, potd, shop } from '@fecpc/content/member-area';
-import { badges, byId, squads } from '@fecpc/content/site';
-import { LEVEL, level } from '@fecpc/contracts';
-import { ArenaExtra } from '@/components/app/arena/ArenaExtra';
-import { Verified } from '@/components/app/sheets/Verified';
+import { Bug } from '@/components/pixel/Sprites';
+import { cfUrl } from '@fecpc/content/member-area';
+import { LEVEL, level, rankFor } from '@fecpc/contracts';
+import { Challenges, Fantasy, Trophies } from '@/components/app/arena/ArenaExtra';
+import { SolveCheck, useDaily } from '@/components/app/home/Daily';
 
-const tabs = ['DAILY', 'RANKS', 'DUELS', 'SEASON'] as const;
+const tabs = ['DAILY', 'CHALLENGES', 'RANKS', 'FANTASY', 'TROPHIES'] as const;
 
 export default function Arena() {
-  const { s, me, xp, act, members } = useStore();
-  const { synced, isSolved } = useSolved();
+  const { me, xp, members, sheets } = useStore();
+  const { isSolved } = useSolved();
+  const potd = useDaily();
   const [tab, setTab] = useState<(typeof tabs)[number]>('DAILY');
   const lv = level(xp);
-  const solvedN = Math.max(me.problems_solved ?? 0, me.solved);
-  // Badges follow the member's real record; the rest wait for data the club does not track yet.
-  const got: Record<string, boolean> = {
-    'first-ac': solvedN > 0,
-    '100': solvedN >= 100,
-    streak30: (me.current_streak ?? me.streak) >= 30,
-    contests10: (me.contests_participated ?? 0) >= 10,
-    'zero-dues': !me.system && !myInvoices(s.reg).some((i) => owes(s.pay, i.id)),
-  };
+  const week = sheets.find((x) => x.kind === 'weekly');
+  const weekDone = week?.problems.filter((p) => isSolved(p.id)).length ?? 0;
+  const rank = [...members].sort((x, y) => y.xp - x.xp).findIndex((m) => m.id === me.id) + 1;
+  // Bounties: this week's problems no member has solved yet, hardest first. The first solver claims it.
+  const bounties = [...(week?.problems ?? [])]
+    .sort((a, b) => +(a.club > 0) - +(b.club > 0) || (b.rating ?? 0) - (a.rating ?? 0))
+    .slice(0, 6);
   return (
     <Page title="ARENA">
       <div className="strip">
         <div>
-          <span className="label">Season rank</span>
+          <span className="label">Club rank</span>
           <strong>
-            #{[...members].sort((x, y) => y.xp - x.xp).findIndex((m) => m.id === me.id) + 1}{' '}
-            <small>of {members.length}</small>
+            #{rank || '—'} <small>of {members.length}</small>
           </strong>
         </div>
         <div>
-          <span className="label">To next level</span>
+          <span className="label">Level {lv.lv}</span>
           <strong>
-            {LEVEL - lv.into} <small>XP</small>
-          </strong>
-        </div>
-        <div>
-          <span className="label">Squad {me.squad}</span>
-          <strong>
-            {['1st', '2nd', '3rd', '4th'][squads.findIndex((q) => q.name === me.squad)]}{' '}
-            <small>in the cup</small>
+            {LEVEL - lv.into} <small>XP to go</small>
           </strong>
         </div>
         <div>
@@ -57,15 +47,25 @@ export default function Arena() {
             <small>/ {potd.length}</small>
           </strong>
         </div>
+        <div>
+          <span className="label">Weekly sheet</span>
+          <strong>
+            {weekDone}
+            <small>/ {week?.problems.length ?? 0}</small>
+          </strong>
+        </div>
       </div>
       <Tabs tabs={tabs} value={tab} onChange={setTab} />
       {tab === 'DAILY' && (
         <div className="stack">
-          <div className="tier3">
-            {potd.map((p, i) => {
-              const done = isSolved(p.id);
-              return (
-                <div key={p.id} className="panel" style={{ gap: 14 }}>
+          {potd.length ? (
+            <div className="tier3">
+              {potd.map((p, i) => (
+                <div
+                  key={p.id}
+                  className="panel"
+                  style={{ gap: 14, opacity: isSolved(p.id) ? 0.6 : 1 }}
+                >
                   <Bug i={i} size={44} />
                   <span className="label acc3">
                     {p.tier} · {p.rating}
@@ -73,114 +73,55 @@ export default function Arena() {
                   <a className="h3 link" href={cfUrl(p.id)} target="_blank" rel="noreferrer">
                     {p.id} {p.name}
                   </a>
-                  <button
-                    className="btn sm"
-                    disabled={synced.has(p.id)}
-                    onClick={() => act('toggle', { list: 'solved', id: p.id })}
-                  >
-                    {done ? 'CLEARED' : 'SOLVE'}
-                    {done && <Verified on={synced.has(p.id) || s.verified.includes(p.id)} />}
-                  </button>
+                  <SolveCheck id={p.id} />
                 </div>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <p className="body">This week&apos;s problems are being picked.</p>
+          )}
           <div className="panel">
-            <p className="label">Bounties · first solver takes it</p>
+            <div className="row between">
+              <p className="label">Bounties · be the first in the club to solve it</p>
+              <span className="label">from this week&apos;s sheet</span>
+            </div>
             <div className="list">
               {bounties.map((b) => (
-                <div key={b.id}>
+                <div key={b.id} style={{ opacity: b.club > 0 ? 0.55 : 1 }}>
                   <span className="grow">
                     <a className="link" href={cfUrl(b.id)} target="_blank" rel="noreferrer">
                       {b.id} {b.name}
                     </a>
                     <br />
-                    <span className="label">{b.left} left</span>
+                    <span className="label">
+                      {b.club > 0
+                        ? `claimed · ${b.club} solved it`
+                        : isSolved(b.id)
+                          ? 'you solved it · claim shows after the next sync'
+                          : 'unclaimed'}
+                    </span>
                   </span>
-                  <span className="arcade acc">+{b.prize}</span>
+                  <span
+                    className="arcade"
+                    style={{
+                      color: b.rating
+                        ? `color-mix(in oklab, ${rankFor(b.rating).color}, #fff 40%)`
+                        : undefined,
+                    }}
+                  >
+                    {b.rating ?? '—'}
+                  </span>
                 </div>
               ))}
+              {bounties.length === 0 && <p className="body">No sheet this week yet.</p>}
             </div>
           </div>
         </div>
       )}
-      {tab === 'RANKS' && <Board list={members} />}
-      {tab === 'DUELS' && (
-        <div className="stack">
-          {duels.map((d) => (
-            <div key={d.a} className="panel">
-              <div className="row between">
-                <span className="row" style={{ '--g': '10px' } as React.CSSProperties}>
-                  <Avatar name={byId(d.a).name} size={36} fg="#3DE1FF" bg="#1D1145" />
-                  {byId(d.a).name} <span className="label">{d.elo[0]}</span>
-                </span>
-                <span className="arcade acc2">VS</span>
-                <span className="row" style={{ '--g': '10px' } as React.CSSProperties}>
-                  <span className="label">{d.elo[1]}</span> {byId(d.b).name}
-                  <Avatar name={byId(d.b).name} size={36} fg="#FF4D8D" bg="#1D1145" />
-                </span>
-              </div>
-              <p className="label" style={{ marginTop: 12 }}>
-                PROBLEM {d.problem} ·{' '}
-                {d.state === 'live' ? <span className="acc blink">LIVE</span> : d.state}
-              </p>
-            </div>
-          ))}
-          <h2 className="h3 acc">FANTASY</h2>
-          <ArenaExtra tab="FANTASY" />
-        </div>
-      )}
-      {tab === 'SEASON' && (
-        <div className="stack">
-          <ArenaExtra tab="SEASON" />
-          <h2 className="h3 acc">BADGES</h2>
-          <ul
-            className="grid badges"
-            style={{ '--min': '300px', '--g': '16px' } as React.CSSProperties}
-          >
-            {badges.map((b, i) => {
-              const has = !!got[b.id];
-              return (
-                <li key={b.id} className={has ? 'got' : ''} style={{ opacity: has ? 1 : 0.4 }}>
-                  <span
-                    className="glyph"
-                    style={{ color: ['#FFD23F', '#3DE1FF', '#FF4D8D'][i % 3] }}
-                  >
-                    {b.glyph}
-                  </span>
-                  <div>
-                    <p className="arcade nm">{b.name}</p>
-                    <p className="body">{b.desc}</p>
-                  </div>
-                  <span className="arcade xp">{has ? 'GOT' : '+' + b.xp}</span>
-                </li>
-              );
-            })}
-          </ul>
-          <h2 className="h3 acc">SHOP</h2>
-          <div className="list">
-            {shop.map(([n, cost]) => {
-              const k = 'shop:' + n,
-                got = s.kudos.includes(k);
-              return (
-                <div key={n}>
-                  <span className="grow">{n}</span>
-                  <span className="arcade acc">{cost} XP</span>
-                  <button
-                    className="btn xs"
-                    disabled={got || xp < cost}
-                    onClick={() => act('redeem', { item: n })}
-                  >
-                    {got ? 'REDEEMED' : xp < cost ? 'NEED XP' : 'REDEEM'}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-          <h2 className="h3 acc">RECAP</h2>
-          <ArenaExtra tab="RECAP" />
-        </div>
-      )}
+      {tab === 'RANKS' && <Board list={members.filter((m) => !m.suspended)} me={me.id} />}
+      {tab === 'CHALLENGES' && <Challenges />}
+      {tab === 'FANTASY' && <Fantasy />}
+      {tab === 'TROPHIES' && <Trophies />}
     </Page>
   );
 }
