@@ -49,7 +49,7 @@ const subs: Record<string, { self: string; items: Item[] }> = {
     self: 'Roadmap',
     items: [
       ['/app/courses', 'Courses'],
-      ['/app/blog', 'Editorials'],
+      ['/app/blog', 'Quiz'],
       ['/app/prep', 'Interview prep'],
     ],
   },
