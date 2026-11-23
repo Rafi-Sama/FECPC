@@ -143,7 +143,12 @@ function PromptDialog({
           className="row"
           style={{ justifyContent: 'flex-end', '--g': '8px' } as React.CSSProperties}
         >
-          <button type="button" className="btn sm line" onClick={() => onDone(null)}>
+          <button
+            type="button"
+            className="btn sm line"
+            onClick={() => onDone(null)}
+            autoFocus={confirmOnly}
+          >
             Cancel
           </button>
           <button type="submit" className={`btn sm${danger ? ' danger' : ''}`}>

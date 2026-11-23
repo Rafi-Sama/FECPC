@@ -4,6 +4,7 @@ import Shell from '@/components/app/Shell';
 import { serverState } from '@/lib/api.ts';
 import '../(site)/site.css';
 import './app.css';
+import './alumni-cards.css';
 
 export const metadata = { title: 'Members' };
 export const dynamic = 'force-dynamic';

@@ -1,63 +1,90 @@
 'use client';
-import React, { useState } from 'react';
-import { AvatarRing, tierText } from '@/components/app/shared/RatingBadge';
-import { rankFor } from '@fecpc/contracts';
+import React, { useEffect, useRef, useState } from 'react';
 import type { AlumniSummary } from '@fecpc/contracts';
 import { HighlightMatch } from './HighlightMatch';
 
+const PIXEL_GRID = ['..###..', '..###..', '#######', '.#####.', '...#...', '..#.#..', '..#.#..'];
+
 export function AlumniCard({
   alumnus,
-  isOwnCard,
   onOpenProfile,
-  onToggleSave,
   highlightQuery,
 }: {
   readonly alumnus: AlumniSummary;
   readonly isOwnCard?: boolean;
   readonly onOpenProfile: (id: string) => void;
-  readonly onToggleSave: (id: string) => Promise<boolean | void>;
+  readonly onToggleSave?: (id: string) => Promise<boolean | void>;
   readonly highlightQuery?: string;
 }) {
-  const [saved, setSaved] = useState(Boolean(alumnus.saved));
-  const [saving, setSaving] = useState(false);
+  const [go, setGo] = useState(false);
 
-  const rank = rankFor(alumnus.cf_rating || alumnus.rating);
-  const tierColor = rank.color;
+  const wmRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      setGo(true);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
   const batchStr =
-    alumnus.batch !== null && alumnus.batch !== undefined ? String(alumnus.batch).slice(-2) : 'AL';
+    alumnus.batch !== null && alumnus.batch !== undefined ? String(alumnus.batch).slice(-2) : '16';
+
   const company =
     alumnus.role && alumnus.role.includes('·')
       ? alumnus.role.split('·')[1]?.trim()
       : alumnus.dept
         ? `Dept. of ${alumnus.dept}`
-        : '[Company]';
+        : 'Tech Company';
+
   const roleTitle =
     alumnus.role && alumnus.role.includes('·')
       ? alumnus.role.split('·')[0]?.trim()
-      : alumnus.role || alumnus.title || 'Software Engineer';
-  const location = alumnus.location || 'Dhaka';
-  const skills =
-    alumnus.skills && alumnus.skills.length > 0 ? alumnus.skills : ['Distributed systems', 'Cloud'];
+      : alumnus.role || 'Software Engineer';
 
-  const handleSaveClick = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (saving) return;
-    setSaving(true);
-    try {
-      const res = await onToggleSave(alumnus.id);
-      if (typeof res === 'boolean') {
-        setSaved(res);
-      } else {
-        setSaved((v) => !v);
-      }
-    } finally {
-      setSaving(false);
-    }
+  const location = alumnus.location || 'Dhaka · Hybrid';
+
+  const skills =
+    alumnus.skills && alumnus.skills.length > 0 ? alumnus.skills : ['CP', 'Systems', 'Graphs'];
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!wmRef.current) return;
+    const banner = e.currentTarget;
+    const r = banner.getBoundingClientRect();
+    wmRef.current.style.setProperty('--mx', `${((e.clientX - r.left) / r.width - 0.5) * -18}px`);
+    wmRef.current.style.setProperty('--my', `${((e.clientY - r.top) / r.height - 0.5) * -12}px`);
   };
+
+  const handlePointerLeave = () => {
+    if (!wmRef.current) return;
+    wmRef.current.style.setProperty('--mx', '0px');
+    wmRef.current.style.setProperty('--my', '0px');
+  };
+
+  // Build pixel avatar SVG rects
+  let pixelIndex = 0;
+  const pixelRects: React.ReactNode[] = [];
+  PIXEL_GRID.forEach((row, y) => {
+    [...row].forEach((char, x) => {
+      if (char === '#') {
+        const p = pixelIndex++;
+        pixelRects.push(
+          <rect
+            key={`${x}-${y}`}
+            x={x}
+            y={y}
+            width="1"
+            height="1"
+            style={{ '--p': p } as React.CSSProperties}
+          />,
+        );
+      }
+    });
+  });
 
   return (
     <article
-      className="alumni-card"
+      className={`alumni-mini enter ${go ? 'go' : ''}`}
       tabIndex={0}
       role="button"
       aria-label={`${alumnus.name}, batch ${alumnus.batch ?? 'alumni'}, ${location}. Open profile.`}
@@ -68,282 +95,112 @@ export function AlumniCard({
           onOpenProfile(alumnus.id);
         }
       }}
-      style={{
-        background: 'var(--panel, #F6F4EE)',
-        border: '2px solid var(--line2, #0B0B0B)',
-        overflow: 'hidden',
-        cursor: 'pointer',
-        display: 'flex',
-        flexDirection: 'column',
-        position: 'relative',
-        transition: 'transform 0.14s ease, box-shadow 0.14s ease',
-      }}
     >
-      {/* 72px Header Band */}
+      {/* Banner */}
       <div
-        style={{
-          position: 'relative',
-          height: 72,
-          background: alumnus.available_for_questions
-            ? 'var(--acc, #1F3BFF)'
-            : 'var(--line2, #0B0B0B)',
-          overflow: 'hidden',
-        }}
+        className="mini-banner"
+        onPointerMove={handlePointerMove}
+        onPointerLeave={handlePointerLeave}
       >
-        {/* Ghost Batch Number */}
-        <span
-          aria-hidden="true"
-          style={{
-            position: 'absolute',
-            right: 12,
-            top: -12,
-            font: '700 110px/1 Inter, Arial, sans-serif',
-            letterSpacing: '-4px',
-            color: 'transparent',
-            WebkitTextStroke: alumnus.available_for_questions
-              ? '1.5px rgba(255,255,255,.4)'
-              : '1.5px rgba(255,255,255,.22)',
-            userSelect: 'none',
-            pointerEvents: 'none',
-          }}
-        >
+        <div className="mini-banner-grid" />
+        <div className="mini-wm" ref={wmRef}>
           {batchStr}
-        </span>
-
-        {/* Source / Batch Label */}
-        <span
-          className="m"
-          style={{
-            position: 'absolute',
-            left: 20,
-            top: 16,
-            color: 'var(--on, #FFFFFF)',
-            font: '11px ui-monospace, Menlo, monospace',
-            letterSpacing: '.06em',
-            textTransform: 'uppercase',
-            zIndex: 1,
-          }}
-        >
-          Alumni · Batch {alumnus.batch ?? '—'}
-        </span>
+        </div>
+        <div className="mini-tagline" data-r style={{ '--i': 0 } as React.CSSProperties}>
+          Alumni · Batch {alumnus.batch ?? batchStr}
+        </div>
       </div>
 
-      {/* Card Content with Overlapping Avatar Box */}
-      <div style={{ padding: '0 20px 20px', display: 'flex', flexDirection: 'column', flex: 1 }}>
-        {/* Overlapping Avatar Box */}
-        <div
-          style={{
-            marginTop: -32,
-            background: 'var(--panel, #F6F4EE)',
-            display: 'inline-block',
-            padding: 4,
-            lineHeight: 0,
-            alignSelf: 'flex-start',
-            zIndex: 2,
-          }}
-        >
-          <div
-            style={{
-              border: `2px solid ${tierColor}`,
-              padding: 2,
-              flex: 'none',
-              lineHeight: 0,
-            }}
-          >
-            <AvatarRing
-              name={alumnus.name}
-              avatarUrl={alumnus.avatar_url}
-              size={56}
-              ringWidth={2}
-              ringOffset={2}
-              notched
-              rank={rank}
-            />
-          </div>
-        </div>
+      {/* Avatar overlapping banner */}
+      <div
+        className="mini-avatar"
+        data-r
+        style={{ '--i': 1 } as React.CSSProperties}
+        title="Hover me"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {alumnus.avatar_url ? (
+          <img
+            src={alumnus.avatar_url}
+            alt={alumnus.name}
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          />
+        ) : (
+          <svg viewBox="0 0 7 7">{pixelRects}</svg>
+        )}
+        <span className="mini-live" />
+      </div>
 
-        {/* Name (tier-tinted) */}
-        <div
-          style={{
-            fontSize: 19,
-            fontWeight: 600,
-            margin: '12px 0 2px',
-            color: tierText(tierColor),
-            lineHeight: 1.2,
-          }}
-        >
-          <HighlightMatch text={alumnus.name} query={highlightQuery} />
-        </div>
+      {/* Content */}
+      <div className="mini-content">
+        <h2 className="mini-name" aria-label={alumnus.name}>
+          {highlightQuery ? (
+            <HighlightMatch text={alumnus.name} query={highlightQuery} />
+          ) : (
+            [...alumnus.name].map((ch, i) => (
+              <span key={i} style={{ '--c': i } as React.CSSProperties} aria-hidden="true">
+                {ch === ' ' ? '\u00A0' : ch}
+              </span>
+            ))
+          )}
+        </h2>
 
-        {/* Role */}
-        <div style={{ fontSize: 15, color: 'var(--ink, #0B0B0B)' }}>
+        <div className="mini-role" data-r style={{ '--i': 4 } as React.CSSProperties}>
           <HighlightMatch text={roleTitle} query={highlightQuery} />
         </div>
 
-        {/* Company in mono .m */}
-        <div
-          className="m"
-          style={{
-            margin: '4px 0 12px',
-            font: '11px ui-monospace, Menlo, monospace',
-            letterSpacing: '.06em',
-            textTransform: 'uppercase',
-            color: 'var(--dim, #5F5F5F)',
-          }}
-        >
+        <div className="mini-company" data-r style={{ '--i': 5 } as React.CSSProperties}>
           <HighlightMatch text={company} query={highlightQuery} />
         </div>
 
-        {/* Location with SVG pin */}
-        <div
-          className="m"
-          style={{
-            display: 'flex',
-            gap: 6,
-            alignItems: 'center',
-            marginBottom: 16,
-            font: '11px ui-monospace, Menlo, monospace',
-            letterSpacing: '.06em',
-            textTransform: 'uppercase',
-            color: 'var(--dim, #5F5F5F)',
-          }}
-        >
-          <svg
-            aria-hidden="true"
-            width="14"
-            height="14"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-          >
-            <path d="M8 14s5-4.2 5-8a5 5 0 0 0-10 0c0 3.8 5 8 5 8z" />
-            <circle cx="8" cy="6" r="1.8" />
+        <div className="mini-loc" data-r style={{ '--i': 6 } as React.CSSProperties}>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z" />
+            <circle cx="12" cy="10" r="2.5" />
           </svg>
-          {location}
+          <HighlightMatch text={location} query={highlightQuery} />
         </div>
 
-        {/* Skills Tag Strip */}
-        <div style={{ minHeight: 34, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        <div className="mini-tags" data-r style={{ '--i': 7 } as React.CSSProperties}>
           {skills.slice(0, 3).map((sk) => (
-            <span
+            <button
               key={sk}
-              className="tg"
-              style={{
-                display: 'inline-block',
-                font: '11px ui-monospace, Menlo, monospace',
-                textTransform: 'uppercase',
-                letterSpacing: '.06em',
-                border: '1px solid var(--line2, #0B0B0B)',
-                padding: '4px 8px',
-                margin: '0 6px 6px 0',
-                background: 'var(--bg, #FFFFFF)',
-                color: 'var(--ink, #0B0B0B)',
+              type="button"
+              className="mini-tag"
+              onClick={(e) => {
+                e.stopPropagation();
               }}
             >
               {sk}
-            </span>
+            </button>
           ))}
         </div>
 
-        {/* Card Footer Divider & Affordance */}
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            borderTop: '1px solid var(--line, #CFCBBF)',
-            paddingTop: 14,
-            marginTop: 'auto',
-          }}
-        >
-          {/* Status Left */}
-          {alumnus.available_for_questions ? (
-            <span
-              className="m"
-              style={{
-                display: 'flex',
-                gap: 8,
-                alignItems: 'center',
-                color: 'var(--ink, #0B0B0B)',
-                font: '11px ui-monospace, Menlo, monospace',
-                letterSpacing: '.06em',
-                textTransform: 'uppercase',
-              }}
-            >
-              <i
-                style={{
-                  width: 10,
-                  height: 10,
-                  background: 'var(--acc, #1F3BFF)',
-                  display: 'inline-block',
-                }}
-              />
-              Open to questions
-            </span>
-          ) : (
-            <span
-              className="m"
-              style={{
-                font: '11px ui-monospace, Menlo, monospace',
-                letterSpacing: '.06em',
-                textTransform: 'uppercase',
-                color: 'var(--dim, #5F5F5F)',
-              }}
-            >
-              Not taking questions
-            </span>
-          )}
-
-          {/* Right Actions: Save button + View Profile */}
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {isOwnCard ? (
-              <span
-                className="pill"
-                style={{
-                  font: '11px ui-monospace, Menlo, monospace',
-                  letterSpacing: '.06em',
-                  textTransform: 'uppercase',
-                  padding: '3px 8px',
-                  background: 'var(--ink, #0B0B0B)',
-                  color: 'var(--on, #FFFFFF)',
-                }}
-              >
-                YOU
-              </span>
-            ) : alumnus.available_for_questions ? (
-              <button
-                type="button"
-                onClick={handleSaveClick}
-                disabled={saving}
-                style={{
-                  font: '11px ui-monospace, Menlo, monospace',
-                  textTransform: 'uppercase',
-                  letterSpacing: '.06em',
-                  border: '1px solid var(--line2, #0B0B0B)',
-                  padding: '3px 8px',
-                  background: saved ? 'var(--ink, #0B0B0B)' : 'transparent',
-                  color: saved ? 'var(--on, #FFFFFF)' : 'var(--ink, #0B0B0B)',
-                  cursor: 'pointer',
-                }}
-                aria-label={saved ? 'Remove save' : 'Save alumnus'}
-              >
-                {saved ? 'Saved ✓' : 'Save'}
-              </button>
-            ) : null}
-
-            <span
-              className="m"
-              style={{
-                color: 'var(--ink, #0B0B0B)',
-                font: '11px ui-monospace, Menlo, monospace',
-                letterSpacing: '.06em',
-                textTransform: 'uppercase',
-              }}
-            >
-              View profile →
-            </span>
+        <div className="mini-foot" data-r style={{ '--i': 8 } as React.CSSProperties}>
+          <div
+            className={`mini-open ${alumnus.available_for_questions ? '' : 'closed'}`}
+            title={alumnus.available_for_questions ? 'Open to questions' : 'Not taking questions'}
+          >
+            <i />
+            {alumnus.available_for_questions ? 'Open to questions' : 'Not taking questions'}
           </div>
+
+          <a
+            className="mini-view"
+            href={`#alumni-${alumnus.id}`}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onOpenProfile(alumnus.id);
+            }}
+          >
+            View profile{' '}
+            <b aria-hidden="true">
+              <svg viewBox="0 0 16 12">
+                <path d="M1 6h13M9 1l5 5-5 5" />
+              </svg>
+            </b>
+          </a>
         </div>
       </div>
     </article>

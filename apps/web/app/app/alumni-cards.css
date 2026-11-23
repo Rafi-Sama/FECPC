@@ -1,0 +1,2093 @@
+/* ==========================================================================
+   FECPC ALUMNI CARD & MINI CARD DESIGN SYSTEM
+   Exact animations, transitions, and styles from prototype HTML templates
+   ========================================================================== */
+
+:root {
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --snap: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --shadow-hard: 4px 4px 0 rgba(0, 0, 0, 0.2);
+  --shadow-hover: 6px 6px 0 rgba(0, 0, 0, 0.2);
+  --shadow-accent: 8px 8px 0 var(--acc);
+  --hero: var(--acc, #1d4ed8);
+  --hero-ink: var(--on, #ffffff);
+}
+
+.t-d,
+body.t-d {
+  --hero: var(--acc, #ff5a1f);
+  --hero-ink: #0c0c0d;
+  --shadow-hard: 4px 4px 0 #000;
+  --shadow-hover: 6px 6px 0 #000;
+}
+
+/* ==========================================================================
+   PARTICLES & TOAST
+   ========================================================================== */
+.alumni-spark {
+  position: fixed;
+  width: 8px;
+  height: 8px;
+  background: var(--acc);
+  pointer-events: none;
+  z-index: 10001;
+  animation: alumniSpark 0.7s var(--ease) forwards;
+}
+
+@keyframes alumniSpark {
+  to {
+    transform: translate(var(--dx), var(--dy)) rotate(180deg) scale(0);
+    opacity: 0;
+  }
+}
+
+.alumni-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  background: var(--hi);
+  color: var(--bg);
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 12px 18px;
+  border: 2px solid var(--line2);
+  box-shadow: var(--shadow-accent);
+  transform: translate(-50%, 160%);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    transform 0.35s var(--ease),
+    opacity 0.2s,
+    visibility 0s 0.35s;
+  z-index: 10000;
+}
+
+.alumni-toast.on {
+  transform: translate(-50%, 0);
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+/* ==========================================================================
+   ALUMNI MINI CARD (in AlumniTab grid)
+   ========================================================================== */
+.alumni-mini {
+  width: 100%;
+  background: var(--panel);
+  border: 2px solid var(--line2);
+  border-left: 6px solid var(--acc);
+  box-shadow: var(--shadow-accent);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 0.25s var(--ease),
+    box-shadow 0.25s var(--ease);
+}
+
+.alumni-mini:hover {
+  transform: translate(-3px, -3px);
+  box-shadow: 12px 12px 0 var(--acc);
+}
+
+.alumni-mini.enter {
+  animation: miniCardIn 0.6s var(--ease) both;
+}
+
+@keyframes miniCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+    clip-path: inset(0 0 100% 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+.alumni-mini [data-r] {
+  opacity: 0;
+  transform: translateY(12px);
+}
+
+.alumni-mini.go [data-r] {
+  animation: miniRise 0.55s var(--ease) both;
+  animation-delay: calc(var(--i, 0) * 70ms + 200ms);
+}
+
+@keyframes miniRise {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Banner */
+.alumni-mini .mini-banner {
+  background: var(--hero);
+  color: var(--hero-ink);
+  height: 104px;
+  position: relative;
+  overflow: hidden;
+  border-bottom: 2px solid var(--line2);
+  display: flex;
+  align-items: flex-start;
+  padding: 16px 20px;
+}
+
+.alumni-mini .mini-banner-grid {
+  position: absolute;
+  inset: 0;
+  opacity: 0.14;
+  background-image:
+    linear-gradient(currentColor 1px, transparent 1px),
+    linear-gradient(90deg, currentColor 1px, transparent 1px);
+  background-size: 20px 20px;
+  -webkit-mask-image: linear-gradient(90deg, transparent 35%, #000);
+  mask-image: linear-gradient(90deg, transparent 35%, #000);
+  pointer-events: none;
+}
+
+.alumni-mini .mini-banner::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.28) 50%,
+    transparent 60%
+  );
+  transform: translateX(-120%);
+}
+
+.alumni-mini.go .mini-banner::after {
+  animation: miniSweep 1s 0.3s var(--ease) 1;
+}
+
+@keyframes miniSweep {
+  to {
+    transform: translateX(120%);
+  }
+}
+
+.alumni-mini .mini-tagline {
+  position: relative;
+  z-index: 1;
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: #111;
+  color: #fff;
+  padding: 4px 8px;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.35);
+}
+
+.alumni-mini .mini-wm {
+  position: absolute;
+  right: -6px;
+  top: -22px;
+  font-weight: 900;
+  font-size: 170px;
+  line-height: 0.85;
+  letter-spacing: -9px;
+  color: color-mix(in srgb, var(--hero-ink) 7%, transparent);
+  -webkit-text-stroke: 2px var(--hero-ink);
+  opacity: 0.5;
+  pointer-events: none;
+  user-select: none;
+  transform: translate(var(--mx, 0px), var(--my, 0px));
+  transition: transform 0.25s var(--ease);
+}
+
+.alumni-mini.go .mini-wm {
+  animation: miniWmIn 1s 0.15s var(--ease) both;
+}
+
+@keyframes miniWmIn {
+  from {
+    opacity: 0;
+    transform: translate(60px, 0);
+  }
+
+  to {
+    opacity: 0.5;
+    transform: translate(0, 0);
+  }
+}
+
+/* Avatar overlapping banner */
+.alumni-mini .mini-avatar {
+  position: absolute;
+  left: 20px;
+  top: 64px;
+  width: 84px;
+  height: 84px;
+  background: var(--bg);
+  border: 2px solid var(--line2);
+  box-shadow: 4px 4px 0 var(--line2);
+  display: grid;
+  place-items: center;
+  z-index: 2;
+  cursor: crosshair;
+  transition:
+    transform 0.15s var(--snap),
+    box-shadow 0.15s;
+}
+
+.alumni-mini .mini-avatar:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 7px 7px 0 var(--line2);
+}
+
+.alumni-mini .mini-avatar svg {
+  width: 66%;
+  height: 66%;
+  shape-rendering: crispEdges;
+}
+
+.alumni-mini .mini-avatar rect {
+  fill: var(--hi);
+  transform-box: fill-box;
+  transform-origin: center;
+  opacity: 0;
+}
+
+.alumni-mini.go .mini-avatar rect {
+  animation: miniPix 0.3s var(--snap) both;
+  animation-delay: calc(450ms + var(--p) * 40ms);
+}
+
+@keyframes miniPix {
+  from {
+    opacity: 0;
+    transform: scale(0);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.alumni-mini .mini-avatar:hover rect {
+  animation: miniWiggle 0.45s var(--snap) both;
+  animation-delay: calc(var(--p) * 22ms);
+}
+
+@keyframes miniWiggle {
+  50% {
+    transform: scale(0.55);
+  }
+}
+
+.alumni-mini .mini-live {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  width: 14px;
+  height: 14px;
+  background: #22c55e;
+  border: 2px solid var(--line2);
+}
+
+.alumni-mini .mini-live::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border: 2px solid #22c55e;
+  animation: miniPing 1.8s var(--snap) infinite;
+}
+
+@keyframes miniPing {
+  from {
+    opacity: 0.9;
+    transform: scale(0.6);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(1.6);
+  }
+}
+
+/* Mini Content */
+.alumni-mini .mini-content {
+  padding: 60px 22px 20px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.alumni-mini .mini-name {
+  font-size: 2rem;
+  font-weight: 900;
+  letter-spacing: -1px;
+  line-height: 1.05;
+  color: var(--acc);
+  margin-bottom: 6px;
+}
+
+.alumni-mini .mini-name span {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(60%);
+}
+
+.alumni-mini.go .mini-name span {
+  animation: miniLetter 0.5s var(--ease) both;
+  animation-delay: calc(400ms + var(--c) * 26ms);
+}
+
+@keyframes miniLetter {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.alumni-mini .mini-role {
+  font-size: 17px;
+  font-weight: 500;
+  margin-bottom: 6px;
+  color: var(--hi);
+}
+
+.alumni-mini .mini-company {
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mut);
+  margin-bottom: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.alumni-mini .mini-company::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  background: var(--acc);
+  border: 1px solid var(--line2);
+  flex: none;
+}
+
+.alumni-mini .mini-loc {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 12px;
+  color: var(--dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 16px;
+}
+
+.alumni-mini .mini-loc svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  transition: transform 0.2s var(--snap);
+}
+
+.alumni-mini:hover .mini-loc svg {
+  transform: translateY(-3px);
+}
+
+.alumni-mini .mini-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.alumni-mini .mini-tag {
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 6px 11px;
+  background: var(--bg);
+  border: 1px solid var(--line2);
+  cursor: pointer;
+  transition: all 0.1s var(--snap);
+}
+
+.alumni-mini .mini-tag:hover {
+  background: var(--hi);
+  color: var(--bg);
+  transform: translate(-2px, -2px);
+  box-shadow: 3px 3px 0 var(--acc);
+}
+
+.alumni-mini .mini-tag:active {
+  transform: translate(1px, 1px);
+  box-shadow: none;
+}
+
+/* Mini Foot */
+.alumni-mini .mini-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+  margin-top: auto;
+}
+
+.alumni-mini .mini-open {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--hi);
+}
+
+.alumni-mini .mini-open.closed {
+  color: var(--dim);
+}
+
+.alumni-mini .mini-open i {
+  width: 10px;
+  height: 10px;
+  background: var(--acc);
+  animation: miniBlink 1.2s step-end infinite;
+  display: inline-block;
+  flex: none;
+}
+
+.alumni-mini .mini-open.closed i {
+  background: var(--dim);
+  animation: none;
+}
+
+@keyframes miniBlink {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.alumni-mini .mini-acts {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.alumni-mini .mini-btn {
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 7px 12px;
+  cursor: pointer;
+  border: 2px solid var(--line2);
+  background: transparent;
+  color: var(--hi);
+  transition: all 0.1s var(--snap);
+  position: relative;
+}
+
+.alumni-mini .mini-btn:hover {
+  background: var(--bg);
+  border-color: var(--acc);
+  transform: translate(-2px, -2px);
+  box-shadow: var(--shadow-hard);
+}
+
+.alumni-mini .mini-btn:active {
+  transform: translate(1px, 1px);
+  box-shadow: none;
+}
+
+.alumni-mini .mini-btn.saved {
+  background: var(--hi);
+  color: var(--bg);
+  animation: miniStamp 0.3s var(--snap);
+}
+
+@keyframes miniStamp {
+  50% {
+    transform: scale(1.15) rotate(-3deg);
+  }
+}
+
+.alumni-mini .mini-view {
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--hi);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+  padding-bottom: 2px;
+  cursor: pointer;
+}
+
+.alumni-mini .mini-view::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--acc);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.25s var(--ease);
+}
+
+.alumni-mini .mini-view:hover {
+  color: var(--acc);
+}
+
+.alumni-mini:hover .mini-view::after,
+.alumni-mini .mini-view:hover::after {
+  transform: scaleX(1);
+}
+
+.alumni-mini .mini-view b {
+  font-size: 18px !important;
+  line-height: 1;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  transition: transform 0.2s var(--snap);
+}
+
+.alumni-mini .mini-view b svg {
+  width: 15px;
+  height: 11px;
+  display: block;
+}
+
+.alumni-mini .mini-view b path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+}
+
+.alumni-mini:hover .mini-view b,
+.alumni-mini .mini-view:hover b {
+  transform: translateX(4px);
+}
+
+@media (max-width: 420px) {
+  .alumni-mini .mini-foot {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* ==========================================================================
+   ALUMNI PROFILE FULL CARD & MODAL
+   ========================================================================== */
+.alumni-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(11, 11, 11, 0.65);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 56px 20px 48px;
+  overflow-y: auto;
+  z-index: 9999;
+  backdrop-filter: blur(4px);
+}
+
+.alumni-modal-controls {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  gap: 10px;
+  z-index: 10002;
+}
+
+.alumni-ctl {
+  background: var(--panel);
+  border: 2px solid var(--line2);
+  padding: 8px 14px;
+  cursor: pointer;
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--hi);
+  box-shadow: var(--shadow-hard);
+  transition:
+    transform 0.1s var(--snap),
+    box-shadow 0.1s,
+    background 0.1s,
+    color 0.1s;
+}
+
+.alumni-ctl:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: var(--shadow-hover);
+  background: var(--acc);
+  color: var(--on);
+  border-color: var(--acc);
+}
+
+.alumni-ctl:active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+
+.alumni-card-full {
+  width: 100%;
+  max-width: 960px;
+  background: var(--panel);
+  border: 2px solid var(--line2);
+  border-left: 6px solid var(--acc);
+  box-shadow: var(--shadow-accent);
+  position: relative;
+  overflow: hidden;
+  transition:
+    box-shadow 0.25s var(--ease),
+    transform 0.25s var(--ease);
+}
+
+.alumni-card-full:hover {
+  box-shadow: 12px 12px 0 var(--acc);
+  transform: translate(-2px, -2px);
+}
+
+.alumni-card-full.enter {
+  animation: fullCardIn 0.7s var(--ease) both;
+}
+
+@keyframes fullCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(28px) scale(0.985);
+    clip-path: inset(0 0 100% 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+.alumni-card-full [data-r] {
+  opacity: 0;
+  transform: translateY(14px);
+}
+
+.alumni-card-full.go [data-r] {
+  animation: fullRise 0.6s var(--ease) both;
+  animation-delay: calc(var(--i, 0) * 70ms + 250ms);
+}
+
+@keyframes fullRise {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* HERO */
+.alumni-card-full .hero {
+  /* Opt out of the public site's global .hero (min-height: max(760px, 100svh)). */
+  min-height: 0;
+  display: block;
+  background: var(--hero);
+  color: var(--hero-ink);
+  padding: 36px 36px 32px;
+  position: relative;
+  overflow: hidden;
+  border-bottom: 2px solid var(--line2);
+}
+
+.alumni-card-full .hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.28) 50%,
+    transparent 60%
+  );
+  transform: translateX(-120%);
+}
+
+.alumni-card-full.go .hero::after {
+  animation: fullSweep 1.1s 0.35s var(--ease) 1;
+}
+
+@keyframes fullSweep {
+  to {
+    transform: translateX(120%);
+  }
+}
+
+.alumni-card-full .hero-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.14;
+  background-image:
+    linear-gradient(currentColor 1px, transparent 1px),
+    linear-gradient(90deg, currentColor 1px, transparent 1px);
+  background-size: 24px 24px;
+  -webkit-mask-image: linear-gradient(90deg, transparent 30%, #000);
+  mask-image: linear-gradient(90deg, transparent 30%, #000);
+}
+
+.alumni-card-full .watermark {
+  position: absolute;
+  right: -6px;
+  top: -34px;
+  font-weight: 900;
+  font-size: 380px;
+  line-height: 0.85;
+  letter-spacing: -18px;
+  color: color-mix(in srgb, var(--hero-ink) 7%, transparent);
+  -webkit-text-stroke: 2px var(--hero-ink);
+  opacity: 0.5;
+  pointer-events: none;
+  user-select: none;
+  z-index: 0;
+  transform: translate(var(--mx, 0px), var(--my, 0px));
+  transition: transform 0.25s var(--ease);
+  -webkit-mask-image: linear-gradient(180deg, #000 45%, transparent 96%);
+  mask-image: linear-gradient(180deg, #000 45%, transparent 96%);
+}
+
+.alumni-card-full .watermark::before {
+  content: attr(data-t);
+  position: absolute;
+  inset: 0;
+  transform: translate(10px, 10px);
+  color: transparent;
+  -webkit-text-stroke: 2px #111;
+  opacity: 0.4;
+  z-index: -1;
+}
+
+body.t-d .alumni-card-full .watermark::before {
+  -webkit-text-stroke-color: #fff;
+  opacity: 0.28;
+}
+
+.alumni-card-full.go .watermark {
+  animation: fullWmIn 1.1s 0.2s var(--ease) both;
+}
+
+@keyframes fullWmIn {
+  from {
+    opacity: 0;
+    transform: translate(90px, 0);
+  }
+
+  to {
+    opacity: 0.5;
+    transform: translate(0, 0);
+  }
+}
+
+.alumni-card-full .hero-top {
+  display: flex;
+  gap: 28px;
+  align-items: center;
+  position: relative;
+  z-index: 1;
+  flex-wrap: wrap;
+}
+
+.alumni-card-full .avatar {
+  width: 112px;
+  height: 112px;
+  background: var(--bg);
+  color: var(--hi);
+  border: 2px solid #111;
+  box-shadow: 5px 5px 0 #111;
+  display: grid;
+  place-items: center;
+  position: relative;
+  flex: none;
+  transition:
+    transform 0.15s var(--snap),
+    box-shadow 0.15s;
+  cursor: crosshair;
+}
+
+.alumni-card-full .avatar:hover {
+  transform: translate(-3px, -3px);
+  box-shadow: 8px 8px 0 #111;
+}
+
+.alumni-card-full .avatar svg {
+  width: 70%;
+  height: 70%;
+  shape-rendering: crispEdges;
+}
+
+.alumni-card-full .avatar rect {
+  fill: #111;
+  transform-origin: center;
+  transform-box: fill-box;
+  opacity: 0;
+}
+
+.alumni-card-full.go .avatar rect {
+  animation: fullPix 0.35s var(--snap) both;
+  animation-delay: calc(450ms + var(--p) * 45ms);
+}
+
+@keyframes fullPix {
+  from {
+    opacity: 0;
+    transform: scale(0);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.alumni-card-full .avatar:hover rect {
+  animation: fullWiggle 0.5s var(--snap) both;
+  animation-delay: calc(var(--p) * 25ms);
+}
+
+@keyframes fullWiggle {
+  50% {
+    transform: scale(0.6);
+  }
+}
+
+.alumni-card-full .avatar .live {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  width: 16px;
+  height: 16px;
+  background: #22c55e;
+  border: 2px solid #111;
+}
+
+.alumni-card-full .avatar .live::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border: 2px solid #22c55e;
+  animation: fullPing 1.8s var(--snap) infinite;
+}
+
+@keyframes fullPing {
+  from {
+    opacity: 0.9;
+    transform: scale(0.6);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(1.6);
+  }
+}
+
+.alumni-card-full .badge {
+  display: inline-block;
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: #111;
+  color: #fff;
+  padding: 4px 8px;
+  margin-bottom: 12px;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.35);
+}
+
+.alumni-card-full .name {
+  font-size: clamp(2rem, 5.2vw, 3.4rem);
+  font-weight: 900;
+  letter-spacing: -1.5px;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.alumni-card-full .name span {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(60%);
+}
+
+.alumni-card-full.go .name span {
+  animation: fullLetter 0.55s var(--ease) both;
+  animation-delay: calc(350ms + var(--c) * 28ms);
+}
+
+@keyframes fullLetter {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.alumni-card-full .role {
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 14px;
+  font-weight: 700;
+  opacity: 0.92;
+}
+
+.alumni-card-full .role small {
+  font-weight: 400;
+  opacity: 0.75;
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* TIMELINE (draws itself) */
+.alumni-card-full .timeline {
+  position: relative;
+  z-index: 1;
+  margin-top: 30px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+}
+
+.alumni-card-full .timeline::before,
+.alumni-card-full .timeline::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  right: calc(100% / 3 - 6px);
+  top: 6px;
+  height: 2px;
+}
+
+.alumni-card-full .timeline::before {
+  background: currentColor;
+  opacity: 0.3;
+  right: 6px;
+}
+
+.alumni-card-full .timeline::after {
+  background: #fff;
+  right: 6px;
+  transform-origin: left;
+  transform: scaleX(0);
+}
+
+body.t-d .alumni-card-full .timeline::after {
+  background: #111;
+}
+
+.alumni-card-full.go .timeline::after {
+  animation: fullDraw 1.2s 0.8s var(--ease) forwards;
+}
+
+@keyframes fullDraw {
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.alumni-card-full .tl {
+  position: relative;
+  padding-top: 24px;
+  font-size: 13px;
+}
+
+.alumni-card-full .tl i {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 14px;
+  height: 14px;
+  background: var(--hero);
+  border: 2px solid #fff;
+  transition: transform 0.15s;
+}
+
+body.t-d .alumni-card-full .tl i {
+  border-color: #111;
+}
+
+.alumni-card-full .tl:hover i {
+  transform: rotate(45deg) scale(1.15);
+}
+
+.alumni-card-full .tl.now i {
+  background: #fff;
+}
+
+body.t-d .alumni-card-full .tl.now i {
+  background: #111;
+}
+
+.alumni-card-full .tl.now i::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border: 2px solid currentColor;
+  animation: fullPing 1.8s var(--snap) infinite;
+}
+
+.alumni-card-full .tl b {
+  display: block;
+  opacity: 0.7;
+  font-weight: 400;
+  margin-bottom: 3px;
+}
+
+.alumni-card-full .tl span {
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 1.3;
+  font-family: var(--sans, sans-serif);
+  display: block;
+}
+
+/* STATS */
+.alumni-card-full .stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-bottom: 2px solid var(--line2);
+  background: var(--panel);
+}
+
+.alumni-card-full .stat {
+  padding: 22px 20px;
+  border-right: 1px solid var(--line);
+  position: relative;
+  overflow: hidden;
+  cursor: crosshair;
+  transition: color 0.15s;
+}
+
+.alumni-card-full .stat:last-child {
+  border-right: none;
+}
+
+.alumni-card-full .stat::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--hi);
+  transform: translateY(101%);
+  transition: transform 0.25s var(--ease);
+}
+
+.alumni-card-full .stat:hover::before {
+  transform: none;
+}
+
+.alumni-card-full .stat:hover {
+  color: var(--bg);
+}
+
+.alumni-card-full .stat > * {
+  position: relative;
+}
+
+.alumni-card-full .stat-val {
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 2.2rem;
+  font-weight: 700;
+  color: var(--acc);
+  line-height: 1;
+  margin-bottom: 8px;
+  font-variant-numeric: tabular-nums;
+  transition: color 0.15s;
+}
+
+.alumni-card-full .stat:hover .stat-val {
+  color: var(--bg);
+}
+
+.alumni-card-full .stat-label {
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.75;
+}
+
+.alumni-card-full .stat-bar {
+  height: 3px;
+  background: var(--line);
+  margin-top: 12px;
+  position: relative;
+}
+
+.alumni-card-full .stat-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--acc);
+  transform-origin: left;
+  transform: scaleX(0);
+}
+
+.alumni-card-full.go .stat-bar::after {
+  animation: fullDrawTo 1s var(--ease) forwards;
+  animation-delay: calc(700ms + var(--i, 0) * 90ms);
+  transform: scaleX(var(--w));
+}
+
+@keyframes fullDrawTo {
+  to {
+    transform: scaleX(var(--w));
+  }
+}
+
+/* BODY */
+.alumni-card-full .body {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+}
+
+.alumni-card-full .left {
+  padding: 0;
+  border-right: 2px solid var(--line2);
+  min-width: 0;
+}
+
+.alumni-card-full .right {
+  padding: 28px;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+/* Tabs with sliding ink */
+.alumni-card-full .tabs {
+  display: flex;
+  position: relative;
+  border-bottom: 2px solid var(--line2);
+  background: var(--panel);
+  margin: 0;
+  padding: 0;
+}
+
+.alumni-card-full .tab {
+  flex: 1;
+  background: none;
+  border: none;
+  padding: 14px 10px;
+  cursor: pointer;
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--dim);
+  transition: color 0.15s;
+  position: relative;
+  z-index: 1;
+}
+
+.alumni-card-full .tab:hover {
+  color: var(--hi);
+}
+
+.alumni-card-full .tab[aria-selected='true'] {
+  color: var(--on);
+}
+
+.alumni-card-full .tab sup {
+  font-size: 9px;
+  margin-left: 4px;
+  opacity: 0.7;
+}
+
+.alumni-card-full .tab-ink {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: var(--acc);
+  width: var(--w, 33.33%);
+  transform: translateX(var(--x, 0));
+  transition:
+    transform 0.35s var(--ease),
+    width 0.35s var(--ease);
+}
+
+.alumni-card-full .panels {
+  padding: 30px 32px 34px;
+  position: relative;
+}
+
+.alumni-card-full .panel {
+  display: none;
+}
+
+.alumni-card-full .panel.on {
+  display: block;
+  animation: fullPanelIn 0.45s var(--ease) both;
+}
+
+@keyframes fullPanelIn {
+  from {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.alumni-card-full .panel.on > * {
+  animation: fullRise 0.5s var(--ease) both;
+  animation-delay: calc(var(--k, 0) * 60ms);
+}
+
+.alumni-card-full .section-title {
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  letter-spacing: 0.05em;
+  color: var(--hi);
+}
+
+.alumni-card-full .section-title::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  background: var(--acc);
+  border: 1px solid var(--line2);
+  flex: none;
+}
+
+.alumni-card-full .about {
+  font-size: 16px;
+  line-height: 1.65;
+  color: var(--mut);
+  margin-bottom: 28px;
+}
+
+.alumni-card-full .about mark {
+  background: color-mix(in srgb, var(--acc) 18%, transparent);
+  color: var(--hi);
+  padding: 0 3px;
+  font-weight: 700;
+}
+
+.alumni-card-full .tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.alumni-card-full .tag {
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 7px 12px;
+  background: var(--bg);
+  border: 1px solid var(--line2);
+  cursor: pointer;
+  transition: all 0.1s var(--snap);
+  color: var(--hi);
+}
+
+.alumni-card-full .tag:hover {
+  background: var(--hi);
+  color: var(--bg);
+  transform: translate(-2px, -2px);
+  box-shadow: 3px 3px 0 var(--acc);
+}
+
+.alumni-card-full .tag:active {
+  transform: translate(1px, 1px);
+  box-shadow: none;
+}
+
+/* CAREER PATH */
+.alumni-card-full .path {
+  position: relative;
+  padding-left: 26px;
+}
+
+.alumni-card-full .path::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  background: var(--line2);
+  transform-origin: top;
+  transform: scaleY(0);
+}
+
+.alumni-card-full .panel.on .path::before {
+  animation: fullGrowY 0.9s 0.1s var(--ease) forwards;
+}
+
+@keyframes fullGrowY {
+  to {
+    transform: scaleY(1);
+  }
+}
+
+.alumni-card-full .step {
+  position: relative;
+  margin-bottom: 26px;
+  padding: 10px 14px;
+  border: 1px solid transparent;
+  transition: all 0.15s var(--snap);
+  cursor: default;
+}
+
+.alumni-card-full .step:last-child {
+  margin-bottom: 0;
+}
+
+.alumni-card-full .step::before {
+  content: '';
+  position: absolute;
+  left: -26px;
+  top: 16px;
+  width: 12px;
+  height: 12px;
+  background: var(--panel);
+  border: 2px solid var(--line2);
+  transition: all 0.15s;
+}
+
+.alumni-card-full .step.now::before {
+  background: var(--acc);
+  border-color: var(--acc);
+}
+
+.alumni-card-full .step:hover {
+  border-color: var(--line2);
+  background: var(--panel);
+  box-shadow: var(--shadow-hard);
+  transform: translate(-2px, -2px);
+}
+
+.alumni-card-full .step:hover::before {
+  background: var(--acc);
+  border-color: var(--line2);
+  transform: rotate(45deg);
+}
+
+.alumni-card-full .step small {
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 11px;
+  color: var(--acc);
+  font-weight: 700;
+  display: block;
+  margin-bottom: 3px;
+}
+
+.alumni-card-full .step h4 {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 3px;
+  color: var(--hi);
+}
+
+.alumni-card-full .step p {
+  font-size: 13px;
+  color: var(--mut);
+  line-height: 1.5;
+}
+
+/* JOBS */
+.alumni-card-full .jobs-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.alumni-card-full .job {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 14px;
+  align-items: center;
+  padding: 14px 12px 14px 0;
+  border-bottom: 1px solid var(--line);
+  position: relative;
+  transition:
+    padding 0.2s var(--ease),
+    background 0.15s;
+}
+
+.alumni-card-full .job::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--acc);
+  transform: scaleY(0);
+  transition: transform 0.2s var(--ease);
+}
+
+.alumni-card-full .job:hover {
+  padding-left: 16px;
+  background: color-mix(in srgb, var(--acc) 6%, transparent);
+}
+
+.alumni-card-full .job:hover::before {
+  transform: scaleY(1);
+}
+
+.alumni-card-full .job h4 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--hi);
+}
+
+.alumni-card-full .job h4 span {
+  font-weight: 400;
+  color: var(--mut);
+}
+
+.alumni-card-full .job .meta {
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--dim);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 4px;
+  letter-spacing: 0.04em;
+}
+
+.alumni-card-full .src {
+  border: 1px solid var(--line2);
+  padding: 1px 5px;
+  color: var(--hi);
+}
+
+.alumni-card-full .job-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.alumni-card-full .job.removing {
+  animation: fullOut 0.35s var(--snap) forwards;
+}
+
+@keyframes fullOut {
+  to {
+    opacity: 0;
+    transform: translateX(40px);
+    height: 0;
+    padding: 0;
+    border-width: 0;
+  }
+}
+
+.alumni-card-full .btn {
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 8px 12px;
+  cursor: pointer;
+  border: 2px solid var(--line2);
+  background: transparent;
+  color: var(--hi);
+  transition: all 0.1s var(--snap);
+  position: relative;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.alumni-card-full .btn.primary {
+  background: var(--hi);
+  color: var(--bg);
+  box-shadow: var(--shadow-hard);
+}
+
+.alumni-card-full .btn.primary:hover {
+  background: var(--acc);
+  border-color: var(--acc);
+  color: var(--on);
+  transform: translate(-2px, -2px);
+  box-shadow: var(--shadow-hover);
+}
+
+.alumni-card-full .btn.primary:active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+
+.alumni-card-full .btn.line:hover {
+  background: var(--bg);
+  border-color: var(--acc);
+  transform: translate(-2px, -2px);
+  box-shadow: var(--shadow-hard);
+}
+
+.alumni-card-full .btn.sm {
+  padding: 5px 9px;
+  font-size: 10px;
+}
+
+.alumni-card-full .btn.danger:hover {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
+}
+
+/* RIGHT PANE (Pass & Viz) */
+.alumni-card-full .pass,
+.alumni-card-full .viz {
+  border: 2px solid var(--line2);
+  background: var(--panel);
+  box-shadow: var(--shadow-hard);
+  transition:
+    transform 0.15s var(--snap),
+    box-shadow 0.15s;
+}
+
+.alumni-card-full .pass:hover,
+.alumni-card-full .viz:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: var(--shadow-hover);
+}
+
+.alumni-card-full .pass-h {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--hi);
+  color: var(--bg);
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.alumni-card-full .pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  padding: 2px 7px;
+  border: 1px solid currentColor;
+}
+
+.alumni-card-full .dot {
+  width: 6px;
+  height: 6px;
+  background: #22c55e;
+  border-radius: 50% !important;
+  animation: fullBlink 1.2s step-end infinite;
+}
+
+.alumni-card-full .pill.off .dot {
+  background: var(--dim);
+  animation: none;
+}
+
+@keyframes fullBlink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.alumni-card-full .pass-b {
+  padding: 16px;
+}
+
+.alumni-card-full .hint {
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 11px;
+  color: var(--dim);
+  margin: 10px 0 14px;
+}
+
+.alumni-card-full .btns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.alumni-card-full .kudos-count {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  background: var(--acc);
+  color: var(--on);
+  min-width: 20px;
+  transition: transform 0.2s var(--snap);
+}
+
+.alumni-card-full .kudos-count.pop {
+  transform: scale(1.5) rotate(-6deg);
+}
+
+.alumni-card-full .links a {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--mut);
+  text-decoration: none;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  transition: all 0.12s var(--snap);
+}
+
+.alumni-card-full .links a:hover {
+  color: var(--acc);
+  padding-left: 6px;
+}
+
+.alumni-card-full .links a span {
+  transition: transform 0.15s var(--snap);
+}
+
+.alumni-card-full .links a:hover span {
+  transform: translate(3px, -3px);
+}
+
+.alumni-card-full .switch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 10px;
+  text-transform: uppercase;
+  cursor: pointer;
+  user-select: none;
+  letter-spacing: 0.05em;
+  color: var(--dim);
+}
+
+.alumni-card-full .switch input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+.alumni-card-full .track {
+  width: 38px;
+  height: 20px;
+  border: 2px solid var(--line2);
+  background: var(--bg);
+  position: relative;
+  transition: background 0.2s;
+  flex: none;
+}
+
+.alumni-card-full .track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  background: var(--hi);
+  transition: transform 0.25s var(--ease);
+}
+
+.alumni-card-full .switch input:checked + .track {
+  background: var(--acc);
+}
+
+.alumni-card-full .switch input:checked + .track::after {
+  transform: translateX(18px);
+  background: var(--on);
+}
+
+/* CHART VIZ */
+.alumni-card-full .viz {
+  padding: 18px;
+}
+
+.alumni-card-full .viz-t {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--dim);
+  text-transform: uppercase;
+  margin-bottom: 14px;
+  letter-spacing: 0.05em;
+}
+
+.alumni-card-full .seg {
+  display: flex;
+  border: 2px solid var(--line2);
+}
+
+.alumni-card-full .seg button {
+  background: transparent;
+  border: none;
+  padding: 4px 10px;
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  cursor: pointer;
+  color: var(--hi);
+  transition:
+    background 0.12s,
+    color 0.12s;
+}
+
+.alumni-card-full .seg button + button {
+  border-left: 2px solid var(--line2);
+}
+
+.alumni-card-full .seg button.on {
+  background: var(--hi);
+  color: var(--bg);
+}
+
+.alumni-card-full .seg button:not(.on):hover {
+  background: var(--acc);
+  color: var(--on);
+}
+
+.alumni-card-full .viz-big {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.alumni-card-full .viz-big b {
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 2.4rem;
+  line-height: 1;
+  color: var(--acc);
+  font-variant-numeric: tabular-nums;
+}
+
+.alumni-card-full .delta {
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--hi);
+  color: var(--bg);
+  padding: 3px 7px;
+  text-transform: uppercase;
+}
+
+.alumni-card-full .viz-cap {
+  display: block;
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--dim);
+  margin: 6px 0 10px;
+}
+
+.alumni-card-full .chart {
+  position: relative;
+}
+
+.alumni-card-full .chart svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
+  touch-action: none;
+}
+
+.alumni-card-full .gridl {
+  stroke: var(--line);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.alumni-card-full .ylab,
+.alumni-card-full .xlab {
+  font: 400 8px var(--mono, 'JetBrains Mono', monospace);
+  fill: var(--dim);
+}
+
+.alumni-card-full .xlab.last {
+  fill: var(--acc);
+  font-weight: 700;
+}
+
+.alumni-card-full .cross {
+  stroke: var(--hi);
+  stroke-width: 1;
+  stroke-dasharray: 2 2;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.alumni-card-full .cross.on {
+  opacity: 1;
+}
+
+.alumni-card-full .area {
+  fill: url(#ag-modal);
+  opacity: 0;
+}
+
+.alumni-card-full.go .area {
+  animation: fullWipe 1.3s 0.9s var(--ease) forwards;
+}
+
+@keyframes fullWipe {
+  from {
+    opacity: 1;
+    clip-path: inset(0 100% 0 0);
+  }
+
+  to {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+.alumni-card-full .lineP {
+  fill: none;
+  stroke: var(--acc);
+  stroke-width: 3;
+  stroke-linejoin: miter;
+  stroke-linecap: square;
+  stroke-dasharray: var(--len);
+  stroke-dashoffset: var(--len);
+}
+
+.alumni-card-full.go .lineP {
+  animation: fullDash 1.3s 0.9s var(--ease) forwards;
+}
+
+@keyframes fullDash {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.alumni-card-full .tw .lineP {
+  animation: none !important;
+  stroke-dasharray: none;
+  stroke-dashoffset: 0;
+}
+
+.alumni-card-full .tw .area {
+  animation: none !important;
+  opacity: 1;
+  clip-path: none;
+}
+
+.alumni-card-full .pt {
+  fill: var(--panel);
+  stroke: var(--hi);
+  stroke-width: 2;
+  cursor: crosshair;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  transition:
+    transform 0.12s var(--snap),
+    fill 0.12s;
+}
+
+.alumni-card-full.go .pt {
+  animation: fullFade1 0.3s calc(1s + var(--n) * 240ms) forwards;
+}
+
+@keyframes fullFade1 {
+  to {
+    opacity: 1;
+  }
+}
+
+.alumni-card-full .pt.peak,
+.alumni-card-full .pt.hot {
+  fill: var(--acc);
+}
+
+.alumni-card-full .pt.hot {
+  transform: scale(1.6);
+}
+
+.alumni-card-full .ring {
+  fill: none;
+  stroke: var(--acc);
+  stroke-width: 2;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.alumni-card-full.go .ring {
+  animation: fullRingp 1.8s 2.3s var(--snap) infinite;
+}
+
+@keyframes fullRingp {
+  from {
+    opacity: 0.9;
+    transform: scale(0.7);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(2.6);
+  }
+}
+
+.alumni-card-full .peakl {
+  font: 700 8px var(--mono, 'JetBrains Mono', monospace);
+  fill: var(--acc);
+  opacity: 0;
+  letter-spacing: 0.06em;
+}
+
+.alumni-card-full.go .peakl {
+  animation: fullFade1 0.4s 2.1s forwards;
+}
+
+.alumni-card-full .tip {
+  position: absolute;
+  pointer-events: none;
+  background: var(--hi);
+  color: var(--bg);
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 7px;
+  white-space: nowrap;
+  transform: translate(-50%, -150%);
+  opacity: 0;
+  transition: opacity 0.1s;
+  z-index: 5;
+}
+
+.alumni-card-full .tip.on {
+  opacity: 1;
+}
+
+/* RESPONSIVE */
+@media (max-width: 860px) {
+  .alumni-card-full .body {
+    grid-template-columns: 1fr;
+  }
+
+  .alumni-card-full .left {
+    border-right: none;
+    border-bottom: 2px solid var(--line2);
+  }
+
+  .alumni-card-full .stats {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .alumni-card-full .stat:nth-child(2) {
+    border-right: none;
+  }
+
+  .alumni-card-full .stat:nth-child(-n + 2) {
+    border-bottom: 1px solid var(--line);
+  }
+
+  .alumni-card-full .watermark {
+    font-size: 230px;
+    top: -12px;
+  }
+
+  .alumni-card-full .hero {
+    padding: 28px 22px;
+  }
+
+  .alumni-card-full .panels {
+    padding: 24px 20px;
+  }
+}
+
+@media (max-width: 520px) {
+  .alumni-card-full .timeline {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .alumni-card-full .timeline::before,
+  .alumni-card-full .timeline::after {
+    display: none;
+  }
+
+  .alumni-card-full .job {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .alumni-mini *,
+  .alumni-mini *::before,
+  .alumni-mini *::after,
+  .alumni-card-full *,
+  .alumni-card-full *::before,
+  .alumni-card-full *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
