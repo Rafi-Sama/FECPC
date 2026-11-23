@@ -172,7 +172,7 @@ export const pickDraft = (from: ClubEvent): Draft =>
   Object.fromEntries(Object.keys(BLANK).map((k) => [k, from[k as keyof ClubEvent]])) as Draft;
 
 /** The sign-up window's first problem, if any. Club-local `YYYY-MM-DDTHH:MM` times compare as text. */
-function windowProblem(v: Draft): string | null {
+export function windowProblem(v: Draft): string | null {
   const { startsAt, regOpens, regCloses } = v;
   if (regOpens && regCloses && regOpens >= regCloses) return 'Sign-up must open before it closes.';
   if (regOpens && startsAt && regOpens >= startsAt)
@@ -433,10 +433,12 @@ export function EventSections({
   event,
   saved,
   readOnly,
+  includeStatus = false,
 }: {
   event: ClubEvent;
   saved: () => void;
   readOnly?: boolean;
+  includeStatus?: boolean;
 }) {
   const [open, setOpen] = useState<number | null>(null);
   const start = useMemo(() => pickDraft(event), [event]);
@@ -473,9 +475,11 @@ export function EventSections({
     <div className="ev-form">
       {/* Title, type, date, place, description and banner are edited in place at the top of the page. */}
       {card(SIGNUP_SECTION)}
-      <aside className="ev-form-side" aria-label="Publishing">
-        {card(STATUS_SECTION)}
-      </aside>
+      {includeStatus && (
+        <aside className="ev-form-side" aria-label="Publishing">
+          {card(STATUS_SECTION)}
+        </aside>
+      )}
     </div>
   );
 }

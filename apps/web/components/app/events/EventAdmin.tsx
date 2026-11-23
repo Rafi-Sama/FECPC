@@ -3,18 +3,18 @@ import { SaveForm } from '../SaveBar';
 import { Fragment, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Tabs } from '../Shell';
 import { useStore } from '../Store';
-import { EventSections, FieldsEditor, Method, cleanFields } from './EventForm';
+import { cleanFields, FieldsEditor } from './EventForm';
 import { downloadCsv, renderCertificate } from '@/lib/events';
 import { useConfirm, usePrompt } from '../shared/PromptDialog';
-import { CertPreview } from './CertPreview';
 import { MailEditor, MailStatus } from '../shared/MailEditor';
+import { EventModal } from './EventModal';
 import {
   CERT_VARS,
   certHeadline,
   DEFAULT_CERT,
   DEFAULT_MAIL,
+  EVENT_STATUS_LABEL,
   MAIL_SAMPLE,
   renderMail,
   fillTemplate,
@@ -22,32 +22,22 @@ import {
   type EventDetail,
   type EventEntry,
   type EventRole,
+  type EventStatus,
 } from '@fecpc/contracts';
+import { liveStatus } from '@/lib/events';
 
-const TABS = ['Responses', 'Details', 'Roles', 'Email', 'Feedback', 'Certificates'] as const;
-
-/** Everything the President and Secretary do with one event. The API checks `event.publish` on each call. */
+/** Command sidebar for event organizers (Status, Responses, Roles, Certificates, Email, Feedback, Settings) */
 export function EventAdmin({ e, reload }: { e: EventDetail; reload: () => void }) {
-  const [tab, setTab] = useState<(typeof TABS)[number]>('Responses');
-  return (
-    <section className="panel stack ev-card ev-org">
-      <b>Organise</b>
-      <Tabs tabs={TABS} value={tab} onChange={setTab} />
-      {tab === 'Responses' && <Responses e={e} reload={reload} />}
-      {tab === 'Details' && <Details e={e} reload={reload} />}
-      {tab === 'Roles' && <Roles e={e} reload={reload} />}
-      {tab === 'Email' && <Email e={e} reload={reload} />}
-      {tab === 'Feedback' && <Feedback e={e} />}
-      {tab === 'Certificates' && <Certificates e={e} reload={reload} />}
-    </section>
-  );
-}
-
-function Details({ e, reload }: { e: EventDetail; reload: () => void }) {
   const { act } = useStore();
   const router = useRouter();
   const confirmIt = useConfirm();
-  const final = e.status === 'completed';
+  const [editStatus, setEditStatus] = useState(false);
+  const [certModalOpen, setCertModalOpen] = useState(false);
+  const [certKind, setCertKind] = useState('participant');
+  const [modal, setModal] = useState<'responses' | 'roles' | 'certs' | 'email' | 'feedback' | null>(
+    null,
+  );
+
   const del = async () => {
     if (
       !(await confirmIt(
@@ -61,26 +51,308 @@ function Details({ e, reload }: { e: EventDetail; reload: () => void }) {
     if (await act('eventDelete', { id: e.id })) router.push('/app/events');
   };
 
+  const statusColor =
+    e.status === 'ongoing'
+      ? '#1a7f37'
+      : e.status === 'open'
+        ? 'var(--acc)'
+        : e.status === 'completed'
+          ? 'var(--ink)'
+          : e.status === 'cancelled'
+            ? 'var(--bad)'
+            : 'var(--dim)';
+
+  const kinds: [string, string][] = [
+    ['participant', 'Participants'],
+    ['winner1', '1st place'],
+    ['winner2', '2nd place'],
+    ['winner3', '3rd place'],
+    ...e.roles.map((r): [string, string] => [`role:${r.id}`, r.title]),
+  ];
+
+  const roleTitle = certKind.startsWith('role:')
+    ? (e.roles.find((r) => `role:${r.id}` === certKind)?.title ?? '')
+    : SAMPLE.role!;
+  const certPlace = certKind.startsWith('winner')
+    ? ['1st', '2nd', '3rd'][+certKind.slice(6) - 1]!
+    : '';
+
+  const totalEntries = e.admin!.entries.length;
+  const approvedCount = e.admin!.entries.filter((x) => x.status === 'approved').length;
+  const pendingCount = e.admin!.entries.filter((x) => x.status === 'pending').length;
+  const placedCount = e.admin!.entries.filter((x) => x.place !== null).length;
+  const rolesCount = e.roles.length;
+  const certsIssued = Object.values(e.admin!.issued).reduce((a, b) => a + b, 0);
+  const fb = e.admin!.feedback;
+  const avgFb = fb.length ? (fb.reduce((s, f) => s + f.rating, 0) / fb.length).toFixed(1) : null;
+  const hasCustomMail = !!e.admin!.mail;
+
   return (
-    <div className="stack">
-      {final && (
-        <p className="body">
-          This event is completed, so its details are final. Feedback and certificates stay
-          available in their tabs.
-        </p>
-      )}
-      <EventSections event={e} saved={reload} readOnly={final} />
-      <div className="row">
-        {(final || e.status === 'cancelled') && (
-          <Link className="btn sm" href={`/app/events/new?copy=${e.id}`}>
-            Run again as a new event
-          </Link>
-        )}
-        <button className="btn sm line danger" type="button" onClick={del}>
-          Delete event
+    <>
+      {/* Panel: Event Status */}
+      <div className="sidebar-panel">
+        <div className="sidebar-header">
+          <span>Status</span>
+          <button type="button" className="btn xs" onClick={() => setEditStatus(!editStatus)}>
+            {editStatus ? 'Cancel' : 'Edit'}
+          </button>
+        </div>
+        <div className="sidebar-content">
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '1rem',
+            }}
+          >
+            <span className="mono" style={{ fontSize: 11, color: 'var(--dim)' }}>
+              CURRENT STATE
+            </span>
+            <span
+              className="tag dark"
+              style={{ background: statusColor, borderColor: statusColor, color: 'white' }}
+            >
+              {(liveStatus(e) ?? EVENT_STATUS_LABEL[e.status]).toUpperCase()}
+            </span>
+          </div>
+
+          {editStatus ? (
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label>Change Status</label>
+              <select
+                className="form-control"
+                value={e.status}
+                onChange={async (x) => {
+                  const s = x.target.value as EventStatus;
+                  if (await act('eventStatus', { id: e.id, status: s })) {
+                    setEditStatus(false);
+                    reload();
+                  }
+                }}
+              >
+                {(
+                  [
+                    'draft',
+                    'published',
+                    'open',
+                    'closed',
+                    'ongoing',
+                    'completed',
+                    'cancelled',
+                  ] as const
+                ).map((st) => (
+                  <option key={st} value={st}>
+                    {EVENT_STATUS_LABEL[st]}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div className="mono" style={{ fontSize: 12, color: 'var(--mut)' }}>
+              {e.status === 'open'
+                ? 'Sign-up is currently open.'
+                : e.status === 'completed'
+                  ? 'Event is completed.'
+                  : e.status === 'ongoing'
+                    ? 'Event is ongoing.'
+                    : 'Sign-up is currently closed.'}
+              {e.seats !== null && ` · ${Math.max(0, e.seats - e.taken)} of ${e.seats} seats left`}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Launchpad Cards: Compact overview & modal openers */}
+      <div className="stack" style={{ gap: 10 }}>
+        {/* Responses & Awards Card */}
+        <button
+          type="button"
+          className="interactive-launchpad"
+          onClick={() => setModal('responses')}
+        >
+          <div
+            className="sidebar-header"
+            style={{ borderBottom: '1px solid var(--line)', padding: '0.65rem 1rem' }}
+          >
+            <span>Responses &amp; Awards</span>
+            <span className="tag xs primary">Open ↗</span>
+          </div>
+          <div className="sidebar-content" style={{ padding: '0.85rem 1rem' }}>
+            <div className="mono" style={{ fontSize: 14, fontWeight: 700 }}>
+              {totalEntries} registered
+            </div>
+            <div className="mono text-dim" style={{ fontSize: 11, marginTop: 4 }}>
+              {approvedCount} approved · {pendingCount} pending{' '}
+              {placedCount > 0 && `· ${placedCount} placed`}
+            </div>
+          </div>
+        </button>
+
+        {/* Roles Card */}
+        <button type="button" className="interactive-launchpad" onClick={() => setModal('roles')}>
+          <div
+            className="sidebar-header"
+            style={{ borderBottom: '1px solid var(--line)', padding: '0.65rem 1rem' }}
+          >
+            <span>Event Roles</span>
+            <span className="tag xs">Open ↗</span>
+          </div>
+          <div className="sidebar-content" style={{ padding: '0.85rem 1rem' }}>
+            <div className="mono" style={{ fontSize: 14, fontWeight: 700 }}>
+              {rolesCount} {rolesCount === 1 ? 'role' : 'roles'} configured
+            </div>
+            <div className="mono text-dim" style={{ fontSize: 11, marginTop: 4 }}>
+              {rolesCount > 0
+                ? e.roles.map((r) => r.title).join(', ')
+                : 'Add volunteer or TA roles'}
+            </div>
+          </div>
+        </button>
+
+        {/* Certificates Studio Card */}
+        <button type="button" className="interactive-launchpad" onClick={() => setModal('certs')}>
+          <div
+            className="sidebar-header"
+            style={{ borderBottom: '1px solid var(--line)', padding: '0.65rem 1rem' }}
+          >
+            <span>Certificates Studio</span>
+            <span className="tag xs">Open ↗</span>
+          </div>
+          <div className="sidebar-content" style={{ padding: '0.85rem 1rem' }}>
+            <div className="mono" style={{ fontSize: 14, fontWeight: 700 }}>
+              {e.certs ? 'Downloads Active' : 'Downloads Off'}
+            </div>
+            <div className="mono text-dim" style={{ fontSize: 11, marginTop: 4 }}>
+              {certsIssued > 0
+                ? `${certsIssued} certificates issued`
+                : 'Template editor & batch generation'}
+            </div>
+          </div>
+        </button>
+
+        {/* Attendee Feedback Card */}
+        <button
+          type="button"
+          className="interactive-launchpad"
+          onClick={() => setModal('feedback')}
+        >
+          <div
+            className="sidebar-header"
+            style={{ borderBottom: '1px solid var(--line)', padding: '0.65rem 1rem' }}
+          >
+            <span>Attendee Feedback</span>
+            <span className="tag xs">Open ↗</span>
+          </div>
+          <div className="sidebar-content" style={{ padding: '0.85rem 1rem' }}>
+            <div className="mono" style={{ fontSize: 14, fontWeight: 700 }}>
+              {avgFb ? `★ ${avgFb} / 5` : 'No reviews yet'}
+            </div>
+            <div className="mono text-dim" style={{ fontSize: 11, marginTop: 4 }}>
+              {fb.length} {fb.length === 1 ? 'response' : 'responses'}
+            </div>
+          </div>
+        </button>
+
+        {/* Approval Email Card */}
+        <button type="button" className="interactive-launchpad" onClick={() => setModal('email')}>
+          <div
+            className="sidebar-header"
+            style={{ borderBottom: '1px solid var(--line)', padding: '0.65rem 1rem' }}
+          >
+            <span>Approval Email</span>
+            <span className="tag xs">Open ↗</span>
+          </div>
+          <div className="sidebar-content" style={{ padding: '0.85rem 1rem' }}>
+            <div className="mono" style={{ fontSize: 14, fontWeight: 700 }}>
+              {hasCustomMail ? 'Custom design' : 'Built-in design'}
+            </div>
+            <div className="mono text-dim" style={{ fontSize: 11, marginTop: 4 }}>
+              Template preview &amp; custom styling
+            </div>
+          </div>
         </button>
       </div>
-    </div>
+
+      {/* Run again button for past events */}
+      {(e.status === 'completed' || e.status === 'cancelled') && (
+        <div style={{ marginTop: '0.75rem' }}>
+          <Link
+            className="btn sm line"
+            style={{ width: '100%', textAlign: 'center' }}
+            href={`/app/events/new?copy=${e.id}`}
+          >
+            Run again as a new event
+          </Link>
+        </div>
+      )}
+
+      {/* Danger Zone */}
+      <div style={{ marginTop: '0.75rem', textAlign: 'center' }}>
+        <button
+          type="button"
+          className="btn danger"
+          style={{ width: '100%', fontSize: 12, padding: '0.5rem' }}
+          onClick={del}
+        >
+          Delete Event
+        </button>
+      </div>
+
+      {/* MODALS */}
+      {modal === 'responses' && (
+        <EventModal
+          wide
+          title={`Responses & Place Awards (${totalEntries})`}
+          onClose={() => setModal(null)}
+        >
+          <Responses e={e} reload={reload} />
+        </EventModal>
+      )}
+
+      {modal === 'roles' && (
+        <EventModal title={`Event Roles (${rolesCount})`} onClose={() => setModal(null)}>
+          <Roles e={e} reload={reload} />
+        </EventModal>
+      )}
+
+      {modal === 'certs' && (
+        <EventModal wide title="Certificates Studio" onClose={() => setModal(null)}>
+          <Certificates
+            e={e}
+            reload={reload}
+            kind={certKind}
+            setKind={setCertKind}
+            kinds={kinds}
+            onOpenPreview={() => setCertModalOpen(true)}
+          />
+        </EventModal>
+      )}
+
+      {modal === 'feedback' && (
+        <EventModal title={`Attendee Feedback (${fb.length})`} onClose={() => setModal(null)}>
+          <Feedback e={e} />
+        </EventModal>
+      )}
+
+      {modal === 'email' && (
+        <EventModal wide title={`Approval Email · ${e.title}`} onClose={() => setModal(null)}>
+          <Email e={e} reload={reload} />
+        </EventModal>
+      )}
+
+      {/* CERTIFICATE PREVIEW MODAL */}
+      {certModalOpen && (
+        <CertificateModal
+          e={e}
+          reload={reload}
+          kind={certKind}
+          roleTitle={roleTitle}
+          certPlace={certPlace}
+          onClose={() => setCertModalOpen(false)}
+        />
+      )}
+    </>
   );
 }
 
@@ -107,6 +379,12 @@ function RoleForm({
   return (
     <SaveForm
       className="stack"
+      style={{
+        padding: '12px',
+        background: 'var(--bg)',
+        border: '1px solid var(--line)',
+        marginTop: 8,
+      }}
       label={role ? `Unsaved changes to “${role.title}”` : 'Unsaved new role'}
       saveLabel={role ? 'Save role' : 'Add role'}
       extraDirty={JSON.stringify([v, fields]) !== start}
@@ -124,29 +402,60 @@ function RoleForm({
         return ok;
       }}
     >
-      <div className="row">
-        <label className="field grow">
-          <span className="label">Role</span>
-          <input
-            className="input"
-            required
-            maxLength={80}
-            placeholder="Volunteer, Teaching Assistant…"
-            value={v.title}
-            onChange={(x) => set({ title: x.target.value })}
-          />
-        </label>
-        <label className="field grow">
-          <span className="label">What they do</span>
-          <input
-            className="input"
-            maxLength={1000}
-            value={v.about}
-            onChange={(x) => set({ about: x.target.value })}
-          />
-        </label>
+      <div className="form-group">
+        <label>Role</label>
+        <input
+          className="form-control"
+          required
+          maxLength={80}
+          placeholder="Volunteer, Teaching Assistant…"
+          value={v.title}
+          onChange={(x) => set({ title: x.target.value })}
+        />
       </div>
-      <Method v={v} set={set} />
+      <div className="form-group">
+        <label>What they do</label>
+        <input
+          className="form-control"
+          maxLength={1000}
+          placeholder="Brief description"
+          value={v.about}
+          onChange={(x) => set({ about: x.target.value })}
+        />
+      </div>
+      <div className="form-group">
+        <label>Sign up method</label>
+        <select
+          className="form-control"
+          value={v.mode}
+          onChange={(x) => set({ mode: x.target.value as any })}
+        >
+          <option value="platform">Here, on this site</option>
+          <option value="form">Google Forms</option>
+        </select>
+      </div>
+      {v.mode === 'form' && (
+        <div className="form-group">
+          <label>Google Forms URL</label>
+          <input
+            className="form-control"
+            placeholder="https://forms.gle/..."
+            value={v.formUrl ?? ''}
+            onChange={(x) => set({ formUrl: x.target.value })}
+          />
+        </div>
+      )}
+      <div className="form-group">
+        <label>Who gets in?</label>
+        <select
+          className="form-control"
+          value={v.approval}
+          onChange={(x) => set({ approval: x.target.value as any })}
+        >
+          <option value="manual">Only those I approve</option>
+          <option value="auto">Everyone automatically</option>
+        </select>
+      </div>
       {v.mode === 'platform' && <FieldsEditor value={fields} onChange={setFields} />}
     </SaveForm>
   );
@@ -161,28 +470,33 @@ function Roles({ e, reload }: { e: EventDetail; reload: () => void }) {
     reload();
   };
   return (
-    <div className="stack">
+    <div className="stack" style={{ gap: 12 }}>
       {e.roles.map((r) => (
-        <div key={r.id} className="stack">
+        <div
+          key={r.id}
+          className="stack"
+          style={{ borderBottom: '1px solid var(--line)', paddingBottom: 10 }}
+        >
           <div className="row between">
-            <span>
-              <b>{r.title}</b>{' '}
-              <span className="label">
+            <div>
+              <b style={{ fontSize: 14 }}>{r.title}</b>
+              <br />
+              <span className="mono text-dim" style={{ fontSize: 11 }}>
                 {r.mode === 'form'
                   ? 'Google Forms'
                   : `${r.approval} approval · ${r.counts?.approved ?? 0} approved · ${r.counts?.pending ?? 0} pending`}
               </span>
-            </span>
-            <span className="row">
+            </div>
+            <div className="row" style={{ gap: 4 }}>
               <button
                 className="btn xs line"
                 type="button"
                 onClick={() => setOpen(open === r.id ? null : r.id)}
               >
-                Edit
+                {open === r.id ? 'Close' : 'Edit'}
               </button>
               <button
-                className="btn xs line"
+                className="btn xs line danger"
                 type="button"
                 onClick={async () =>
                   (await confirmIt(
@@ -197,7 +511,7 @@ function Roles({ e, reload }: { e: EventDetail; reload: () => void }) {
               >
                 Remove
               </button>
-            </span>
+            </div>
           </div>
           {open === r.id && <RoleForm eventId={e.id} role={r} done={done} />}
         </div>
@@ -206,12 +520,12 @@ function Roles({ e, reload }: { e: EventDetail; reload: () => void }) {
         <RoleForm eventId={e.id} done={done} />
       ) : (
         <button
-          className="btn sm line"
+          className="btn outline xs"
           type="button"
-          style={{ alignSelf: 'flex-start' }}
+          style={{ width: '100%', marginTop: '0.25rem' }}
           onClick={() => setOpen('new')}
         >
-          Add a role
+          + Add a role
         </button>
       )}
     </div>
@@ -247,7 +561,6 @@ function Responses({ e, reload }: { e: EventDetail; reload: () => void }) {
       ),
     [entries, who, status, query],
   );
-  const count = (pred: (x: EventEntry) => boolean) => entries.filter(pred).length;
   const decide = async (ids: number[], s: string) => {
     let reason: string | null = null;
     if (s === 'rejected') {
@@ -268,9 +581,9 @@ function Responses({ e, reload }: { e: EventDetail; reload: () => void }) {
   const questions = [...new Set(rows.flatMap((x) => Object.keys(x.answers)))];
 
   return (
-    <div className="stack">
+    <div className="stack" style={{ gap: 12 }}>
       {e.mode === 'form' && (
-        <p className="label">
+        <p className="mono text-dim" style={{ fontSize: 11 }}>
           Participants register on Google Forms; their answers are in the form, not here.{' '}
           {e.formUrl && (
             <a className="link" href={e.formUrl} target="_blank" rel="noopener noreferrer">
@@ -279,78 +592,20 @@ function Responses({ e, reload }: { e: EventDetail; reload: () => void }) {
           )}
         </p>
       )}
-      <div className="row">
-        {[
-          ...(e.mode === 'platform'
-            ? [{ t: 'Participants', f: (x: EventEntry) => x.roleId === null }]
-            : []),
-          ...e.roles
-            .filter((r) => r.mode === 'platform')
-            .map((r) => ({ t: r.title, f: (x: EventEntry) => x.roleId === r.id })),
-        ].map(({ t, f }) => (
-          <span key={t} className="chip">
-            {t}: {count((x) => f(x) && x.status === 'approved')} approved ·{' '}
-            {count((x) => f(x) && x.status === 'pending')} pending ·{' '}
-            {count((x) => f(x) && x.status === 'rejected')} declined
-          </span>
-        ))}
-      </div>
-      <div className="row">
+
+      {/* Search Toolbar */}
+      <div style={{ display: 'flex', gap: '0.5rem' }}>
         <input
           type="search"
-          className="input grow"
-          aria-label="Search responses"
-          placeholder="Search name, email, phone, answers"
+          className="form-control"
+          placeholder="Search name, email, phone..."
           value={q}
           onChange={(x) => setQ(x.target.value)}
         />
-        <select
-          className="input"
-          aria-label="Who"
-          value={who}
-          onChange={(x) => setWho(x.target.value)}
-          style={{ width: 'auto' }}
-        >
-          <option value="all">Everyone</option>
-          <option value="participants">Participants</option>
-          {e.roles.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.title}
-            </option>
-          ))}
-        </select>
-        <select
-          className="input"
-          aria-label="Status"
-          value={status}
-          onChange={(x) => setStatus(x.target.value)}
-          style={{ width: 'auto' }}
-        >
-          {['all', 'pending', 'approved', 'rejected', 'cancelled'].map((s) => (
-            <option key={s}>{s}</option>
-          ))}
-        </select>
-      </div>
-      <div className="row">
         <button
-          className="btn xs"
+          className="btn solid xs"
           type="button"
-          disabled={!picked.length}
-          onClick={() => decide(picked, 'approved')}
-        >
-          Approve {picked.length || ''}
-        </button>
-        <button
-          className="btn xs line"
-          type="button"
-          disabled={!picked.length}
-          onClick={() => decide(picked, 'rejected')}
-        >
-          Decline {picked.length || ''}
-        </button>
-        <button
-          className="btn xs line"
-          type="button"
+          style={{ whiteSpace: 'nowrap' }}
           disabled={!rows.length}
           onClick={() =>
             downloadCsv(`${e.id}-responses.csv`, [
@@ -369,14 +624,60 @@ function Responses({ e, reload }: { e: EventDetail; reload: () => void }) {
             ])
           }
         >
-          Export CSV ({rows.length})
+          Export
         </button>
       </div>
+
+      {/* Filters row */}
+      <div className="row" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
+        <select
+          className="form-control"
+          aria-label="Who"
+          value={who}
+          onChange={(x) => setWho(x.target.value)}
+          style={{ width: 'auto', flex: '1 1 110px' }}
+        >
+          <option value="all">Everyone</option>
+          <option value="participants">Participants</option>
+          {e.roles.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.title}
+            </option>
+          ))}
+        </select>
+        <select
+          className="form-control"
+          aria-label="Status"
+          value={status}
+          onChange={(x) => setStatus(x.target.value)}
+          style={{ width: 'auto', flex: '1 1 110px' }}
+        >
+          {['all', 'pending', 'approved', 'rejected', 'cancelled'].map((s) => (
+            <option key={s}>{s}</option>
+          ))}
+        </select>
+        {picked.length > 0 && (
+          <div className="row" style={{ gap: 4 }}>
+            <button className="btn xs acc" type="button" onClick={() => decide(picked, 'approved')}>
+              Approve ({picked.length})
+            </button>
+            <button
+              className="btn xs line danger"
+              type="button"
+              onClick={() => decide(picked, 'rejected')}
+            >
+              Decline ({picked.length})
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Mini Table */}
       <div style={{ overflowX: 'auto' }}>
-        <table className="tbl">
+        <table className="mini-table">
           <thead>
             <tr>
-              <th>
+              <th style={{ width: 28 }}>
                 <input
                   type="checkbox"
                   aria-label="Select all"
@@ -384,12 +685,9 @@ function Responses({ e, reload }: { e: EventDetail; reload: () => void }) {
                   onChange={(x) => setPicked(x.target.checked ? rows.map((r) => r.id) : [])}
                 />
               </th>
-              <th>Name</th>
-              <th>Kind</th>
-              <th>Phone</th>
-              <th>Status</th>
-              <th>Place</th>
-              <th />
+              <th>NAME</th>
+              <th>STATUS</th>
+              <th style={{ textAlign: 'right' }}>ACTIONS</th>
             </tr>
           </thead>
           <tbody>
@@ -409,54 +707,50 @@ function Responses({ e, reload }: { e: EventDetail; reload: () => void }) {
                     />
                   </td>
                   <td>
-                    {x.name}
-                    <br />
-                    <span className="label">
-                      {x.email} · batch {x.batch} · signed up{' '}
-                      {new Date(x.at).toLocaleDateString('en-GB', {
-                        day: 'numeric',
-                        month: 'short',
-                      })}
+                    <strong style={{ display: 'block', fontSize: 13 }}>{x.name}</strong>
+                    <span className="mono text-dim" style={{ fontSize: 11 }}>
+                      {roleName(x)} · {x.batch ? `b${x.batch} · ` : ''}
+                      {x.email}
                     </span>
                   </td>
-                  <td>{roleName(x)}</td>
-                  <td className="mono">{x.phone}</td>
                   <td>
-                    {x.status === 'rejected' ? 'declined' : x.status}
-                    {x.status === 'rejected' && x.reason && (
-                      <>
-                        <br />
-                        <span className="label">{x.reason}</span>
-                      </>
-                    )}
-                  </td>
-                  <td>
-                    {x.roleId === null && x.status === 'approved' ? (
-                      <select
-                        className="input ev-place"
-                        aria-label={`Place for ${x.name}`}
-                        value={x.place ?? ''}
-                        onChange={async (c) =>
-                          (await act('entryPlace', {
-                            id: x.id,
-                            place: c.target.value ? +c.target.value : null,
-                          })) && reload()
-                        }
+                    <div className="row" style={{ gap: 4, alignItems: 'center' }}>
+                      <span
+                        className={`tag xs ${x.status === 'approved' ? 'primary' : x.status === 'rejected' ? 'danger' : 'dark'}`}
+                        style={{ fontSize: 10, padding: '2px 5px' }}
                       >
-                        <option value="">None</option>
-                        <option value="1">1st</option>
-                        <option value="2">2nd</option>
-                        <option value="3">3rd</option>
-                      </select>
-                    ) : (
-                      PLACES[x.place ?? 0]
-                    )}
+                        {x.status === 'rejected' ? 'declined' : x.status}
+                      </span>
+                      {x.roleId === null && x.status === 'approved' && (
+                        <select
+                          className="form-control"
+                          aria-label={`Place for ${x.name}`}
+                          value={x.place ?? ''}
+                          style={{
+                            width: 'auto',
+                            padding: '1px 4px',
+                            fontSize: 10,
+                            height: 22,
+                            marginLeft: 4,
+                          }}
+                          onChange={async (c) => {
+                            const val = c.target.value ? +c.target.value : null;
+                            if (await act('entryPlace', { id: x.id, place: val })) reload();
+                          }}
+                        >
+                          <option value="">No place</option>
+                          <option value="1">1st place</option>
+                          <option value="2">2nd place</option>
+                          <option value="3">3rd place</option>
+                        </select>
+                      )}
+                    </div>
                   </td>
                   <td>
-                    <span className="row">
+                    <div className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>
                       {x.status !== 'approved' && x.status !== 'cancelled' && (
                         <button
-                          className="btn xs"
+                          className="btn xs solid"
                           type="button"
                           onClick={() => decide([x.id], 'approved')}
                         >
@@ -472,31 +766,28 @@ function Responses({ e, reload }: { e: EventDetail; reload: () => void }) {
                           Decline
                         </button>
                       )}
-                      {/* Only when they answered the extra questions; name and phone are already in the row. */}
                       {Object.keys(x.answers).length > 0 && (
                         <button
                           className="btn xs line"
                           type="button"
-                          aria-expanded={shown === x.id}
                           onClick={() => setShown(shown === x.id ? null : x.id)}
                         >
-                          {shown === x.id
-                            ? 'Hide answers'
-                            : `Answers (${Object.keys(x.answers).length})`}
+                          {shown === x.id ? 'Hide' : `Ans (${Object.keys(x.answers).length})`}
                         </button>
                       )}
-                    </span>
+                    </div>
                   </td>
                 </tr>
                 {shown === x.id && (
                   <tr>
-                    <td />
-                    <td colSpan={6}>
-                      <dl className="stack">
+                    <td colSpan={4} style={{ background: 'var(--bg)', padding: '8px 12px' }}>
+                      <dl className="stack" style={{ gap: 4, margin: 0 }}>
                         {Object.entries(x.answers).map(([k, v]) => (
-                          <div key={k}>
-                            <dt className="label">{k}</dt>
-                            <dd>{v}</dd>
+                          <div key={k} style={{ fontSize: 12 }}>
+                            <dt className="mono text-dim" style={{ fontSize: 11 }}>
+                              {k}:
+                            </dt>
+                            <dd style={{ marginLeft: 8 }}>{v}</dd>
                           </div>
                         ))}
                       </dl>
@@ -505,9 +796,18 @@ function Responses({ e, reload }: { e: EventDetail; reload: () => void }) {
                 )}
               </Fragment>
             ))}
+            {!rows.length && (
+              <tr>
+                <td
+                  colSpan={4}
+                  style={{ textAlign: 'center', color: 'var(--dim)', padding: '1rem' }}
+                >
+                  No responses match.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
-        {!rows.length && <p className="empty">No responses match.</p>}
       </div>
     </div>
   );
@@ -560,145 +860,291 @@ const SAMPLE: Record<string, string> = {
   code: 'FEC-0A1B2C3D4E',
 };
 
-function Certificates({ e, reload }: { e: EventDetail; reload: () => void }) {
+function CertificateModal({
+  e,
+  reload,
+  kind,
+  roleTitle,
+  certPlace,
+  onClose,
+}: {
+  e: EventDetail;
+  reload: () => void;
+  kind: string;
+  roleTitle: string;
+  certPlace: string;
+  onClose: () => void;
+}) {
   const { act } = useStore();
-  const confirmIt = useConfirm();
-  const { templates, issued } = e.admin!;
-  const kinds: [string, string][] = [
-    ['participant', 'Participants'],
-    ['winner1', '1st place'],
-    ['winner2', '2nd place'],
-    ['winner3', '3rd place'],
-    ...e.roles.map((r): [string, string] => [`role:${r.id}`, r.title]),
-  ];
-  const [kind, setKind] = useState('participant');
+  const { templates } = e.admin!;
   const saved = templates[kind] ?? '';
-  // Without a saved template, a kind uses the built-in design; editing starts from it.
   const [html, setHtml] = useState(saved || DEFAULT_CERT);
-  const [csv, setCsv] = useState<string[][] | null>(null);
-  const [map, setMap] = useState<string[]>([]);
-  const done = e.status === 'completed';
-  const roleTitle = kind.startsWith('role:')
-    ? (e.roles.find((r) => `role:${r.id}` === kind)?.title ?? '')
-    : SAMPLE.role!;
-  const place = kind.startsWith('winner') ? ['1st', '2nd', '3rd'][+kind.slice(6) - 1]! : '';
+  const [editHtml, setEditHtml] = useState(false);
+
   const sample = {
     ...SAMPLE,
     role: roleTitle,
-    place,
+    place: certPlace,
     event: e.title,
     date: new Date(`${e.startsAt.slice(0, 10)}T00:00`).toLocaleDateString('en-GB', {
       dateStyle: 'long',
     }),
-    headline: certHeadline(kind, roleTitle, place),
+    headline: certHeadline(kind, roleTitle, certPlace),
   };
+
   const custom = html.trim() !== DEFAULT_CERT.trim();
   const unsaved = html.trim() !== (saved || DEFAULT_CERT).trim();
 
   return (
-    <div className="stack">
-      {!done && (
-        <p className="label">Certificates are generated once the event is marked Completed.</p>
-      )}
-      <div className="row">
-        <select
-          className="input"
-          aria-label="Certificate"
-          style={{ width: 'auto' }}
-          value={kind}
-          onChange={async (x) => {
-            const next = x.target.value;
-            if (
-              unsaved &&
-              !(await confirmIt(
-                'Discard design changes?',
-                'Your edits to this design are not saved.',
-                'Discard',
-                true,
-              ))
-            )
-              return;
-            setKind(next);
-            setHtml(templates[next] || DEFAULT_CERT);
-          }}
-        >
+    <div
+      className="cm-backdrop"
+      data-modal
+      role="dialog"
+      aria-modal="true"
+      aria-label="Certificate Preview"
+      onClick={(evt) => evt.target === evt.currentTarget && onClose()}
+    >
+      <div className="cert-dialog">
+        <div className="modal-header">
+          <h2 className="mono" style={{ fontSize: 14, textTransform: 'uppercase' }}>
+            Certificate Preview
+          </h2>
+          <button type="button" className="modal-close" onClick={onClose}>
+            ×
+          </button>
+        </div>
+        <div className="modal-body">
+          {/* Brutalist Certificate Card from deepseek_html_20261122_3c6079.html */}
+          <div className="cert-preview">
+            <div className="mono" style={{ fontSize: 10, letterSpacing: 2, marginBottom: '2rem' }}>
+              FECPC · PROGRAMMING CLUB
+            </div>
+            <h2
+              className="mono"
+              style={{
+                fontSize: 14,
+                color: 'var(--acc)',
+                letterSpacing: 1,
+                marginBottom: '1rem',
+                textTransform: 'uppercase',
+              }}
+            >
+              {sample.headline || 'CERTIFICATE OF PARTICIPATION'}
+            </h2>
+            <div
+              style={{
+                fontFamily: 'serif',
+                fontStyle: 'italic',
+                color: 'var(--dim)',
+                marginBottom: '0.5rem',
+              }}
+            >
+              This is presented to
+            </div>
+            <h1
+              style={{
+                fontFamily: 'serif',
+                fontSize: '3rem',
+                marginBottom: '0.5rem',
+                lineHeight: 1.1,
+              }}
+            >
+              {SAMPLE.name}
+            </h1>
+            <div style={{ fontSize: 12, color: 'var(--mut)', marginBottom: '3rem' }}>
+              for participating in the {e.title} held on {sample.date}.
+            </div>
+
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                marginTop: '3rem',
+                fontSize: 12,
+              }}
+            >
+              <div
+                style={{
+                  borderTop: '1px solid var(--ink)',
+                  paddingTop: '0.5rem',
+                  width: '30%',
+                  textAlign: 'left',
+                }}
+              >
+                President
+              </div>
+              <div
+                style={{
+                  textAlign: 'center',
+                  fontFamily: 'var(--f-label, var(--mono, monospace))',
+                  fontSize: 10,
+                }}
+              >
+                Certificate ID
+                <br />
+                <strong style={{ color: 'var(--ink)' }}>{SAMPLE.code}</strong>
+              </div>
+              <div
+                style={{
+                  borderTop: '1px solid var(--ink)',
+                  paddingTop: '0.5rem',
+                  width: '30%',
+                  textAlign: 'right',
+                }}
+              >
+                Event lead
+              </div>
+            </div>
+          </div>
+
+          {/* HTML/CSS Template Editor */}
+          {editHtml && (
+            <div
+              className="stack"
+              style={{
+                marginBottom: '1.5rem',
+                background: 'var(--bg)',
+                padding: '1rem',
+                border: '1px solid var(--line)',
+              }}
+            >
+              <span className="mono text-dim" style={{ fontSize: 11 }}>
+                PLACEHOLDERS: {CERT_VARS.map((v) => `{{${v}}}`).join(' ')}
+              </span>
+              <textarea
+                className="form-control mono"
+                rows={10}
+                value={html}
+                onChange={(x) => setHtml(x.target.value)}
+              />
+              <div className="row">
+                <button
+                  className="btn xs solid"
+                  type="button"
+                  disabled={!unsaved}
+                  onClick={async () => {
+                    const ok = await act('certTemplate', {
+                      eventId: e.id,
+                      kind,
+                      html: custom ? html : '',
+                    });
+                    if (ok) reload();
+                  }}
+                >
+                  Save design
+                </button>
+                <button
+                  className="btn xs line"
+                  type="button"
+                  disabled={!custom}
+                  onClick={() => setHtml(DEFAULT_CERT)}
+                >
+                  Use built-in design
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div
+            style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', flexWrap: 'wrap' }}
+          >
+            <button type="button" className="btn line" onClick={() => setEditHtml(!editHtml)}>
+              {editHtml ? 'Hide HTML/CSS' : 'Edit HTML/CSS'}
+            </button>
+            <button
+              type="button"
+              className="btn solid"
+              onClick={() =>
+                renderCertificate(fillTemplate(html, sample), 'png', `${e.id}-preview`)
+              }
+            >
+              Download Sample PNG
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Certificates({
+  e,
+  reload,
+  kind,
+  setKind,
+  kinds,
+  onOpenPreview,
+}: {
+  e: EventDetail;
+  reload: () => void;
+  kind: string;
+  setKind: (k: string) => void;
+  kinds: [string, string][];
+  onOpenPreview: () => void;
+}) {
+  const { act } = useStore();
+  const { templates, issued } = e.admin!;
+  const [csv, setCsv] = useState<string[][] | null>(null);
+  const [map, setMap] = useState<string[]>([]);
+  const done = e.status === 'completed';
+
+  return (
+    <div className="stack" style={{ gap: 14 }}>
+      <p className="mono text-dim" style={{ fontSize: 11, lineHeight: 1.4 }}>
+        Certificates are generated once the event is marked completed.
+      </p>
+
+      <button type="button" className="btn acc" style={{ width: '100%' }} onClick={onOpenPreview}>
+        Preview Design
+      </button>
+
+      <div className="form-group" style={{ marginBottom: 0 }}>
+        <label>Generate For</label>
+        <select className="form-control" value={kind} onChange={(x) => setKind(x.target.value)}>
           {kinds.map(([k, t]) => (
             <option key={k} value={k}>
-              {t} · {templates[k] ? 'custom design' : 'built-in design'}
+              {t} {templates[k] ? '(custom)' : '(built-in)'}
               {issued[k] ? ` · ${issued[k]} issued` : ''}
             </option>
           ))}
         </select>
-        <span className="label">{custom ? 'Custom design' : 'Built-in design'}</span>
       </div>
 
-      <CertPreview html={fillTemplate(html, sample)} title="Certificate preview" />
-      <p className="label">Preview with sample details. Real certificates use each person’s own.</p>
+      <button
+        type="button"
+        className="btn solid"
+        style={{ width: '100%' }}
+        disabled={!done}
+        title={!done ? 'Event must be completed to issue certificates' : ''}
+        onClick={async () => {
+          if (await act('certIssue', { eventId: e.id })) reload();
+        }}
+      >
+        Generate All
+      </button>
 
-      <details>
-        <summary className="label" style={{ cursor: 'pointer' }}>
-          Edit the design (HTML and CSS)
-        </summary>
-        <div className="stack" style={{ marginTop: 12 }}>
-          <span className="label">
-            Placeholders: {CERT_VARS.map((v) => `{{${v}}}`).join(' ')}, or any CSV column you map.
-            Images and fonts must be inline (data: links).
+      {/* Distribution & Import */}
+      <div
+        className="stack"
+        style={{ gap: 10, paddingTop: 10, borderTop: '1px solid var(--line)' }}
+      >
+        <div className="row between">
+          <span className={e.certs ? 'ok' : 'text-dim'} style={{ fontSize: 12 }}>
+            {e.certs ? 'Downloads are ON.' : 'Downloads are OFF.'}
           </span>
-          <textarea
-            className="input mono"
-            aria-label="Template HTML and CSS"
-            rows={12}
-            value={html}
-            onChange={(x) => setHtml(x.target.value)}
-          />
+          <button
+            className="btn xs line"
+            type="button"
+            disabled={!done && !e.certs}
+            onClick={async () =>
+              (await act('certDistribute', { eventId: e.id, on: !e.certs })) && reload()
+            }
+          >
+            {e.certs ? 'Turn off' : 'Turn on'}
+          </button>
         </div>
-      </details>
-      <div className="row">
-        <button
-          className="btn sm"
-          type="button"
-          disabled={!unsaved}
-          onClick={async () =>
-            // Saving the built-in design as-is just removes the custom one.
-            (await act('certTemplate', { eventId: e.id, kind, html: custom ? html : '' })) &&
-            reload()
-          }
-        >
-          Save design
-        </button>
-        <button
-          className="btn sm line"
-          type="button"
-          disabled={!custom}
-          onClick={() => setHtml(DEFAULT_CERT)}
-        >
-          Use built-in design
-        </button>
-        <button
-          className="btn sm line"
-          type="button"
-          onClick={() => renderCertificate(fillTemplate(html, sample), 'png', 'preview')}
-        >
-          Download sample PNG
-        </button>
-      </div>
 
-      <p className="label">Generate</p>
-      <div className="row">
-        <button
-          className="btn sm"
-          type="button"
-          disabled={!done || unsaved}
-          title={
-            unsaved
-              ? 'Save the design first.'
-              : 'One per approved participant, winner and role. Re-running removes certificates people no longer earn.'
-          }
-          onClick={async () => (await act('certIssue', { eventId: e.id })) && reload()}
-        >
-          Generate for everyone approved
-        </button>
-        <label className="btn sm line">
+        <label className="btn xs line" style={{ textAlign: 'center', cursor: 'pointer' }}>
           Import CSV for this kind
           <input
             type="file"
@@ -722,18 +1168,22 @@ function Certificates({ e, reload }: { e: EventDetail; reload: () => void }) {
           />
         </label>
       </div>
+
       {csv && (
-        <div className="stack">
-          <p className="label">
-            {csv.length - 1} rows. Map each column to a placeholder (one must be email); leave empty
-            to skip.
+        <div
+          className="stack"
+          style={{ background: 'var(--bg)', padding: 10, border: '1px solid var(--line)' }}
+        >
+          <p className="mono text-dim" style={{ fontSize: 11 }}>
+            {csv.length - 1} rows. Map columns:
           </p>
-          <div className="row">
+          <div className="stack" style={{ gap: 6 }}>
             {csv[0]!.map((h, i) => (
-              <label key={i} className="field">
-                <span className="label">{h}</span>
+              <label key={i} className="row between" style={{ fontSize: 12 }}>
+                <span>{h}</span>
                 <input
-                  className="input"
+                  className="form-control"
+                  style={{ width: 140, padding: '2px 6px', fontSize: 12 }}
                   list="cert-vars"
                   value={map[i] ?? ''}
                   onChange={(x) => setMap(map.map((m, j) => (j === i ? x.target.value : m)))}
@@ -746,9 +1196,9 @@ function Certificates({ e, reload }: { e: EventDetail; reload: () => void }) {
               ))}
             </datalist>
           </div>
-          <div className="row">
+          <div className="row" style={{ marginTop: 8 }}>
             <button
-              className="btn sm"
+              className="btn xs solid"
               type="button"
               disabled={!done || !map.includes('email')}
               onClick={async () => {
@@ -762,31 +1212,14 @@ function Certificates({ e, reload }: { e: EventDetail; reload: () => void }) {
                 reload();
               }}
             >
-              Generate {csv.length - 1} for {kinds.find(([k]) => k === kind)?.[1]}
+              Generate {csv.length - 1}
             </button>
-            <button className="btn sm line" type="button" onClick={() => setCsv(null)}>
+            <button className="btn xs line" type="button" onClick={() => setCsv(null)}>
               Cancel
             </button>
           </div>
         </div>
       )}
-
-      <p className="label">Distribution</p>
-      <div className="row">
-        <span className={e.certs ? 'ok' : ''}>
-          {e.certs ? 'Members can download their certificates.' : 'Downloads are off.'}
-        </span>
-        <button
-          className="btn sm line"
-          type="button"
-          disabled={!done && !e.certs}
-          onClick={async () =>
-            (await act('certDistribute', { eventId: e.id, on: !e.certs })) && reload()
-          }
-        >
-          {e.certs ? 'Turn off' : 'Turn on'}
-        </button>
-      </div>
     </div>
   );
 }
