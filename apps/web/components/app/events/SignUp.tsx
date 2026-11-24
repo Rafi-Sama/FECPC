@@ -85,7 +85,6 @@ export function SignUp({
             className="mono text-dim"
             style={{ fontSize: 14, textTransform: 'uppercase', letterSpacing: '0.06em' }}
           >
-            Answers stay with Google Forms.
           </span>
         </div>
       </div>

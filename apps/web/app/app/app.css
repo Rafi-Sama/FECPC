@@ -5701,8 +5701,8 @@ select.member-filter-ctrl {
 /* Main layout grid: canvas + command rail */
 .ev-detail .layout-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 380px;
-  gap: 2rem;
+  grid-template-columns: minmax(0, 7fr) minmax(300px, 3fr);
+  gap: 32px;
   align-items: start;
 }
 @media (max-width: 992px) {
@@ -5757,8 +5757,8 @@ select.member-filter-ctrl {
 
 .ev-detail .layout-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
-  gap: 36px;
+  grid-template-columns: minmax(0, 7fr) minmax(300px, 3fr);
+  gap: 32px;
   align-items: start;
 }
 @media (max-width: 980px) {
@@ -5769,10 +5769,9 @@ select.member-filter-ctrl {
 
 /* Post Container (The Canvas) */
 .ev-detail .post {
-  background: var(--panel);
-  border: 1px solid var(--line2);
-  box-shadow: 6px 6px 0 var(--line2);
-  /* Do not add overflow: hidden or transform here; it traps fixed popovers like DatePicker */
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }
 
 /* Banner Component */
@@ -5780,13 +5779,12 @@ select.member-filter-ctrl {
   position: relative;
   overflow: hidden;
   width: 100%;
-  /* Standard event cover, 1200 × 630: the image is framed the same at every width. */
-  aspect-ratio: 1200 / 630;
+  aspect-ratio: 24 / 7;
+  max-height: 260px;
   height: auto;
-  min-height: 0;
+  min-height: 140px;
   padding: 0;
-  border: 0;
-  border-bottom: 1px solid var(--line2);
+  border: 1px solid var(--line2);
   background-color: var(--acc);
   background-size: cover;
   background-position: center;
@@ -5873,12 +5871,19 @@ select.member-filter-ctrl {
 
 /* Pad inside Post */
 .ev-detail .pad {
-  padding: 24px 32px;
+  padding: 24px 0;
 }
 @media (max-width: 600px) {
   .ev-detail .pad {
-    padding: 18px 20px;
+    padding: 16px 0;
   }
+}
+
+.ev-detail .ed-preview-panel {
+  padding: 24px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  margin-top: 16px;
 }
 
 /* Scratch Paper In-place Title */
@@ -6071,11 +6076,11 @@ select.member-filter-ctrl {
   display: flex;
   gap: 24px;
   border-bottom: 1px solid var(--line);
-  padding: 0 32px;
+  padding: 0;
 }
 @media (max-width: 600px) {
   .ev-detail .tabs {
-    padding: 0 20px;
+    padding: 0;
   }
 }
 .ev-detail .tab {
@@ -6255,6 +6260,22 @@ select.member-filter-ctrl {
 .ev-detail .side .panel {
   box-shadow: none !important;
   padding: 0 !important;
+}
+.ev-detail .side details.panel summary::-webkit-details-marker {
+  display: none;
+}
+.ev-detail .side details.panel summary {
+  list-style: none;
+}
+.ev-detail .side details.panel:not([open]) .ph {
+  border-bottom: 0;
+}
+.ev-detail .side details.panel[open] .ev-fold-icon {
+  transform: rotate(0deg);
+}
+.ev-detail .side details.panel:not([open]) .ev-fold-icon {
+  transform: rotate(-90deg);
+  display: inline-block;
 }
 .ev-detail .ph {
   display: flex;
@@ -6562,11 +6583,43 @@ select.member-filter-ctrl {
 .ev-detail .mini-table tbody tr:hover td {
   background: color-mix(in srgb, var(--acc) 4%, transparent);
 }
-.ev-detail .mini-table input[type='checkbox'] {
-  accent-color: var(--acc);
+.ev-detail .mini-table input[type='checkbox'],
+.evm-modal input[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
   width: 16px;
   height: 16px;
+  margin: 0;
+  border: 1.5px solid var(--line2);
+  background: var(--panel);
+  border-radius: 0;
   cursor: pointer;
+  display: inline-grid;
+  place-items: center;
+  vertical-align: middle;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+
+.ev-detail .mini-table input[type='checkbox']:hover,
+.evm-modal input[type='checkbox']:hover {
+  border-color: var(--hi);
+}
+
+.ev-detail .mini-table input[type='checkbox']:checked,
+.evm-modal input[type='checkbox']:checked {
+  background: var(--acc);
+  border-color: var(--acc);
+}
+
+.ev-detail .mini-table input[type='checkbox']:checked::after,
+.evm-modal input[type='checkbox']:checked::after {
+  content: '';
+  width: 4px;
+  height: 8px;
+  border: solid var(--on);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) translate(-0.5px, -1px);
 }
 
 /* Buttons: flat rectangles with hard 2px frames, per the design system. */
@@ -6826,10 +6879,6 @@ select.member-filter-ctrl {
 }
 .evm-modal .me-frame {
   height: 420px;
-}
-.evm-modal input[type='checkbox'] {
-  accent-color: var(--acc);
-  cursor: pointer;
 }
 .evm-modal .eb {
   background: var(--panel) !important;
@@ -7975,7 +8024,7 @@ textarea.tm-code {
   left: 50%;
   transform: translateX(-50%);
   width: min(720px, calc(100vw - 32px));
-  z-index: 10001;
+  z-index: 9999999;
   display: flex;
   align-items: center;
   justify-content: space-between;

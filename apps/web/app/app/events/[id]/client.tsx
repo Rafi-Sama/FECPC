@@ -97,10 +97,16 @@ export default function EventDetailPage({ initial }: { initial?: EventDetail }) 
           </div>
         </div>
       ) : (
-        <div className="panel">
-          <div
+        <details className="panel" open>
+          <summary
             className="ph"
-            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              cursor: 'pointer',
+              userSelect: 'none',
+            }}
           >
             <span
               className="mono"
@@ -113,12 +119,17 @@ export default function EventDetailPage({ initial }: { initial?: EventDetail }) 
             >
               Participate
             </span>
-            {e.mode === 'platform' && left !== null && (
-              <span className="mono text-dim" style={{ fontSize: 14 }}>
-                {left} of {e.seats} left
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {e.mode === 'platform' && left !== null && (
+                <span className="mono text-dim" style={{ fontSize: 14 }}>
+                  {left} of {e.seats} left
+                </span>
+              )}
+              <span className="mono text-dim ev-fold-icon" aria-hidden="true" style={{ fontSize: 16 }}>
+                ▾
               </span>
-            )}
-          </div>
+            </div>
+          </summary>
           <div className="st stack">
             <SignUp
               eventId={e.id}
@@ -149,7 +160,7 @@ export default function EventDetailPage({ initial }: { initial?: EventDetail }) 
               </Link>
             )}
           </div>
-        </div>
+        </details>
       )}
 
       {e.status === 'completed' && tookPart && <FeedbackForm e={e} done={reload} />}
@@ -161,8 +172,17 @@ export default function EventDetailPage({ initial }: { initial?: EventDetail }) 
       {!over &&
         !isOrg &&
         e.roles.map((r) => (
-          <div key={r.id} className="panel">
-            <div className="ph">
+          <details key={r.id} className="panel" open>
+            <summary
+              className="ph"
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                cursor: 'pointer',
+                userSelect: 'none',
+              }}
+            >
               <span
                 className="mono"
                 style={{
@@ -174,7 +194,10 @@ export default function EventDetailPage({ initial }: { initial?: EventDetail }) 
               >
                 {r.title}
               </span>
-            </div>
+              <span className="mono text-dim ev-fold-icon" aria-hidden="true" style={{ fontSize: 16 }}>
+                ▾
+              </span>
+            </summary>
             <div className="st stack">
               {r.about && (
                 <span
@@ -196,9 +219,29 @@ export default function EventDetailPage({ initial }: { initial?: EventDetail }) 
                 done={reload}
               />
             </div>
-          </div>
+          </details>
         ))}
     </div>
+  );
+
+  const asideContent = (
+    <aside className="side">
+      {e.admin ? (
+        <>
+          <EventAdmin e={e} reload={reload} />
+          {(tookPart || e.certificates.length > 0) && (
+            <details className="panel" style={{ padding: '12px 16px' }}>
+              <summary className="mono" style={{ cursor: 'pointer', fontWeight: 600 }}>
+                My Attendance &amp; Certificates
+              </summary>
+              <div style={{ marginTop: 12 }}>{renderMemberParticipation(true)}</div>
+            </details>
+          )}
+        </>
+      ) : (
+        renderMemberParticipation(false)
+      )}
+    </aside>
   );
 
   return (
@@ -215,29 +258,7 @@ export default function EventDetailPage({ initial }: { initial?: EventDetail }) 
         )}
       </div>
 
-      <div className="layout-grid">
-        {/* Left Column: The Event Canvas */}
-        <EventHead e={e} reload={reload} />
-
-        {/* Right Column: The Command Rail Sidebar */}
-        <aside className="side">
-          {e.admin ? (
-            <>
-              <EventAdmin e={e} reload={reload} />
-              {(tookPart || e.certificates.length > 0) && (
-                <details className="panel" style={{ padding: '12px 16px' }}>
-                  <summary className="mono" style={{ cursor: 'pointer', fontWeight: 600 }}>
-                    My Attendance &amp; Certificates
-                  </summary>
-                  <div style={{ marginTop: 12 }}>{renderMemberParticipation(true)}</div>
-                </details>
-              )}
-            </>
-          ) : (
-            renderMemberParticipation(false)
-          )}
-        </aside>
-      </div>
+      <EventHead e={e} reload={reload} aside={asideContent} />
     </div>
   );
 }

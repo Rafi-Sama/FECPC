@@ -187,22 +187,25 @@ export function EventHead({
             </div>
           </div>
 
-          <div className="tabs">
-            <button type="button" className="tab on">
-              Overview
-            </button>
-            <span className="mono" style={{ marginLeft: 'auto', alignSelf: 'center' }}>
-              EVENT DETAILS
-            </span>
-          </div>
-          <div className="pad">
-            <div className="ed-preview">
-              <MarkdownView text={e.about || ''} />
+          <div className="layout-grid">
+            <div>
+              <div className="tabs">
+                <button type="button" className="tab on">
+                  Overview
+                </button>
+                <span className="mono" style={{ marginLeft: 'auto', alignSelf: 'center', fontSize: 13, color: 'var(--dim)' }}>
+                  EVENT DETAILS
+                </span>
+              </div>
+              <div className="ed-preview-panel">
+                <div className="ed-preview">
+                  <MarkdownView text={e.about || ''} />
+                </div>
+              </div>
             </div>
+            {aside}
           </div>
         </div>
-
-        {aside}
       </main>
     );
   }
@@ -434,43 +437,48 @@ export function HeadFields({
           </div>
         </div>
 
-        <div className="tabs">
-          <button
-            type="button"
-            className={`tab ${descTab === 'write' ? 'on' : ''}`}
-            onClick={() => setDescTab('write')}
-          >
-            Write
-          </button>
-          <button
-            type="button"
-            className={`tab ${descTab === 'preview' ? 'on' : ''}`}
-            onClick={() => setDescTab('preview')}
-          >
-            Preview
-          </button>
-          <span className="mono" style={{ marginLeft: 'auto', alignSelf: 'center' }}>
-            Markdown supported
-          </span>
-        </div>
-
-        <div className="pad">
-          {descTab === 'write' ? (
-            <textarea
-              form={FORM}
-              className="ed"
-              aria-label="Event description"
-              placeholder="What will happen, who it's for, what to bring."
-              rows={8}
-              maxLength={6000}
-              value={v.about}
-              onChange={(x) => set({ about: x.target.value })}
-            />
-          ) : (
-            <div className="ed-preview">
-              <MarkdownView text={v.about || ''} />
+        <div className="layout-grid">
+          <div>
+            <div className="tabs">
+              <button
+                type="button"
+                className={`tab ${descTab === 'write' ? 'on' : ''}`}
+                onClick={() => setDescTab('write')}
+              >
+                Write
+              </button>
+              <button
+                type="button"
+                className={`tab ${descTab === 'preview' ? 'on' : ''}`}
+                onClick={() => setDescTab('preview')}
+              >
+                Preview
+              </button>
+              <span className="mono" style={{ marginLeft: 'auto', alignSelf: 'center', fontSize: 13, color: 'var(--dim)' }}>
+                Markdown supported
+              </span>
             </div>
-          )}
+
+            <div className="ed-preview-panel">
+              {descTab === 'write' ? (
+                <textarea
+                  form={FORM}
+                  className="ed"
+                  aria-label="Event description"
+                  placeholder="What will happen, who it's for, what to bring."
+                  rows={8}
+                  maxLength={6000}
+                  value={v.about}
+                  onChange={(x) => set({ about: x.target.value })}
+                />
+              ) : (
+                <div className="ed-preview">
+                  <MarkdownView text={v.about || ''} />
+                </div>
+              )}
+            </div>
+          </div>
+          {aside}
         </div>
       </div>
 
@@ -589,8 +597,6 @@ export function HeadFields({
           {error}
         </p>
       )}
-
-      {aside}
     </main>
   );
 }
