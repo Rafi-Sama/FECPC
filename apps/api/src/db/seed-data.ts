@@ -1069,6 +1069,294 @@ export async function setup(db: Db, password: string) {
          ('tahmina', 'Interview prep: ML coding & probability rounds for new grads', 'Checklist of probability, matrix manipulation, and PyTorch debugging questions that show up in ML engineering loops.', 'topic', 15, now() - interval '5 days', now() - interval '5 days')`,
       );
     }
+
+    // Seed pending profile requests for the admin Requests section
+    if (!(await db.query(`select 1 from profile_requests where status = 'pending' limit 1`)).rowCount) {
+      await db.query(`
+        insert into profile_requests (user_id, changes, note, status, created_at)
+        values
+          (
+            'nadia',
+            '{"phone": "+880 1711-987654", "location": "Sylhet, Bangladesh", "bio": "Competitive programmer & full-stack builder focusing on distributed consensus and high-throughput systems."}'::jsonb,
+            'Updated my contact number and location since moving back to campus dorms.',
+            'pending',
+            now() - interval '45 minutes'
+          ),
+          (
+            'anika',
+            '{"cf_handle": "anika_dp", "skills": ["Competitive Programming", "C++20", "Dynamic Programming", "Segment Trees", "Go"]}'::jsonb,
+            'Reached Candidate Master on Codeforces! Updated my handle and skills list.',
+            'pending',
+            now() - interval '3 hours'
+          ),
+          (
+            'tanvir',
+            '{"dept": "CSE", "linkedin_url": "https://linkedin.com/in/tanvir-fecpc", "github_url": "https://github.com/tanvir-dev"}'::jsonb,
+            'Added professional links for the upcoming alumni directory.',
+            'pending',
+            now() - interval '1 day'
+          )
+        on conflict (user_id) where status = 'pending'
+        do update set changes = excluded.changes, note = excluded.note, created_at = excluded.created_at;
+      `);
+    }
+  }
+
+  // Seed demo recruitment links and applications if no recruit_links exist
+  if (hasSeedUsers && !(await db.query(`select 1 from recruit_links limit 1`)).rowCount) {
+    const linkRes = await db.query(`
+      insert into recruit_links (token, title, batch, form, closes_at, by, mail_subject, mail_html)
+      values
+        (
+          'batch-10-recruit',
+          'Batch 10 recruit',
+          10,
+          '{"cf": true, "why": true, "questions": [{"id": "q_exp", "long": false, "label": "Prior contest platforms used (e.g. AtCoder, VJudge)?"}, {"id": "q_hours", "long": false, "label": "Weekly hours committed to club practice sessions?"}]}'::jsonb,
+          now() + interval '5 days',
+          'tanvir',
+          'Welcome to FECPC Batch 10!',
+          '<p>Congratulations! Your application to FEC Programming Club Batch 10 has been accepted.</p>'
+        ),
+        (
+          'batch-9-recruit',
+          'Batch 9 recruit',
+          9,
+          '{"cf": true, "why": true, "questions": []}'::jsonb,
+          now() - interval '20 days',
+          'nadia',
+          'Welcome to FECPC Batch 9!',
+          '<p>Welcome to FECPC!</p>'
+        )
+      returning id, token;
+    `);
+
+    const batch10LinkId = linkRes.rows.find((r: { token: string; id: number }) => r.token === 'batch-10-recruit')?.id;
+
+    if (batch10LinkId) {
+      await db.query(`
+        insert into applications (name, sid, dept, batch, email, phone, cf, track, why, answers, link_id, status, decided_by, decided_at, decline_reason)
+        values
+          (
+            'Zubair Ahmed',
+            '2024-331-012',
+            'CSE',
+            10,
+            'zubair.ahmed@student.fec.edu.bd',
+            '+880 1712-345678',
+            'zubair_coder',
+            'cp',
+            'I love solving algorithmic problems and want to represent FEC in ICPC Dhaka regional preliminaries.',
+            '[{"q": "Prior contest platforms used (e.g. AtCoder, VJudge)?", "a": "Codeforces & VJudge (solved around 250 problems)"}, {"q": "Weekly hours committed to club practice sessions?", "a": "15-20 hours/week"}]'::jsonb,
+            $1,
+            'pending',
+            null,
+            null,
+            null
+          ),
+          (
+            'Sumaiya Tasneem',
+            '2024-331-045',
+            'CSE',
+            10,
+            'sumaiya.tasneem@student.fec.edu.bd',
+            '+880 1819-234567',
+            'sumaiya_t',
+            'cp',
+            'Passionate about graph theory, dynamic programming, and participating in team programming contests.',
+            '[{"q": "Prior contest platforms used (e.g. AtCoder, VJudge)?", "a": "AtCoder Beginner Contests & LeetCode"}, {"q": "Weekly hours committed to club practice sessions?", "a": "12 hours/week"}]'::jsonb,
+            $1,
+            'pending',
+            null,
+            null,
+            null
+          ),
+          (
+            'Mahin Chowdhury',
+            '2024-332-008',
+            'EEE',
+            10,
+            'mahin.eee@student.fec.edu.bd',
+            '+880 1623-456789',
+            'mahin_bits',
+            'cp',
+            'Transitioning from robotics firmware into software algorithms; eager to build strong foundational math and DSA skills.',
+            '[{"q": "Prior contest platforms used (e.g. AtCoder, VJudge)?", "a": "Beginner on Codeforces (Pupil)"}, {"q": "Weekly hours committed to club practice sessions?", "a": "10 hours/week"}]'::jsonb,
+            $1,
+            'pending',
+            null,
+            null,
+            null
+          ),
+          (
+            'Abrar Faiyaz',
+            '2024-331-029',
+            'CSE',
+            10,
+            'abrar.faiyaz@student.fec.edu.bd',
+            '+880 1934-567890',
+            'abrar_f',
+            'cp',
+            'Active regular in Div 3 & Div 2 rounds. Excited to mentor newcomers once reaching Specialist rating.',
+            '[{"q": "Prior contest platforms used (e.g. AtCoder, VJudge)?", "a": "Codeforces Specialist, CSES Problem Set 120+"}, {"q": "Weekly hours committed to club practice sessions?", "a": "20 hours/week"}]'::jsonb,
+            $1,
+            'accepted',
+            'tanvir',
+            now() - interval '1 day',
+            null
+          ),
+          (
+            'Farhan Ishraq',
+            '2024-331-051',
+            'CSE',
+            10,
+            'farhan.ishraq@student.fec.edu.bd',
+            '+880 1545-678901',
+            'fishraq',
+            'cp',
+            'Looking to improve speed in implementation problems and participate in weekly intra-college contests.',
+            '[{"q": "Prior contest platforms used (e.g. AtCoder, VJudge)?", "a": "VJudge junior sheet"}, {"q": "Weekly hours committed to club practice sessions?", "a": "15 hours/week"}]'::jsonb,
+            $1,
+            'accepted',
+            'tanvir',
+            now() - interval '2 days',
+            null
+          ),
+          (
+            'Nayeem Hasan',
+            '2022-331-099',
+            'CSE',
+            8,
+            'nayeem.hasan@student.fec.edu.bd',
+            '+880 1756-789012',
+            'nayeem_cf',
+            'cp',
+            'Applied to batch 10 accidentally while from an earlier batch.',
+            '[{"q": "Prior contest platforms used (e.g. AtCoder, VJudge)?", "a": "None"}, {"q": "Weekly hours committed to club practice sessions?", "a": "5 hours/week"}]'::jsonb,
+            $1,
+            'declined',
+            'tanvir',
+            now() - interval '6 hours',
+            'Recruitment is reserved for Batch 10 students. Please connect directly for senior member onboarding.'
+          )
+        on conflict do nothing;
+      `, [batch10LinkId]);
+    }
+  } else if (hasSeedUsers) {
+    // If recruit_links exist (e.g. from prior runs), ensure batch 10 has demo applicants linked
+    const existingLink = await db.query(`select id from recruit_links where batch = 10 order by id desc limit 1`);
+    if (existingLink.rowCount && existingLink.rows[0].id) {
+      const linkId = existingLink.rows[0].id;
+      const appCount = await db.query(`select count(*) from applications where link_id = $1`, [linkId]);
+      if (parseInt(appCount.rows[0].count, 10) === 0) {
+        await db.query(`
+          insert into applications (name, sid, dept, batch, email, phone, cf, track, why, answers, link_id, status, decided_by, decided_at, decline_reason)
+          values
+            (
+              'Zubair Ahmed',
+              '2024-331-012',
+              'CSE',
+              10,
+              'zubair.ahmed@student.fec.edu.bd',
+              '+880 1712-345678',
+              'zubair_coder',
+              'cp',
+              'I love solving algorithmic problems and want to represent FEC in ICPC Dhaka regional preliminaries.',
+              '[{"q": "Prior contest platforms used (e.g. AtCoder, VJudge)?", "a": "Codeforces & VJudge (solved around 250 problems)"}, {"q": "Weekly hours committed to club practice sessions?", "a": "15-20 hours/week"}]'::jsonb,
+              $1,
+              'pending',
+              null,
+              null,
+              null
+            ),
+            (
+              'Sumaiya Tasneem',
+              '2024-331-045',
+              'CSE',
+              10,
+              'sumaiya.tasneem@student.fec.edu.bd',
+              '+880 1819-234567',
+              'sumaiya_t',
+              'cp',
+              'Passionate about graph theory, dynamic programming, and participating in team programming contests.',
+              '[{"q": "Prior contest platforms used (e.g. AtCoder, VJudge)?", "a": "AtCoder Beginner Contests & LeetCode"}, {"q": "Weekly hours committed to club practice sessions?", "a": "12 hours/week"}]'::jsonb,
+              $1,
+              'pending',
+              null,
+              null,
+              null
+            ),
+            (
+              'Mahin Chowdhury',
+              '2024-332-008',
+              'EEE',
+              10,
+              'mahin.eee@student.fec.edu.bd',
+              '+880 1623-456789',
+              'mahin_bits',
+              'cp',
+              'Transitioning from robotics firmware into software algorithms; eager to build strong foundational math and DSA skills.',
+              '[{"q": "Prior contest platforms used (e.g. AtCoder, VJudge)?", "a": "Beginner on Codeforces (Pupil)"}, {"q": "Weekly hours committed to club practice sessions?", "a": "10 hours/week"}]'::jsonb,
+              $1,
+              'pending',
+              null,
+              null,
+              null
+            ),
+            (
+              'Abrar Faiyaz',
+              '2024-331-029',
+              'CSE',
+              10,
+              'abrar.faiyaz@student.fec.edu.bd',
+              '+880 1934-567890',
+              'abrar_f',
+              'cp',
+              'Active regular in Div 3 & Div 2 rounds. Excited to mentor newcomers once reaching Specialist rating.',
+              '[{"q": "Prior contest platforms used (e.g. AtCoder, VJudge)?", "a": "Codeforces Specialist, CSES Problem Set 120+"}, {"q": "Weekly hours committed to club practice sessions?", "a": "20 hours/week"}]'::jsonb,
+              $1,
+              'accepted',
+              'tanvir',
+              now() - interval '1 day',
+              null
+            ),
+            (
+              'Farhan Ishraq',
+              '2024-331-051',
+              'CSE',
+              10,
+              'farhan.ishraq@student.fec.edu.bd',
+              '+880 1545-678901',
+              'fishraq',
+              'cp',
+              'Looking to improve speed in implementation problems and participate in weekly intra-college contests.',
+              '[{"q": "Prior contest platforms used (e.g. AtCoder, VJudge)?", "a": "VJudge junior sheet"}, {"q": "Weekly hours committed to club practice sessions?", "a": "15 hours/week"}]'::jsonb,
+              $1,
+              'accepted',
+              'tanvir',
+              now() - interval '2 days',
+              null
+            ),
+            (
+              'Nayeem Hasan',
+              '2022-331-099',
+              'CSE',
+              8,
+              'nayeem.hasan@student.fec.edu.bd',
+              '+880 1756-789012',
+              'nayeem_cf',
+              'cp',
+              'Applied to batch 10 accidentally while from an earlier batch.',
+              '[{"q": "Prior contest platforms used (e.g. AtCoder, VJudge)?", "a": "None"}, {"q": "Weekly hours committed to club practice sessions?", "a": "5 hours/week"}]'::jsonb,
+              $1,
+              'declined',
+              'tanvir',
+              now() - interval '6 hours',
+              'Recruitment is reserved for Batch 10 students. Please connect directly for senior member onboarding.'
+            )
+          on conflict do nothing;
+        `, [linkId]);
+      }
+    }
   }
 
   // First-deploy backfill: ensure existing active members with problems_solved > 0 and no milestones yet

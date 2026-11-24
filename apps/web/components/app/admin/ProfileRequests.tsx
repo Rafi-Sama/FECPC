@@ -22,7 +22,7 @@ const ago = (iso: string) => {
 };
 const show = (v: ProfileValue | undefined) =>
   v === null || v === undefined || v === '' || (Array.isArray(v) && !v.length) ? (
-    <span className="dim">empty</span>
+    <span className="diff-empty">—</span>
   ) : Array.isArray(v) ? (
     v.join(', ')
   ) : (
@@ -34,8 +34,19 @@ export function ProfileRequests() {
   const sure = useConfirm(),
     ask = usePrompt();
   const [busy, setBusy] = useState('');
+  const [openIds, setOpenIds] = useState<Set<string>>(new Set());
+
+  const toggleOpen = (id: string) => {
+    setOpenIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   const list = office.profileRequests ?? [];
-  if (!list.length) return <p className="rc-none">No change requests waiting.</p>;
+  if (!list.length) return <p className="rc-none empty-state">No change requests waiting.</p>;
 
   const decide = async (r: ProfileRequestReview, to: 'approved' | 'rejected') => {
     let reason: string | null = null;
@@ -60,83 +71,128 @@ export function ProfileRequests() {
   };
 
   return (
-    <ul className="rc-apps">
-      {list.map((r) => {
-        const fields = PROFILE_FIELDS.filter(([k]) => k in r.changes) as (readonly [
-          ProfileField,
-          string,
-        ])[];
-        const face = members.find((m) => m.id === r.user)?.avatar_url;
-        return (
-          <li key={r.id} className="panel preq-card">
-            <header className="preq-head">
-              <MemberFace url={face} name={r.name} size={44} />
-              <div>
-                <strong>{r.name}</strong>
-                <span className="rc-when">asked {ago(r.at)}</span>
+    <div className="requests-container">
+      <div className="requests-list">
+        {list.map((r) => {
+          const fields = PROFILE_FIELDS.filter(([k]) => k in r.changes) as (readonly [
+            ProfileField,
+            string,
+          ])[];
+          const face = members.find((m) => m.id === r.user)?.avatar_url;
+          const isOpen = openIds.has(r.id);
+          const changeCount = fields.length;
+
+          return (
+            <article key={r.id} className={`request-card${isOpen ? ' is-open' : ''}`}>
+              <div className="card-header" onClick={() => toggleOpen(r.id)} style={{ cursor: 'pointer' }}>
+                {face ? (
+                  <img className="avatar-img" src={face} alt={r.name} width={48} height={48} />
+                ) : (
+                  <div className="avatar">
+                    {r.name
+                      .split(' ')
+                      .map((w) => w[0])
+                      .slice(0, 2)
+                      .join('')}
+                  </div>
+                )}
+                <div className="user-info" style={{ flexGrow: 1 }}>
+                  <div className="user-header-row">
+                    <span className="user-name">{r.name}</span>
+                    <span className="request-time">asked {ago(r.at)}</span>
+                    <button
+                      type="button"
+                      className="toggle-diff-btn"
+                      aria-expanded={isOpen}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleOpen(r.id);
+                      }}
+                    >
+                      <span className="chevron">{isOpen ? '▲' : '▼'}</span>
+                      {isOpen ? 'Hide Details' : `${changeCount} ${changeCount === 1 ? 'change' : 'changes'}`}
+                    </button>
+                  </div>
+                  {r.note && <p className="user-quote">“{r.note}”</p>}
+                </div>
               </div>
-            </header>
-            {r.note && <p className="preq-note">“{r.note}”</p>}
-            <table className="tbl preq-tbl">
-              <thead>
-                <tr>
-                  <th>Field</th>
-                  <th>Now</th>
-                  <th>Requested</th>
-                </tr>
-              </thead>
-              <tbody>
-                {fields.map(([k, label]) => (
-                  <tr key={k}>
-                    <td>{label}</td>
-                    {k === 'avatar_url' ? (
-                      <>
-                        <td>
-                          {face ? (
-                            <img className="face" src={face} alt="Current" width={64} height={64} />
-                          ) : (
-                            show(null)
-                          )}
-                        </td>
-                        <td>
-                          {r.changes.avatar_url ? (
-                            <img
-                              className="face"
-                              src={`/api/profile-requests/${r.id}/photo`}
-                              alt="Requested"
-                              width={64}
-                              height={64}
-                            />
-                          ) : (
-                            <span className="bad">remove the photo</span>
-                          )}
-                        </td>
-                      </>
-                    ) : (
-                      <>
-                        <td>{show(r.current[k])}</td>
-                        <td className="preq-new">{show(r.changes[k])}</td>
-                      </>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="rc-row-actions">
-              <button className="btn sm" disabled={!!busy} onClick={() => decide(r, 'approved')}>
-                {busy === r.id ? '…' : 'Approve'}
-              </button>
-              <button
-                className="btn sm line"
-                disabled={!!busy}
-                onClick={() => decide(r, 'rejected')}
-              >
-                Reject
-              </button>
-            </div>
-          </li>
-        );
-      })}
-    </ul>
+
+              {/* Collapsible Details Area */}
+              <div className={`diff-collapsible${isOpen ? ' open' : ''}`}>
+                <div className="diff-inner">
+                  <div className="diff-table">
+                    <div className="diff-header-row">
+                      <div className="diff-th">Field</div>
+                      <div className="diff-th">Current Value</div>
+                      <div className="diff-th">Requested Change</div>
+                    </div>
+
+                    {fields.map(([k, label]) => {
+                      const isPhoto = k === 'avatar_url';
+
+                      return (
+                        <div key={k} className="diff-row-contents">
+                          <div className="diff-cell field-name">{label}</div>
+                          <div className="diff-cell val-now">
+                            {isPhoto ? (
+                              face ? (
+                                <img className="face" src={face} alt="Current" width={56} height={56} />
+                              ) : (
+                                <span className="diff-empty">None</span>
+                              )
+                            ) : (
+                              show(r.current[k])
+                            )}
+                          </div>
+                          <div className="diff-cell val-requested">
+                            {isPhoto ? (
+                              r.changes.avatar_url ? (
+                                <img
+                                  className="face"
+                                  src={`/api/profile-requests/${r.id}/photo`}
+                                  alt="Requested"
+                                  width={56}
+                                  height={56}
+                                />
+                              ) : (
+                                <span className="bad">Remove photo</span>
+                              )
+                            ) : (
+                              show(r.changes[k])
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <div className="card-footer">
+                <span className="footer-status-label">
+                  Review Required · {changeCount} {changeCount === 1 ? 'Field' : 'Fields'}
+                </span>
+                <div className="action-buttons">
+                  <button
+                    className="btn btn-reject"
+                    disabled={!!busy}
+                    onClick={() => decide(r, 'rejected')}
+                  >
+                    Reject
+                  </button>
+                  <button
+                    className="btn btn-approve"
+                    disabled={!!busy}
+                    onClick={() => decide(r, 'approved')}
+                  >
+                    {busy === r.id ? '…' : 'Approve'}
+                  </button>
+                </div>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </div>
   );
 }
