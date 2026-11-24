@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Polls</title>
+<script src="./vendor/react.js"></script>
+<script src="./vendor/react-dom.js"></script>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&amp;family=Space+Mono:wght@400;700&amp;display=swap">
+<style>
+body{margin:0;background:#EDEAE2}
+*{box-sizing:border-box}
+.pg{width:1360px;height:1000px;font-family:"Space Grotesk",sans-serif;color:#121212;background:#EDEAE2;padding:48px 84px;-webkit-font-smoothing:antialiased}
+.mono{font-family:"Space Mono",monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#6F6B60}
+.in{opacity:0;transform:translateY(10px);animation:up .6s cubic-bezier(.2,.7,.2,1) forwards}
+.d1{animation-delay:.05s}.d2{animation-delay:.15s}.d3{animation-delay:.25s}.d4{animation-delay:.35s}.d5{animation-delay:.45s}
+@keyframes up{to{opacity:1;transform:none}}
+@keyframes grow{from{transform:scaleX(0)}}
+h1{font:700 52px/1 "Space Grotesk",sans-serif;letter-spacing:-.04em;margin:0 0 28px}
+h1 i{display:inline-block;width:11px;height:11px;background:#2438FF;margin-left:4px}
+.tg{position:absolute;width:1px;height:1px;clip-path:inset(50%);overflow:hidden}
+.hrow{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:28px}.hrow h1{margin:0}
+.nb{display:inline-flex;align-items:center;gap:12px;font:700 11px "Space Mono",monospace;letter-spacing:.06em;text-transform:uppercase;border:1px solid #121212;background:#121212;color:#F6F4EE;padding:14px 20px;cursor:pointer;transition:all .25s}
+.nb:hover{background:#2438FF;border-color:#2438FF;transform:translate(-2px,-2px);box-shadow:3px 3px 0 #121212}
+.nb .pl{display:inline-block;font-size:16px;line-height:1;transition:transform .45s cubic-bezier(.2,.7,.2,1)}
+.nb .t2{display:none}
+.tg:focus-visible ~ .hrow .nb{outline:2px solid #2438FF;outline-offset:3px}
+.tg:checked ~ .hrow .nb{background:transparent;color:#121212}
+.tg:checked ~ .hrow .nb:hover{background:#fff;border-color:#121212}
+.tg:checked ~ .hrow .pl{transform:rotate(45deg)}
+.tg:checked ~ .hrow .t1{display:none}.tg:checked ~ .hrow .t2{display:inline}
+.rev{display:grid;grid-template-rows:0fr;visibility:hidden;transition:grid-template-rows .6s cubic-bezier(.2,.7,.2,1),visibility .6s}
+.rin{overflow:hidden;min-height:0}
+.rev .comp{opacity:0;transform:translateY(-14px);transition:opacity .4s,transform .5s cubic-bezier(.2,.7,.2,1)}
+.tg:checked ~ .rev{grid-template-rows:1fr;visibility:visible}
+.tg:checked ~ .rev .comp{opacity:1;transform:none;transition-delay:.2s}
+.ghost{font:700 11px "Space Mono",monospace;letter-spacing:.06em;text-transform:uppercase;background:none;border:0;border-bottom:1px solid transparent;color:#6F6B60;padding:4px 0;cursor:pointer;transition:all .2s}
+.ghost:hover{color:#121212;border-bottom-color:#121212}
+.tabs{display:flex;gap:28px;border-bottom:1px solid #CFCABD;margin-bottom:32px}
+.tab{font:700 11px "Space Mono",monospace;letter-spacing:.06em;text-transform:uppercase;background:none;border:0;border-bottom:2px solid transparent;padding:0 0 14px;margin-bottom:-1px;color:#6F6B60;cursor:pointer;transition:color .2s,border-color .2s}
+.tab:hover{color:#121212}.tab.on{color:#121212;border-bottom-color:#2438FF}
+.comp{border:1px solid #121212;background:#F6F4EE;display:grid;grid-template-columns:1fr 1fr;gap:0 32px;padding:28px 32px;margin-bottom:32px}
+.comp h2{grid-column:1/-1;font:600 18px "Space Grotesk",sans-serif;letter-spacing:-.01em;margin:0 0 20px}
+label{display:block;margin-bottom:8px}
+.ctl{width:100%;border:1px solid #CFCABD;background:#fff;font:400 15px "Space Grotesk",sans-serif;color:#121212;padding:0 14px;outline:none;border-radius:0;transition:border-color .2s,box-shadow .2s}
+.ctl:hover{border-color:#121212}.ctl:focus{border-color:#2438FF;box-shadow:3px 3px 0 #2438FF}
+input.ctl{height:48px}textarea.ctl{height:104px;padding:12px 14px;resize:none;line-height:1.6}
+.foot{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;margin-top:20px}
+.btn{font:700 11px "Space Mono",monospace;letter-spacing:.06em;text-transform:uppercase;border:1px solid #121212;background:#121212;color:#F6F4EE;padding:14px 22px;cursor:pointer;transition:all .2s}
+.btn:hover{background:#2438FF;border-color:#2438FF;transform:translate(-2px,-2px);box-shadow:3px 3px 0 #121212}
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:32px}
+.card{border:1px solid #121212;background:#F6F4EE;padding:28px 32px;display:flex;flex-direction:column;gap:10px;transition:transform .3s,box-shadow .3s}
+.card:hover{transform:translate(-2px,-2px);box-shadow:6px 6px 0 #121212}
+.card h3{font:600 22px/1.25 "Space Grotesk",sans-serif;letter-spacing:-.02em;margin:0 0 8px}
+.opt{position:relative;display:flex;align-items:center;gap:12px;height:52px;padding:0 16px;border:1px solid #CFCABD;background:#fff;font-size:15px;overflow:hidden;cursor:pointer;transition:border-color .2s,padding .25s}
+.opt:hover{border-color:#121212;padding-left:22px}
+.opt .bar{position:absolute;left:0;top:0;bottom:0;background:#DDE0FF;transform-origin:left;animation:grow 1s .5s cubic-bezier(.2,.7,.2,1) backwards}
+.opt>*:not(.bar){position:relative}
+.opt .box{width:10px;height:10px;border:1px solid #121212;background:#fff;flex:none;transition:background .2s}
+.opt:hover .box{background:#2438FF;border-color:#2438FF}
+.opt .pc{margin-left:auto;font:700 12px "Space Mono",monospace}
+.opt.sel{border-color:#2438FF}.opt.sel .box{background:#2438FF;border-color:#2438FF}.opt.sel .bar{background:#C9CEFF}
+.meta{display:flex;align-items:center;justify-content:space-between;margin-top:8px;gap:12px}
+.del{font:700 11px "Space Mono",monospace;letter-spacing:.06em;text-transform:uppercase;background:none;border:0;border-bottom:1px solid transparent;color:#B8301F;padding:4px 0;cursor:pointer;transition:border-color .2s}
+.del:hover{border-bottom-color:#B8301F}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;opacity:1!important;transform:none!important}}
+</style>
+</helmet>
+<div class="pg">
+<input type="checkbox" id="np" class="tg" aria-label="Show poll form">
+<div class="hrow in d1"><h1>Polls<i></i></h1><label class="nb" for="np"><span class="pl">+</span><span class="t1">Publish a poll</span><span class="t2">Close</span></label></div>
+<div class="tabs in d1"><button class="tab">Feed</button><button class="tab">Announcements</button><button class="tab">Ideas</button><button class="tab on">Polls</button></div>
+<div class="rev"><div class="rin"><div class="comp">
+<h2>Ask the community</h2>
+<div><label class="mono" for="q">Question</label><input id="q" class="ctl" placeholder="What do you want to ask?"></div>
+<div><label class="mono" for="o">Options · one per line · 2 to 8</label><textarea id="o" class="ctl" placeholder="Option one
+Option two"></textarea></div>
+<div class="foot"><span class="mono">Everyone can vote once. Results show after voting.</span><div style="display:flex;align-items:center;gap:24px"><label class="ghost" for="np">Cancel</label><button class="btn">Publish poll</button></div></div>
+</div></div></div>
+<div class="cards">
+<div class="card in d3">
+<h3>KI koro</h3>
+<div class="opt"><span class="box"></span>kicuna</div>
+<div class="opt"><span class="box"></span>onek kisu</div>
+<div class="meta"><span class="mono">2 votes · Tanvir Ahmed · 2d ago · Vote to see results</span></div>
+<div><button class="del">Delete</button></div>
+</div>
+<div class="card in d4">
+<h3>Tomra Free te kacchi Khaba</h3>
+<div class="opt"><span class="bar" style="width:33%"></span><span class="box"></span>Yesss,<span class="pc">33%</span></div>
+<div class="opt sel"><span class="bar" style="width:67%"></span><span class="box"></span>Yess But Onek Yess<span class="pc">67%</span></div>
+<div class="meta"><span class="mono">3 votes · Tanvir Ahmed · 2d ago</span><button class="del">Delete</button></div>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1360,"height":1000}}'>
+class Component extends DCLogic {
+renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -485,11 +485,13 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
 
   /* ────────── POLLS STATE ────────── */
   const canPoll = canFully(s.roles, 'poll.create');
+  const [pollFormOpen, setPollFormOpen] = useState(false);
   const [pollQ, setPollQ] = useState('');
   const [pollOpts, setPollOpts] = useState('');
   const resetPoll = () => {
     setPollQ('');
     setPollOpts('');
+    setPollFormOpen(false);
   };
   const handleCreatePoll = async () => {
     const options = pollOpts
@@ -497,7 +499,9 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
       .map((o) => o.trim())
       .filter(Boolean);
     const ok = await act('createPoll', { question: pollQ.trim(), options });
-    if (ok) resetPoll();
+    if (ok) {
+      resetPoll();
+    }
     return ok;
   };
 
@@ -518,6 +522,17 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
         tab === 'Announcements' && canAnnounce ? (
           <button type="button" className="ann-btn-primary" onClick={() => setComposeOpen(true)}>
             + Publish
+          </button>
+        ) : tab === 'Polls' && canPoll ? (
+          <button
+            type="button"
+            className={`btn sm poll-toggle-btn ${pollFormOpen ? 'line' : ''}`}
+            onClick={() => setPollFormOpen(!pollFormOpen)}
+            aria-expanded={pollFormOpen}
+            aria-controls="poll-create-form"
+          >
+            <span className={`poll-toggle-icon ${pollFormOpen ? 'is-open' : ''}`} aria-hidden>+</span>
+            <span>{pollFormOpen ? 'Close' : 'Publish a poll'}</span>
           </button>
         ) : undefined
       }
@@ -1044,39 +1059,63 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
       {tab === 'Polls' && (
         <div className="bento">
           {canPoll && (
-            <SaveForm
-              className="panel stack"
-              style={{ '--g': '14px' } as React.CSSProperties}
-              label="Unpublished poll"
-              saveLabel="Publish"
-              onDiscard={resetPoll}
-              onSubmit={handleCreatePoll}
+            <div
+              id="poll-create-form"
+              className={`poll-create-wrap c12 ${pollFormOpen ? 'is-open' : ''}`}
+              aria-hidden={!pollFormOpen}
             >
-              <label className="field">
-                <span className="label">Question</span>
-                <input
-                  className="input"
-                  value={pollQ}
-                  onChange={(e) => setPollQ(e.target.value)}
-                  required
-                  minLength={3}
-                  maxLength={160}
-                />
-              </label>
-              <label className="field">
-                <span className="label">Options, one per line (2 to 8)</span>
-                <textarea
-                  className="input"
-                  rows={4}
-                  value={pollOpts}
-                  onChange={(e) => setPollOpts(e.target.value)}
-                  required
-                />
-              </label>
-              <button className="btn sm" style={{ alignSelf: 'flex-start' }}>
-                Publish poll
-              </button>
-            </SaveForm>
+              <div className="poll-create-inner">
+                <div className="poll-create-content">
+                  <SaveForm
+                    className="panel stack"
+                    style={{ '--g': '14px' } as React.CSSProperties}
+                    label="Unpublished poll"
+                    saveLabel="Publish"
+                    onDiscard={resetPoll}
+                    onSubmit={handleCreatePoll}
+                  >
+                    <label className="field">
+                      <span className="label">Question</span>
+                      <input
+                        className="input"
+                        value={pollQ}
+                        onChange={(e) => setPollQ(e.target.value)}
+                        required
+                        minLength={3}
+                        maxLength={160}
+                        placeholder="What do you want to ask?"
+                      />
+                    </label>
+                    <label className="field">
+                      <span className="label">Options, one per line (2 to 8)</span>
+                      <textarea
+                        className="input"
+                        rows={4}
+                        value={pollOpts}
+                        onChange={(e) => setPollOpts(e.target.value)}
+                        required
+                        placeholder={"Option one\nOption two"}
+                      />
+                    </label>
+                    <div className="row between" style={{ alignItems: 'center' }}>
+                      <span className="label">Everyone can vote once. Results show after voting.</span>
+                      <div className="row" style={{ '--g': '12px' } as React.CSSProperties}>
+                        <button
+                          type="button"
+                          className="btn sm line"
+                          onClick={() => setPollFormOpen(false)}
+                        >
+                          Cancel
+                        </button>
+                        <button className="btn sm">
+                          Publish poll
+                        </button>
+                      </div>
+                    </div>
+                  </SaveForm>
+                </div>
+              </div>
+            </div>
           )}
           {polls.length === 0 && <p className="empty">No polls yet.</p>}
           {polls.map((p) => {
@@ -1096,7 +1135,7 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
                       disabled={me.system}
                       onClick={() => act('vote', { poll: p.id, option: o })}
                     >
-                      {mine && <i style={{ width: `${pct}%` }} />}
+                      {mine && <i key={`bar-${p.id}-${o}`} style={{ width: `${pct}%` }} />}
                       <span>
                         <b className="mono acc" style={{ marginRight: 10 }}>
                           {mine === o ? '●' : '○'}
