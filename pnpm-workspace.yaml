@@ -6,3 +6,9 @@ allowBuilds:
   '@prisma/client': false
   '@swc/core': true
   esbuild: true
+
+overrides:
+  # light-my-request 6.8 (Fastify's in-process requests, used by apiFetch) requires the ESM-only cookie@2 from
+  # CommonJS. Node allows that locally, but Vercel's function runtime does not (ERR_REQUIRE_ESM). 6.6.0 is the
+  # last release on cookie@1. Drop this once light-my-request ships an ES module build or Vercel allows require(esm).
+  light-my-request: 6.6.0

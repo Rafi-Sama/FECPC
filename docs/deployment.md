@@ -25,7 +25,7 @@ Browser ──▶ Vercel project (apps/web; the API inside it) ──▶ Supabas
    lock and idle-transaction timeouts) are defaults of its database role, set by `pnpm db:migrate`, so they
    apply through the pooler.
 2. **Secret.** `openssl rand -hex 32` for `CRON_SECRET`.
-3. **Project.** New Vercel project from the repository, root directory `apps/web`, Node.js 24, region Singapore
+3. **Project.** New Vercel project from the repository, root directory `apps/web`, Node.js 26, region Singapore
    (`sin1`). `apps/web/vercel.json` builds the API bundle, then the web app; on production deployments it first
    runs `pnpm db:migrate` (the schema is idempotent). Vercel's own Git deploys are off there: the
    [pipeline](#cicd) deploys `main` only after CI passes. Environment (Production): `DATABASE_URL`, `CRON_SECRET`,
@@ -78,7 +78,7 @@ private repositories; there the deploy job's `needs: verify` is the gate.
 ## Launch checklist
 
 - [ ] Supabase project (Singapore), transaction-pooler URL copied.
-- [ ] Vercel project: root `apps/web`, Node.js 24, Production environment variables set (see above). A wrong
+- [ ] Vercel project: root `apps/web`, Node.js 26, Production environment variables set (see above). A wrong
       value stops the API with a clear message (`productionProblems` in `config.service.ts`): http origins,
       `CORS_ORIGINS` without the site, the local database, or no `CRON_SECRET` on Vercel.
 - [ ] GitHub secret and variables set; first push to `main` deploys; the deploy job's smoke test passes.

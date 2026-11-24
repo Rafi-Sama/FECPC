@@ -2,6 +2,7 @@ import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import pg from 'pg';
 import { ConfigService } from '../config/config.service.ts';
+import { BEGIN } from '../../modules/member-area/db.ts';
 
 export type TxClient = pg.PoolClient;
 
@@ -19,8 +20,8 @@ export class DbService implements OnModuleInit, OnModuleDestroy {
       query_timeout: this.config.env.DB_STATEMENT_TIMEOUT_MS, // the client gives up too, if the server did not
       connectionTimeoutMillis: 5000,
       idleTimeoutMillis: 30_000, // an unused pooled connection is closed after 30 s
-      // jit, statement_timeout, lock_timeout and idle_in_transaction_session_timeout are defaults of the role,
-      // set by `pnpm db:migrate`: connection startup options would not survive a transaction pooler.
+      // Timeouts: every transaction sets its own with BEGIN (see BEGIN in member-area/db.ts); `pnpm db:migrate`
+      // also makes them the role's defaults, which a plain server or PgBouncer honours (Supabase's pooler does not).
     });
 
     this.pool.on('error', (err) => {
@@ -57,7 +58,7 @@ export class DbService implements OnModuleInit, OnModuleDestroy {
       let connectionError: any = null;
 
       try {
-        await client.query('BEGIN');
+        await client.query(BEGIN());
 
         const result = await this.als.run(client, () => fn(client));
         await client.query('COMMIT');

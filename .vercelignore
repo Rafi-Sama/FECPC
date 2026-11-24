@@ -1,0 +1,10 @@
+# Never uploaded by `vercel deploy`: local env files (apps/web/.env.local points the app at a local API), build
+# output and dependencies (Vercel installs and builds from the lockfile itself).
+**/.env
+**/.env.*
+!**/.env.example
+**/node_modules
+**/.next
+**/dist
+**/.turbo
+**/.vercel

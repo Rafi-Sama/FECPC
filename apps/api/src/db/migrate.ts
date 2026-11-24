@@ -13,8 +13,8 @@ try {
   // The role's own defaults (set below) are for the API's short queries, not for a schema change.
   await client.query(`set local statement_timeout = 0; set local lock_timeout = '60s'`);
   await applySchema(client);
-  // Session settings as defaults of the API's role in this database, so every connection gets them, also through
-  // a transaction pooler (Supabase, Neon), which drops per-connection startup options. JIT compiles the big state
+  // Session settings as defaults of the API's role in this database, for queries outside a transaction (each
+  // transaction also sets its timeouts with BEGIN, since Supabase's pooler ignores role defaults). JIT compiles the big state
   // query for seconds and never pays off on short queries; the timeouts stop a stuck query or a lock wait or an
   // abandoned transaction from holding rows.
   await client.query(`do $$ begin

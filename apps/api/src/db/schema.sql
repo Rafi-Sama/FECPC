@@ -1099,3 +1099,17 @@ create table if not exists mail_runner (
   id    int primary key check (id = 1),
   until timestamptz not null
 );
+
+-- Supabase: its public API roles get nothing from the app's tables, now or later (the app connects as their owner,
+-- and its own API enforces every permission). Defence in depth beside the Data API being off and RLS on.
+-- A no-op on a database without those roles.
+do $$ begin
+  if exists (select 1 from pg_roles where rolname = 'anon') and exists (select 1 from pg_roles where rolname = 'authenticated') then
+    revoke all on all tables in schema public from anon, authenticated;
+    revoke all on all sequences in schema public from anon, authenticated;
+    revoke all on all functions in schema public from anon, authenticated;
+    alter default privileges in schema public revoke all on tables from anon, authenticated;
+    alter default privileges in schema public revoke all on sequences from anon, authenticated;
+    alter default privileges in schema public revoke all on functions from anon, authenticated;
+  end if;
+end $$;

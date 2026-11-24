@@ -24,11 +24,25 @@ export const face = (alias: string) =>
 /** Anything that can run a query: the pool, or one client inside a transaction. */
 export type Db = Pick<pg.Pool, 'query'>;
 
+const ms = (v: string | undefined, d: number) => {
+  const n = Number(v);
+  return Number.isInteger(n) && n > 0 ? n : d;
+};
+/**
+ * BEGIN with the transaction's limits: a lock wait or a statement is cut off, and so is a transaction left idle (a
+ * crashed handler), instead of holding rows. Sent with BEGIN, in the same round trip, because a transaction pooler
+ * (Supabase's) keeps neither session settings nor the role's defaults.
+ */
+export const BEGIN = () =>
+  `begin; set local lock_timeout = ${ms(process.env.DB_LOCK_TIMEOUT_MS, 5000)}; ` +
+  `set local statement_timeout = ${ms(process.env.DB_STATEMENT_TIMEOUT_MS, 15000)}; ` +
+  `set local idle_in_transaction_session_timeout = ${ms(process.env.DB_IDLE_TX_TIMEOUT_MS, 30000)}`;
+
 /** Runs `fn` in one transaction; any throw rolls everything back. */
 export async function tx<T>(fn: (c: pg.PoolClient) => Promise<T>): Promise<T> {
   const c = await pool().connect();
   try {
-    await c.query('begin');
+    await c.query(BEGIN());
     const out = await fn(c);
     await c.query('commit');
     return out;

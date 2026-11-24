@@ -23,7 +23,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  NODE_VERSION: 24 # the version the Vercel project runs (Settings → Build and Deployment → Node.js Version)
+  NODE_VERSION: 26 # the version the Vercel project runs (Settings → Build and Deployment → Node.js Version)
   NEXT_TELEMETRY_DISABLED: 1
   TURBO_TELEMETRY_DISABLED: 1
 
@@ -77,7 +77,9 @@ jobs:
           export SEED_PASSWORD="$(openssl rand -hex 16)" CRON_SECRET="$(openssl rand -hex 32)"
           pnpm --filter @fecpc/api db:migrate
           pnpm --filter @fecpc/api db:seed
-          pnpm --filter @fecpc/web start > web.log 2>&1 &
+          # Without require() of ES modules, like Vercel's function runtime (a CommonJS package loading an ESM-only
+          # one works on a local Node and fails there).
+          (cd apps/web && node --no-experimental-require-module node_modules/next/dist/bin/next start > ../../web.log 2>&1 &)
           for i in $(seq 1 30); do curl -fs -o /dev/null http://localhost:3000/login && break; sleep 1; done
           SMOKE_EMAIL=admin@fecpc.example SMOKE_PASSWORD="$SEED_PASSWORD" node scripts/smoke.mjs http://localhost:3000 \
             || { cat web.log; exit 1; }
