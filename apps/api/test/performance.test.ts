@@ -44,11 +44,11 @@ test('roster: its own request, with photo links instead of photo bytes', async (
   const t = (await loadRoster(db(), 'tanvir'))!.find((m) => m.id === 'tasnim')!;
   assert.match(t.avatar_url!, /^\/api\/avatars\/tasnim\?v=[0-9a-f]{10}$/);
   assert.equal(JSON.stringify(state).includes('base64'), false);
-  const img = await avatar(db(), 'tasnim');
+  const img = await avatar(db(), 'tasnim', t.avatar_url!.split('v=')[1]!);
   assert.equal(img.type, 'image/jpeg');
   assert.equal(img.body[0], 0xff);
-  await refused(404, avatar(db(), 'tanvir')); // no uploaded photo
-  await refused(404, avatar(db(), '../etc'));
+  await refused(404, avatar(db(), 'tanvir', '')); // no uploaded photo
+  await refused(404, avatar(db(), '../etc', ''));
 });
 
 test('roster: one cached body per view, cleared after a change', async () => {

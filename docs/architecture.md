@@ -11,7 +11,8 @@
    │  • /api/* route handlers are a thin proxy (lib/api.ts → proxy())
    │  • two read-only outside fetchers of its own: /api/cf/[handle] (Codeforces), /api/vjudge (standings)
    │
-   │  server-to-server, API_INTERNAL_URL, forwards cookie + Origin + Referer + Sec-Fetch-Site
+   │  apiFetch: HTTP to API_INTERNAL_URL (a server), or in-process when unset (Vercel: one function per request);
+   │  either way forwards cookie + Origin + Referer + Sec-Fetch-Site
    ▼
  apps/api  ── NestJS 11 on Fastify 5
    │  • AuthGuard on every route (sessions), CsrfGuard on every write
@@ -26,7 +27,8 @@
 ```
 
 The browser never talks to the API directly. Everything goes through the web app's own `/api/*` routes, so
-the site has one origin, the session cookie stays first-party, and the API can sit on a private network.
+the site has one origin, the session cookie stays first-party, and the API can sit on a private network, or (on
+Vercel) run inside the web app's functions with no address of its own.
 
 ## How a member-area request flows
 

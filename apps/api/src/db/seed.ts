@@ -11,7 +11,14 @@ if (pw.length < 10) {
   );
   process.exit(1);
 }
-const pool = new pg.Pool({ connectionString: new ConfigService().env.DATABASE_URL });
+const env = new ConfigService().env;
+// Placeholder accounts share one known password: never on a database anyone else can reach.
+const host = new URL(env.DATABASE_URL).hostname;
+if (env.APP_ENV === 'production' || !['127.0.0.1', 'localhost', '::1', 'postgres'].includes(host)) {
+  console.error(`Refusing to seed ${host}: placeholder data is for a local database only.`);
+  process.exit(1);
+}
+const pool = new pg.Pool({ connectionString: env.DATABASE_URL });
 usePool(pool);
 try {
   const seeded = await setup(pool, pw);

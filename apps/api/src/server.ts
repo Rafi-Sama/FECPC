@@ -13,7 +13,7 @@ import { isIP } from 'node:net';
 import { requestId } from './platform/logging/logging.module.ts';
 import { sameSecret } from './modules/member-area/tokens.ts';
 
-/** The API, configured and initialised but not listening: `main.ts` listens, `vercel.ts` hands it requests. */
+/** The API, configured and initialised but not listening: `main.ts` listens; `inprocess.ts` hands it the web app's requests. */
 export async function createApp() {
   const env = new ConfigService();
   const fastifyAdapter = new FastifyAdapter({
@@ -38,8 +38,9 @@ export async function createApp() {
       }
     });
 
-  // Where the API has a public address (Vercel), only the web app may call it: it proves itself with the shared
-  // secret and reports the visitor's address in X-Client-Ip, since the platform rewrites X-Forwarded-For.
+  // Where the API runs as its own server with a public address, only the web app may call it: it proves itself
+  // with the shared secret and reports the visitor's address in X-Client-Ip, since a platform may rewrite
+  // X-Forwarded-For.
   // Runs before the rate limiter, which then counts the visitor, not the web app.
   const secret = env.env.API_PROXY_SECRET;
   if (secret)

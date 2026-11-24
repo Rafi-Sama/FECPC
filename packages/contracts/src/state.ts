@@ -451,6 +451,8 @@ export type Office = {
     /** The latest error on mail still waiting (server unreachable, login rejected, limit reached). */
     problem: string | null;
     failed: { id: string; to: string; subject: string; error: string; at: string }[];
+    /** Sending accounts resting after a quota or login answer, until `until`; Retry wakes them. */
+    paused: { account: string; until: string; error: string | null }[];
   };
   suggestions?: { body: string; at: string }[];
   feedback?: { body: string; at: string }[];

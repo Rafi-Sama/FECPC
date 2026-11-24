@@ -1,0 +1,15 @@
+# Weekly update pull requests; each one runs the full CI before it can be merged.
+version: 2
+updates:
+  - package-ecosystem: npm # the pnpm workspace (pnpm-lock.yaml)
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions # the pinned action SHAs in .github/workflows
+    directory: /
+    schedule:
+      interval: weekly

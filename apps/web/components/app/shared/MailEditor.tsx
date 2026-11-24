@@ -235,7 +235,7 @@ export function MailStatus() {
     );
   const pct = Math.min(100, Math.round((m.sent / m.limit) * 100));
   return (
-    <div className={`ms${m.problem || m.failed.length ? ' warn' : ''}`}>
+    <div className={`ms${m.problem || m.failed.length || m.paused.length ? ' warn' : ''}`}>
       <div className="ms-line">
         <span>
           <b>Email</b> · {m.sent} of {m.limit} sent in the last 24 h
@@ -246,6 +246,20 @@ export function MailStatus() {
         </span>
       </div>
       {m.problem && <p className="ms-problem">{m.problem}</p>}
+      {m.paused.length > 0 && (
+        <p className="ms-problem">
+          {m.paused.map((p) => (
+            <span key={p.account}>
+              <b>{p.account}</b> rests until{' '}
+              {new Date(p.until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              .{' '}
+            </span>
+          ))}
+          <button type="button" className="btn xs line" onClick={() => void act('mailRetry', {})}>
+            Retry now
+          </button>
+        </p>
+      )}
       {m.failed.length > 0 && (
         <details className="ms-failed">
           <summary>

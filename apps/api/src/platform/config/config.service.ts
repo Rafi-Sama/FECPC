@@ -42,15 +42,15 @@ export const EnvSchema = z.object({
   GITHUB_CLIENT_ID: z.string().optional(),
   GITHUB_CLIENT_SECRET: z.string().optional(),
 
-  /** Optional SMTP for acceptance emails, e.g. smtps://user:app-password@smtp.gmail.com:465. */
+  /** Optional SMTP: one or more URLs separated by spaces, e.g. smtps://user:app-password@smtp.gmail.com:465. */
   SMTP_URL: z.string().optional(),
   MAIL_FROM: z.string().optional(),
   /**
-   * Set where the API has a public address (Vercel): every request except health and cron must carry it in
-   * X-Proxy-Secret, which only the web app knows (its API_PROXY_SECRET). At least 32 characters.
+   * Set when the API runs on its own host with a public address: every request except health and cron must carry
+   * it in X-Proxy-Secret, which only the web app knows (its API_PROXY_SECRET). At least 32 characters.
    */
   API_PROXY_SECRET: z.string().min(32).optional(),
-  /** Bearer token for GET /v1/cron (weekly sheet, mail queue). Vercel Cron sends it as CRON_SECRET. */
+  /** Bearer token for GET /v1/cron (weekly sheet, mail runs). Vercel Cron sends it; a mail run starts the next. */
   CRON_SECRET: z.string().min(16).optional(),
   /** Optional Cloudflare Turnstile secret; when set, the join form must pass the human check. */
   TURNSTILE_SECRET_KEY: z.string().optional(),
@@ -58,17 +58,38 @@ export const EnvSchema = z.object({
 
 export type EnvConfig = z.infer<typeof EnvSchema>;
 
+/** Settings that would leave a production site broken or open; empty when it may start. */
+export function productionProblems(env: EnvConfig, onVercel = !!process.env.VERCEL): string[] {
+  if (env.APP_ENV !== 'production') return [];
+  const out: string[] = [];
+  const https = (u: string) => /^https:\/\/[^/\s]+$/.test(u.replace(/\/$/, ''));
+  if (!https(env.APP_PUBLIC_URL)) out.push('APP_PUBLIC_URL must be the https origin of the site.');
+  const origins = env.CORS_ORIGINS.split(',').map((o) => o.trim());
+  if (!origins.every(https)) out.push('CORS_ORIGINS must list only https origins (the site).');
+  if (!origins.includes(env.APP_PUBLIC_URL.replace(/\/$/, '')))
+    out.push('CORS_ORIGINS must include APP_PUBLIC_URL, or every sign-in is refused.');
+  if (/@(127\.0\.0\.1|localhost)[:/]|fecpc_dev/.test(env.DATABASE_URL))
+    out.push('DATABASE_URL is the local development database.');
+  if (onVercel && !env.CRON_SECRET)
+    out.push('CRON_SECRET is required on Vercel (the weekly sheet and email runs use it).');
+  return out;
+}
+
 @Injectable()
 export class ConfigService {
   readonly env: EnvConfig;
 
   constructor() {
     const parsed = EnvSchema.safeParse(process.env);
-    if (!parsed.success) {
-      console.error('Invalid environment configuration:\n', parsed.error.format());
-      process.exit(1);
-    }
+    // Thrown, not process.exit: inside the web app (Vercel) the API must not take the whole server down.
+    if (!parsed.success)
+      throw new Error(
+        `Invalid environment configuration: ${JSON.stringify(parsed.error.format())}`,
+      );
     this.env = parsed.data;
+    const bad = productionProblems(this.env);
+    if (bad.length)
+      throw new Error(`Production configuration is not ready:\n- ${bad.join('\n- ')}`);
   }
 
   /** Fastify's trustProxy as a hop count: only that many proxies may set the client address. */

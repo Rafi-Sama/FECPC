@@ -3379,14 +3379,14 @@ export async function profileRequestPhoto(db: Db, viewerId: string, id: string) 
   return { type: m[1]!, body: Buffer.from(m[2]!, 'base64') };
 }
 
-/** A member's uploaded photo, for any signed-in member (the roster already links it). */
-export async function avatar(db: Db, id: string) {
+/**
+ * A member's uploaded photo, only at its current version (`v` = avatar_key, 40 bits of the photo's hash): the
+ * link cannot be guessed, so it may be served from the CDN's cache to anyone who has it.
+ */
+export async function avatar(db: Db, id: string, v: string) {
   const p = /^[a-z0-9_]{2,40}$/.test(id)
-    ? (
-        await db.query(`select avatar_url p from users where id = $1 and avatar_key is not null`, [
-          id,
-        ])
-      ).rows[0]?.p
+    ? (await db.query(`select avatar_url p from users where id = $1 and avatar_key = $2`, [id, v]))
+        .rows[0]?.p
     : null;
   const m = typeof p === 'string' ? /^data:(image\/(?:png|jpeg|webp));base64,(.+)$/.exec(p) : null;
   if (!m) throw new Fail(404, 'No photo.');

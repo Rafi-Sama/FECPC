@@ -16,18 +16,11 @@ export class DbService implements OnModuleInit, OnModuleDestroy {
     this.pool = new pg.Pool({
       connectionString: this.config.env.DATABASE_URL,
       max: this.config.env.DB_POOL_MAX,
-      statement_timeout: this.config.env.DB_STATEMENT_TIMEOUT_MS,
-      query_timeout: this.config.env.DB_STATEMENT_TIMEOUT_MS,
+      query_timeout: this.config.env.DB_STATEMENT_TIMEOUT_MS, // the client gives up too, if the server did not
       connectionTimeoutMillis: 5000,
       idleTimeoutMillis: 30_000, // an unused pooled connection is closed after 30 s
-      // Session settings for every connection, so the member-area transactions (db.ts `tx`) get them too:
-      // JIT compiles the big state query for seconds and never pays off on short queries; a lock wait or a
-      // transaction left idle (a crashed handler) is cut off instead of holding rows.
-      options: [
-        '-c jit=off',
-        `-c lock_timeout=${this.config.env.DB_LOCK_TIMEOUT_MS}`,
-        `-c idle_in_transaction_session_timeout=${this.config.env.DB_IDLE_TX_TIMEOUT_MS}`,
-      ].join(' '),
+      // jit, statement_timeout, lock_timeout and idle_in_transaction_session_timeout are defaults of the role,
+      // set by `pnpm db:migrate`: connection startup options would not survive a transaction pooler.
     });
 
     this.pool.on('error', (err) => {

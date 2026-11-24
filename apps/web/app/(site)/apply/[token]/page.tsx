@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import type { RecruitPublic } from '@fecpc/contracts';
 import ApplyForm from '@/components/site/ApplyForm';
-import { API, toApi } from '@/lib/api';
+import { apiFetch, toApi } from '@/lib/api';
 import { site } from '@/lib/site';
 
 export const metadata = { title: 'Apply', robots: { index: false } };
@@ -18,9 +18,8 @@ const when = (iso: string) =>
 
 export default async function Apply({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const res = await fetch(`${API()}/v1/recruit/${encodeURIComponent(token)}`, {
+  const res = await apiFetch(`/v1/recruit/${encodeURIComponent(token)}`, {
     headers: toApi(),
-    cache: 'no-store',
   }).catch(() => null);
   if (res?.status === 404) notFound();
   const link = res?.ok ? ((await res.json()) as RecruitPublic) : null;

@@ -7,11 +7,12 @@
     "dev": "node scripts/dev-ready.ts && next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "lint": "eslint app components lib scripts",
     "format:check": "prettier --check 'app/**/*.{ts,tsx,css}' 'components/**/*.{ts,tsx}' 'lib/**/*.ts' 'scripts/**/*.ts'"
   },
   "dependencies": {
+    "@fecpc/api": "workspace:*",
     "@fecpc/content": "workspace:*",
     "@fecpc/contracts": "workspace:*",
     "next": "^16.4.6",

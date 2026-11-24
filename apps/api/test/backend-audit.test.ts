@@ -13,7 +13,11 @@ import { setup } from '../src/db/seed-data.ts';
 import { AuthService } from '../src/modules/auth/auth.service.ts';
 import { AuditService } from '../src/modules/audit/audit.service.ts';
 import { LoginThrottlingService } from '../src/modules/auth/login-throttling.service.ts';
-import { ConfigService } from '../src/platform/config/config.service.ts';
+import {
+  ConfigService,
+  EnvSchema,
+  productionProblems,
+} from '../src/platform/config/config.service.ts';
 import { DbService } from '../src/platform/database/db.service.ts';
 import { ProblemDetailsFilter } from '../src/platform/http/problem-details.filter.ts';
 
@@ -162,6 +166,11 @@ test('errors: Fastify and plugin errors keep their status instead of becoming 50
     [{ statusCode: 429, message: 'Rate limit exceeded' }, 429, 'RATE_LIMITED'],
     [{ code: '22003', message: 'value out of range for type integer' }, 400, 'BAD_REQUEST'],
     [{ code: '22021', message: 'invalid byte sequence (NUL)' }, 400, 'BAD_REQUEST'],
+    [
+      Object.assign(new Error('getaddrinfo ENOTFOUND db'), { code: 'ENOTFOUND' }),
+      503,
+      'SERVICE_UNAVAILABLE',
+    ],
     [new Error('boom'), 500, 'INTERNAL_ERROR'],
   ] as const) {
     filter.catch(err, host);
@@ -262,4 +271,28 @@ test('writes: one member is capped at 120 changes a minute, counted in the datab
   await at(3000, `date_trunc('minute', now()) - interval '1 minute'`); // but not a new day
   await refused(429, act('farhan', { type: 'readAll' }));
   await at(0, 'null');
+});
+
+test('production config: a broken or unsafe setup refuses to start, a correct one passes', () => {
+  const env = (o: Record<string, string>) => EnvSchema.parse({ APP_ENV: 'production', ...o });
+  const good = {
+    APP_PUBLIC_URL: 'https://fecpc.vercel.app',
+    CORS_ORIGINS: 'https://fecpc.vercel.app',
+    DATABASE_URL: 'postgres://u:p@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres',
+    CRON_SECRET: 'x'.repeat(32),
+  };
+  assert.deepEqual(productionProblems(env(good), true), []);
+  assert.equal(
+    productionProblems(env({ ...good, CORS_ORIGINS: 'https://other.app' }), true).length,
+    1,
+  );
+  assert.equal(
+    productionProblems(env({ ...good, APP_PUBLIC_URL: 'http://fecpc.vercel.app' }), true).length,
+    2,
+  );
+  assert.equal(
+    productionProblems(env({ ...good, CRON_SECRET: undefined as never }), true).length,
+    1,
+  );
+  assert.deepEqual(productionProblems(EnvSchema.parse({})), [], 'local development is not checked');
 });

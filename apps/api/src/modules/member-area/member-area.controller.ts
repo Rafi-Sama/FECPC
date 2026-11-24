@@ -11,7 +11,6 @@ import {
   Res,
 } from '@nestjs/common';
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { waitUntil } from '@vercel/functions';
 import { act, auditQuery, avatar, exportMembers, profileRequestPhoto } from './actions.ts';
 import { applicantPhoto, apply, recruitPublic } from './recruit.ts';
 import { Fail, pool } from './db.ts';
@@ -21,7 +20,7 @@ import { syncCodeforces, syncVjudge } from './milestones.ts';
 import { ensureWeekly } from './sheets.ts';
 import { sameSecret } from './tokens.ts';
 import { forgetShared, loadState, rosterJson } from './state.ts';
-import { drainMail } from './mail.ts';
+import { mailInBackground } from './mail.ts';
 import { CurrentUser, type RequestUser } from '../auth/decorators.ts';
 import { Public } from '../auth/decorators.ts';
 
@@ -33,6 +32,9 @@ const AREAS = {
   events: eventsQuery,
   audit: auditQuery,
 };
+
+/** Versioned images: kept for a year by browsers and (s-maxage) by the CDN in front of the web app. */
+const FOREVER = 'public, max-age=31536000, s-maxage=31536000, immutable';
 
 const object = (b: unknown): Record<string, unknown> => {
   if (!b || typeof b !== 'object' || Array.isArray(b)) throw new Fail(400, 'Send a JSON object.');
@@ -69,8 +71,7 @@ export class MemberAreaController {
   @HttpCode(200)
   async act(@CurrentUser() user: RequestUser, @Body() body: unknown) {
     const info = await act(user.id, object(body)); // act() clears the shared cache
-    // After the commit, mail queued by this action goes out; on Vercel the function stays alive until it is sent.
-    waitUntil(drainMail().catch(() => {}));
+    mailInBackground(); // after the commit: mail queued by this action goes out now
     return { state: await loadState(pool(), user.id), info: info ?? null };
   }
 
@@ -107,7 +108,7 @@ export class MemberAreaController {
 
   /**
    * The periodic work a long-running server does on timers: this week's sheet and the mail queue. Vercel Cron
-   * calls it daily with `Authorization: Bearer CRON_SECRET`; a free pinger may call it every few minutes.
+   * calls it daily with `Authorization: Bearer CRON_SECRET`, and a mail run that leaves due mail calls it again.
    */
   @Public()
   @Get('cron')
@@ -116,7 +117,7 @@ export class MemberAreaController {
     if (!s || !sameSecret(req.headers.authorization, `Bearer ${s}`))
       throw new Fail(404, 'Not found.');
     await ensureWeekly(pool());
-    await drainMail();
+    mailInBackground(); // answers now; the run continues after the response
     return { ok: true };
   }
 
@@ -141,13 +142,19 @@ export class MemberAreaController {
     return p.body;
   }
 
-  /** A member's photo. The link carries a version (`?v=`), so the browser may keep it for good. */
+  /**
+   * A member's photo at its current version (`?v=`). Public and cached for good by the browser and the CDN, so a
+   * photo leaves the database about once instead of on every view; the version makes the link unguessable.
+   */
+  @Public()
   @Get('avatars/:id')
-  async avatar(@Param('id') id: string, @Res({ passthrough: true }) res: FastifyReply) {
-    const p = await avatar(pool(), id);
-    res
-      .header('content-type', p.type)
-      .header('cache-control', 'private, max-age=31536000, immutable');
+  async avatar(
+    @Param('id') id: string,
+    @Query('v') v: string,
+    @Res({ passthrough: true }) res: FastifyReply,
+  ) {
+    const p = await avatar(pool(), id, String(v ?? ''));
+    res.header('content-type', p.type).header('cache-control', FOREVER);
     return p.body;
   }
 
@@ -188,9 +195,7 @@ export class MemberAreaController {
     @Res({ passthrough: true }) res: FastifyReply,
   ) {
     const p = await eventBanner(pool(), id, String(v ?? ''));
-    res
-      .header('content-type', p.type)
-      .header('cache-control', 'public, max-age=31536000, immutable');
+    res.header('content-type', p.type).header('cache-control', FOREVER);
     return p.body;
   }
 

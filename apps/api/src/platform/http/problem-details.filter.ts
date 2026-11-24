@@ -112,6 +112,16 @@ export class ProblemDetailsFilter implements ExceptionFilter {
         code = ErrorCodes.BAD_REQUEST;
         title = 'Bad Request';
         detail = 'A value in the request is out of range or malformed.';
+      } else if (
+        ['ECONNREFUSED', 'ENOTFOUND', 'ETIMEDOUT', 'ECONNRESET', 'EAI_AGAIN'].includes(pgCode) ||
+        String(pgCode).startsWith('08') // Postgres connection exceptions
+      ) {
+        // The database is asleep, restarting or unreachable: the client should try again shortly.
+        status = HttpStatus.SERVICE_UNAVAILABLE;
+        code = ErrorCodes.SERVICE_UNAVAILABLE;
+        title = 'Service Unavailable';
+        detail = 'The database is not answering. Try again in a moment.';
+        console.error(`[ProblemDetailsFilter] Database unreachable [${requestId}]: ${pgCode}`);
       } else if (['40001', '40P01', '55P03', '57014'].includes(pgCode)) {
         // Serialization, deadlock, lock timeout or statement timeout
         status = HttpStatus.SERVICE_UNAVAILABLE;

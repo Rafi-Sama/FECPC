@@ -25,7 +25,7 @@ import { getTeam, lineDiff } from '../src/modules/member-area/teams.ts';
 import { auditQuery } from '../src/modules/member-area/actions.ts';
 import { eventsQuery, verifyCertificate } from '../src/modules/member-area/events.ts';
 import { apply, recruitPublic } from '../src/modules/member-area/recruit.ts';
-import { drainMail, enqueue } from '../src/modules/member-area/mail.ts';
+import { drainMail, enqueue, mailAccounts, mailStatus } from '../src/modules/member-area/mail.ts';
 import { HttpException } from '@nestjs/common';
 import { AuthService } from '../src/modules/auth/auth.service.ts';
 import { AuditService } from '../src/modules/audit/audit.service.ts';
@@ -927,7 +927,9 @@ test('recruitment: links are officer-only; the form is validated; batch comes fr
   assert.deepEqual([own.student_id, own.phone], ['2026-331-077', '01712345678']);
   // the photo travels as a link to GET /v1/avatars/:id, which serves the uploaded bytes
   assert.match(own.avatar_url!, /^\/api\/avatars\/rina_akter\?v=[0-9a-f]{10}$/);
-  assert.equal((await avatar(db(), 'rina_akter')).body.toString('base64'), PHOTO.split(',')[1]);
+  const v = own.avatar_url!.split('v=')[1]!;
+  assert.equal((await avatar(db(), 'rina_akter', v)).body.toString('base64'), PHOTO.split(',')[1]);
+  await refused(404, avatar(db(), 'rina_akter', 'ffffffffff')); // only the current version is served
   const other = await getMemberProfile(db(), 'tasnim', { userId: 'rina_akter' });
   assert.deepEqual([other.student_id, other.phone, other.email], [undefined, undefined, undefined]);
   const log = (
@@ -2500,7 +2502,8 @@ test('mail queue: sends within the rolling daily limit, clears bodies, pauses on
         .every((r) => +r.next_at > Date.now() + 50 * 6e4),
     );
     // a refused address fails on its own and can be retried by an officer
-    await db().query(`update mail_queue set next_at = now() where status = 'queued'`);
+    await db().query(`update mail_queue set next_at = now() where status = 'queued'`); // an hour later
+    await db().query(`delete from mail_pause`);
     await drainMail(async (x) => {
       if (x.to === 'q4@example.com')
         throw Object.assign(new Error('550 5.1.1 no such user'), { responseCode: 550 });
@@ -2513,6 +2516,128 @@ test('mail queue: sends within the rolling daily limit, clears bodies, pauses on
     assert.match((await act('sadia', { type: 'mailRetry' })) as string, /^1 email back/);
     await refused(403, act('tasnim', { type: 'mailRetry' }));
   }, '3');
+});
+
+test('mail accounts: limits add up, each account keeps its own pace and daily limit, one sender at a time', async () => {
+  const list =
+    'smtps://a%40x.org:pw@one.invalid:465?daily=3&per_minute=2&from=A%20%3Ca%40x.org%3E smtp://b@two.invalid?daily=5&per_minute=2';
+  const [a, b] = mailAccounts(list);
+  assert.deepEqual(
+    [a!.key, a!.daily, a!.perMinute, a!.from, a!.url],
+    ['a@x.org@one.invalid:465', 3, 2, 'A <a@x.org>', 'smtps://a%40x.org:pw@one.invalid:465'],
+  );
+  assert.equal(b!.key, 'b@two.invalid');
+  const was = process.env.SMTP_URL;
+  process.env.SMTP_URL = list;
+  try {
+    await db().query(`delete from mail_queue; delete from mail_pause`);
+    for (let n = 1; n <= 10; n++)
+      await enqueue(db(), {
+        to: `m${n}@example.com`,
+        subject: 'S',
+        html: 'x',
+        text: 'x',
+        kind: 'test',
+      });
+    const by: string[] = [];
+    const send = async (_m: unknown, acc: { key: string }) => void by.push(acc.key);
+    const minuteLater = () =>
+      db().query(
+        `update mail_queue set sent_at = sent_at - interval '2 minutes' where status = 'sent'`,
+      );
+    await drainMail(send); // one pass: each account's pace for this minute
+    assert.equal(by.length, 4);
+    assert.equal(by.filter((k) => k === a!.key).length, 2, 'spread across both accounts');
+    await minuteLater();
+    await drainMail(send);
+    await minuteLater();
+    await drainMail(send);
+    assert.deepEqual(
+      [by.filter((k) => k === a!.key).length, by.filter((k) => k === b!.key).length],
+      [3, 5],
+      'each stops at its own daily limit',
+    );
+    const via = (
+      await db().query(
+        `select via, count(*)::int n from mail_queue where status = 'sent' group by via order by via`,
+      )
+    ).rows;
+    assert.deepEqual(via, [
+      { via: a!.key, n: 3 },
+      { via: b!.key, n: 5 },
+    ]);
+    // a quota answer pauses only that account
+    await db().query(`delete from mail_queue where status = 'sent'`);
+    const left: string[] = [];
+    await drainMail(async (m, acc) => {
+      if (acc.key === a!.key)
+        throw Object.assign(new Error('550 5.4.5 quota exceeded'), { responseCode: 550 });
+      left.push(m.to);
+    });
+    assert.equal(left.length, 2, 'the other account carried on');
+    assert.equal(
+      (await db().query(`select via from mail_pause where until > now()`)).rows[0].via,
+      a!.key,
+    );
+    const status = await mailStatus(db());
+    assert.deepEqual(
+      status.paused.map((p: { account: string }) => p.account),
+      [a!.key],
+    );
+    // Retry wakes the paused account (the officer may have fixed it)
+    assert.equal(await act('sadia', { type: 'mailRetry' }), 'Sending again now.');
+    assert.equal((await mailStatus(db())).paused.length, 0);
+    // only one run sends at a time
+    await db().query(
+      `delete from mail_pause; update mail_queue set sent_at = now() - interval '2 days' where status = 'sent'`,
+    );
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    const first = drainMail(async () => held);
+    await new Promise((r) => setTimeout(r, 50));
+    assert.equal(
+      await drainMail(async () => void assert.fail('a second run must not send')),
+      false,
+    );
+    release();
+    await first;
+  } finally {
+    process.env.SMTP_URL = was;
+    await db().query(`delete from mail_queue; delete from mail_pause`);
+  }
+});
+
+test('mail run with a time budget waits out the per-minute pace instead of stopping', async () => {
+  const was = process.env.SMTP_URL;
+  process.env.SMTP_URL = 'smtp://c@three.invalid?per_minute=1';
+  try {
+    await db().query(`delete from mail_queue; delete from mail_pause`);
+    // this minute's one message went out 59 s ago, so the next may go in about 2 s
+    await db().query(
+      `insert into mail_queue (to_email, subject, kind, status, sent_at, via) values ('old@example.com', 'S', 'test', 'sent', now() - interval '59 seconds', 'c@three.invalid')`,
+    );
+    await enqueue(db(), {
+      to: 'next@example.com',
+      subject: 'S',
+      html: 'x',
+      text: 'x',
+      kind: 'test',
+    });
+    const sent: string[] = [];
+    assert.equal(
+      await drainMail(async (m) => void sent.push(m.to)),
+      true,
+      'one pass: paced, mail left',
+    );
+    assert.equal(sent.length, 0);
+    const t = Date.now();
+    assert.equal(await drainMail(async (m) => void sent.push(m.to), 8000), false);
+    assert.deepEqual(sent, ['next@example.com']);
+    assert.ok(Date.now() - t < 6000);
+  } finally {
+    process.env.SMTP_URL = was;
+    await db().query(`delete from mail_queue`);
+  }
 });
 
 test('mail: acceptances and event approvals are emailed with the saved designs; templates are checked', async () => {

@@ -1085,3 +1085,17 @@ alter table users add column if not exists judge_synced_at timestamptz;
 alter table users add column if not exists writes_at  timestamptz;
 alter table users add column if not exists writes_min int not null default 0;
 alter table users add column if not exists writes_day int not null default 0;
+
+-- Several sending accounts (SMTP_URL may list more than one): which account sent each message, so each
+-- account's daily and per-minute limits are counted on their own; an account paused after a quota or login error;
+-- and the one sender lease, so only one run sends at a time across every instance (serverless included).
+alter table mail_queue add column if not exists via text;
+create table if not exists mail_pause (
+  via   text primary key,
+  until timestamptz not null,
+  error text
+);
+create table if not exists mail_runner (
+  id    int primary key check (id = 1),
+  until timestamptz not null
+);

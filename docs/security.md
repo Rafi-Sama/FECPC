@@ -112,6 +112,10 @@ gives no sign-in: the account exists only after a President or Secretary accepts
   static; inline scripts are allowed for Next's hydration data.
 - The CSRF check compares the content type's essence: `text/plain; x=application/json` is not JSON.
 - HTML previews (mail, certificates) render in `sandbox=""` iframes, which run no scripts.
+- Member photos are served at `/api/avatars/:id?v=<avatar_key>` without a session, so the CDN can cache them:
+  only the current version is served (any other `v` is a 404), and `v` is 40 bits of the photo's hash, so the
+  link cannot be guessed from a member's id. Anyone given a link can open it, like any image link. Applicant
+  and profile-request photos stay behind their officer capabilities and are never cached.
 - The member CSV export neutralises spreadsheet formulas (`= + - @` prefixes) and contains no emails.
 - Logs redact cookies, authorization headers, passwords, tokens, transaction IDs and phone numbers.
 
@@ -133,7 +137,7 @@ gives no sign-in: the account exists only after a President or Secretary accepts
 - Keep the API on a private network: only the web app needs to reach it. It listens on `HOST=0.0.0.0` by
   default and trusts `X-Forwarded-For` from one hop, so if its port is public anyone can pick their own
   address and sidestep every per-address limit. Firewall it, or set `HOST=127.0.0.1` when both apps share a
-  machine. Where it must be public (Vercel), set `API_PROXY_SECRET` on both apps: the API then answers 404 to
+  machine. On Vercel it has no address at all: it runs inside the web app's functions. Where it must be public (its own host), set `API_PROXY_SECRET` on both apps: the API then answers 404 to
   any request without it (except `/health` and `/v1/cron`, which checks `CRON_SECRET`), and takes the client
   address only from the web app's `X-Client-Ip`. The secret is compared in constant time and redacted from logs.
 - Strong database credentials. Run `pnpm db:migrate` with an account that can create tables; the API itself

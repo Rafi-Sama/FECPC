@@ -1,5 +1,5 @@
 import { cookies } from 'next/headers';
-import { API, toApi } from '@/lib/api.ts';
+import { apiFetch, toApi } from '@/lib/api.ts';
 
 const NAMES: Record<string, string> = { google: 'Google', github: 'GitHub' };
 
@@ -24,11 +24,10 @@ export async function GET(req: Request, ctx: RouteContext<'/api/auth/[provider]/
     return back('That sign-in attempt expired. Try again.');
 
   try {
-    const res = await fetch(`${API()}/v1/auth/${provider}`, {
+    const res = await apiFetch(`/v1/auth/${provider}`, {
       method: 'POST',
       headers: toApi('', { 'content-type': 'application/json' }),
       body: JSON.stringify({ code }),
-      signal: AbortSignal.timeout(25_000),
     });
     if (!res.ok) {
       const err = (await res.json().catch(() => ({}))) as { detail?: string };

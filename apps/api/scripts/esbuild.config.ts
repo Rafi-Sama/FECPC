@@ -29,9 +29,9 @@ const deps = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.u
   dependencies: Record<string, string>;
 };
 
-/** dist/main.js (a Node server) and dist/vercel.js (Vercel's request handler). */
+/** dist/main.js (a Node server) and dist/inprocess.js (the API as a library, which the web app runs in-process). */
 export const options: esbuild.BuildOptions = {
-  entryPoints: { main: 'src/main.ts', vercel: 'src/vercel.ts' },
+  entryPoints: { main: 'src/main.ts', inprocess: 'src/inprocess.ts' },
   bundle: true,
   platform: 'node',
   format: 'esm',

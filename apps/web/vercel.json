@@ -1,0 +1,16 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": [
+    "sin1"
+  ],
+  "buildCommand": "cd ../.. && if [ \"$VERCEL_ENV\" = production ]; then pnpm --filter @fecpc/api db:migrate; fi && pnpm --filter @fecpc/api build && pnpm --filter @fecpc/web build",
+  "crons": [
+    {
+      "path": "/api/cron",
+      "schedule": "5 18 * * *"
+    }
+  ],
+  "git": {
+    "deploymentEnabled": false
+  }
+}

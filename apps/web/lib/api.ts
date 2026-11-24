@@ -1,8 +1,43 @@
 // Next.js API routes are a thin proxy to the NestJS API, which owns sessions, permissions and validation.
 import { headers } from 'next/headers';
+import { unstable_cache } from 'next/cache';
 import type { AppState, PublicEvent } from '@fecpc/contracts';
 
-export const API = () => process.env.API_INTERNAL_URL ?? 'http://localhost:3001';
+/**
+ * One call to the API. With API_INTERNAL_URL (local development, a self-hosted API) it goes over HTTP; without it
+ * the API runs inside this process (`@fecpc/api/inprocess`): one Vercel project, one function per request, and
+ * an API with no address of its own. Either way the request passes the API's own guards unchanged.
+ */
+export async function apiFetch(
+  path: string,
+  init: { method?: string; headers?: Headers; body?: string } = {},
+): Promise<Response> {
+  const headers = init.headers ?? new Headers();
+  const remote = process.env.API_INTERNAL_URL;
+  if (remote)
+    return fetch(remote + path, {
+      ...init,
+      headers,
+      cache: 'no-store',
+      redirect: 'manual',
+      signal: AbortSignal.timeout(30_000),
+    });
+  const { inject } = await import('@fecpc/api/inprocess');
+  const r = await inject({
+    method: (init.method ?? 'GET') as 'GET',
+    url: path,
+    headers: Object.fromEntries(headers),
+    payload: init.body,
+  });
+  const out = new Headers();
+  for (const [k, v] of Object.entries(r.headers))
+    for (const x of [v].flat()) if (x !== undefined) out.append(k, String(x));
+  const empty = r.statusCode === 204 || r.statusCode === 304;
+  return new Response(empty ? null : new Uint8Array(r.rawPayload), {
+    status: r.statusCode,
+    headers: out,
+  });
+}
 
 /** The API's session cookie: `__Host-` prefixed over HTTPS, plain in local development. */
 export const SESSION_COOKIES = ['__Host-fecpc_session', 'fecpc_session'];
@@ -53,13 +88,10 @@ export async function proxy(req: Request, path: string): Promise<Response> {
 
   let res: Response;
   try {
-    res = await fetch(API() + path, {
+    res = await apiFetch(path, {
       method: req.method,
       headers,
       body: req.method === 'GET' || req.method === 'HEAD' ? undefined : await req.text(),
-      cache: 'no-store',
-      redirect: 'manual',
-      signal: AbortSignal.timeout(30_000),
     });
   } catch {
     return Response.json({ error: 'The server is not answering. Try again.' }, { status: 502 });
@@ -101,9 +133,8 @@ async function asVisitor(): Promise<Headers | null> {
 export async function signedIn(req: Request): Promise<boolean> {
   const cookie = req.headers.get('cookie');
   if (!cookie) return false;
-  const res = await fetch(`${API()}/v1/auth/session`, {
+  const res = await apiFetch('/v1/auth/session', {
     headers: toApi(clientIp(req.headers), { cookie }),
-    cache: 'no-store',
   }).catch(() => null);
   return !!res?.ok;
 }
@@ -112,9 +143,7 @@ export async function signedIn(req: Request): Promise<boolean> {
 export async function serverState(): Promise<AppState | null> {
   const who = await asVisitor();
   if (!who) return null;
-  const res = await fetch(`${API()}/v1/me/state`, { headers: who, cache: 'no-store' }).catch(
-    () => null,
-  );
+  const res = await apiFetch('/v1/me/state', { headers: who }).catch(() => null);
   if (!res?.ok) return null;
   return ((await res.json()) as { state: AppState | null }).state;
 }
@@ -130,11 +159,10 @@ export async function serverQuery<T>(
   const who = await asVisitor();
   if (!who) return null;
   who.set('content-type', 'application/json');
-  const res = await fetch(`${API()}/v1/queries/${area}`, {
+  const res = await apiFetch(`/v1/queries/${area}`, {
     method: 'POST',
     headers: who,
     body: JSON.stringify(body),
-    cache: 'no-store',
   }).catch(() => null);
   return res?.ok ? ((await res.json()) as T) : null;
 }
@@ -143,10 +171,13 @@ export async function serverQuery<T>(
  * Upcoming events for the public site; empty when the API is down. Kept for a minute, so the home and events pages
  * are served from cache instead of rendering per visitor (seat counts may lag by up to a minute there).
  */
-export async function publicEvents(): Promise<PublicEvent[]> {
-  const res = await fetch(`${API()}/v1/events`, {
-    headers: toApi(),
-    next: { revalidate: 60 },
-  }).catch(() => null);
-  return res?.ok ? ((await res.json()) as PublicEvent[]) : [];
-}
+const events = unstable_cache(
+  async () => {
+    const res = await apiFetch('/v1/events', { headers: toApi() });
+    if (!res.ok) throw new Error(`events: ${res.status}`); // a failure is not cached
+    return (await res.json()) as PublicEvent[];
+  },
+  ['public-events'],
+  { revalidate: 60 },
+);
+export const publicEvents = (): Promise<PublicEvent[]> => events().catch(() => []);

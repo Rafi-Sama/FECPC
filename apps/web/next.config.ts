@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next';
+import { fileURLToPath } from 'node:url';
 
 const dev = process.env.NODE_ENV !== 'production';
 
@@ -21,6 +22,20 @@ const csp = [
 
 const config: NextConfig = {
   poweredByHeader: false,
+  // The API runs inside this app (lib/api.ts, apiFetch). Its prebuilt bundle and its npm packages (Nest, Fastify,
+  // pg) are loaded by Node as they are, not bundled; tracing from the repo root ships them with the functions.
+  serverExternalPackages: [
+    '@fecpc/api',
+    '@nestjs/common',
+    '@nestjs/core',
+    '@nestjs/platform-fastify',
+    'fastify',
+    'pg',
+    'nodemailer',
+    'nestjs-pino',
+    'pino',
+  ],
+  outputFileTracingRoot: fileURLToPath(new URL('../..', import.meta.url)),
   async headers() {
     return [
       {
