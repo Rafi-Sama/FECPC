@@ -151,52 +151,47 @@ export default function EventDetailPage() {
 
   return (
     <div className="page ev-detail">
-      <div className="breadcrumbs">
-        <Link href="/app/events">Events</Link> / {e.title}
+      <div className="top mono">
+        <span>
+          <Link href="/app/events">Events</Link> &nbsp;/&nbsp; {e.title}
+        </span>
+        {e.admin && (
+          <span className="live">
+            <i />Organizer mode · edit in place
+          </span>
+        )}
       </div>
 
       <div className="layout-grid">
         {/* Left Column: The Event Canvas */}
         <EventHead e={e} reload={reload} />
 
-        {/* Right Column: The Command Sidebar */}
-        <aside className="sidebar">
+        {/* Right Column: The Command Rail Sidebar */}
+        <aside className="side">
           {e.admin ? (
             <>
               <EventAdmin e={e} reload={reload} />
               {(tookPart || e.certificates.length > 0) && (
-                <details>
-                  <summary>My Attendance &amp; Certificates</summary>
-                  <div className="details-content">{renderMemberParticipation(true)}</div>
+                <details className="panel" style={{ padding: '12px 16px' }}>
+                  <summary className="mono" style={{ cursor: 'pointer', fontWeight: 600 }}>
+                    My Attendance &amp; Certificates
+                  </summary>
+                  <div style={{ marginTop: 12 }}>{renderMemberParticipation(true)}</div>
                 </details>
               )}
             </>
           ) : (
             <>
-              <div className="sidebar-panel">
-                <div className="sidebar-header">
-                  <span>Status</span>
+              <div className="panel">
+                <div className="ph">
+                  <span className="mono">Status</span>
                 </div>
-                <div className="sidebar-content">
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      marginBottom: '1rem',
-                    }}
-                  >
-                    <span className="mono" style={{ fontSize: 11, color: 'var(--dim)' }}>
-                      CURRENT STATE
-                    </span>
-                    <span
-                      className="tag dark"
-                      style={{ background: '#1a7f37', borderColor: '#1a7f37', color: 'white' }}
-                    >
-                      {(liveStatus(e) ?? EVENT_STATUS_LABEL[e.status]).toUpperCase()}
-                    </span>
-                  </div>
-                  <div className="mono" style={{ fontSize: 12, color: 'var(--mut)' }}>
+                <div className="st">
+                  <span className="state">
+                    <i />
+                    {(liveStatus(e) ?? EVENT_STATUS_LABEL[e.status]).toUpperCase()}
+                  </span>
+                  <div className="mono" style={{ fontSize: 13, marginTop: 12 }}>
                     {e.regOpen
                       ? 'Sign-up is currently open.'
                       : over

@@ -65,7 +65,7 @@ export function FieldsEditor({
         </div>
       ))}
       <button
-        className="btn xs line"
+        className="add"
         type="button"
         style={{ alignSelf: 'flex-start' }}
         onClick={() => onChange([...value, { label: '', required: false }])}

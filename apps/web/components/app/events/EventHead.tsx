@@ -6,7 +6,6 @@ import { DatePicker } from '../shared/DatePicker';
 import { SaveForm } from '../SaveBar';
 import {
   FieldsEditor,
-  Method,
   pickDraft,
   useSaveEvent,
   windowProblem,
@@ -132,41 +131,50 @@ export function EventHead({
 
   if (!editable) {
     return (
-      <div className="event-canvas">
-        <div className="hero">
-          <div className="hero-banner" data-type={e.type} style={bannerStyle(e.banner)}>
-            {!e.banner && <span>{e.title}</span>}
+      <main style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+        <div className="post">
+          <div
+            className={`banner${!e.banner ? ' has-pattern' : ''}`}
+            data-type={e.type}
+            style={bannerStyle(e.banner)}
+          >
+            {!e.banner && (
+              <span className="mono" style={{ color: '#fff', fontSize: 13, zIndex: 1 }}>
+                {e.title}
+              </span>
+            )}
           </div>
-          <div className="hero-content">
-            <div className="event-meta-tags">
-              <span className="tag primary">{e.type}</span>
-              <span className="tag dark">{liveStatus(e) ?? EVENT_STATUS_LABEL[e.status]}</span>
-              <span className="tag">{fmtWhen(e.startsAt)}</span>
-              {e.place && <span className="tag">{e.place}</span>}
-              {tags}
+          <div className="pad" style={{ paddingBottom: 24 }}>
+            <h1 className="title" style={{ cursor: 'default', margin: 0 }}>
+              {e.title}
+            </h1>
+            <div className="meta">
+              <span className="on">{e.type}</span>
+              <span className="bl">● {liveStatus(e) ?? EVENT_STATUS_LABEL[e.status]}</span>
+              <span>{fmtWhen(e.startsAt)}</span>
+              {e.place && <span>{e.place}</span>}
+              {e.seats !== null && <span>{e.seats} seats</span>}
+              <span>{e.fee > 0 ? `৳${e.fee}` : 'Free'}</span>
             </div>
-            <h1 className="event-title">{e.title}</h1>
           </div>
-        </div>
 
-        <div className="markdown-section">
-          <div className="editor-toolbar">
-            <div className="editor-tabs">
-              <button type="button" className="editor-tab active">
-                Overview
-              </button>
-            </div>
-            <span className="mono text-dim" style={{ fontSize: 11 }}>
+          <div className="tabs">
+            <button type="button" className="tab on">
+              Overview
+            </button>
+            <span className="mono" style={{ marginLeft: 'auto', alignSelf: 'center' }}>
               EVENT DETAILS
             </span>
           </div>
-          <div className="markdown-body">
-            <MarkdownView text={e.about || ''} />
+          <div className="pad">
+            <div className="ed-preview">
+              <MarkdownView text={e.about || ''} />
+            </div>
           </div>
         </div>
 
         {aside}
-      </div>
+      </main>
     );
   }
 
@@ -234,23 +242,14 @@ export function HeadFields({
   const [descTab, setDescTab] = useState<'write' | 'preview'>('write');
 
   return (
-    <div className="event-canvas">
-      {isOrganizer && !creating && (
-        <div className="edit-banner">
-          <span>ORGANIZER MODE: EDIT IN PLACE</span>
-        </div>
-      )}
-
-      <div className="hero">
-        <div
-          className="hero-banner"
-          data-type={v.type}
-          style={{
-            ...bannerStyle(v.banner ?? null),
-            cursor: 'pointer',
-            position: 'relative',
-          }}
+    <main style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+      <div className="post">
+        <button
+          type="button"
+          className={`banner${!v.banner ? ' has-pattern' : ''}`}
+          aria-label="Upload banner image"
           title="Click anywhere to choose or change banner image"
+          style={bannerStyle(v.banner ?? null)}
           onClick={() => fileInputRef.current?.click()}
         >
           <input
@@ -269,191 +268,142 @@ export function HeadFields({
               r.readAsDataURL(f);
             }}
           />
-
-          {!v.banner ? (
-            <div
-              style={{
-                position: 'absolute',
-                inset: 0,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: 'rgba(0,0,0,0.3)',
-              }}
+          <span className="up">
+            <svg
+              width="22"
+              height="22"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="square"
             >
-              <span
-                className="mono"
-                style={{
-                  fontSize: 12,
-                  fontWeight: 600,
-                  background: 'var(--panel)',
-                  color: 'var(--hi)',
-                  padding: '6px 14px',
-                  border: '2px solid var(--line2)',
-                  boxShadow: '3px 3px 0 var(--line2)',
-                }}
-              >
-                📷 Click anywhere to upload a banner image
-              </span>
-            </div>
-          ) : (
-            <div
-              style={{
-                position: 'absolute',
-                top: 10,
-                right: 10,
-                display: 'flex',
-                gap: 6,
-                zIndex: 2,
-              }}
-            >
-              <span
-                className="tag dark"
-                style={{
-                  background: 'rgba(0,0,0,0.7)',
-                  borderColor: 'rgba(255,255,255,0.4)',
-                  color: '#fff',
-                  fontSize: 11,
-                }}
-              >
-                Click to change
-              </span>
+              <path d="M11 18V4M5 10l6-6 6 6" />
+            </svg>
+          </span>
+          {v.banner && (
+            <div className="banner-actions" onClick={(e) => e.stopPropagation()}>
+              <span className="banner-badge">Click anywhere to change</span>
               <button
                 type="button"
-                className="btn xs danger"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  set({ banner: null });
-                }}
+                className="banner-remove"
+                onClick={() => set({ banner: null })}
               >
                 Remove
               </button>
             </div>
           )}
-        </div>
+        </button>
 
-        <div className="hero-content">
-          <div className="event-meta-tags">
-            <select
-              className="tag primary"
-              aria-label="Type"
-              value={v.type}
-              onChange={(x) => set({ type: x.target.value })}
-            >
-              {EVENT_TYPES.map((t) => (
-                <option key={t}>{t}</option>
-              ))}
-            </select>
-            {tags}
-            <DatePicker
-              time
-              required
-              label="Starts"
-              className="tag"
-              placeholder="Pick a start"
-              min={creating ? clubNow().slice(0, 10) : undefined}
-              value={v.startsAt ?? ''}
-              onChange={(x) => set({ startsAt: x })}
-            />
-            <input
-              form={FORM}
-              className="tag"
-              aria-label="Place"
-              placeholder="Add a place"
-              maxLength={140}
-              size={Math.max(10, (v.place ?? '').length + 1)}
-              value={v.place}
-              onChange={(x) => set({ place: x.target.value })}
-            />
-            <label className="tag" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-              <span className="mono text-dim">Seats:</span>
+        <div className="pad" style={{ paddingBottom: 24 }}>
+          <input
+            form={FORM}
+            className="title"
+            value={v.title}
+            placeholder="Event title"
+            aria-label="Event title"
+            required
+            minLength={3}
+            maxLength={140}
+            onChange={(x) => set({ title: x.target.value.replace(/\s*\n\s*/g, ' ') })}
+          />
+          <div className="meta">
+            <span className="on">
+              <select
+                value={v.type}
+                onChange={(x) => set({ type: x.target.value })}
+                aria-label="Event type"
+              >
+                {EVENT_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </span>
+            {tags ? (
+              <span className="bl">{tags}</span>
+            ) : (
+              <span className="bl">● Sign-up open</span>
+            )}
+            <span>
+              <DatePicker
+                time
+                required
+                label="Starts"
+                placeholder="Pick a start"
+                min={creating ? clubNow().slice(0, 10) : undefined}
+                value={v.startsAt ?? ''}
+                onChange={(x) => set({ startsAt: x })}
+              />
+            </span>
+            <span>
+              <input
+                form={FORM}
+                aria-label="Place"
+                placeholder="Add a place"
+                maxLength={140}
+                size={Math.max(8, (v.place ?? '').length + 1)}
+                value={v.place}
+                onChange={(x) => set({ place: x.target.value })}
+              />
+            </span>
+            <span>
               <input
                 form={FORM}
                 type="number"
                 min={1}
                 placeholder="No limit"
-                style={{
-                  width: 64,
-                  background: 'transparent',
-                  border: 'none',
-                  color: 'inherit',
-                  font: 'inherit',
-                  padding: 0,
-                  outline: 'none',
-                }}
+                style={{ width: 56 }}
                 value={v.seats ?? ''}
                 onChange={(e) => set({ seats: e.target.value ? +e.target.value : null })}
               />
-            </label>
-            <label className="tag" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-              <span className="mono text-dim">Fee: ৳</span>
+              <span className="mono" style={{ fontSize: 11, color: 'var(--dim)' }}>
+                seats
+              </span>
+            </span>
+            <span>
+              <span className="mono" style={{ fontSize: 11, color: 'var(--dim)' }}>
+                ৳
+              </span>
               <input
                 form={FORM}
                 type="number"
                 min={0}
                 placeholder="Free"
-                style={{
-                  width: 52,
-                  background: 'transparent',
-                  border: 'none',
-                  color: 'inherit',
-                  font: 'inherit',
-                  padding: 0,
-                  outline: 'none',
-                }}
+                style={{ width: 44 }}
                 value={v.fee || ''}
                 onChange={(e) => set({ fee: Math.max(0, parseInt(e.target.value, 10) || 0) })}
               />
-            </label>
+            </span>
           </div>
-
-          <h1 className="event-title">
-            <textarea
-              form={FORM}
-              className="edit-input"
-              aria-label="Title"
-              placeholder="Event title"
-              required
-              rows={1}
-              minLength={3}
-              maxLength={140}
-              value={v.title}
-              onKeyDown={(x) => x.key === 'Enter' && x.preventDefault()}
-              onChange={(x) => set({ title: x.target.value.replace(/\s*\n\s*/g, ' ') })}
-              spellCheck={false}
-            />
-          </h1>
         </div>
-      </div>
 
-      <div className="markdown-section">
-        <div className="editor-toolbar">
-          <div className="editor-tabs">
-            <button
-              type="button"
-              className={`editor-tab ${descTab === 'write' ? 'active' : ''}`}
-              onClick={() => setDescTab('write')}
-            >
-              Write
-            </button>
-            <button
-              type="button"
-              className={`editor-tab ${descTab === 'preview' ? 'active' : ''}`}
-              onClick={() => setDescTab('preview')}
-            >
-              Preview
-            </button>
-          </div>
-          <span className="mono text-dim" style={{ fontSize: 11 }}>
-            MARKDOWN SUPPORTED
+        <div className="tabs">
+          <button
+            type="button"
+            className={`tab ${descTab === 'write' ? 'on' : ''}`}
+            onClick={() => setDescTab('write')}
+          >
+            Write
+          </button>
+          <button
+            type="button"
+            className={`tab ${descTab === 'preview' ? 'on' : ''}`}
+            onClick={() => setDescTab('preview')}
+          >
+            Preview
+          </button>
+          <span className="mono" style={{ marginLeft: 'auto', alignSelf: 'center' }}>
+            Markdown supported
           </span>
         </div>
-        <div className="markdown-body">
+
+        <div className="pad">
           {descTab === 'write' ? (
             <textarea
               form={FORM}
-              className="edit-input"
-              aria-label="Description"
+              className="ed"
+              aria-label="Event description"
               placeholder="What will happen, who it's for, what to bring."
               rows={8}
               maxLength={6000}
@@ -461,75 +411,103 @@ export function HeadFields({
               onChange={(x) => set({ about: x.target.value })}
             />
           ) : (
-            <MarkdownView text={v.about || ''} />
+            <div className="ed-preview">
+              <MarkdownView text={v.about || ''} />
+            </div>
           )}
         </div>
       </div>
 
       {/* In-place Sign-up Configuration & Questions on the canvas */}
       {!creating && isOrganizer && (
-        <section
-          className="panel stack"
-          style={{
-            border: '2px solid var(--line2)',
-            background: 'var(--panel)',
-            padding: '1.25rem',
-            gap: '1rem',
-          }}
-        >
-          <div
-            className="row between"
-            style={{
-              borderBottom: '1px solid var(--line)',
-              paddingBottom: '0.6rem',
-            }}
-          >
-            <div>
-              <h3 className="h3" style={{ fontSize: 16, margin: 0 }}>
-                Registration &amp; Sign-up
-              </h3>
-              <span className="mono text-dim" style={{ fontSize: 11 }}>
-                Configure sign-up method, window and custom questions
-              </span>
+        <div className="sec-box">
+          <div className="sec" style={{ borderTop: 0 }}>
+            <h2>Registration &amp; sign-up</h2>
+            <p className="sub">Configure the sign-up method, window and custom questions.</p>
+            <div className="f">
+              <div>
+                <label className="mono" htmlFor="reg-how">
+                  How do people sign up?
+                </label>
+                <select
+                  id="reg-how"
+                  className="ctl"
+                  value={v.mode}
+                  onChange={(x) => set({ mode: x.target.value as any })}
+                >
+                  <option value="platform">Here, on this site</option>
+                  <option value="form">With a Google Form</option>
+                </select>
+              </div>
+              <div>
+                <label className="mono" htmlFor="reg-approval">
+                  Who gets in?
+                </label>
+                <select
+                  id="reg-approval"
+                  className="ctl"
+                  disabled={v.mode === 'form'}
+                  value={v.approval}
+                  onChange={(x) => set({ approval: x.target.value as any })}
+                >
+                  <option value="auto">Everyone, automatically</option>
+                  <option value="manual">Only those I approve</option>
+                </select>
+              </div>
+              {v.mode === 'form' && (
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label className="mono" htmlFor="reg-form-url">
+                    Google Form link
+                  </label>
+                  <input
+                    id="reg-form-url"
+                    className="ctl"
+                    type="url"
+                    placeholder="https://forms.gle/..."
+                    value={v.formUrl ?? ''}
+                    onChange={(x) => set({ formUrl: x.target.value || null })}
+                  />
+                </div>
+              )}
+              <div>
+                <label className="mono">Sign-up opens · optional</label>
+                <DatePicker
+                  time
+                  label="Sign-up opens"
+                  className="ctl"
+                  placeholder="Follows status"
+                  max={v.regCloses || v.startsAt}
+                  invalid={!!v.regOpens && !!windowProblem({ ...v, regCloses: null })}
+                  value={v.regOpens ?? ''}
+                  onChange={(x) => set({ regOpens: x || null })}
+                />
+              </div>
+              <div>
+                <label className="mono">Sign-up closes · optional</label>
+                <DatePicker
+                  time
+                  label="Sign-up closes"
+                  className="ctl"
+                  placeholder="Until event starts"
+                  min={v.regOpens}
+                  max={v.startsAt}
+                  invalid={!!v.regCloses && !!windowProblem({ ...v, regOpens: null })}
+                  value={v.regCloses ?? ''}
+                  onChange={(x) => set({ regCloses: x || null })}
+                />
+              </div>
             </div>
           </div>
-
-          <Method v={v as any} set={set as any} />
-
-          <div className="row ev-pair" style={{ gap: '1rem' }}>
-            <label className="field grow">
-              <span className="label">Sign-up opens (optional)</span>
-              <DatePicker
-                time
-                label="Sign-up opens"
-                placeholder="Follows status"
-                max={v.regCloses || v.startsAt}
-                invalid={!!v.regOpens && !!windowProblem({ ...v, regCloses: null })}
-                value={v.regOpens ?? ''}
-                onChange={(x) => set({ regOpens: x || null })}
-              />
-            </label>
-            <label className="field grow">
-              <span className="label">Sign-up closes (optional)</span>
-              <DatePicker
-                time
-                label="Sign-up closes"
-                placeholder="Until event starts"
-                min={v.regOpens}
-                max={v.startsAt}
-                invalid={!!v.regCloses && !!windowProblem({ ...v, regOpens: null })}
-                value={v.regCloses ?? ''}
-                onChange={(x) => set({ regCloses: x || null })}
-              />
-            </label>
-          </div>
-
           {v.mode !== 'form' && (
-            <div style={{ marginTop: 8, paddingTop: 12, borderTop: '1px solid var(--line)' }}>
+            <div className="sec">
+              <h2 style={{ fontSize: 16 }}>Extra questions</h2>
+              <p className="sub" style={{ marginBottom: 16 }}>
+                We always ask for name and phone. Add anything else you need to know.
+              </p>
               <FieldsEditor value={v.fields ?? []} onChange={(fields) => set({ fields })} />
             </div>
           )}
-        </section>
+        </div>
       )}
 
       {error && (
@@ -539,6 +517,6 @@ export function HeadFields({
       )}
 
       {aside}
-    </div>
+    </main>
   );
 }
