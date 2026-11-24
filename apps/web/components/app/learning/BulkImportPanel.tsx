@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
-import { bulkImportQuizQuestions, stripJsonComments, LearningApiError } from '@/lib/learning.ts';
+import { stripJsonComments } from '@/lib/learning.ts';
+import { useStore } from '@/components/app/Store';
 
 const EXAMPLE_JSON = `[
   // Each question needs: q, options (exactly 4) and answer (0-3 = position of the correct option, starting at 0)
@@ -9,11 +10,8 @@ const EXAMPLE_JSON = `[
   {"q":"Which structure does BFS use?","options":["Stack","Queue","Heap","Set"],"answer":1}
 ]`;
 
-export function BulkImportPanel({
-  onImportSuccess,
-}: {
-  onImportSuccess: () => void;
-}) {
+export function BulkImportPanel() {
+  const { act } = useStore();
   const [open, setOpen] = useState(false);
   const [rawText, setRawText] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -74,7 +72,10 @@ export function BulkImportPanel({
         item.q.trim().length > 200 ||
         !Array.isArray(item.options) ||
         item.options.length !== 4 ||
-        item.options.some((opt: any) => !opt || typeof opt !== 'string' || opt.trim().length === 0 || opt.trim().length > 200) ||
+        item.options.some(
+          (opt: any) =>
+            !opt || typeof opt !== 'string' || opt.trim().length === 0 || opt.trim().length > 200,
+        ) ||
         typeof item.answer !== 'number' ||
         !Number.isInteger(item.answer) ||
         item.answer < 0 ||
@@ -91,21 +92,12 @@ export function BulkImportPanel({
       return;
     }
 
-    try {
-      setSubmitting(true);
-      const res = await bulkImportQuizQuestions(parsed);
-      setSuccess(`Successfully imported ${res.count} question${res.count > 1 ? 's' : ''}!`);
-      setRawText('');
-      onImportSuccess();
-    } catch (err: any) {
-      if (err instanceof LearningApiError) {
-        setError(err.message);
-      } else {
-        setError('Bulk import failed. Please verify question format.');
-      }
-    } finally {
-      setSubmitting(false);
-    }
+    setSubmitting(true);
+    const ok = await act('quizImport', { questions: parsed });
+    setSubmitting(false);
+    if (!ok) return;
+    setSuccess(`Imported ${parsed.length} question${parsed.length > 1 ? 's' : ''}.`);
+    setRawText('');
   };
 
   return (
@@ -123,7 +115,7 @@ export function BulkImportPanel({
       {open && (
         <form className="bulk-panel-content" onSubmit={handleSubmit}>
           <div>
-            <p className="body" style={{ fontSize: 13, color: 'var(--dim)', marginBottom: 8 }}>
+            <p className="body" style={{ color: 'var(--dim)', marginBottom: 8 }}>
               Bulk format example (supports comments):
             </p>
             <div className="json-example-box">{EXAMPLE_JSON}</div>
@@ -131,11 +123,7 @@ export function BulkImportPanel({
 
           <div className="row between" style={{ alignItems: 'center' }}>
             <span className="label">JSON Questions (max 200)</span>
-            <button
-              type="button"
-              className="btn xs line"
-              onClick={handleUseExample}
-            >
+            <button type="button" className="btn xs line" onClick={handleUseExample}>
               Use the example
             </button>
           </div>

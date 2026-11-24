@@ -9,8 +9,8 @@ import { SignUp } from '@/components/app/events/SignUp';
 import { CertPreview } from '@/components/app/events/CertPreview';
 import { EventHead } from '@/components/app/events/EventHead';
 import { useStore } from '@/components/app/Store';
-import type { EventDetail } from '@fecpc/contracts';
-import { clubNow, renderCertificate, useEventsQuery } from '@/lib/events';
+import { type EventDetail } from '@fecpc/contracts';
+import { clubNow, fmtWhen, renderCertificate, useEventsQuery } from '@/lib/events';
 
 const CERT_NAME: Record<string, string> = {
   participant: 'Participation',
@@ -32,110 +32,212 @@ export default function EventDetailPage() {
   const certName = (k: string) =>
     CERT_NAME[k] ?? e.roles.find((r) => `role:${r.id}` === k)?.title ?? k;
 
+  const renderMemberParticipation = (isOrg = false) => (
+    <div className="stack" style={{ gap: '1rem' }}>
+      {e.certificates.length ? (
+        <div className="panel">
+          <div className="ph">
+            <span
+              className="mono"
+              style={{
+                fontSize: 14,
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.08em',
+              }}
+            >
+              Your certificates
+            </span>
+          </div>
+          <div className="st stack">
+            {e.certificates.map((c) => (
+              <div key={c.code} className="stack">
+                <span className="mono" style={{ fontSize: 14, fontWeight: 600 }}>
+                  {certName(c.kind)} <span className="text-dim">({c.code})</span>
+                </span>
+                <CertPreview html={c.html} title={`${certName(c.kind)} certificate preview`} />
+                <div className="row" style={{ gap: 8, marginTop: 8 }}>
+                  <span className="mono text-dim" style={{ fontSize: 14 }}>
+                    Download:
+                  </span>
+                  {(['png', 'jpeg'] as const).map((t) => (
+                    <button
+                      key={t}
+                      className="eb"
+                      type="button"
+                      onClick={() => renderCertificate(c.html, t, `${e.id}-${c.code}`)}
+                    >
+                      {t.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : e.status === 'completed' && tookPart ? (
+        <div className="panel">
+          <div className="ph">
+            <span
+              className="mono"
+              style={{
+                fontSize: 14,
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.08em',
+              }}
+            >
+              Your certificates
+            </span>
+          </div>
+          <div className="st">
+            <p className="mono text-dim" style={{ fontSize: 14, margin: 0 }}>
+              Not issued yet. They will appear here to download.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="panel">
+          <div
+            className="ph"
+            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+          >
+            <span
+              className="mono"
+              style={{
+                fontSize: 14,
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.08em',
+              }}
+            >
+              Participate
+            </span>
+            {e.mode === 'platform' && left !== null && (
+              <span className="mono text-dim" style={{ fontSize: 14 }}>
+                {left} of {e.seats} left
+              </span>
+            )}
+          </div>
+          <div className="st stack">
+            <SignUp
+              eventId={e.id}
+              mode={e.mode}
+              formUrl={e.formUrl}
+              fields={e.fields}
+              entry={entry(null)}
+              open={e.regOpen && left !== 0}
+              locked={over}
+              closedText={
+                over
+                  ? `This event is ${e.status}.`
+                  : left === 0 && e.regOpen
+                    ? 'Full.'
+                    : e.regOpens && e.regOpens > clubNow()
+                      ? `Sign-up opens ${fmtWhen(e.regOpens)}.`
+                      : 'Registration is not open.'
+              }
+              done={reload}
+            />
+            {e.fee > 0 && entry(null)?.status === 'approved' && (
+              <Link
+                className="eb"
+                style={{ textAlign: 'center', marginTop: 8 }}
+                href="/app/finance"
+              >
+                Pay ৳{e.fee}
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
+
+      {e.status === 'completed' && tookPart && <FeedbackForm e={e} done={reload} />}
+      {['open', 'closed', 'ongoing'].includes(e.status) &&
+        (e.admin ||
+          (entry(null)?.status === 'approved' &&
+            e.startsAt.slice(0, 10) <= clubNow().slice(0, 10))) && <CheckIn e={e} />}
+
+      {!over &&
+        !isOrg &&
+        e.roles.map((r) => (
+          <div key={r.id} className="panel">
+            <div className="ph">
+              <span
+                className="mono"
+                style={{
+                  fontSize: 14,
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.08em',
+                }}
+              >
+                {r.title}
+              </span>
+            </div>
+            <div className="st stack">
+              {r.about && (
+                <span
+                  className="mono text-dim"
+                  style={{ fontSize: 14, marginBottom: 8, display: 'block' }}
+                >
+                  {r.about}
+                </span>
+              )}
+              <SignUp
+                eventId={e.id}
+                roleId={r.id}
+                mode={r.mode}
+                formUrl={r.formUrl}
+                fields={r.fields}
+                entry={entry(r.id)}
+                open={['published', 'open', 'closed'].includes(e.status)}
+                closedText="Applications are closed."
+                done={reload}
+              />
+            </div>
+          </div>
+        ))}
+    </div>
+  );
+
   return (
     <div className="page ev-detail">
-      <p className="label">
-        <Link href="/app/events">Events</Link> / {e.title}
-      </p>
-      <EventHead
-        e={e}
-        reload={reload}
-        aside={
-          <aside className="stack ev-aside">
-            {e.certificates.length ? (
-              <section className="panel stack ev-card">
-                <b>Your certificates</b>
-                {e.certificates.map((c) => (
-                  <div key={c.code} className="stack">
-                    <span>
-                      {certName(c.kind)} <span className="label mono">{c.code}</span>
-                    </span>
-                    <CertPreview html={c.html} title={`${certName(c.kind)} certificate preview`} />
-                    <div className="row">
-                      <span className="label">Download</span>
-                      {(['png', 'jpeg'] as const).map((t) => (
-                        <button
-                          key={t}
-                          className="btn sm"
-                          type="button"
-                          onClick={() => renderCertificate(c.html, t, `${e.id}-${c.code}`)}
-                        >
-                          {t === 'png' ? 'PNG' : 'JPG'}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </section>
-            ) : e.status === 'completed' && tookPart ? (
-              <section className="panel stack ev-card">
-                <b>Your certificates</b>
-                <p className="label">Not issued yet. They will appear here to download.</p>
-              </section>
-            ) : (
-              <section className="panel stack ev-card">
-                <div className="row between">
-                  <b>Participate</b>
-                  {e.mode === 'platform' && left !== null && (
-                    <span className="label">
-                      {left} of {e.seats} left
-                    </span>
-                  )}
-                </div>
-                <SignUp
-                  eventId={e.id}
-                  mode={e.mode}
-                  formUrl={e.formUrl}
-                  fields={e.fields}
-                  entry={entry(null)}
-                  open={e.regOpen && left !== 0}
-                  locked={over}
-                  closedText={
-                    over
-                      ? `This event is ${e.status}.`
-                      : left === 0 && e.regOpen
-                        ? 'Full.'
-                        : 'Registration is not open.'
-                  }
-                  done={reload}
-                />
-                {e.fee > 0 && entry(null)?.status === 'approved' && (
-                  <Link className="btn sm line" href="/app/finance">
-                    Pay ৳{e.fee}
-                  </Link>
-                )}
-              </section>
-            )}
+      <div className="top mono">
+        <span>
+          <Link href="/app/events">Events</Link> &nbsp;/&nbsp; {e.title}
+        </span>
+        {e.admin && (
+          <span className="live">
+            <i />
+            Organizer mode · edit in place
+          </span>
+        )}
+      </div>
 
-            {e.status === 'completed' && tookPart && <FeedbackForm e={e} done={reload} />}
-            {['open', 'closed', 'ongoing'].includes(e.status) &&
-              (e.admin ||
-                // Members get the code box from the event's day on.
-                (entry(null)?.status === 'approved' &&
-                  e.startsAt.slice(0, 10) <= clubNow().slice(0, 10))) && <CheckIn e={e} />}
+      <div className="layout-grid">
+        {/* Left Column: The Event Canvas */}
+        <EventHead e={e} reload={reload} />
 
-            {!over &&
-              e.roles.map((r) => (
-                <section key={r.id} className="panel stack ev-card">
-                  <b>{r.title}</b>
-                  {r.about && <span className="label">{r.about}</span>}
-                  <SignUp
-                    eventId={e.id}
-                    roleId={r.id}
-                    mode={r.mode}
-                    formUrl={r.formUrl}
-                    fields={r.fields}
-                    entry={entry(r.id)}
-                    open={['published', 'open', 'closed'].includes(e.status)}
-                    closedText="Applications are closed."
-                    done={reload}
-                  />
-                </section>
-              ))}
-          </aside>
-        }
-      />
-      {e.admin && <EventAdmin e={e} reload={reload} />}
+        {/* Right Column: The Command Rail Sidebar */}
+        <aside className="side">
+          {e.admin ? (
+            <>
+              <EventAdmin e={e} reload={reload} />
+              {(tookPart || e.certificates.length > 0) && (
+                <details className="panel" style={{ padding: '12px 16px' }}>
+                  <summary className="mono" style={{ cursor: 'pointer', fontWeight: 600 }}>
+                    My Attendance &amp; Certificates
+                  </summary>
+                  <div style={{ marginTop: 12 }}>{renderMemberParticipation(true)}</div>
+                </details>
+              )}
+            </>
+          ) : (
+            renderMemberParticipation(false)
+          )}
+        </aside>
+      </div>
     </div>
   );
 }
@@ -148,37 +250,60 @@ function CheckIn({ e }: { e: EventDetail }) {
   const approved = e.mine.some((x) => x.roleId === null && x.status === 'approved');
   return (
     <form
-      className="panel stack ev-card"
+      className="panel"
       onSubmit={async (x) => {
         x.preventDefault();
         if (await act('attend', { eventId: e.id, code })) setCode('');
       }}
     >
-      <b>Check in</b>
-      {room && (
-        <div className="ev-code">
-          <span className="label">Room code</span>
-          <span className="mono">{room.code}</span>
-          <span className="label">{room.arrived} checked in</span>
-        </div>
-      )}
-      {!approved ? null : s.present.includes(e.id) ? (
-        <p className="ok">You are checked in.</p>
-      ) : (
-        <div className="row">
-          <input
-            className="input grow"
-            aria-label="Room code"
-            placeholder="Code on the projector"
-            value={code}
-            maxLength={12}
-            onChange={(x) => setCode(x.target.value)}
-          />
-          <button className="btn sm" disabled={code.trim().length < 4}>
-            Check in
-          </button>
-        </div>
-      )}
+      <div className="ph">
+        <span
+          className="mono"
+          style={{
+            fontSize: 14,
+            fontWeight: 700,
+            textTransform: 'uppercase',
+            letterSpacing: '0.08em',
+          }}
+        >
+          Check in
+        </span>
+      </div>
+      <div className="st stack">
+        {room && (
+          <div className="ev-code" style={{ marginBottom: 12 }}>
+            <span className="mono text-dim" style={{ fontSize: 14 }}>
+              ROOM CODE
+            </span>
+            <span
+              className="mono"
+              style={{ fontSize: 32, fontWeight: 700, letterSpacing: '0.1em' }}
+            >
+              {room.code}
+            </span>
+            <span className="mono text-dim" style={{ fontSize: 14 }}>
+              {room.arrived} checked in
+            </span>
+          </div>
+        )}
+        {!approved ? null : s.present.includes(e.id) ? (
+          <p className="ok">You are checked in.</p>
+        ) : (
+          <div className="row">
+            <input
+              className="form-control"
+              aria-label="Room code"
+              placeholder="Code on the projector"
+              value={code}
+              maxLength={12}
+              onChange={(x) => setCode(x.target.value)}
+            />
+            <button className="btn xs solid" disabled={code.trim().length < 4}>
+              Check in
+            </button>
+          </div>
+        )}
+      </div>
     </form>
   );
 }
@@ -189,13 +314,18 @@ function FeedbackForm({ e, done }: { e: EventDetail; done: () => void }) {
   const [body, setBody] = useState('');
   if (e.feedback)
     return (
-      <section className="panel ev-card">
-        <p className="ok">Thanks. You rated it {e.feedback.rating}/5.</p>
+      <section className="sidebar-panel">
+        <div className="sidebar-header">
+          <span>Feedback</span>
+        </div>
+        <div className="sidebar-content">
+          <p className="ok">Thanks. You rated it {e.feedback.rating}/5.</p>
+        </div>
       </section>
     );
   return (
     <SaveForm
-      className="panel stack ev-card"
+      className="sidebar-panel stack"
       label="Feedback not sent"
       saveLabel="Send feedback"
       extraDirty={rating > 0}
@@ -213,30 +343,34 @@ function FeedbackForm({ e, done }: { e: EventDetail; done: () => void }) {
         return ok;
       }}
     >
-      <b>How was it?</b>
-      <div className="row" role="radiogroup" aria-label="Rating">
-        {[1, 2, 3, 4, 5].map((v) => (
-          <button
-            key={v}
-            type="button"
-            role="radio"
-            aria-checked={rating === v}
-            className={`tag tab ${rating === v ? 'on' : ''}`}
-            onClick={() => setRating(v)}
-          >
-            {v}
-          </button>
-        ))}
+      <div className="sidebar-header">
+        <span>How was it?</span>
       </div>
-      <textarea
-        className="input"
-        aria-label="What should change next time?"
-        placeholder="What should change next time?"
-        rows={3}
-        maxLength={2000}
-        value={body}
-        onChange={(x) => setBody(x.target.value)}
-      />
+      <div className="sidebar-content stack">
+        <div className="row" role="radiogroup" aria-label="Rating">
+          {[1, 2, 3, 4, 5].map((v) => (
+            <button
+              key={v}
+              type="button"
+              role="radio"
+              aria-checked={rating === v}
+              className={`tag tab ${rating === v ? 'on' : ''}`}
+              onClick={() => setRating(v)}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
+        <textarea
+          className="form-control"
+          aria-label="What should change next time?"
+          placeholder="What should change next time?"
+          rows={3}
+          maxLength={2000}
+          value={body}
+          onChange={(x) => setBody(x.target.value)}
+        />
+      </div>
     </SaveForm>
   );
 }

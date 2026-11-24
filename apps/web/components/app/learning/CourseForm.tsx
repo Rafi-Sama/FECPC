@@ -1,15 +1,9 @@
 'use client';
 import { useState } from 'react';
-import type { Course } from '@/lib/learning.ts';
-import { createCourse, LearningApiError } from '@/lib/learning.ts';
+import { useStore } from '@/components/app/Store';
 
-export function CourseForm({
-  onCourseCreated,
-  onCancel,
-}: {
-  onCourseCreated: (course: Course) => void;
-  onCancel?: () => void;
-}) {
+export function CourseForm({ onDone, onCancel }: { onDone: () => void; onCancel?: () => void }) {
+  const { act } = useStore();
   const [title, setTitle] = useState('');
   const [instructor, setInstructor] = useState('');
   const [durationWeeks, setDurationWeeks] = useState('4');
@@ -49,30 +43,16 @@ export function CourseForm({
       return;
     }
 
-    try {
-      setSubmitting(true);
-      const newCourse = await createCourse({
-        title: trimmedTitle,
-        instructor: trimmedInstructor,
-        duration_weeks: weeks,
-        description: trimmedDesc,
-        url: trimmedUrl,
-      });
-      setTitle('');
-      setInstructor('');
-      setDurationWeeks('4');
-      setDescription('');
-      setUrl('');
-      onCourseCreated(newCourse);
-    } catch (err: any) {
-      if (err instanceof LearningApiError) {
-        setError(err.message);
-      } else {
-        setError('Failed to create course. Please try again.');
-      }
-    } finally {
-      setSubmitting(false);
-    }
+    setSubmitting(true);
+    const ok = await act('courseAdd', {
+      title: trimmedTitle,
+      instructor: trimmedInstructor,
+      weeks,
+      description: trimmedDesc,
+      url: trimmedUrl,
+    });
+    setSubmitting(false);
+    if (ok) onDone();
   };
 
   return (

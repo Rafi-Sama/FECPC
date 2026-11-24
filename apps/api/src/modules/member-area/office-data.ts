@@ -88,8 +88,71 @@ export const reports = {
   retention: [71, 74, 70, 78, 81, 79, 84, 86],
   solves: [410, 520, 480, 690, 760, 720, 910, 1040],
 };
-export const quizAnswers: Record<string, number[]> = {
-  dp: [1, 2, 0],
-  cpp: [1, 2, 1],
-  graphs: [0, 1, 2],
-};
+
+// Placeholder courses and quiz questions for a fresh database (/app/courses, /app/quiz).
+export const courses = [
+  {
+    title: 'Competitive Programming Core: Algorithms & Data Structures',
+    instructor: 'Tasnim Ahmed',
+    duration_weeks: 12,
+    description:
+      'Master binary search, graph traversals, shortest paths, dynamic programming, and segment trees.',
+    url: 'https://cp-algorithms.com',
+  },
+  {
+    title: 'Introduction to Modern C++ for Contests',
+    instructor: 'Tanvir Hossain',
+    duration_weeks: 4,
+    description:
+      'Fast I/O, STL containers, iterators, lambdas, bitsets, and custom comparators for speed.',
+    url: 'https://en.cppreference.com/w/cpp',
+  },
+  {
+    title: 'Graph Theory & Network Flows Deep Dive',
+    instructor: 'Anika Rahman',
+    duration_weeks: 8,
+    description:
+      'DFS/BFS trees, articulation points, bridges, 2-SAT, Dinic algorithm, and min-cost max-flow.',
+    url: 'https://usaco.guide/advanced',
+  },
+];
+export const quizBank = [
+  {
+    question:
+      'What is the worst-case time complexity of binary search on a sorted array of size n?',
+    options: ['O(1)', 'O(log n)', 'O(n)', 'O(n log n)'],
+    correct_index: 1,
+  },
+  {
+    question: 'Which abstract data structure does Breadth-First Search (BFS) typically use?',
+    options: ['Queue', 'Stack', 'Priority Queue', 'Disjoint Set Union'],
+    correct_index: 0,
+  },
+  {
+    question: 'What is the time complexity of building a Segment Tree for an array of size n?',
+    options: ['O(log n)', 'O(n)', 'O(n log n)', 'O(n^2)'],
+    correct_index: 1,
+  },
+  {
+    question:
+      'In Dijkstra algorithm with a binary min-heap, what is the standard time complexity for graph G(V, E)?',
+    options: ['O(V^2)', 'O(V + E)', 'O((V + E) log V)', 'O(V * E)'],
+    correct_index: 2,
+  },
+  {
+    question:
+      'What is the space complexity of an adjacency matrix representation for a graph with V vertices?',
+    options: ['O(V)', 'O(V + E)', 'O(V^2)', 'O(E^2)'],
+    correct_index: 2,
+  },
+  {
+    question: 'Which of the following problems can NOT be solved in polynomial time unless P = NP?',
+    options: [
+      'Minimum Spanning Tree',
+      '0/1 Knapsack (exact)',
+      'Shortest Path with negative weights (no cycle)',
+      'Eulerian Circuit',
+    ],
+    correct_index: 1,
+  },
+];

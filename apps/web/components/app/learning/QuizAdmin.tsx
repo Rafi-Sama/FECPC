@@ -1,13 +1,12 @@
 'use client';
-import { useCallback, useEffect, useState } from 'react';
-import type { QuizQuestion } from '@/lib/learning.ts';
-import { fetchAllQuizQuestions, createQuizQuestion, LearningApiError } from '@/lib/learning.ts';
+import { useState } from 'react';
+import { useStore } from '@/components/app/Store';
 import { BulkImportPanel } from './BulkImportPanel.tsx';
 import { QuizBankModal } from './QuizBankModal.tsx';
 
 export function QuizAdmin() {
-  const [questions, setQuestions] = useState<QuizQuestion[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { quizBank, act } = useStore();
+  const questions = quizBank ?? [];
   const [modalOpen, setModalOpen] = useState(false);
 
   // Add one question form state
@@ -17,22 +16,6 @@ export function QuizAdmin() {
   const [formError, setFormError] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-
-  const loadQuestions = useCallback(async () => {
-    try {
-      setLoading(true);
-      const list = await fetchAllQuizQuestions();
-      setQuestions(list);
-    } catch {
-      // silently handle, user can retry
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadQuestions();
-  }, [loadQuestions]);
 
   const handleCreateOne = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,39 +34,26 @@ export function QuizAdmin() {
       return;
     }
 
-    try {
-      setSubmitting(true);
-      const newQ = await createQuizQuestion({
-        question: trimmedQ,
-        options: trimmedOpts,
-        correct_index: correctIndex,
-      });
-
-      setQuestions((prev) => [newQ, ...prev]);
-      setQuestionText('');
-      setOptions(['', '', '', '']);
-      setCorrectIndex(0);
-      setFormSuccess('Question added to bank successfully!');
-    } catch (err: any) {
-      if (err instanceof LearningApiError) {
-        setFormError(err.message);
-      } else {
-        setFormError('Failed to add question. Please try again.');
-      }
-    } finally {
-      setSubmitting(false);
-    }
+    setSubmitting(true);
+    const ok = await act('quizAdd', {
+      question: trimmedQ,
+      options: trimmedOpts,
+      answer: correctIndex,
+    });
+    setSubmitting(false);
+    if (!ok) return;
+    setQuestionText('');
+    setOptions(['', '', '', '']);
+    setCorrectIndex(0);
+    setFormSuccess('Question added.');
   };
 
   return (
     <div className="learning-container">
-      <header className="quiz-staff-header">
-        <h1 className="quiz-staff-title">Quiz bank.</h1>
-        <p className="quiz-staff-sub">Add, edit or delete questions. Members get five a day.</p>
-      </header>
+      <p className="quiz-staff-sub">Members get five a day.</p>
 
       {/* 1. Bulk import panel */}
-      <BulkImportPanel onImportSuccess={loadQuestions} />
+      <BulkImportPanel />
 
       {/* 2. Add one question form */}
       <form className="course-form-panel" onSubmit={handleCreateOne}>
@@ -124,7 +94,9 @@ export function QuizAdmin() {
           >
             {[0, 1, 2, 3].map((optIdx) => (
               <div key={optIdx} className="form-group">
-                <label htmlFor={`one-opt-${optIdx}`}>Option {String.fromCharCode(65 + optIdx)} *</label>
+                <label htmlFor={`one-opt-${optIdx}`}>
+                  Option {String.fromCharCode(65 + optIdx)} *
+                </label>
                 <input
                   id={`one-opt-${optIdx}`}
                   type="text"
@@ -172,17 +144,12 @@ export function QuizAdmin() {
           style={{ width: '100%', minHeight: 48, justifyContent: 'center' }}
           onClick={() => setModalOpen(true)}
         >
-          {loading ? 'Loading quiz bank...' : `Edit or delete questions (${questions.length})`}
+          {`Edit or delete questions (${questions.length})`}
         </button>
       </div>
 
       {/* 4. Bank management modal */}
-      <QuizBankModal
-        isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
-        questions={questions}
-        onQuestionsChanged={loadQuestions}
-      />
+      <QuizBankModal isOpen={modalOpen} onClose={() => setModalOpen(false)} questions={questions} />
     </div>
   );
 }

@@ -7,8 +7,6 @@ const base: Earn = {
   solved: Array(9).fill('x'),
   verified: [],
   done: ['r1'],
-  lessons: [],
-  quiz: {},
   present: [],
   checkin: false,
   kudos: [],
@@ -24,18 +22,17 @@ test('xp: base state earns nothing, actions add up, shop items never earn', () =
   assert.equal(earned(base), 0);
   assert.equal(earned({ ...base, checkin: true }), XP.checkin);
   assert.equal(earned({ ...base, kudos: ['shop:Sticker pack'] }), 0);
-  assert.equal(earned({ ...base, quiz: { a: 1, b: 3 } }), XP.quiz); // only passes (2+ of 3) count
   const all3 = {
     ...base,
     solved: [...base.solved, 'y'],
     verified: ['y'],
-    lessons: ['l1'],
+    done: [...base.done, 'r2'],
     kudos: ['f1'],
   };
-  assert.equal(earned(all3), XP.solve + XP.lesson + XP.kudos + XP.quest);
+  assert.equal(earned(all3), XP.solve + XP.resource + XP.kudos + XP.quest);
   // a tick Codeforces has not confirmed is tracked but earns nothing, and does not finish the quest
   const unverified = { ...all3, verified: [] };
-  assert.equal(earned(unverified), XP.lesson + XP.kudos);
+  assert.equal(earned(unverified), XP.resource + XP.kudos);
   assert.equal(quests(unverified)[0]!.done, false);
   assert.deepEqual(level(3100), { lv: 3, into: 100, title: 'Grinder' });
 });

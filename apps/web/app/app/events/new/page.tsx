@@ -2,19 +2,12 @@
 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useMemo, useState, type CSSProperties } from 'react';
+import { Suspense, useMemo, useState } from 'react';
 import { can, eventSlug, type EventDetail } from '@fecpc/contracts';
 import { useStore } from '@/components/app/Store';
 import { SaveForm } from '@/components/app/SaveBar';
 import { HeadFields } from '@/components/app/events/EventHead';
-import {
-  BLANK,
-  pickDraft,
-  SignupEdit,
-  StatusField,
-  useSaveEvent,
-  type Draft,
-} from '@/components/app/events/EventForm';
+import { BLANK, pickDraft, useSaveEvent, type Draft } from '@/components/app/events/EventForm';
 import { useEventsQuery } from '@/lib/events';
 
 const FORM = 'ev-new-form';
@@ -80,25 +73,9 @@ function Editor({ from }: { from: EventDetail | null }) {
           Saving creates a new event with its roles; the past one is not changed.
         </p>
       )}
-      <HeadFields
-        form={FORM}
-        creating
-        v={v}
-        set={set}
-        error={error}
-        setError={setError}
-        aside={
-          <aside className="stack ev-aside">
-            <section className="panel stack ev-card" aria-label="Publishing">
-              <StatusField v={v} set={set} copy={!!from} />
-            </section>
-          </aside>
-        }
-      />
       <SaveForm
         id={FORM}
-        className="panel stack ev-card ev-org"
-        style={{ '--g': '16px' } as CSSProperties}
+        hidden
         label={from ? 'New event from a past one, not saved' : 'Unsaved new event'}
         saveLabel={v.status === 'draft' ? 'Save draft' : 'Create event'}
         trackFields={false}
@@ -122,10 +99,16 @@ function Editor({ from }: { from: EventDetail | null }) {
           if (ok) router.push(`/app/events/${newId}`);
           return ok;
         }}
-      >
-        <b>Sign-up</b>
-        <SignupEdit v={v} set={set} setError={setError} />
-      </SaveForm>
+      />
+      <HeadFields
+        form={FORM}
+        creating
+        v={v}
+        set={set}
+        error={error}
+        setError={setError}
+        isOrganizer
+      />
     </div>
   );
 }

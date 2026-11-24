@@ -1,4 +1,5 @@
 'use client';
+import { canFully } from '@fecpc/contracts';
 import { Page } from '@/components/app/Shell';
 import { useStore } from '@/components/app/Store';
 import { QuizMember } from '@/components/app/learning/QuizMember';
@@ -6,12 +7,9 @@ import { QuizAdmin } from '@/components/app/learning/QuizAdmin';
 import '@/components/app/learning/learning.css';
 
 export default function QuizPage() {
-  const { s } = useStore();
-
-  // Staff: CP Head, President, Super Admin
-  const isStaff = s.roles.some(
-    (r) => r === 'cp_head' || r === 'president' || r === 'super_admin',
-  );
+  const { s, me } = useStore();
+  // Cosmetic: the server only sends the bank, and only accepts bank edits, for full `learning.curate`.
+  const isStaff = !me.system && !!canFully(s.roles, 'learning.curate');
 
   return (
     <Page

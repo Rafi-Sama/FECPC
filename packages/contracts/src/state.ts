@@ -46,14 +46,12 @@ export type S = {
   /** Ticked problems that Codeforces confirmed; only these earn solve XP. */
   verified: string[];
   done: string[];
-  lessons: string[];
   read: string[];
   kudos: string[];
   reg: string[];
   /** This member's bills: member dues, post dues and event fees (see dues.ts). Settled ones stay listed. */
   dues: Due[];
   present: string[];
-  quiz: Record<string, number>;
   votes: Record<string, string>;
   /** The member's latest payment per invoice. A rejected one stays visible until it is replaced. */
   pay: Record<string, Payment>;
@@ -520,6 +518,36 @@ export type AppState = {
   fantasy: { week: string; next: string; teams: { by: string; week: string; picks: string }[] };
   /** Which roles each club post grants. Set by the Super Admin. */
   postRoles: Partial<Record<Post, Role[]>>;
+  /** Popular courses, newest first. */
+  courses: Course[];
+  /** Today's daily quiz (Asia/Dhaka date). `answer` is sent only once the member has picked. */
+  quiz: QuizToday[];
+  /** The whole question bank with answers, newest first. Only for holders of `learning.curate`. */
+  quizBank: QuizQuestion[] | null;
+};
+
+export type Course = {
+  id: string;
+  title: string;
+  instructor: string;
+  weeks: number;
+  description: string;
+  url: string;
+};
+export type QuizToday = {
+  id: string;
+  question: string;
+  options: string[];
+  picked: number | null;
+  answer: number | null;
+};
+export type QuizQuestion = {
+  id: string;
+  question: string;
+  options: string[];
+  answer: number;
+  /** One of today's five. */
+  today: boolean;
 };
 
 export type SheetProblem = {

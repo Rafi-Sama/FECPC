@@ -1,17 +1,95 @@
 'use client';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { EVENT_STATUS_LABEL, EVENT_TYPES, type EventDetail } from '@fecpc/contracts';
-import { bannerStyle, clubNow, fmtWhen, liveStatus } from '@/lib/events';
+import {
+  EVENT_STATUS_LABEL,
+  EVENT_STATUSES,
+  EVENT_TYPES,
+  type EventDetail,
+} from '@fecpc/contracts';
+import { bannerStyle, clubNow, eventBadgeStatus, fmtWhen } from '@/lib/events';
 import { DatePicker } from '../shared/DatePicker';
-import { usePrompt } from '../shared/PromptDialog';
 import { SaveForm } from '../SaveBar';
-import { pickDraft, useSaveEvent, type Draft } from './EventForm';
+import { FieldsEditor, pickDraft, useSaveEvent, windowProblem, type Draft } from './EventForm';
 
 const FORM = 'ev-head-form';
 
+export function MarkdownView({ text }: { text: string }) {
+  if (!text || !text.trim()) {
+    return (
+      <p className="mono text-dim" style={{ fontSize: 14 }}>
+        No description provided yet.
+      </p>
+    );
+  }
+  const lines = text.split('\n');
+  const elements: ReactNode[] = [];
+  let listItems: string[] = [];
+
+  const flushList = () => {
+    if (listItems.length > 0) {
+      elements.push(
+        <ul key={`ul-${elements.length}`} style={{ marginBottom: '1rem', paddingLeft: '1.5rem' }}>
+          {listItems.map((item, idx) => (
+            <li key={idx} dangerouslySetInnerHTML={{ __html: formatInline(item) }} />
+          ))}
+        </ul>,
+      );
+      listItems = [];
+    }
+  };
+
+  lines.forEach((line, i) => {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+      listItems.push(trimmed.slice(2));
+    } else {
+      flushList();
+      if (trimmed.startsWith('### ')) {
+        elements.push(
+          <h3 key={i} style={{ marginBottom: '0.5rem', fontSize: '1.2rem' }}>
+            {trimmed.slice(4)}
+          </h3>,
+        );
+      } else if (trimmed.startsWith('## ')) {
+        elements.push(
+          <h2 key={i} style={{ marginBottom: '0.6rem', fontSize: '1.4rem' }}>
+            {trimmed.slice(3)}
+          </h2>,
+        );
+      } else if (trimmed.startsWith('# ')) {
+        elements.push(
+          <h1 key={i} style={{ marginBottom: '0.75rem', fontSize: '1.6rem' }}>
+            {trimmed.slice(2)}
+          </h1>,
+        );
+      } else if (trimmed.length > 0) {
+        elements.push(
+          <p
+            key={i}
+            style={{ marginBottom: '1rem', lineHeight: 1.6 }}
+            dangerouslySetInnerHTML={{ __html: formatInline(trimmed) }}
+          />,
+        );
+      }
+    }
+  });
+  flushList();
+  return <>{elements}</>;
+}
+
+function formatInline(str: string) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/`([^`]+)`/g, '<code class="mono">$1</code>');
+}
+
 /**
- * The top of an event page: banner, tags, title and description, with `aside` beside them. Organisers edit these
- * in place (the save bar saves them); everything else is edited under Organise → Details.
+ * The top of an event page: banner, tags, title and description.
+ * Organisers edit these in place (the save bar saves them).
  */
 export function EventHead({
   e,
@@ -20,17 +98,16 @@ export function EventHead({
 }: {
   e: EventDetail;
   reload: () => void;
-  aside: ReactNode;
+  aside?: ReactNode;
 }) {
   const editable = !!e.admin && e.status !== 'completed';
   const start = useMemo(() => pickDraft(e), [e]);
   const [v, setV] = useState(start);
   const [error, setError] = useState<string | null>(null);
   const saveEvent = useSaveEvent();
-  // A reload (after this save, or an organiser action elsewhere on the page) takes the new values, unless the
-  // organiser is mid-edit here.
   const base = useRef(start);
   const justSaved = useRef(false);
+
   useEffect(() => {
     setV((cur) =>
       justSaved.current || JSON.stringify(cur) === JSON.stringify(base.current) ? start : cur,
@@ -38,49 +115,100 @@ export function EventHead({
     base.current = start;
     justSaved.current = false;
   }, [start]);
+
   const set = (p: Draft) => {
     setError(null);
     setV((x) => ({ ...x, ...p }));
   };
 
-  const tags = (
-    <>
-      <span className="tag k">{liveStatus(e) ?? EVENT_STATUS_LABEL[e.status]}</span>
-      {e.fee > 0 && <span className="tag">৳{e.fee}</span>}
-    </>
-  );
-
-  if (!editable)
+  if (!editable) {
     return (
-      <>
-        <div className="ban ev-hero" data-type={e.type} style={bannerStyle(e.banner)}>
-          {!e.banner && <span>{e.title}</span>}
-        </div>
-        <div className="ev-split">
-          <div className="stack">
-            <div className="row">
-              <span className="tag b">{e.type}</span>
-              <span className="tag">{fmtWhen(e.startsAt)}</span>
-              {e.place && <span className="tag">{e.place}</span>}
-              {tags}
+      <main style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+        <div className="post">
+          <div
+            className={`banner${!e.banner ? ' has-pattern' : ''}`}
+            data-type={e.type}
+            style={bannerStyle(e.banner)}
+          />
+          <div className="pad" style={{ paddingBottom: 24 }}>
+            <h1 className="title" style={{ cursor: 'default', margin: 0 }}>
+              {e.title}
+            </h1>
+            <div className="meta">
+              <span className="on">{e.type}</span>
+              <span className="ev-meta-status">
+                <span className="ev-status-dot" data-status={e.status} />
+                {eventBadgeStatus(e)}
+              </span>
+              <span title="Event starts at">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="15"
+                  height="15"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                  style={{ flexShrink: 0, opacity: 0.75 }}
+                >
+                  <rect x="3" y="4" width="18" height="18" rx="2" />
+                  <path d="M16 2v4M8 2v4M3 10h18" />
+                </svg>
+                {fmtWhen(e.startsAt)}
+              </span>
+              <span title="Venue">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="15"
+                  height="15"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                  style={{ flexShrink: 0, opacity: 0.75 }}
+                >
+                  <path d="M12 2a8 8 0 0 0-8 8c0 5.25 8 12 8 12s8-6.75 8-12a8 8 0 0 0-8-8z" />
+                  <circle cx="12" cy="10" r="3" />
+                </svg>
+                <span
+                  style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                >
+                  {e.place || 'No venue specified'}
+                </span>
+              </span>
+              <span title="Seat capacity">
+                {e.seats !== null ? `${e.seats} seats` : 'No seat limit'}
+              </span>
+              <span title="Fee">{e.fee > 0 ? `৳${e.fee}` : 'Free'}</span>
             </div>
-            <h1 className="h2">{e.title}</h1>
-            {e.about && (
-              <section className="panel">
-                <p className="body" style={{ whiteSpace: 'pre-line' }}>
-                  {e.about}
-                </p>
-              </section>
-            )}
           </div>
-          {aside}
+
+          <div className="tabs">
+            <button type="button" className="tab on">
+              Overview
+            </button>
+            <span className="mono" style={{ marginLeft: 'auto', alignSelf: 'center' }}>
+              EVENT DETAILS
+            </span>
+          </div>
+          <div className="pad">
+            <div className="ed-preview">
+              <MarkdownView text={e.about || ''} />
+            </div>
+          </div>
         </div>
-      </>
+
+        {aside}
+      </main>
     );
+  }
 
   return (
     <>
-      {/* The fields below sit in the page layout and join this form through their `form` attribute. */}
       <SaveForm
         id={FORM}
         hidden
@@ -107,8 +235,8 @@ export function EventHead({
         set={set}
         error={error}
         setError={setError}
-        tags={tags}
         aside={aside}
+        isOrganizer
       />
     </>
   );
@@ -116,7 +244,6 @@ export function EventHead({
 
 /**
  * The event page's header as fields: banner, type, start, place, title and description, styled as the page.
- * They join the form `form` through their `form` attribute, so they can sit anywhere in the layout.
  */
 export function HeadFields({
   form: FORM,
@@ -124,9 +251,9 @@ export function HeadFields({
   set,
   error,
   setError,
-  tags,
   aside,
   creating,
+  isOrganizer = true,
 }: {
   form: string;
   v: Draft;
@@ -134,135 +261,331 @@ export function HeadFields({
   error: string | null;
   setError: (e: string) => void;
   tags?: ReactNode;
-  aside: ReactNode;
-  /** A new event: its start cannot be in the past. */
+  aside?: ReactNode;
   creating?: boolean;
+  isOrganizer?: boolean;
 }) {
-  const ask = usePrompt();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [descTab, setDescTab] = useState<'write' | 'preview'>('write');
+
   return (
-    <>
-      <div
-        className="ban ev-hero ev-edit-ban"
-        data-type={v.type}
-        style={bannerStyle(v.banner ?? null)}
-      >
-        {!v.banner && <span>{v.title || 'Untitled event'}</span>}
-        <div className="ev-ban-tools row">
-          <label className="btn xs">
-            Upload banner
-            <input
-              type="file"
-              hidden
-              accept="image/png,image/jpeg,image/webp"
-              onChange={(x) => {
-                const f = x.target.files?.[0];
-                x.target.value = '';
-                if (!f) return;
-                if (f.size > 500_000)
-                  return setError('That image is over 500 KB. Pick a smaller one.');
-                const r = new FileReader();
-                r.onload = () => set({ banner: String(r.result) });
-                r.readAsDataURL(f);
-              }}
-            />
-          </label>
-          <button
-            type="button"
-            className="btn xs"
-            onClick={async () => {
-              const url = await ask({
-                title: 'Banner link',
-                label: 'An image link (https://…)',
-                placeholder: 'https://…',
-                confirmLabel: 'Use it',
-                initial: v.banner?.startsWith('http') ? v.banner : '',
-                minLength: 8,
-                maxLength: 2000,
-              });
-              if (url === null) return;
-              if (!/^https?:\/\//.test(url.trim()))
-                return setError('A banner link starts with http(s)://.');
-              set({ banner: url.trim() });
+    <main style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+      <div className="post">
+        <div
+          role="button"
+          tabIndex={0}
+          className={`banner${!v.banner ? ' has-pattern' : ''}`}
+          aria-label="Upload banner image"
+          title="Click anywhere to choose or change banner image"
+          style={bannerStyle(v.banner ?? null)}
+          onClick={() => fileInputRef.current?.click()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              fileInputRef.current?.click();
+            }
+          }}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            hidden
+            accept="image/png,image/jpeg,image/webp"
+            onClick={(e) => {
+              (e.target as HTMLInputElement).value = '';
             }}
-          >
-            Link…
-          </button>
+            onChange={(x) => {
+              const f = x.target.files?.[0];
+              x.target.value = '';
+              if (!f) return;
+              if (f.size > 500_000)
+                return setError('That image is over 500 KB. Pick a smaller one.');
+              const r = new FileReader();
+              r.onload = () => set({ banner: String(r.result) });
+              r.readAsDataURL(f);
+            }}
+          />
+          <span className="up">
+            <svg
+              width="22"
+              height="22"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="square"
+            >
+              <path d="M11 18V4M5 10l6-6 6 6" />
+            </svg>
+          </span>
           {v.banner && (
-            <button type="button" className="btn xs" onClick={() => set({ banner: null })}>
-              Remove
-            </button>
+            <div className="banner-actions" onClick={(e) => e.stopPropagation()}>
+              <span className="banner-badge">Click anywhere to change</span>
+              <button type="button" className="banner-remove" onClick={() => set({ banner: null })}>
+                Remove
+              </button>
+            </div>
           )}
         </div>
-      </div>
-      <div className="ev-split">
-        <div className="stack">
-          <div className="row ev-inline-tags">
-            <select
-              className="tag b"
-              aria-label="Type"
-              value={v.type}
-              onChange={(x) => set({ type: x.target.value })}
-            >
-              {EVENT_TYPES.map((t) => (
-                <option key={t}>{t}</option>
-              ))}
-            </select>
-            <DatePicker
-              time
-              required
-              label="Starts"
-              className="ev-inline-date"
-              placeholder="Pick a start"
-              min={creating ? clubNow().slice(0, 10) : undefined}
-              value={v.startsAt ?? ''}
-              onChange={(x) => set({ startsAt: x })}
-            />
-            <input
-              form={FORM}
-              className="tag ev-inline-place"
-              aria-label="Place"
-              placeholder="Add a place"
-              maxLength={140}
-              size={Math.max(10, (v.place ?? '').length + 1)}
-              value={v.place}
-              onChange={(x) => set({ place: x.target.value })}
-            />
-            {tags}
-          </div>
-          {/* A textarea so long titles wrap like the heading; Enter never adds a line. */}
-          <textarea
+
+        <div className="pad" style={{ paddingBottom: 24 }}>
+          <input
             form={FORM}
-            className="h2 ev-inline ev-inline-title"
-            aria-label="Title"
+            className="title"
+            value={v.title}
             placeholder="Event title"
+            aria-label="Event title"
             required
-            rows={1}
             minLength={3}
             maxLength={140}
-            value={v.title}
-            onKeyDown={(x) => x.key === 'Enter' && x.preventDefault()}
             onChange={(x) => set({ title: x.target.value.replace(/\s*\n\s*/g, ' ') })}
           />
-          <section className="panel">
+          <div className="meta">
+            <span className="on">
+              <select
+                form={FORM}
+                value={v.type}
+                onChange={(x) => set({ type: x.target.value })}
+                aria-label="Event type"
+              >
+                {EVENT_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </span>
+            <span className="ev-meta-status">
+              <span className="ev-status-dot" data-status={v.status ?? 'draft'} />
+              <select
+                form={FORM}
+                value={v.status ?? 'draft'}
+                onChange={(x) => set({ status: x.target.value as any })}
+                aria-label="Event status"
+              >
+                {EVENT_STATUSES.map((s) => (
+                  <option
+                    key={s}
+                    value={s}
+                    disabled={s === 'completed' && (!v.startsAt || v.startsAt > clubNow())}
+                  >
+                    {EVENT_STATUS_LABEL[s]}
+                  </option>
+                ))}
+              </select>
+            </span>
+            <span>
+              <DatePicker
+                time
+                required
+                label="Starts"
+                placeholder="Pick a start"
+                min={creating ? clubNow().slice(0, 10) : undefined}
+                value={v.startsAt ?? ''}
+                onChange={(x) => set({ startsAt: x })}
+              />
+            </span>
+            <span>
+              <input
+                form={FORM}
+                aria-label="Place"
+                placeholder="Add a place"
+                maxLength={140}
+                style={{ width: '100%', minWidth: 0 }}
+                value={v.place}
+                onChange={(x) => set({ place: x.target.value })}
+              />
+            </span>
+            <span>
+              <input
+                form={FORM}
+                type="number"
+                min={1}
+                placeholder="No limit"
+                style={{ width: 68 }}
+                value={v.seats ?? ''}
+                onChange={(e) => set({ seats: e.target.value ? +e.target.value : null })}
+              />
+              <span
+                className="mono"
+                style={{ fontSize: 14, color: 'var(--dim)', textTransform: 'uppercase' }}
+              >
+                seats
+              </span>
+            </span>
+            <span>
+              <span className="mono" style={{ fontSize: 14, color: 'var(--dim)' }}>
+                ৳
+              </span>
+              <input
+                form={FORM}
+                type="number"
+                min={0}
+                placeholder="Free"
+                style={{ width: 60 }}
+                value={v.fee || ''}
+                onChange={(e) => set({ fee: Math.max(0, parseInt(e.target.value, 10) || 0) })}
+              />
+            </span>
+          </div>
+        </div>
+
+        <div className="tabs">
+          <button
+            type="button"
+            className={`tab ${descTab === 'write' ? 'on' : ''}`}
+            onClick={() => setDescTab('write')}
+          >
+            Write
+          </button>
+          <button
+            type="button"
+            className={`tab ${descTab === 'preview' ? 'on' : ''}`}
+            onClick={() => setDescTab('preview')}
+          >
+            Preview
+          </button>
+          <span className="mono" style={{ marginLeft: 'auto', alignSelf: 'center' }}>
+            Markdown supported
+          </span>
+        </div>
+
+        <div className="pad">
+          {descTab === 'write' ? (
             <textarea
               form={FORM}
-              className="body ev-inline ev-inline-about"
-              aria-label="Description"
+              className="ed"
+              aria-label="Event description"
               placeholder="What will happen, who it's for, what to bring."
-              rows={4}
+              rows={8}
               maxLength={6000}
               value={v.about}
               onChange={(x) => set({ about: x.target.value })}
             />
-          </section>
-          {error && (
-            <p className="bad" role="alert" style={{ fontSize: 14 }}>
-              {error}
-            </p>
+          ) : (
+            <div className="ed-preview">
+              <MarkdownView text={v.about || ''} />
+            </div>
           )}
         </div>
-        {aside}
       </div>
-    </>
+
+      {/* In-place Sign-up Configuration & Questions on the canvas */}
+      {isOrganizer && (
+        <div className="sec-box">
+          <div className="sec" style={{ borderTop: 0 }}>
+            <h2>Registration &amp; sign-up</h2>
+            <p className="sub">Configure the sign-up method, window and custom questions.</p>
+            <div className="f">
+              <div>
+                <label className="mono" htmlFor="reg-how">
+                  How do people sign up?
+                </label>
+                <select
+                  id="reg-how"
+                  className="ctl"
+                  value={v.mode}
+                  onChange={(x) => set({ mode: x.target.value as any })}
+                >
+                  <option value="platform">Here, on this site</option>
+                  <option value="form">With a Google Form</option>
+                </select>
+              </div>
+              <div>
+                <label className="mono" htmlFor="reg-approval">
+                  Who gets in?
+                </label>
+                <select
+                  id="reg-approval"
+                  className="ctl"
+                  disabled={v.mode === 'form'}
+                  value={v.approval}
+                  onChange={(x) => set({ approval: x.target.value as any })}
+                >
+                  <option value="auto">Everyone, automatically</option>
+                  <option value="manual">Only those I approve</option>
+                </select>
+              </div>
+              {v.mode === 'form' && (
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label className="mono" htmlFor="reg-form-url">
+                    Google Form link
+                  </label>
+                  <input
+                    id="reg-form-url"
+                    className="ctl"
+                    type="url"
+                    placeholder="https://forms.gle/..."
+                    value={v.formUrl ?? ''}
+                    onChange={(x) => set({ formUrl: x.target.value || null })}
+                  />
+                </div>
+              )}
+              <div>
+                <label className="mono">Sign-up opens · optional</label>
+                <DatePicker
+                  time
+                  label="Sign-up opens"
+                  className="ctl"
+                  placeholder="Follows status"
+                  max={v.regCloses || v.startsAt}
+                  invalid={!!v.regOpens && !!windowProblem({ ...v, regCloses: null })}
+                  value={v.regOpens ?? ''}
+                  onChange={(x) => set({ regOpens: x || null })}
+                />
+              </div>
+              <div>
+                <label className="mono">Sign-up closes · optional</label>
+                <DatePicker
+                  time
+                  label="Sign-up closes"
+                  className="ctl"
+                  placeholder="Until event starts"
+                  min={v.regOpens}
+                  max={v.startsAt}
+                  invalid={!!v.regCloses && !!windowProblem({ ...v, regOpens: null })}
+                  value={v.regCloses ?? ''}
+                  onChange={(x) => set({ regCloses: x || null })}
+                />
+              </div>
+            </div>
+          </div>
+          {v.mode !== 'form' && (
+            <div className="sec">
+              <div className="row between" style={{ alignItems: 'flex-start', marginBottom: 12 }}>
+                <div>
+                  <h2 style={{ fontSize: 16, margin: 0 }}>Extra questions</h2>
+                  <p className="sub" style={{ margin: '4px 0 0 0' }}>
+                    We always ask for name and phone. Add anything else you need to know.
+                  </p>
+                </div>
+                <button
+                  className="eb"
+                  type="button"
+                  onClick={() =>
+                    set({ fields: [...(v.fields ?? []), { label: '', required: false }] })
+                  }
+                >
+                  + Add a question
+                </button>
+              </div>
+              <FieldsEditor
+                hideHeader
+                hideAddButton
+                value={v.fields ?? []}
+                onChange={(fields) => set({ fields })}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {error && (
+        <p className="bad" role="alert" style={{ fontSize: 14 }}>
+          {error}
+        </p>
+      )}
+
+      {aside}
+    </main>
   );
 }

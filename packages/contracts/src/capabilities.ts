@@ -44,6 +44,12 @@ export const matrix = {
     president: Y,
     super_admin: Y,
   },
+  'learning.curate': {
+    label: 'Keep the course list and the daily quiz bank',
+    cp_head: Y,
+    president: Y,
+    super_admin: Y,
+  },
   'payments.verify': {
     label: 'Verify member payments',
     treasurer: Y,

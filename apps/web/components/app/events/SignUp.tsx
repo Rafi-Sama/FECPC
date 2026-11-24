@@ -48,54 +48,116 @@ export function SignUp({
 
   if (mode === 'form')
     return formUrl ? (
-      <div className="dash" style={{ flexWrap: 'wrap' }}>
-        <QR text={formUrl} size={160} />
-        <span className="grow">
-          <a className="btn sm b" href={formUrl} target="_blank" rel="noopener noreferrer">
-            Open the form
+      <div className="stack" style={{ gap: 14, alignItems: 'center', textAlign: 'center' }}>
+        <div
+          style={{
+            background: '#ffffff',
+            padding: 8,
+            border: '1px solid var(--line2)',
+            display: 'inline-flex',
+            boxShadow: '2px 2px 0 var(--line2)',
+          }}
+        >
+          <QR text={formUrl} size={130} />
+        </div>
+        <div className="stack" style={{ gap: 6, width: '100%', alignItems: 'center' }}>
+          <a
+            className="eb"
+            style={{
+              display: 'block',
+              width: '100%',
+              padding: '10px 14px',
+              textAlign: 'center',
+              textDecoration: 'none',
+              background: 'var(--acc)',
+              color: 'white',
+              borderColor: 'var(--acc)',
+              fontWeight: 700,
+              fontSize: 14,
+            }}
+            href={formUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Open the form ↗
           </a>
-          <br />
-          <span className="label">Answers stay with Google Forms.</span>
-        </span>
+          <span
+            className="mono text-dim"
+            style={{ fontSize: 14, textTransform: 'uppercase', letterSpacing: '0.06em' }}
+          >
+            Answers stay with Google Forms.
+          </span>
+        </div>
       </div>
     ) : null;
 
+  const entryStatus =
+    entry?.status === 'approved'
+      ? 'completed'
+      : entry?.status === 'rejected'
+        ? 'cancelled'
+        : 'draft';
+
   if (entry && entry.status !== 'cancelled')
     return (
-      <div className="stack">
-        <p
-          className={entry.status === 'approved' ? 'ok' : entry.status === 'rejected' ? 'bad' : ''}
+      <div className="stack" style={{ gap: 12 }}>
+        <div
+          className="row"
+          style={{
+            alignItems: 'center',
+            gap: 8,
+            padding: '8px 12px',
+            background: 'var(--bg)',
+            border: '1px solid var(--line)',
+          }}
         >
-          {STATUS[entry.status]}
-        </p>
+          <span className="ev-status-dot" data-status={entryStatus} />
+          <span className="mono" style={{ fontSize: 14, fontWeight: 600, color: 'var(--hi)' }}>
+            {STATUS[entry.status]}
+          </span>
+        </div>
         {entry.status === 'rejected' && entry.reason && (
-          <p className="body">
-            <span className="label">Reason</span>
-            <br />
+          <p className="mono text-dim" style={{ fontSize: 14, margin: 0 }}>
+            <span style={{ color: 'var(--bad)', fontWeight: 600 }}>Reason: </span>
             {entry.reason}
           </p>
         )}
         {entry.status !== 'rejected' && !locked && (
           <button
-            className="btn sm line"
+            className="del"
             type="button"
+            style={{ width: '100%', justifyContent: 'center', padding: '8px 12px' }}
             onClick={async () => (await act('unregister', { eventId, roleId })) && done()}
           >
-            Withdraw
+            Withdraw application
           </button>
         )}
       </div>
     );
-  if (!open) return <p className="label">{closedText}</p>;
+  if (!open)
+    return (
+      <p className="mono text-dim" style={{ fontSize: 14, margin: 0 }}>
+        {closedText}
+      </p>
+    );
   if (!editing)
     return (
       <button
-        className="btn sm b"
+        className="eb"
+        style={{
+          width: '100%',
+          padding: '12px',
+          background: 'var(--acc)',
+          color: 'white',
+          borderColor: 'var(--acc)',
+          fontWeight: 700,
+          fontSize: 14,
+        }}
         type="button"
         disabled={me.system}
         onClick={() => setEditing(true)}
       >
-        {roleId ? 'Apply' : 'Register'}
+        {roleId ? 'Apply for Role' : 'Register'}
       </button>
     );
 
@@ -103,6 +165,7 @@ export function SignUp({
     // Opening the form is the intent to register, so the bar shows right away.
     <SaveForm
       className="stack"
+      style={{ gap: 12 }}
       label={roleId ? 'Application not sent' : 'Registration not sent'}
       saveLabel={roleId ? 'Send application' : 'Register'}
       extraDirty
@@ -122,20 +185,40 @@ export function SignUp({
         return ok;
       }}
     >
-      <label className="field">
-        <span className="label">Name</span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <span
+          className="mono"
+          style={{
+            fontSize: 14,
+            color: 'var(--dim)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.08em',
+          }}
+        >
+          Name
+        </span>
         <input
-          className="input"
+          className="ctl"
           required
           maxLength={80}
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
-      </label>
-      <label className="field">
-        <span className="label">Phone</span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <span
+          className="mono"
+          style={{
+            fontSize: 14,
+            color: 'var(--dim)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.08em',
+          }}
+        >
+          Phone
+        </span>
         <input
-          className="input"
+          className="ctl"
           type="tel"
           required
           minLength={6}
@@ -146,16 +229,24 @@ export function SignUp({
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
         />
-      </label>
+      </div>
       {fields.map((f) => (
-        <label key={f.label} className="field">
-          <span className="label">
+        <div key={f.label} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <span
+            className="mono"
+            style={{
+              fontSize: 14,
+              color: 'var(--dim)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
+            }}
+          >
             {f.label}
             {f.required && ' *'}
           </span>
           {f.options ? (
             <select
-              className="input"
+              className="ctl"
               required={f.required}
               value={answers[f.label] ?? ''}
               onChange={(e) => setAnswers({ ...answers, [f.label]: e.target.value })}
@@ -167,18 +258,39 @@ export function SignUp({
             </select>
           ) : (
             <input
-              className="input"
+              className="ctl"
               required={f.required}
               maxLength={1000}
               value={answers[f.label] ?? ''}
               onChange={(e) => setAnswers({ ...answers, [f.label]: e.target.value })}
             />
           )}
-        </label>
+        </div>
       ))}
-      <div className="row">
-        <button className="btn sm line" type="button" data-close onClick={() => setEditing(false)}>
-          Back
+      <div className="row" style={{ gap: 8, marginTop: 8 }}>
+        <button
+          className="eb"
+          style={{
+            flex: 1,
+            padding: '10px 16px',
+            background: 'var(--acc)',
+            color: 'white',
+            borderColor: 'var(--acc)',
+            fontWeight: 700,
+            fontSize: 14,
+          }}
+          type="submit"
+        >
+          {roleId ? 'Send Application' : 'Register'}
+        </button>
+        <button
+          className="eb"
+          style={{ padding: '10px 14px', fontSize: 14 }}
+          type="button"
+          data-close
+          onClick={() => setEditing(false)}
+        >
+          Cancel
         </button>
       </div>
     </SaveForm>

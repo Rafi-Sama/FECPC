@@ -17,16 +17,24 @@ import {
 export function FieldsEditor({
   value,
   onChange,
+  hideHeader,
+  hideAddButton,
 }: {
   value: EventField[];
   onChange: (f: EventField[]) => void;
+  hideHeader?: boolean;
+  hideAddButton?: boolean;
 }) {
   const set = (i: number, f: Partial<EventField>) =>
     onChange(value.map((x, j) => (j === i ? { ...x, ...f } : x)));
   return (
     <div className="stack" style={{ '--g': '12px' } as CSSProperties}>
-      <span className="label">Extra questions</span>
-      <Hint>We always ask for name and phone. Add anything else you need to know.</Hint>
+      {!hideHeader && (
+        <>
+          <span className="label">Extra questions</span>
+          <Hint>We always ask for name and phone. Add anything else you need to know.</Hint>
+        </>
+      )}
       {value.map((f, i) => (
         <div key={i} className="row">
           <input
@@ -64,14 +72,16 @@ export function FieldsEditor({
           </button>
         </div>
       ))}
-      <button
-        className="btn xs line"
-        type="button"
-        style={{ alignSelf: 'flex-start' }}
-        onClick={() => onChange([...value, { label: '', required: false }])}
-      >
-        + Add a question
-      </button>
+      {!hideAddButton && (
+        <button
+          className="add"
+          type="button"
+          style={{ alignSelf: 'flex-start' }}
+          onClick={() => onChange([...value, { label: '', required: false }])}
+        >
+          + Add a question
+        </button>
+      )}
     </div>
   );
 }
@@ -172,7 +182,7 @@ export const pickDraft = (from: ClubEvent): Draft =>
   Object.fromEntries(Object.keys(BLANK).map((k) => [k, from[k as keyof ClubEvent]])) as Draft;
 
 /** The sign-up window's first problem, if any. Club-local `YYYY-MM-DDTHH:MM` times compare as text. */
-function windowProblem(v: Draft): string | null {
+export function windowProblem(v: Draft): string | null {
   const { startsAt, regOpens, regCloses } = v;
   if (regOpens && regCloses && regOpens >= regCloses) return 'Sign-up must open before it closes.';
   if (regOpens && startsAt && regOpens >= startsAt)
@@ -235,10 +245,6 @@ const SECTIONS: {
             `On this site · ${v.approval === 'manual' ? 'I approve each one' : 'everyone gets in'}`
           )}
         </dd>
-        <dt className="label">Seats</dt>
-        <dd>{v.seats ?? 'No limit'}</dd>
-        <dt className="label">Fee</dt>
-        <dd>{v.fee ? `৳${v.fee}` : 'Free'}</dd>
         <dt className="label">Window</dt>
         <dd>
           {v.regOpens ? fmtWhen(v.regOpens) : 'Follows the status'}
@@ -274,32 +280,6 @@ const SECTIONS: {
           }}
           set={set}
         />
-        <div className="row ev-pair">
-          <label className="field grow">
-            <span className="label">Seats</span>
-            <input
-              className="input"
-              type="number"
-              min={1}
-              max={100000}
-              placeholder="No limit"
-              value={v.seats ?? ''}
-              onChange={(e) => set({ seats: e.target.value ? +e.target.value : null })}
-            />
-          </label>
-          <label className="field grow">
-            <span className="label">Fee (৳)</span>
-            <input
-              className="input"
-              type="number"
-              min={0}
-              step={1}
-              value={v.fee}
-              onChange={(e) => set({ fee: +e.target.value })}
-            />
-            <Hint>0 means free.</Hint>
-          </label>
-        </div>
         <div className="row ev-pair">
           <label className="field grow">
             <span className="label">Sign-up opens (optional)</span>
@@ -433,10 +413,12 @@ export function EventSections({
   event,
   saved,
   readOnly,
+  includeStatus = false,
 }: {
   event: ClubEvent;
   saved: () => void;
   readOnly?: boolean;
+  includeStatus?: boolean;
 }) {
   const [open, setOpen] = useState<number | null>(null);
   const start = useMemo(() => pickDraft(event), [event]);
@@ -473,9 +455,11 @@ export function EventSections({
     <div className="ev-form">
       {/* Title, type, date, place, description and banner are edited in place at the top of the page. */}
       {card(SIGNUP_SECTION)}
-      <aside className="ev-form-side" aria-label="Publishing">
-        {card(STATUS_SECTION)}
-      </aside>
+      {includeStatus && (
+        <aside className="ev-form-side" aria-label="Publishing">
+          {card(STATUS_SECTION)}
+        </aside>
+      )}
     </div>
   );
 }

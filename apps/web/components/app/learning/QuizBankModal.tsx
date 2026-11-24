@@ -1,8 +1,8 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import type { QuizQuestion } from '@/lib/learning.ts';
-import { deleteQuizQuestion, updateQuizQuestion } from '@/lib/learning.ts';
+import type { QuizQuestion } from '@fecpc/contracts';
 import { useConfirm } from '@/components/app/shared/PromptDialog';
+import { useStore } from '@/components/app/Store';
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -11,20 +11,24 @@ export function QuizBankModal({
   isOpen,
   onClose,
   questions,
-  onQuestionsChanged,
 }: {
   isOpen: boolean;
   onClose: () => void;
   questions: QuizQuestion[];
-  onQuestionsChanged: () => void;
 }) {
+  const { act } = useStore();
   const modalRef = useRef<HTMLDivElement | null>(null);
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
   const confirm = useConfirm();
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editQuestion, setEditQuestion] = useState('');
-  const [editOptions, setEditOptions] = useState<[string, string, string, string]>(['', '', '', '']);
+  const [editOptions, setEditOptions] = useState<[string, string, string, string]>([
+    '',
+    '',
+    '',
+    '',
+  ]);
   const [editCorrectIndex, setEditCorrectIndex] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,9 +50,9 @@ export function QuizBankModal({
       }
 
       if (e.key === 'Tab' && modalRef.current) {
-        const nodes = Array.from(
-          modalRef.current.querySelectorAll<HTMLElement>(FOCUSABLE),
-        ).filter((el) => el.offsetParent !== null);
+        const nodes = Array.from(modalRef.current.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+          (el) => el.offsetParent !== null,
+        );
 
         if (nodes.length === 0) return;
         const first = nodes[0];
@@ -83,7 +87,7 @@ export function QuizBankModal({
       q.options[2] || '',
       q.options[3] || '',
     ]);
-    setEditCorrectIndex(q.correct_index);
+    setEditCorrectIndex(q.answer);
     setError(null);
   };
 
@@ -109,20 +113,15 @@ export function QuizBankModal({
       return;
     }
 
-    try {
-      setSaving(true);
-      await updateQuizQuestion(editingId, {
-        question: trimmedQ,
-        options: trimmedOpts,
-        correct_index: editCorrectIndex,
-      });
-      setEditingId(null);
-      onQuestionsChanged();
-    } catch (err: any) {
-      setError(err.message || 'Failed to save question changes.');
-    } finally {
-      setSaving(false);
-    }
+    setSaving(true);
+    const ok = await act('quizEdit', {
+      id: editingId,
+      question: trimmedQ,
+      options: trimmedOpts,
+      answer: editCorrectIndex,
+    });
+    setSaving(false);
+    if (ok) setEditingId(null);
   };
 
   const handleDelete = async (q: QuizQuestion) => {
@@ -134,15 +133,7 @@ export function QuizBankModal({
     );
     if (!ok) return;
 
-    try {
-      await deleteQuizQuestion(q.id);
-      if (editingId === q.id) {
-        setEditingId(null);
-      }
-      onQuestionsChanged();
-    } catch (err: any) {
-      alert(err.message || 'Failed to delete question.');
-    }
+    if ((await act('quizDelete', { id: q.id })) && editingId === q.id) setEditingId(null);
   };
 
   return (
@@ -202,7 +193,14 @@ export function QuizBankModal({
                       />
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr',
+                        gap: 10,
+                        marginTop: 10,
+                      }}
+                    >
                       {[0, 1, 2, 3].map((optIdx) => (
                         <div key={optIdx} className="form-group">
                           <label htmlFor={`edit-opt-${q.id}-${optIdx}`}>
@@ -270,11 +268,11 @@ export function QuizBankModal({
                 <div key={q.id} className="bank-row">
                   <div className="bank-row-content">
                     <div className="row" style={{ gap: 8, alignItems: 'center' }}>
-                      <strong style={{ fontSize: 14 }}>{q.question}</strong>
-                      {q.is_today && <span className="badge-today">TODAY</span>}
+                      <strong>{q.question}</strong>
+                      {q.today && <span className="badge-today">TODAY</span>}
                     </div>
                     <span className="course-meta">
-                      Ans: Option {String.fromCharCode(65 + q.correct_index)} ({q.options[q.correct_index]})
+                      Ans: Option {String.fromCharCode(65 + q.answer)} ({q.options[q.answer]})
                     </span>
                   </div>
 

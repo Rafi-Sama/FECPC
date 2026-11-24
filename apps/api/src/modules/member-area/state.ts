@@ -44,10 +44,8 @@ export type Progress = {
   base: { solved: number; done: number };
   solved: string[];
   done: string[];
-  lessons: string[];
   read: string[];
   shop: string[];
-  quiz: Record<string, number>;
   flags: Record<string, boolean>;
   kv: Record<string, string>;
   spent: number;
@@ -62,10 +60,8 @@ export function progress(raw: Partial<Progress> | null): Progress {
     base: { solved: p.base?.solved ?? 0, done: p.base?.done ?? 0 },
     solved: p.solved ?? [],
     done: p.done ?? [],
-    lessons: p.lessons ?? [],
     read: p.read ?? [],
     shop: p.shop ?? [],
-    quiz: p.quiz ?? {},
     flags: p.flags ?? {},
     kv: p.kv ?? {},
     spent: p.spent ?? 0,
@@ -181,8 +177,30 @@ select u.email, u.progress, to_char(u.created_at at time zone '${TZ}', 'YYYY-MM-
       'opts', p.options, 'by', w.name, 'at', p.created_at) order by p.id desc), '[]')
      from (select * from club_polls order by id desc limit 50) p join users w on w.id = p.user_id) as polls,
   (select coalesce(json_agg(${ROSTER} order by rating desc, id), '[]') from users) as members,
-  (select coalesce(json_object_agg(key, value), '{}') from club) as club
+  (select coalesce(json_object_agg(key, value), '{}') from club) as club,
+  (select coalesce(json_agg(json_build_object('id', c.id, 'title', c.title, 'instructor', c.instructor, 'weeks', c.duration_weeks,
+      'description', c.description, 'url', c.url) order by c.created_at desc), '[]') from learning_courses c) as courses,
+  (select coalesce(json_agg(json_build_object('id', q.id, 'question', q.question, 'options', q.options,
+      'picked', a.selected_index, 'answer', case when a.member_id is not null then q.correct_index end) order by d.position), '[]')
+     from learning_quiz_daily_picks d join learning_quiz_questions q on q.id = d.question_id
+     left join learning_quiz_answers a on a.member_id = $1 and a.quiz_date = d.quiz_date and a.question_id = q.id
+     where d.quiz_date = (now() at time zone '${TZ}')::date) as quiz
 from users u where u.id = $1 and not u.suspended`;
+const QUIZ_BANK = `
+select coalesce(json_agg(json_build_object('id', q.id, 'question', q.question, 'options', q.options, 'answer', q.correct_index,
+    'today', exists (select 1 from learning_quiz_daily_picks d where d.question_id = q.id and d.quiz_date = (now() at time zone '${TZ}')::date))
+  order by q.created_at desc), '[]') as bank
+from learning_quiz_questions q`;
+// The day's five, least recently used first. One statement: when two loads race, the loser's rows all collide
+// on (quiz_date, position) and are dropped, so the day never mixes two sets.
+const QUIZ_PICK = `
+insert into learning_quiz_daily_picks (quiz_date, position, question_id)
+select (now() at time zone '${TZ}')::date, row_number() over (), id from (
+  select q.id from learning_quiz_questions q where q.is_active
+  order by (select max(p.quiz_date) from learning_quiz_daily_picks p where p.question_id = q.id) asc nulls first, random()
+  limit 5) x
+where not exists (select 1 from learning_quiz_daily_picks where quiz_date = (now() at time zone '${TZ}')::date)
+on conflict do nothing`;
 const OFFICE = `
 select
   case when $1 then (select coalesce(json_agg(json_build_object('id', 'PAY-' || p.id, 'name', u.name, 'label', p.label, 'amount', p.amount, 'via', p.via, 'trx', p.trx,
@@ -250,6 +268,7 @@ type Raw = Roster & {
 
 /** Everything `userId` may see, or null when the account is gone or suspended. */
 export async function loadState(db: Db, userId: string): Promise<AppState | null> {
+  await db.query(QUIZ_PICK);
   const row = (await db.query(MINE, [userId])).rows[0];
   if (!row) return null;
   const postRoles = row.post_roles as AppState['postRoles'],
@@ -300,9 +319,7 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
     solved: p.solved,
     verified: row.verified,
     done: p.done,
-    lessons: p.lessons,
     read: p.read,
-    quiz: p.quiz,
     spent: p.spent,
     checkin: p.checkin === today(),
     run: p.checkin === today() || p.checkin === yesterday() ? p.run : 0,
@@ -606,6 +623,9 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
     fantasy: row.fantasy,
     challenges: row.challenges,
     postRoles,
+    courses: row.courses,
+    quiz: row.quiz,
+    quizBank: canFully(roles, 'learning.curate') ? (await db.query(QUIZ_BANK)).rows[0].bank : null,
   };
 }
 

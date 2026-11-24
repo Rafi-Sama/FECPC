@@ -262,12 +262,13 @@ test('progress: only real items are accepted; XP follows', async () => {
   await refused(400, act('shuvo', { type: 'toggle', list: 'spent', id: 'x' }));
   await refused(400, act('shuvo', { type: 'toggle', list: 'solved', id: '<script>' }));
   await act('shuvo', { type: 'checkin' });
-  await act('shuvo', { type: 'toggle', list: 'lessons', id: 'dp:0' });
-  await refused(403, act('shuvo', { type: 'toggle', list: 'lessons', id: 'dp:99' }));
+  await act('shuvo', { type: 'toggle', list: 'done', id: 'wiki:icpc' });
+  await refused(403, act('shuvo', { type: 'toggle', list: 'done', id: 'wiki:nope' }));
+  await refused(400, act('shuvo', { type: 'toggle', list: 'lessons', id: 'dp:0' }));
   const s = (await st('shuvo')).s;
   assert.ok(s.solved.includes('282A') && s.checkin);
   // A ticked solve earns nothing until Codeforces confirms it (cf_solves); the rest counts at once.
-  assert.equal(earned(s) - x0, XP.checkin + XP.lesson);
+  assert.equal(earned(s) - x0, XP.checkin + XP.resource);
   await act('shuvo', { type: 'toggle', list: 'solved', id: '282A' });
   assert.equal((await st('shuvo')).s.solved.includes('282A'), false);
 });
@@ -279,13 +280,85 @@ test('progress: simultaneous writes by one member never lose an update', async (
   const solved = (await st('imran')).s.solved;
   for (const id of ids) assert.ok(solved.includes(id), id);
 });
-test('quiz is scored on the server; the client cannot send a score', async () => {
-  await act('shuvo', { type: 'quiz', course: 'dp', picks: [1, 2, 2], score: 3 });
-  assert.equal((await st('shuvo')).s.quiz.dp, 2);
-  await refused(400, act('shuvo', { type: 'quiz', course: 'dp', picks: [1] }));
-  await refused(403, act('shuvo', { type: 'quiz', course: 'nope', picks: [0, 0, 0] }));
-  await act('shuvo', { type: 'quizReset', course: 'dp' });
-  assert.equal((await st('shuvo')).s.quiz.dp, undefined);
+test('courses: only learning curators add and delete them', async () => {
+  const course = {
+    title: 'Segment trees',
+    instructor: 'Nadia',
+    weeks: 3,
+    url: 'https://cp-algorithms.com',
+  };
+  await refused(403, act('shuvo', { type: 'courseAdd', ...course }));
+  await refused(403, act('admin', { type: 'courseAdd', ...course })); // operator account
+  await refused(400, act('nadia', { type: 'courseAdd', ...course, url: 'javascript:alert(1)' }));
+  await refused(400, act('nadia', { type: 'courseAdd', ...course, weeks: 0 }));
+  await act('nadia', { type: 'courseAdd', ...course });
+  const added = (await st('shuvo')).courses[0]!;
+  assert.equal(added.title, 'Segment trees');
+  await refused(403, act('shuvo', { type: 'courseDelete', id: added.id }));
+  await refused(404, act('nadia', { type: 'courseDelete', id: 'not-a-uuid' }));
+  await act('tanvir', { type: 'courseDelete', id: added.id });
+  assert.ok(!(await st('shuvo')).courses.some((c) => c.id === added.id));
+});
+test('daily quiz: five fixed picks, answers hidden until picked, one answer each', async () => {
+  const s = await st('shuvo');
+  assert.equal(s.quizBank, null, 'members never get the bank');
+  assert.equal(s.quiz.length, 5);
+  assert.ok(s.quiz.every((q) => q.answer === null && q.picked === null));
+  assert.deepEqual(
+    (await st('imran')).quiz.map((q) => q.id),
+    s.quiz.map((q) => q.id),
+    'everyone gets the same five',
+  );
+  const q = s.quiz[0]!;
+  await act('shuvo', { type: 'quizAnswer', id: q.id, pick: 1, isCorrect: true });
+  const after = (await st('shuvo')).quiz[0]!;
+  assert.equal(after.picked, 1);
+  assert.equal(typeof after.answer, 'number');
+  await refused(409, act('shuvo', { type: 'quizAnswer', id: q.id, pick: 2 }));
+  await refused(400, act('shuvo', { type: 'quizAnswer', id: q.id, pick: 4 }));
+  const bank = (await st('nadia')).quizBank!;
+  const other = bank.find((b) => !b.today)!;
+  await refused(400, act('shuvo', { type: 'quizAnswer', id: other.id, pick: 0 }));
+  assert.equal(
+    (await st('imran')).quiz[0]!.answer,
+    null,
+    'one member answering reveals nothing to others',
+  );
+});
+test('daily quiz: two first loads of the day agree on one set', async () => {
+  await db().query(`delete from learning_quiz_daily_picks`);
+  const [a, b] = await Promise.all([st('shuvo'), st('imran')]);
+  assert.equal(a.quiz.length, 5);
+  assert.deepEqual(
+    a.quiz.map((q) => q.id),
+    b.quiz.map((q) => q.id),
+  );
+});
+test('quiz bank: curators add, import all or nothing, edit and delete', async () => {
+  const q = { question: 'BFS uses a?', options: ['Stack', 'Queue', 'Heap', 'Set'], answer: 1 };
+  await refused(403, act('shuvo', { type: 'quizAdd', ...q }));
+  await refused(400, act('nadia', { type: 'quizAdd', ...q, options: ['a', 'b', 'c'] }));
+  const n0 = (await st('nadia')).quizBank!.length;
+  await act('nadia', { type: 'quizAdd', ...q });
+  const good = {
+    q: 'DSU find is about?',
+    options: ['O(1)', 'O(log n)', 'O(n)', 'O(α(n))'],
+    answer: 3,
+  };
+  await refused(
+    400,
+    act('nadia', { type: 'quizImport', questions: [good, { ...good, answer: 9 }] }),
+  );
+  assert.equal((await st('nadia')).quizBank!.length, n0 + 1, 'a bad item imports nothing');
+  await act('nadia', { type: 'quizImport', questions: [good, good] });
+  const bank = (await st('tanvir')).quizBank!;
+  assert.equal(bank.length, n0 + 3);
+  const mine = bank.find((b) => b.question === 'BFS uses a?')!;
+  await act('nadia', { type: 'quizEdit', id: mine.id, ...q, answer: 0 });
+  assert.equal((await st('nadia')).quizBank!.find((b) => b.id === mine.id)!.answer, 0);
+  await refused(403, act('shuvo', { type: 'quizDelete', id: mine.id }));
+  await act('nadia', { type: 'quizDelete', id: mine.id });
+  await refused(404, act('nadia', { type: 'quizDelete', id: mine.id }));
 });
 
 test('sync: registrations, kudos and poll votes are counted across members', async () => {
@@ -330,7 +403,7 @@ test('cheers, reads and seats cannot be invented: XP needs a real target', async
   await refused(403, act('priya', { type: 'toggle', list: 'kudos', id: 'member:priya' }));
   await refused(403, act('priya', { type: 'toggle', list: 'kudos', id: 'made:up' }));
   await refused(403, act('priya', { type: 'toggle', list: 'read', id: 'n:not-in-my-inbox' }));
-  await act('priya', { type: 'toggle', list: 'kudos', id: 'post:4A' }); // someone else's editorial
+  await refused(403, act('priya', { type: 'toggle', list: 'kudos', id: 'post:4A' })); // editorials are gone
   await refused(403, act('priya', { type: 'markAnnouncementRead', id: 'an:999999' }));
   // the last seat goes to one of two simultaneous registrations
   await pool().query(`update club_events set seats = 1 where id = 'icpc-mock-3'`);

@@ -1,8 +1,6 @@
 export const XP = {
   solve: 12,
   resource: 15,
-  lesson: 25,
-  quiz: 40,
   attend: 20,
   checkin: 5,
   kudos: 2,
@@ -41,8 +39,6 @@ export type Earn = {
   /** The ticked problems Codeforces confirmed (server-side sync). Only these earn solve XP. */
   verified: string[];
   done: string[];
-  lessons: string[];
-  quiz: Record<string, number>;
   present: string[];
   checkin: boolean;
   kudos: string[];
@@ -67,11 +63,7 @@ export const verifiedNew = (s: Earn) =>
 export function quests(s: Earn) {
   return [
     { id: 'q1', text: 'Solve one problem', done: verifiedNew(s) > 0 },
-    {
-      id: 'q2',
-      text: 'Finish a lesson or read a wiki page',
-      done: s.lessons.length + s.done.length > s.base.done,
-    },
+    { id: 'q2', text: 'Read a wiki page', done: s.done.length > s.base.done },
     { id: 'q3', text: 'Help or cheer someone', done: given(s) > 0 },
   ];
 }
@@ -87,8 +79,6 @@ export function earned(s: Earn): number {
   return (
     verifiedNew(s) * XP.solve +
     Math.max(0, s.done.length - s.base.done) * XP.resource +
-    s.lessons.length * XP.lesson +
-    Object.values(s.quiz).filter((v) => v >= 2).length * XP.quiz +
     s.present.length * XP.attend +
     (s.checkin ? XP.checkin : 0) +
     Math.min(20, given(s)) * XP.kudos +

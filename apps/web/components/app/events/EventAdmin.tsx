@@ -1,15 +1,14 @@
 'use client';
-import { SaveForm } from '../SaveBar';
 import { Fragment, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Tabs } from '../Shell';
 import { useStore } from '../Store';
-import { EventSections, FieldsEditor, Method, cleanFields } from './EventForm';
+import { cleanFields, FieldsEditor } from './EventForm';
 import { downloadCsv, renderCertificate } from '@/lib/events';
 import { useConfirm, usePrompt } from '../shared/PromptDialog';
-import { CertPreview } from './CertPreview';
 import { MailEditor, MailStatus } from '../shared/MailEditor';
+import { EventModal } from './EventModal';
+import { CertPreview } from './CertPreview';
 import {
   CERT_VARS,
   certHeadline,
@@ -24,30 +23,17 @@ import {
   type EventRole,
 } from '@fecpc/contracts';
 
-const TABS = ['Responses', 'Details', 'Roles', 'Email', 'Feedback', 'Certificates'] as const;
-
-/** Everything the President and Secretary do with one event. The API checks `event.publish` on each call. */
+/** Command sidebar for event organizers (Status, Responses, Roles, Certificates, Email, Feedback, Settings) */
 export function EventAdmin({ e, reload }: { e: EventDetail; reload: () => void }) {
-  const [tab, setTab] = useState<(typeof TABS)[number]>('Responses');
-  return (
-    <section className="panel stack ev-card ev-org">
-      <b>Organise</b>
-      <Tabs tabs={TABS} value={tab} onChange={setTab} />
-      {tab === 'Responses' && <Responses e={e} reload={reload} />}
-      {tab === 'Details' && <Details e={e} reload={reload} />}
-      {tab === 'Roles' && <Roles e={e} reload={reload} />}
-      {tab === 'Email' && <Email e={e} reload={reload} />}
-      {tab === 'Feedback' && <Feedback e={e} />}
-      {tab === 'Certificates' && <Certificates e={e} reload={reload} />}
-    </section>
-  );
-}
-
-function Details({ e, reload }: { e: EventDetail; reload: () => void }) {
   const { act } = useStore();
   const router = useRouter();
   const confirmIt = useConfirm();
-  const final = e.status === 'completed';
+  const [certModalOpen, setCertModalOpen] = useState(false);
+  const [certKind, setCertKind] = useState('participant');
+  const [modal, setModal] = useState<'responses' | 'roles' | 'certs' | 'email' | 'feedback' | null>(
+    null,
+  );
+
   const del = async () => {
     if (
       !(await confirmIt(
@@ -61,26 +47,148 @@ function Details({ e, reload }: { e: EventDetail; reload: () => void }) {
     if (await act('eventDelete', { id: e.id })) router.push('/app/events');
   };
 
+  const kinds: [string, string][] = [
+    ['participant', 'Participants'],
+    ['winner1', '1st place'],
+    ['winner2', '2nd place'],
+    ['winner3', '3rd place'],
+    ...e.roles.map((r): [string, string] => [`role:${r.id}`, r.title]),
+  ];
+
+  const roleTitle = certKind.startsWith('role:')
+    ? (e.roles.find((r) => `role:${r.id}` === certKind)?.title ?? '')
+    : SAMPLE.role!;
+  const certPlace = certKind.startsWith('winner')
+    ? ['1st', '2nd', '3rd'][+certKind.slice(6) - 1]!
+    : '';
+
+  const totalEntries = e.admin!.entries.length;
+  const approvedCount = e.admin!.entries.filter((x) => x.status === 'approved').length;
+  const pendingCount = e.admin!.entries.filter((x) => x.status === 'pending').length;
+  const placedCount = e.admin!.entries.filter((x) => x.place !== null).length;
+  const rolesCount = e.roles.length;
+  const certsIssued = Object.values(e.admin!.issued).reduce((a, b) => a + b, 0);
+  const fb = e.admin!.feedback;
+  const avgFb = fb.length ? (fb.reduce((s, f) => s + f.rating, 0) / fb.length).toFixed(1) : null;
+  const hasCustomMail = !!e.admin!.mail;
+
   return (
-    <div className="stack">
-      {final && (
-        <p className="body">
-          This event is completed, so its details are final. Feedback and certificates stay
-          available in their tabs.
-        </p>
-      )}
-      <EventSections event={e} saved={reload} readOnly={final} />
-      <div className="row">
-        {(final || e.status === 'cancelled') && (
-          <Link className="btn sm" href={`/app/events/new?copy=${e.id}`}>
-            Run again as a new event
-          </Link>
-        )}
-        <button className="btn sm line danger" type="button" onClick={del}>
-          Delete event
+    <>
+      {/* Launchpad Rail */}
+      <div className="panel">
+        <button type="button" className="item" onClick={() => setModal('responses')}>
+          <span className="tx">
+            <b>Responses &amp; awards</b>
+            <span>
+              {totalEntries} registered · {approvedCount} approved · {pendingCount} pending
+              {placedCount > 0 ? ` · ${placedCount} placed` : ''}
+            </span>
+          </span>
+          <span className="ar">↗</span>
+        </button>
+
+        <button type="button" className="item" onClick={() => setModal('roles')}>
+          <span className="tx">
+            <b>Event roles</b>
+            <span>{rolesCount} configured · volunteer or TA roles</span>
+          </span>
+          <span className="ar">↗</span>
+        </button>
+
+        <button type="button" className="item" onClick={() => setModal('certs')}>
+          <span className="tx">
+            <b>Certificates studio</b>
+            <span>
+              {e.certs ? 'Downloads on' : 'Downloads off'} ·{' '}
+              {certsIssued > 0 ? `${certsIssued} issued` : 'template editor'}
+            </span>
+          </span>
+          <span className="ar">↗</span>
+        </button>
+
+        <button type="button" className="item" onClick={() => setModal('feedback')}>
+          <span className="tx">
+            <b>Attendee feedback</b>
+            <span>
+              {fb.length > 0 ? `★ ${avgFb} / 5 (${fb.length} reviews)` : 'No reviews yet'}
+            </span>
+          </span>
+          <span className="ar">↗</span>
+        </button>
+
+        <button type="button" className="item" onClick={() => setModal('email')}>
+          <span className="tx">
+            <b>Approval email</b>
+            <span>
+              {hasCustomMail ? 'Custom design' : 'Built-in design'} · preview &amp; styling
+            </span>
+          </span>
+          <span className="ar">↗</span>
         </button>
       </div>
-    </div>
+
+      {/* Run again button for past events */}
+      {(e.status === 'completed' || e.status === 'cancelled') && (
+        <Link
+          className="eb"
+          style={{ display: 'block', textAlign: 'center', textDecoration: 'none' }}
+          href={`/app/events/new?copy=${e.id}`}
+        >
+          Run again as a new event
+        </Link>
+      )}
+
+      {/* Delete Event */}
+      <button type="button" className="del" onClick={del}>
+        Delete event
+      </button>
+
+      {/* MODALS */}
+      {modal === 'responses' && <Responses e={e} reload={reload} onClose={() => setModal(null)} />}
+
+      {modal === 'roles' && (
+        <EventModal title={`Event Roles (${rolesCount})`} onClose={() => setModal(null)}>
+          <Roles e={e} reload={reload} />
+        </EventModal>
+      )}
+
+      {modal === 'certs' && (
+        <EventModal wide noShadow title="Certificates Studio" onClose={() => setModal(null)}>
+          <Certificates
+            e={e}
+            reload={reload}
+            kind={certKind}
+            setKind={setCertKind}
+            kinds={kinds}
+            onOpenPreview={() => setCertModalOpen(true)}
+          />
+        </EventModal>
+      )}
+
+      {modal === 'feedback' && (
+        <EventModal title={`Attendee Feedback (${fb.length})`} onClose={() => setModal(null)}>
+          <Feedback e={e} />
+        </EventModal>
+      )}
+
+      {modal === 'email' && (
+        <EventModal wide title={`Approval Email · ${e.title}`} onClose={() => setModal(null)}>
+          <Email e={e} reload={reload} />
+        </EventModal>
+      )}
+
+      {/* CERTIFICATE PREVIEW MODAL */}
+      {certModalOpen && (
+        <CertificateModal
+          e={e}
+          reload={reload}
+          kind={certKind}
+          roleTitle={roleTitle}
+          certPlace={certPlace}
+          onClose={() => setCertModalOpen(false)}
+        />
+      )}
+    </>
   );
 }
 
@@ -102,53 +210,171 @@ function RoleForm({
     approval: role?.approval ?? 'manual',
   });
   const [fields, setFields] = useState(role?.fields ?? []);
-  const [start] = useState(() => JSON.stringify([v, fields]));
+  const [saving, setSaving] = useState(false);
   const set = (p: Partial<typeof v>) => setV((x) => ({ ...x, ...p }));
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!v.title.trim()) return;
+    setSaving(true);
+    const ok = await act('roleSave', {
+      eventId,
+      id: role?.id,
+      ...v,
+      title: v.title.trim(),
+      about: v.about.trim(),
+      fields: cleanFields(fields),
+    });
+    setSaving(false);
+    if (ok) done();
+  };
+
   return (
-    <SaveForm
+    <form
       className="stack"
-      label={role ? `Unsaved changes to “${role.title}”` : 'Unsaved new role'}
-      saveLabel={role ? 'Save role' : 'Add role'}
-      extraDirty={JSON.stringify([v, fields]) !== start}
-      onDiscard={done}
-      onSubmit={async () => {
-        const ok = await act('roleSave', {
-          eventId,
-          id: role?.id,
-          ...v,
-          title: v.title.trim(),
-          about: v.about.trim(),
-          fields: cleanFields(fields),
-        });
-        if (ok) done();
-        return ok;
+      style={{
+        padding: '16px',
+        background: 'var(--bg)',
+        border: '1px solid var(--line2)',
+        marginTop: 8,
+        gap: 14,
       }}
+      onSubmit={handleSubmit}
     >
-      <div className="row">
-        <label className="field grow">
-          <span className="label">Role</span>
-          <input
-            className="input"
-            required
-            maxLength={80}
-            placeholder="Volunteer, Teaching Assistant…"
-            value={v.title}
-            onChange={(x) => set({ title: x.target.value })}
-          />
+      <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <label
+          className="mono"
+          style={{
+            fontSize: 14,
+            color: 'var(--dim)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.08em',
+          }}
+        >
+          Role
         </label>
-        <label className="field grow">
-          <span className="label">What they do</span>
-          <input
-            className="input"
-            maxLength={1000}
-            value={v.about}
-            onChange={(x) => set({ about: x.target.value })}
-          />
-        </label>
+        <input
+          className="ctl"
+          required
+          maxLength={80}
+          placeholder="Volunteer, Teaching Assistant…"
+          value={v.title}
+          onChange={(x) => set({ title: x.target.value })}
+        />
       </div>
-      <Method v={v} set={set} />
+      <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <label
+          className="mono"
+          style={{
+            fontSize: 14,
+            color: 'var(--dim)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.08em',
+          }}
+        >
+          What they do
+        </label>
+        <input
+          className="ctl"
+          maxLength={1000}
+          placeholder="Brief description"
+          value={v.about}
+          onChange={(x) => set({ about: x.target.value })}
+        />
+      </div>
+      <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <label
+          className="mono"
+          style={{
+            fontSize: 14,
+            color: 'var(--dim)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.08em',
+          }}
+        >
+          Sign up method
+        </label>
+        <select
+          className="ctl"
+          value={v.mode}
+          onChange={(x) => set({ mode: x.target.value as any })}
+        >
+          <option value="platform">Here, on this site</option>
+          <option value="form">Google Forms</option>
+        </select>
+      </div>
+      {v.mode === 'form' && (
+        <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <label
+            className="mono"
+            style={{
+              fontSize: 14,
+              color: 'var(--dim)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
+            }}
+          >
+            Google Forms URL
+          </label>
+          <input
+            className="ctl"
+            placeholder="https://forms.gle/..."
+            value={v.formUrl ?? ''}
+            onChange={(x) => set({ formUrl: x.target.value })}
+          />
+        </div>
+      )}
+      <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <label
+          className="mono"
+          style={{
+            fontSize: 14,
+            color: 'var(--dim)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.08em',
+          }}
+        >
+          Who gets in?
+        </label>
+        <select
+          className="ctl"
+          value={v.approval}
+          onChange={(x) => set({ approval: x.target.value as any })}
+        >
+          <option value="manual">Only those I approve</option>
+          <option value="auto">Everyone automatically</option>
+        </select>
+      </div>
       {v.mode === 'platform' && <FieldsEditor value={fields} onChange={setFields} />}
-    </SaveForm>
+
+      <div className="row" style={{ gap: 8, marginTop: 8 }}>
+        <button
+          className="eb"
+          type="submit"
+          disabled={saving}
+          style={{
+            flex: 1,
+            padding: '10px 16px',
+            background: 'var(--acc)',
+            color: 'white',
+            borderColor: 'var(--acc)',
+            fontWeight: 700,
+            fontSize: 14,
+            cursor: 'pointer',
+          }}
+        >
+          {saving ? 'Saving...' : role ? 'Save role' : 'Add role'}
+        </button>
+        <button
+          className="eb"
+          type="button"
+          onClick={done}
+          style={{ padding: '10px 16px', fontSize: 14, cursor: 'pointer' }}
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }
 
@@ -161,28 +387,31 @@ function Roles({ e, reload }: { e: EventDetail; reload: () => void }) {
     reload();
   };
   return (
-    <div className="stack">
+    <div className="stack" style={{ gap: 14 }}>
       {e.roles.map((r) => (
-        <div key={r.id} className="stack">
-          <div className="row between">
-            <span>
-              <b>{r.title}</b>{' '}
-              <span className="label">
+        <div key={r.id} className="panel" style={{ padding: '14px 18px' }}>
+          <div className="row between" style={{ alignItems: 'flex-start' }}>
+            <div>
+              <b style={{ fontSize: 15, display: 'block' }}>{r.title}</b>
+              <span
+                className="mono text-dim"
+                style={{ fontSize: 14, marginTop: 4, display: 'block' }}
+              >
                 {r.mode === 'form'
-                  ? 'Google Forms'
-                  : `${r.approval} approval · ${r.counts?.approved ?? 0} approved · ${r.counts?.pending ?? 0} pending`}
+                  ? 'Google Forms link'
+                  : `${r.approval === 'auto' ? 'Auto approval' : 'Manual approval'} · ${r.counts?.approved ?? 0} approved · ${r.counts?.pending ?? 0} pending`}
               </span>
-            </span>
-            <span className="row">
+            </div>
+            <div className="row" style={{ gap: 8, alignItems: 'center' }}>
               <button
-                className="btn xs line"
+                className="eb"
                 type="button"
                 onClick={() => setOpen(open === r.id ? null : r.id)}
               >
-                Edit
+                {open === r.id ? 'Close' : 'Edit'}
               </button>
               <button
-                className="btn xs line"
+                className="del"
                 type="button"
                 onClick={async () =>
                   (await confirmIt(
@@ -197,21 +426,42 @@ function Roles({ e, reload }: { e: EventDetail; reload: () => void }) {
               >
                 Remove
               </button>
-            </span>
+            </div>
           </div>
-          {open === r.id && <RoleForm eventId={e.id} role={r} done={done} />}
+          {open === r.id && (
+            <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
+              <RoleForm eventId={e.id} role={r} done={done} />
+            </div>
+          )}
         </div>
       ))}
       {open === 'new' ? (
-        <RoleForm eventId={e.id} done={done} />
+        <div className="panel" style={{ padding: '16px' }}>
+          <div
+            className="row between"
+            style={{
+              marginBottom: 12,
+              borderBottom: '1px solid var(--line)',
+              paddingBottom: 8,
+            }}
+          >
+            <span className="mono" style={{ fontWeight: 700 }}>
+              New Event Role
+            </span>
+            <button className="del" type="button" onClick={() => setOpen(null)}>
+              Cancel
+            </button>
+          </div>
+          <RoleForm eventId={e.id} done={done} />
+        </div>
       ) : (
         <button
-          className="btn sm line"
+          className="add"
           type="button"
-          style={{ alignSelf: 'flex-start' }}
+          style={{ width: '100%', justifyContent: 'center' }}
           onClick={() => setOpen('new')}
         >
-          Add a role
+          + Add a role
         </button>
       )}
     </div>
@@ -220,7 +470,15 @@ function Roles({ e, reload }: { e: EventDetail; reload: () => void }) {
 
 const PLACES = ['', '1st', '2nd', '3rd'];
 
-function Responses({ e, reload }: { e: EventDetail; reload: () => void }) {
+function Responses({
+  e,
+  reload,
+  onClose,
+}: {
+  e: EventDetail;
+  reload: () => void;
+  onClose: () => void;
+}) {
   const { act } = useStore();
   const ask = usePrompt();
   const entries = e.admin!.entries;
@@ -247,7 +505,6 @@ function Responses({ e, reload }: { e: EventDetail; reload: () => void }) {
       ),
     [entries, who, status, query],
   );
-  const count = (pred: (x: EventEntry) => boolean) => entries.filter(pred).length;
   const decide = async (ids: number[], s: string) => {
     let reason: string | null = null;
     if (s === 'rejected') {
@@ -268,89 +525,21 @@ function Responses({ e, reload }: { e: EventDetail; reload: () => void }) {
   const questions = [...new Set(rows.flatMap((x) => Object.keys(x.answers)))];
 
   return (
-    <div className="stack">
-      {e.mode === 'form' && (
-        <p className="label">
-          Participants register on Google Forms; their answers are in the form, not here.{' '}
-          {e.formUrl && (
-            <a className="link" href={e.formUrl} target="_blank" rel="noopener noreferrer">
-              Open the form
-            </a>
-          )}
-        </p>
-      )}
-      <div className="row">
-        {[
-          ...(e.mode === 'platform'
-            ? [{ t: 'Participants', f: (x: EventEntry) => x.roleId === null }]
-            : []),
-          ...e.roles
-            .filter((r) => r.mode === 'platform')
-            .map((r) => ({ t: r.title, f: (x: EventEntry) => x.roleId === r.id })),
-        ].map(({ t, f }) => (
-          <span key={t} className="chip">
-            {t}: {count((x) => f(x) && x.status === 'approved')} approved ·{' '}
-            {count((x) => f(x) && x.status === 'pending')} pending ·{' '}
-            {count((x) => f(x) && x.status === 'rejected')} declined
-          </span>
-        ))}
-      </div>
-      <div className="row">
-        <input
-          type="search"
-          className="input grow"
-          aria-label="Search responses"
-          placeholder="Search name, email, phone, answers"
-          value={q}
-          onChange={(x) => setQ(x.target.value)}
-        />
-        <select
-          className="input"
-          aria-label="Who"
-          value={who}
-          onChange={(x) => setWho(x.target.value)}
-          style={{ width: 'auto' }}
-        >
-          <option value="all">Everyone</option>
-          <option value="participants">Participants</option>
-          {e.roles.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.title}
-            </option>
-          ))}
-        </select>
-        <select
-          className="input"
-          aria-label="Status"
-          value={status}
-          onChange={(x) => setStatus(x.target.value)}
-          style={{ width: 'auto' }}
-        >
-          {['all', 'pending', 'approved', 'rejected', 'cancelled'].map((s) => (
-            <option key={s}>{s}</option>
-          ))}
-        </select>
-      </div>
-      <div className="row">
+    <EventModal
+      wide
+      title={`Responses & Place Awards (${entries.length})`}
+      onClose={onClose}
+      headerActions={
         <button
-          className="btn xs"
+          className="eb"
           type="button"
-          disabled={!picked.length}
-          onClick={() => decide(picked, 'approved')}
-        >
-          Approve {picked.length || ''}
-        </button>
-        <button
-          className="btn xs line"
-          type="button"
-          disabled={!picked.length}
-          onClick={() => decide(picked, 'rejected')}
-        >
-          Decline {picked.length || ''}
-        </button>
-        <button
-          className="btn xs line"
-          type="button"
+          style={{
+            whiteSpace: 'nowrap',
+            height: 34,
+            padding: '0 12px',
+            fontSize: 14,
+            fontWeight: 700,
+          }}
           disabled={!rows.length}
           onClick={() =>
             downloadCsv(`${e.id}-responses.csv`, [
@@ -369,147 +558,466 @@ function Responses({ e, reload }: { e: EventDetail; reload: () => void }) {
             ])
           }
         >
-          Export CSV ({rows.length})
+          Export CSV
         </button>
-      </div>
-      <div style={{ overflowX: 'auto' }}>
-        <table className="tbl">
-          <thead>
-            <tr>
-              <th>
-                <input
-                  type="checkbox"
-                  aria-label="Select all"
-                  checked={!!rows.length && rows.every((x) => picked.includes(x.id))}
-                  onChange={(x) => setPicked(x.target.checked ? rows.map((r) => r.id) : [])}
-                />
-              </th>
-              <th>Name</th>
-              <th>Kind</th>
-              <th>Phone</th>
-              <th>Status</th>
-              <th>Place</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((x) => (
-              <Fragment key={x.id}>
-                <tr>
-                  <td>
-                    <input
-                      type="checkbox"
-                      aria-label={`Select ${x.name}`}
-                      checked={picked.includes(x.id)}
-                      onChange={(c) =>
-                        setPicked(
-                          c.target.checked ? [...picked, x.id] : picked.filter((p) => p !== x.id),
-                        )
-                      }
-                    />
-                  </td>
-                  <td>
-                    {x.name}
-                    <br />
-                    <span className="label">
-                      {x.email} · batch {x.batch} · signed up{' '}
-                      {new Date(x.at).toLocaleDateString('en-GB', {
-                        day: 'numeric',
-                        month: 'short',
-                      })}
-                    </span>
-                  </td>
-                  <td>{roleName(x)}</td>
-                  <td className="mono">{x.phone}</td>
-                  <td>
-                    {x.status === 'rejected' ? 'declined' : x.status}
-                    {x.status === 'rejected' && x.reason && (
-                      <>
-                        <br />
-                        <span className="label">{x.reason}</span>
-                      </>
-                    )}
-                  </td>
-                  <td>
-                    {x.roleId === null && x.status === 'approved' ? (
-                      <select
-                        className="input ev-place"
-                        aria-label={`Place for ${x.name}`}
-                        value={x.place ?? ''}
-                        onChange={async (c) =>
-                          (await act('entryPlace', {
-                            id: x.id,
-                            place: c.target.value ? +c.target.value : null,
-                          })) && reload()
-                        }
-                      >
-                        <option value="">None</option>
-                        <option value="1">1st</option>
-                        <option value="2">2nd</option>
-                        <option value="3">3rd</option>
-                      </select>
-                    ) : (
-                      PLACES[x.place ?? 0]
-                    )}
-                  </td>
-                  <td>
-                    <span className="row">
-                      {x.status !== 'approved' && x.status !== 'cancelled' && (
-                        <button
-                          className="btn xs"
-                          type="button"
-                          onClick={() => decide([x.id], 'approved')}
-                        >
-                          Approve
-                        </button>
-                      )}
-                      {x.status !== 'rejected' && x.status !== 'cancelled' && (
-                        <button
-                          className="btn xs line"
-                          type="button"
-                          onClick={() => decide([x.id], 'rejected')}
-                        >
-                          Decline
-                        </button>
-                      )}
-                      {/* Only when they answered the extra questions; name and phone are already in the row. */}
-                      {Object.keys(x.answers).length > 0 && (
-                        <button
-                          className="btn xs line"
-                          type="button"
-                          aria-expanded={shown === x.id}
-                          onClick={() => setShown(shown === x.id ? null : x.id)}
-                        >
-                          {shown === x.id
-                            ? 'Hide answers'
-                            : `Answers (${Object.keys(x.answers).length})`}
-                        </button>
-                      )}
-                    </span>
-                  </td>
-                </tr>
-                {shown === x.id && (
+      }
+    >
+      <div className="stack" style={{ gap: 14 }}>
+        {e.mode === 'form' && (
+          <div
+            className="row between"
+            style={{
+              padding: '8px 12px',
+              background: 'var(--bg)',
+              border: '1px solid var(--line)',
+              alignItems: 'center',
+              gap: 8,
+              flexWrap: 'wrap',
+            }}
+          >
+            <span className="mono text-dim" style={{ fontSize: 14 }}>
+              Participants register on Google Forms; their answers are in the form, not here.
+            </span>
+            {e.formUrl && (
+              <a
+                className="eb"
+                style={{
+                  fontSize: 14,
+                  padding: '4px 10px',
+                  textDecoration: 'none',
+                  whiteSpace: 'nowrap',
+                }}
+                href={e.formUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Open Google Form ↗
+              </a>
+            )}
+          </div>
+        )}
+
+        {/* Search Toolbar & Filters in SAME row */}
+        <div className="row" style={{ gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <input
+            type="search"
+            className="ctl"
+            style={{ flex: '1 1 200px', height: 40 }}
+            placeholder="Search name, email, phone, answers..."
+            value={q}
+            onChange={(x) => setQ(x.target.value)}
+          />
+          <select
+            className="ctl"
+            aria-label="Who"
+            value={who}
+            onChange={(x) => setWho(x.target.value)}
+            style={{ width: 'auto', height: 40, fontSize: 14, flex: '0 1 140px' }}
+          >
+            <option value="all">Everyone</option>
+            <option value="participants">Participants</option>
+            {e.roles.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.title}
+              </option>
+            ))}
+          </select>
+          <select
+            className="ctl"
+            aria-label="Status"
+            value={status}
+            onChange={(x) => setStatus(x.target.value)}
+            style={{ width: 'auto', height: 40, fontSize: 14, flex: '0 1 130px' }}
+          >
+            {['all', 'pending', 'approved', 'rejected', 'cancelled'].map((s) => (
+              <option key={s}>{s}</option>
+            ))}
+          </select>
+        </div>
+
+        {picked.length > 0 && (
+          <div
+            className="row between"
+            style={{
+              background: 'var(--bg)',
+              padding: '8px 14px',
+              border: '1px solid var(--line2)',
+              boxShadow: '2px 2px 0 var(--line2)',
+              alignItems: 'center',
+            }}
+          >
+            <span className="mono" style={{ fontSize: 14, fontWeight: 700 }}>
+              {picked.length} {picked.length === 1 ? 'entry' : 'entries'} selected
+            </span>
+            <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+              <button
+                type="button"
+                style={{
+                  fontSize: 14,
+                  fontWeight: 700,
+                  fontFamily: 'var(--f-mono, monospace)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.04em',
+                  padding: '5px 12px',
+                  background: '#16a34a',
+                  color: '#ffffff',
+                  border: '1px solid #16a34a',
+                  cursor: 'pointer',
+                }}
+                onClick={() => decide(picked, 'approved')}
+              >
+                Approve ({picked.length})
+              </button>
+              <button
+                type="button"
+                style={{
+                  fontSize: 14,
+                  fontWeight: 700,
+                  fontFamily: 'var(--f-mono, monospace)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.04em',
+                  padding: '5px 10px',
+                  background: 'transparent',
+                  color: '#dc2626',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.textDecoration = 'underline';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.textDecoration = 'none';
+                }}
+                onClick={() => decide(picked, 'rejected')}
+              >
+                Decline ({picked.length})
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Data Table */}
+        <div
+          style={{
+            overflowX: 'auto',
+            border: '1px solid var(--line2)',
+            background: 'var(--panel)',
+            boxShadow: '2px 2px 0 var(--line2)',
+          }}
+        >
+          <table className="mini-table">
+            <thead>
+              <tr>
+                <th style={{ width: 36, paddingLeft: 14 }}>
+                  <input
+                    type="checkbox"
+                    aria-label="Select all"
+                    checked={!!rows.length && rows.every((x) => picked.includes(x.id))}
+                    onChange={(x) => setPicked(x.target.checked ? rows.map((r) => r.id) : [])}
+                  />
+                </th>
+                <th>NAME &amp; CONTACT</th>
+                <th>STATUS / PLACE</th>
+                <th style={{ textAlign: 'right', paddingRight: 14 }}>ACTIONS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((x) => (
+                <Fragment key={x.id}>
                   <tr>
-                    <td />
-                    <td colSpan={6}>
-                      <dl className="stack">
-                        {Object.entries(x.answers).map(([k, v]) => (
-                          <div key={k}>
-                            <dt className="label">{k}</dt>
-                            <dd>{v}</dd>
-                          </div>
-                        ))}
-                      </dl>
+                    <td style={{ paddingLeft: 14 }}>
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${x.name}`}
+                        checked={picked.includes(x.id)}
+                        onChange={(c) =>
+                          setPicked(
+                            c.target.checked ? [...picked, x.id] : picked.filter((p) => p !== x.id),
+                          )
+                        }
+                      />
+                    </td>
+                    <td>
+                      <span
+                        style={{
+                          display: 'block',
+                          fontSize: 14,
+                          fontWeight: 700,
+                          color: 'var(--hi)',
+                        }}
+                      >
+                        {x.name}
+                      </span>
+                      <div
+                        className="mono text-dim"
+                        style={{
+                          fontSize: 14,
+                          marginTop: 4,
+                          display: 'flex',
+                          flexWrap: 'wrap',
+                          gap: 6,
+                          alignItems: 'center',
+                        }}
+                      >
+                        <span
+                          style={{
+                            background: 'var(--bg)',
+                            padding: '1px 6px',
+                            border: '1px solid var(--line)',
+                            color: 'var(--hi)',
+                            fontWeight: 600,
+                          }}
+                        >
+                          {roleName(x)}
+                        </span>
+                        {x.batch && <span>b{x.batch}</span>}
+                        <span>{x.email}</span>
+                        {x.phone && <span>· {x.phone}</span>}
+                      </div>
+                    </td>
+                    <td>
+                      <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+                        {(() => {
+                          const statusConfig: Record<
+                            string,
+                            {
+                              label: string;
+                              color: string;
+                              border: string;
+                              bg: string;
+                              dot: string;
+                            }
+                          > = {
+                            approved: {
+                              label: 'Approved',
+                              color: '#15803d',
+                              border: '#86efac',
+                              bg: 'rgba(22, 163, 74, 0.08)',
+                              dot: '#16a34a',
+                            },
+                            pending: {
+                              label: 'Pending',
+                              color: '#b45309',
+                              border: '#fcd34d',
+                              bg: 'rgba(245, 158, 11, 0.08)',
+                              dot: '#f59e0b',
+                            },
+                            rejected: {
+                              label: 'Declined',
+                              color: '#b91c1c',
+                              border: '#fca5a5',
+                              bg: 'rgba(220, 38, 38, 0.08)',
+                              dot: '#dc2626',
+                            },
+                            cancelled: {
+                              label: 'Cancelled',
+                              color: '#64748b',
+                              border: '#cbd5e1',
+                              bg: 'rgba(100, 116, 139, 0.08)',
+                              dot: '#94a3b8',
+                            },
+                          };
+                          const cfg = statusConfig[x.status] ?? {
+                            label: x.status,
+                            color: 'var(--hi)',
+                            border: 'var(--line2)',
+                            bg: 'var(--bg)',
+                            dot: 'var(--hi)',
+                          };
+                          return (
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                padding: '3px 8px',
+                                background: cfg.bg,
+                                border: `1px solid ${cfg.border}`,
+                                borderRadius: 2,
+                              }}
+                            >
+                              <span
+                                style={{
+                                  width: 6,
+                                  height: 6,
+                                  borderRadius: '50%',
+                                  background: cfg.dot,
+                                }}
+                              />
+                              <span
+                                className="mono"
+                                style={{
+                                  fontSize: 14,
+                                  fontWeight: 700,
+                                  color: cfg.color,
+                                  textTransform: 'uppercase',
+                                  letterSpacing: '0.04em',
+                                }}
+                              >
+                                {cfg.label}
+                              </span>
+                            </span>
+                          );
+                        })()}
+                        {x.roleId === null && x.status === 'approved' && (
+                          <select
+                            className="ctl"
+                            aria-label={`Place for ${x.name}`}
+                            value={x.place ?? ''}
+                            style={{
+                              width: 'auto',
+                              padding: '0 8px',
+                              fontSize: 14,
+                              height: 26,
+                              fontFamily: 'var(--f-mono, monospace)',
+                              fontWeight: 600,
+                            }}
+                            onChange={async (c) => {
+                              const val = c.target.value ? +c.target.value : null;
+                              if (await act('entryPlace', { id: x.id, place: val })) reload();
+                            }}
+                          >
+                            <option value="">No place</option>
+                            <option value="1">1st place</option>
+                            <option value="2">2nd place</option>
+                            <option value="3">3rd place</option>
+                          </select>
+                        )}
+                      </div>
+                    </td>
+                    <td style={{ paddingRight: 14 }}>
+                      <div
+                        className="row"
+                        style={{ gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}
+                      >
+                        {x.status !== 'approved' && x.status !== 'cancelled' && (
+                          <button
+                            type="button"
+                            style={{
+                              fontSize: 14,
+                              fontWeight: 700,
+                              fontFamily: 'var(--f-mono, monospace)',
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.04em',
+                              padding: '4px 10px',
+                              background: '#16a34a',
+                              color: '#ffffff',
+                              border: '1px solid #16a34a',
+                              cursor: 'pointer',
+                            }}
+                            onClick={() => decide([x.id], 'approved')}
+                          >
+                            Approve
+                          </button>
+                        )}
+                        {x.status !== 'rejected' && x.status !== 'cancelled' && (
+                          <button
+                            type="button"
+                            style={{
+                              fontSize: 14,
+                              fontWeight: 700,
+                              fontFamily: 'var(--f-mono, monospace)',
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.04em',
+                              padding: '4px 8px',
+                              background: 'transparent',
+                              color: '#dc2626',
+                              border: 'none',
+                              cursor: 'pointer',
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.textDecoration = 'underline';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.textDecoration = 'none';
+                            }}
+                            onClick={() => decide([x.id], 'rejected')}
+                          >
+                            Decline
+                          </button>
+                        )}
+                        {Object.keys(x.answers).length > 0 && (
+                          <button
+                            className="eb"
+                            type="button"
+                            style={{
+                              fontSize: 14,
+                              fontWeight: 700,
+                              fontFamily: 'var(--f-mono, monospace)',
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.04em',
+                              padding: '4px 10px',
+                              background: shown === x.id ? 'var(--ink)' : 'transparent',
+                              color: shown === x.id ? 'var(--panel)' : 'var(--hi)',
+                              borderColor: 'var(--line2)',
+                              cursor: 'pointer',
+                            }}
+                            onClick={() => setShown(shown === x.id ? null : x.id)}
+                          >
+                            {shown === x.id ? 'Close' : `Ans (${Object.keys(x.answers).length})`}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
-                )}
-              </Fragment>
-            ))}
-          </tbody>
-        </table>
-        {!rows.length && <p className="empty">No responses match.</p>}
+                  {shown === x.id && (
+                    <tr>
+                      <td
+                        colSpan={4}
+                        style={{
+                          background: 'var(--bg)',
+                          padding: '14px 18px',
+                          borderBottom: '1px solid var(--line2)',
+                        }}
+                      >
+                        <dl className="stack" style={{ gap: 8, margin: 0 }}>
+                          {Object.entries(x.answers).map(([k, v]) => (
+                            <div
+                              key={k}
+                              style={{
+                                fontSize: 14,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 2,
+                              }}
+                            >
+                              <dt
+                                className="mono text-dim"
+                                style={{
+                                  fontSize: 14,
+                                  fontWeight: 700,
+                                  textTransform: 'uppercase',
+                                  letterSpacing: '0.06em',
+                                }}
+                              >
+                                {k}
+                              </dt>
+                              <dd style={{ margin: 0, color: 'var(--hi)', fontWeight: 500 }}>
+                                {v}
+                              </dd>
+                            </div>
+                          ))}
+                        </dl>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              ))}
+              {!rows.length && (
+                <tr>
+                  <td
+                    colSpan={4}
+                    style={{ textAlign: 'center', color: 'var(--dim)', padding: '2rem 1rem' }}
+                  >
+                    No responses match.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+    </EventModal>
   );
 }
 
@@ -517,34 +1025,54 @@ function Feedback({ e }: { e: EventDetail }) {
   const fb = e.admin!.feedback;
   if (!fb.length)
     return (
-      <p className="empty">
-        {e.status === 'completed'
-          ? 'No feedback yet.'
-          : 'Feedback opens when the event is completed.'}
-      </p>
+      <div className="pad" style={{ textAlign: 'center', padding: '32px 16px' }}>
+        <p className="mono text-dim" style={{ fontSize: 14, margin: 0 }}>
+          {e.status === 'completed'
+            ? 'No feedback submitted yet.'
+            : 'Attendee feedback opens when the event is marked completed.'}
+        </p>
+      </div>
     );
+  const avg = (fb.reduce((s, f) => s + f.rating, 0) / fb.length).toFixed(1);
   return (
-    <div className="stack">
-      <p className="label">
-        {fb.length} responses · average{' '}
-        {(fb.reduce((s, f) => s + f.rating, 0) / fb.length).toFixed(1)} / 5
-      </p>
-      <ol className="list">
-        {fb.map((f, i) => (
-          <li key={i} className="ev-fb">
-            <span className="mono acc">{f.rating}/5</span>
-            <span className="grow">
-              <b>{f.name}</b>
-              {f.body && (
-                <>
-                  <br />
-                  {f.body}
-                </>
-              )}
+    <div className="stack" style={{ gap: 16 }}>
+      <div className="panel" style={{ padding: '16px 20px', background: 'var(--bg)' }}>
+        <div className="row between" style={{ alignItems: 'baseline' }}>
+          <div>
+            <span className="mono" style={{ fontSize: 14, color: 'var(--dim)' }}>
+              OVERALL RATING
             </span>
-          </li>
+            <div className="big" style={{ fontSize: 28, marginTop: 4 }}>
+              ★ {avg}{' '}
+              <span style={{ fontSize: 16, color: 'var(--dim)', fontWeight: 500 }}>/ 5</span>
+            </div>
+          </div>
+          <span className="mono" style={{ fontSize: 14 }}>
+            {fb.length} {fb.length === 1 ? 'response' : 'responses'}
+          </span>
+        </div>
+      </div>
+
+      <div className="stack" style={{ gap: 10 }}>
+        {fb.map((f, i) => (
+          <div key={i} className="panel" style={{ padding: '14px 18px' }}>
+            <div className="row between" style={{ marginBottom: 6 }}>
+              <span className="mono" style={{ fontWeight: 700, fontSize: 14 }}>
+                {f.name}
+              </span>
+              <span className="tag dark" style={{ fontSize: 14, background: 'var(--ink)' }}>
+                {'★'.repeat(f.rating)}
+                {'☆'.repeat(5 - f.rating)}
+              </span>
+            </div>
+            {f.body && (
+              <p style={{ fontSize: 14, margin: 0, lineHeight: 1.5, color: 'var(--hi)' }}>
+                “{f.body}”
+              </p>
+            )}
+          </div>
         ))}
-      </ol>
+      </div>
     </div>
   );
 }
@@ -560,232 +1088,335 @@ const SAMPLE: Record<string, string> = {
   code: 'FEC-0A1B2C3D4E',
 };
 
-function Certificates({ e, reload }: { e: EventDetail; reload: () => void }) {
+function CertificateModal({
+  e,
+  reload,
+  kind,
+  roleTitle,
+  certPlace,
+  onClose,
+}: {
+  e: EventDetail;
+  reload: () => void;
+  kind: string;
+  roleTitle: string;
+  certPlace: string;
+  onClose: () => void;
+}) {
   const { act } = useStore();
-  const confirmIt = useConfirm();
-  const { templates, issued } = e.admin!;
-  const kinds: [string, string][] = [
-    ['participant', 'Participants'],
-    ['winner1', '1st place'],
-    ['winner2', '2nd place'],
-    ['winner3', '3rd place'],
-    ...e.roles.map((r): [string, string] => [`role:${r.id}`, r.title]),
-  ];
-  const [kind, setKind] = useState('participant');
+  const { templates } = e.admin!;
   const saved = templates[kind] ?? '';
-  // Without a saved template, a kind uses the built-in design; editing starts from it.
   const [html, setHtml] = useState(saved || DEFAULT_CERT);
-  const [csv, setCsv] = useState<string[][] | null>(null);
-  const [map, setMap] = useState<string[]>([]);
-  const done = e.status === 'completed';
-  const roleTitle = kind.startsWith('role:')
-    ? (e.roles.find((r) => `role:${r.id}` === kind)?.title ?? '')
-    : SAMPLE.role!;
-  const place = kind.startsWith('winner') ? ['1st', '2nd', '3rd'][+kind.slice(6) - 1]! : '';
+  const [editHtml, setEditHtml] = useState(false);
+
   const sample = {
     ...SAMPLE,
     role: roleTitle,
-    place,
+    place: certPlace,
     event: e.title,
     date: new Date(`${e.startsAt.slice(0, 10)}T00:00`).toLocaleDateString('en-GB', {
       dateStyle: 'long',
     }),
-    headline: certHeadline(kind, roleTitle, place),
+    headline: certHeadline(kind, roleTitle, certPlace),
   };
+
   const custom = html.trim() !== DEFAULT_CERT.trim();
   const unsaved = html.trim() !== (saved || DEFAULT_CERT).trim();
 
   return (
-    <div className="stack">
-      {!done && (
-        <p className="label">Certificates are generated once the event is marked Completed.</p>
-      )}
-      <div className="row">
-        <select
-          className="input"
-          aria-label="Certificate"
-          style={{ width: 'auto' }}
-          value={kind}
-          onChange={async (x) => {
-            const next = x.target.value;
-            if (
-              unsaved &&
-              !(await confirmIt(
-                'Discard design changes?',
-                'Your edits to this design are not saved.',
-                'Discard',
-                true,
-              ))
-            )
-              return;
-            setKind(next);
-            setHtml(templates[next] || DEFAULT_CERT);
-          }}
-        >
-          {kinds.map(([k, t]) => (
-            <option key={k} value={k}>
-              {t} · {templates[k] ? 'custom design' : 'built-in design'}
-              {issued[k] ? ` · ${issued[k]} issued` : ''}
-            </option>
-          ))}
-        </select>
-        <span className="label">{custom ? 'Custom design' : 'Built-in design'}</span>
-      </div>
+    <EventModal
+      wide
+      noShadow
+      title={`Certificate Preview · ${sample.headline || 'Participation'}`}
+      onClose={onClose}
+    >
+      <div className="stack" style={{ gap: 16 }}>
+        {/* Certificate Preview (A4 landscape scale) */}
+        <CertPreview
+          html={fillTemplate(html, sample)}
+          title={`Certificate Preview · ${sample.headline || 'Participation'}`}
+        />
 
-      <CertPreview html={fillTemplate(html, sample)} title="Certificate preview" />
-      <p className="label">Preview with sample details. Real certificates use each person’s own.</p>
-
-      <details>
-        <summary className="label" style={{ cursor: 'pointer' }}>
-          Edit the design (HTML and CSS)
-        </summary>
-        <div className="stack" style={{ marginTop: 12 }}>
-          <span className="label">
-            Placeholders: {CERT_VARS.map((v) => `{{${v}}}`).join(' ')}, or any CSV column you map.
-            Images and fonts must be inline (data: links).
-          </span>
-          <textarea
-            className="input mono"
-            aria-label="Template HTML and CSS"
-            rows={12}
-            value={html}
-            onChange={(x) => setHtml(x.target.value)}
-          />
-        </div>
-      </details>
-      <div className="row">
-        <button
-          className="btn sm"
-          type="button"
-          disabled={!unsaved}
-          onClick={async () =>
-            // Saving the built-in design as-is just removes the custom one.
-            (await act('certTemplate', { eventId: e.id, kind, html: custom ? html : '' })) &&
-            reload()
-          }
-        >
-          Save design
-        </button>
-        <button
-          className="btn sm line"
-          type="button"
-          disabled={!custom}
-          onClick={() => setHtml(DEFAULT_CERT)}
-        >
-          Use built-in design
-        </button>
-        <button
-          className="btn sm line"
-          type="button"
-          onClick={() => renderCertificate(fillTemplate(html, sample), 'png', 'preview')}
-        >
-          Download sample PNG
-        </button>
-      </div>
-
-      <p className="label">Generate</p>
-      <div className="row">
-        <button
-          className="btn sm"
-          type="button"
-          disabled={!done || unsaved}
-          title={
-            unsaved
-              ? 'Save the design first.'
-              : 'One per approved participant, winner and role. Re-running removes certificates people no longer earn.'
-          }
-          onClick={async () => (await act('certIssue', { eventId: e.id })) && reload()}
-        >
-          Generate for everyone approved
-        </button>
-        <label className="btn sm line">
-          Import CSV for this kind
-          <input
-            type="file"
-            accept=".csv,text/csv"
-            hidden
-            onChange={async (x) => {
-              const f = x.target.files?.[0];
-              if (!f) return;
-              const rows = parseCsv(await f.text());
-              setCsv(rows);
-              setMap(
-                rows[0]!.map((h) =>
-                  h
-                    .trim()
-                    .toLowerCase()
-                    .replace(/[^\w.-]+/g, '_'),
-                ),
-              );
-              x.target.value = '';
+        {/* HTML/CSS Template Editor */}
+        {editHtml && (
+          <div
+            className="stack"
+            style={{
+              background: 'var(--bg)',
+              padding: '1rem',
+              border: '1px solid var(--line)',
             }}
-          />
-        </label>
-      </div>
-      {csv && (
-        <div className="stack">
-          <p className="label">
-            {csv.length - 1} rows. Map each column to a placeholder (one must be email); leave empty
-            to skip.
-          </p>
-          <div className="row">
-            {csv[0]!.map((h, i) => (
-              <label key={i} className="field">
-                <span className="label">{h}</span>
-                <input
-                  className="input"
-                  list="cert-vars"
-                  value={map[i] ?? ''}
-                  onChange={(x) => setMap(map.map((m, j) => (j === i ? x.target.value : m)))}
-                />
-              </label>
-            ))}
-            <datalist id="cert-vars">
-              {CERT_VARS.map((v) => (
-                <option key={v} value={v} />
-              ))}
-            </datalist>
+          >
+            <span className="mono text-dim" style={{ fontSize: 14 }}>
+              PLACEHOLDERS: {CERT_VARS.map((v) => `{{${v}}}`).join(' ')}
+            </span>
+            <textarea
+              className="ctl mono"
+              style={{ height: 'auto', minHeight: 180, resize: 'vertical' }}
+              rows={10}
+              value={html}
+              onChange={(x) => setHtml(x.target.value)}
+            />
+            <div className="row" style={{ gap: 8, marginTop: 8 }}>
+              <button
+                className="eb"
+                style={{ background: 'var(--acc)', color: 'white', borderColor: 'var(--acc)' }}
+                type="button"
+                disabled={!unsaved}
+                onClick={async () => {
+                  const ok = await act('certTemplate', {
+                    eventId: e.id,
+                    kind,
+                    html: custom ? html : '',
+                  });
+                  if (ok) reload();
+                }}
+              >
+                Save design
+              </button>
+              <button
+                className="del"
+                type="button"
+                disabled={!custom}
+                onClick={() => setHtml(DEFAULT_CERT)}
+              >
+                Use built-in design
+              </button>
+            </div>
           </div>
-          <div className="row">
-            <button
-              className="btn sm"
-              type="button"
-              disabled={!done || !map.includes('email')}
-              onClick={async () => {
-                const rows = csv
-                  .slice(1)
-                  .map((r) =>
-                    Object.fromEntries(map.flatMap((m, i) => (m ? [[m, r[i] ?? '']] : []))),
-                  );
-                if (!(await act('certIssue', { eventId: e.id, kind, rows }))) return;
-                setCsv(null);
-                reload();
+        )}
+
+        <div
+          style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', flexWrap: 'wrap' }}
+        >
+          <button type="button" className="eb" onClick={() => setEditHtml(!editHtml)}>
+            {editHtml ? 'Hide HTML/CSS' : 'Edit HTML/CSS'}
+          </button>
+          <button
+            type="button"
+            className="add"
+            onClick={() => renderCertificate(fillTemplate(html, sample), 'png', `${e.id}-preview`)}
+          >
+            Download Sample PNG
+          </button>
+        </div>
+      </div>
+    </EventModal>
+  );
+}
+
+function Certificates({
+  e,
+  reload,
+  kind,
+  setKind,
+  kinds,
+  onOpenPreview,
+}: {
+  e: EventDetail;
+  reload: () => void;
+  kind: string;
+  setKind: (k: string) => void;
+  kinds: [string, string][];
+  onOpenPreview: () => void;
+}) {
+  const { act } = useStore();
+  const { templates, issued } = e.admin!;
+  const [csv, setCsv] = useState<string[][] | null>(null);
+  const [map, setMap] = useState<string[]>([]);
+  const done = e.status === 'completed';
+
+  return (
+    <div className="stack" style={{ gap: 16 }}>
+      {/* Top Banner / Distribution State */}
+      <div className="panel" style={{ padding: '14px 18px', background: 'var(--bg)' }}>
+        <div className="row between" style={{ alignItems: 'center' }}>
+          <div>
+            <span className="mono" style={{ fontSize: 14, color: 'var(--dim)', display: 'block' }}>
+              ATTENDEE DOWNLOADS
+            </span>
+            <span
+              className="mono"
+              style={{
+                fontSize: 14,
+                fontWeight: 700,
+                color: e.certs ? 'var(--acc)' : 'var(--dim)',
               }}
             >
-              Generate {csv.length - 1} for {kinds.find(([k]) => k === kind)?.[1]}
+              {e.certs
+                ? '● Active — Attendees can download certificates'
+                : '○ Disabled — Attendees cannot download yet'}
+            </span>
+          </div>
+          <button
+            className="eb"
+            type="button"
+            disabled={!done && !e.certs}
+            title={!done && !e.certs ? 'Mark event completed to enable downloads' : ''}
+            onClick={async () =>
+              (await act('certDistribute', { eventId: e.id, on: !e.certs })) && reload()
+            }
+          >
+            {e.certs ? 'Turn off' : 'Turn on'}
+          </button>
+        </div>
+      </div>
+
+      {/* Kind Selector & Template Preview */}
+      <div className="panel" style={{ padding: '16px 20px', background: 'var(--bg)' }}>
+        <div className="stack" style={{ gap: 12 }}>
+          <div>
+            <label
+              className="mono"
+              style={{
+                fontSize: 14,
+                color: 'var(--dim)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.08em',
+                display: 'block',
+                marginBottom: 6,
+              }}
+            >
+              Select Certificate Type
+            </label>
+            <select className="ctl" value={kind} onChange={(x) => setKind(x.target.value)}>
+              {kinds.map(([k, t]) => (
+                <option key={k} value={k}>
+                  {t} {templates[k] ? '(custom template)' : '(built-in template)'}
+                  {issued[k] ? ` · ${issued[k]} issued` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="row" style={{ gap: 8 }}>
+            <button
+              type="button"
+              className="eb"
+              style={{ flex: 1, padding: '10px 14px', textAlign: 'center' }}
+              onClick={onOpenPreview}
+            >
+              Edit Template &amp; Live Preview ↗
             </button>
-            <button className="btn sm line" type="button" onClick={() => setCsv(null)}>
-              Cancel
+            <button
+              type="button"
+              className="eb"
+              style={{
+                flex: 1,
+                padding: '10px 14px',
+                textAlign: 'center',
+                background: 'var(--acc)',
+                color: 'white',
+                borderColor: 'var(--acc)',
+              }}
+              disabled={!done}
+              title={!done ? 'Event must be completed to issue certificates' : ''}
+              onClick={async () => {
+                if (await act('certIssue', { eventId: e.id })) reload();
+              }}
+            >
+              Generate All ({kinds.find(([k]) => k === kind)?.[1] ?? kind})
             </button>
           </div>
         </div>
-      )}
+      </div>
 
-      <p className="label">Distribution</p>
-      <div className="row">
-        <span className={e.certs ? 'ok' : ''}>
-          {e.certs ? 'Members can download their certificates.' : 'Downloads are off.'}
-        </span>
-        <button
-          className="btn sm line"
-          type="button"
-          disabled={!done && !e.certs}
-          onClick={async () =>
-            (await act('certDistribute', { eventId: e.id, on: !e.certs })) && reload()
-          }
-        >
-          {e.certs ? 'Turn off' : 'Turn on'}
-        </button>
+      {/* CSV Import Section */}
+      <div className="panel" style={{ padding: '16px' }}>
+        <div className="row between" style={{ alignItems: 'center' }}>
+          <div>
+            <span className="mono" style={{ fontSize: 14, color: 'var(--dim)', display: 'block' }}>
+              BATCH ISSUANCE VIA CSV
+            </span>
+            <span style={{ fontSize: 14, color: 'var(--hi)' }}>
+              Issue certificates to a list of external recipients
+            </span>
+          </div>
+          <label className="eb" style={{ cursor: 'pointer', margin: 0 }}>
+            Import CSV
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              hidden
+              onChange={async (x) => {
+                const f = x.target.files?.[0];
+                if (!f) return;
+                const rows = parseCsv(await f.text());
+                setCsv(rows);
+                setMap(
+                  rows[0]!.map((h) =>
+                    h
+                      .trim()
+                      .toLowerCase()
+                      .replace(/[^\w.-]+/g, '_'),
+                  ),
+                );
+                x.target.value = '';
+              }}
+            />
+          </label>
+        </div>
+
+        {csv && (
+          <div
+            className="stack"
+            style={{
+              marginTop: 14,
+              background: 'var(--bg)',
+              padding: 12,
+              border: '1px solid var(--line)',
+            }}
+          >
+            <p className="mono text-dim" style={{ fontSize: 14, margin: 0 }}>
+              {csv.length - 1} rows detected. Map columns to certificate variables:
+            </p>
+            <div className="stack" style={{ gap: 6, marginTop: 8 }}>
+              {csv[0]!.map((h, i) => (
+                <label
+                  key={i}
+                  className="row between"
+                  style={{ fontSize: 14, alignItems: 'center' }}
+                >
+                  <span className="mono">{h}</span>
+                  <input
+                    className="ctl"
+                    style={{ width: 160, height: 32, padding: '2px 8px', fontSize: 14 }}
+                    list="cert-vars"
+                    value={map[i] ?? ''}
+                    onChange={(x) => setMap(map.map((m, j) => (j === i ? x.target.value : m)))}
+                  />
+                </label>
+              ))}
+              <datalist id="cert-vars">
+                {CERT_VARS.map((v) => (
+                  <option key={v} value={v} />
+                ))}
+              </datalist>
+            </div>
+            <div className="row" style={{ marginTop: 12, gap: 8 }}>
+              <button
+                className="add"
+                type="button"
+                disabled={!done || !map.includes('email')}
+                onClick={async () => {
+                  const rows = csv
+                    .slice(1)
+                    .map((r) =>
+                      Object.fromEntries(map.flatMap((m, i) => (m ? [[m, r[i] ?? '']] : []))),
+                    );
+                  if (!(await act('certIssue', { eventId: e.id, kind, rows }))) return;
+                  setCsv(null);
+                  reload();
+                }}
+              >
+                Generate {csv.length - 1} Certificates
+              </button>
+              <button className="del" type="button" onClick={() => setCsv(null)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -812,12 +1443,12 @@ function Email({ e, reload }: { e: EventDetail; reload: () => void }) {
   return (
     <div className="stack">
       <MailStatus />
-      <div className="row between" style={{ '--g': '12px' } as React.CSSProperties}>
-        <p className="body">
+      <div className="row between" style={{ alignItems: 'center' }}>
+        <p className="body" style={{ margin: 0, fontSize: 14, color: 'var(--dim)' }}>
           Sent when someone is approved, by you or automatically.{' '}
-          {e.admin!.mail ? 'Your design.' : 'The built-in design.'}
+          {e.admin!.mail ? 'Custom design active.' : 'Built-in design active.'}
         </p>
-        <button className="btn sm" onClick={() => setEditing(true)}>
+        <button className="eb" onClick={() => setEditing(true)}>
           Edit email
         </button>
       </div>

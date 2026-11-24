@@ -29,6 +29,7 @@ Generated from `packages/contracts/src/capabilities.ts`.
 | `teams.oversee`             | Oversee ICPC teams and assign coaches                            |        |        |    ✓    |           |           |     ✓     |      ✓      |
 | `sheet.stats`               | See sheet completion statistics                                  |        |        |    ✓    |           |           |     ✓     |      ✓      |
 | `sheet.curate`              | Publish curated problem sheets                                   |        |        |    ✓    |           |           |     ✓     |      ✓      |
+| `learning.curate`           | Keep the course list and the daily quiz bank                     |        |        |    ✓    |           |           |     ✓     |      ✓      |
 | `payments.verify`           | Verify member payments                                           |        |        |         |     ✓     |           |   view    |      ✓      |
 | `finance.fee`               | Set the amount of member dues                                    |        |        |         |           |     ✓     |     ✓     |      ✓      |
 | `expense.approve`           | Approve expenses                                                 |        |        |         |  propose  |           |     ✓     |      ✓      |

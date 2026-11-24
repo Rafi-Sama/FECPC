@@ -56,17 +56,21 @@ and extra columns on existing tables.
 
 ### Money
 
-| Table                         | Purpose                                                                                 | FK    |
-| ----------------------------- | --------------------------------------------------------------------------------------- | ----- |
-| `payments`                    | Submitted bKash/Nagad payments and their decisions; one live payment per transaction ID | users |
-| `expenses`                    | Expense requests and decisions                                                          | users |
-| `decisions`                   | Older officer decisions by kind and id (no longer written for waivers)                  | users |
-| `waiver_requests`             | Old waiver requests; no longer written. A `waived` row still settles its invoice        | users |
-| `committee_tasks`             | Ops board tasks: assignee, due date, column                                             | users |
-| `documents`                   | Committee document links (Ops → Documents): title, description, link, who added it      | users |
-| `meetings`, `meeting_actions` | Committee meetings with agenda, and their action items                                  | users |
-| `inventory`                   | Club equipment and who holds it                                                         | users |
-| `budgets`                     | Event budgets: plan, and spending from before the ledger (`spent_before`)               | —     |
+| Table                         | Purpose                                                                                 | FK               |
+| ----------------------------- | --------------------------------------------------------------------------------------- | ---------------- |
+| `payments`                    | Submitted bKash/Nagad payments and their decisions; one live payment per transaction ID | users            |
+| `expenses`                    | Expense requests and decisions                                                          | users            |
+| `decisions`                   | Older officer decisions by kind and id (no longer written for waivers)                  | users            |
+| `waiver_requests`             | Old waiver requests; no longer written. A `waived` row still settles its invoice        | users            |
+| `committee_tasks`             | Ops board tasks: assignee, due date, column                                             | users            |
+| `learning_courses`            | Course links on `/app/courses`                                                          | users            |
+| `learning_quiz_questions`     | The quiz bank: question, four options, the right one                                    | users            |
+| `learning_quiz_daily_picks`   | The day's five questions (Asia/Dhaka date), picked on the day's first state load        | questions        |
+| `learning_quiz_answers`       | One answer per member, day and question                                                 | users, questions |
+| `documents`                   | Committee document links (Ops → Documents): title, description, link, who added it      | users            |
+| `meetings`, `meeting_actions` | Committee meetings with agenda, and their action items                                  | users            |
+| `inventory`                   | Club equipment and who holds it                                                         | users            |
+| `budgets`                     | Event budgets: plan, and spending from before the ledger (`spent_before`)               | —                |
 
 Invoices, the fund's opening balance and accounts are placeholder content
 (`packages/content/src/member-area.ts`, `apps/api/src/modules/member-area/office-data.ts`). The fund balance and
@@ -129,11 +133,11 @@ Prefixed `icpc_` because some older databases carry an unrelated, unused `teams`
 ## Where state lives
 
 - **Personal progress** is in `users.progress` (JSON): Codeforces handle, base XP numbers, solved sheet
-  problems, done resources, lessons, read items, quiz scores, shop purchases, XP spent, last check-in,
+  problems, done resources, read items, shop purchases, XP spent, last check-in,
   preference flags and values. Only `act()` writes it, under a row lock.
 - **Everything shared between members** has its own table, so counts (registrations, kudos, votes, solves per
   problem) are computed with SQL across members.
-- **Static content** (sheet problems, courses, shop items, invoices) is not in the database. It
+- **Static content** (sheet problems, shop items, invoices) is not in the database. It
   lives in `packages/content`, and handlers check ids against it.
 
 ## Seeding

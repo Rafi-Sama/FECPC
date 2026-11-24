@@ -1,18 +1,11 @@
 'use client';
 import { useState } from 'react';
-import type { Course } from '@/lib/learning.ts';
-import { deleteCourse } from '@/lib/learning.ts';
+import type { Course } from '@fecpc/contracts';
 import { useConfirm } from '@/components/app/shared/PromptDialog';
+import { useStore } from '@/components/app/Store';
 
-export function CourseGrid({
-  courses,
-  isStaff,
-  onCourseDeleted,
-}: {
-  courses: Course[];
-  isStaff: boolean;
-  onCourseDeleted: (id: string) => void;
-}) {
+export function CourseGrid({ courses, isStaff }: { courses: Course[]; isStaff: boolean }) {
+  const { act } = useStore();
   const confirm = useConfirm();
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -25,15 +18,9 @@ export function CourseGrid({
     );
     if (!ok) return;
 
-    try {
-      setDeletingId(course.id);
-      await deleteCourse(course.id);
-      onCourseDeleted(course.id);
-    } catch (err: any) {
-      alert(err.message || 'Failed to delete course.');
-    } finally {
-      setDeletingId(null);
-    }
+    setDeletingId(course.id);
+    await act('courseDelete', { id: course.id });
+    setDeletingId(null);
   };
 
   if (courses.length === 0) {
@@ -52,7 +39,7 @@ export function CourseGrid({
         <article key={c.id} className="course-card">
           <div className="course-card-header">
             <span className="course-meta">
-              {c.duration_weeks} week{c.duration_weeks > 1 ? 's' : ''} · {c.instructor}
+              {c.weeks} week{c.weeks > 1 ? 's' : ''} · {c.instructor}
             </span>
             <h3 className="course-title">{c.title}</h3>
           </div>
@@ -60,12 +47,7 @@ export function CourseGrid({
           <p className="course-desc">{c.description || 'No description provided.'}</p>
 
           <div className="course-card-actions">
-            <a
-              href={c.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn sm line"
-            >
+            <a href={c.url} target="_blank" rel="noopener noreferrer" className="btn sm line">
               Open course ↗
             </a>
 

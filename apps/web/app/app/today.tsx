@@ -19,7 +19,7 @@ const dueIn = (d: number) =>
     : d === 0
       ? 'due today'
       : `due in ${d} day${d === 1 ? '' : 's'}`;
-const questLink = ['/app/sheets', '/app/courses', '/app/community'];
+const questLink = ['/app/sheets', '/app/wiki', '/app/community'];
 const css = (o: Record<string, string | number>) => o as React.CSSProperties;
 const until = (ms: number) => {
   const h = (ms - Date.now()) / 36e5;

@@ -7,7 +7,7 @@ import {
   sheet,
   shop,
 } from '@fecpc/content/member-area';
-import { cols, courses, posts as editorials, volunteerShifts, wiki } from '@fecpc/content/training';
+import { cols, volunteerShifts, wiki } from '@fecpc/content/training';
 import {
   can,
   canFully,
@@ -47,7 +47,6 @@ import type {
   MilestoneDTO,
 } from '@fecpc/contracts';
 import { newToken, sha } from './tokens.ts';
-import * as data from './office-data.ts';
 import { Fail, tx, type Db } from './db.ts';
 import { teamHandlers } from './teams.ts';
 import { eventHandlers } from './events.ts';
@@ -63,6 +62,7 @@ import {
   type ProfileField,
 } from '@fecpc/contracts';
 import { challengeHandlers, sheetHandlers } from './sheets.ts';
+import { learningHandlers } from './learning.ts';
 import { DAILY_KUDOS_CAP, MILESTONE_FRESHNESS_DAYS } from './milestones.ts';
 import {
   isAdmin,
@@ -214,7 +214,6 @@ const flip = (list: string[], id: string, on: boolean) =>
 const lists: Record<string, (id: string) => boolean> = {
   solved: (id) => sheet.some((p) => p.id === id),
   done: (id) => wiki.some((w) => 'wiki:' + w.id === id),
-  lessons: (id) => courses.some((c) => c.lessons.some((_, i) => `${c.id}:${i}` === id)),
   read: (id) => announcements.some((a) => a.id === id) || /^(an:\d{1,9}|n:[\w:.-]{1,70})$/.test(id),
 };
 // Shared switches: who may flip them. Everything not listed here is a personal preference.
@@ -233,7 +232,6 @@ async function kudosOwner(c: Db, id: string): Promise<string | null> {
       (await c.query(`select id from users where id = $1 and not system`, [ref])).rows[0]?.id ??
       null
     );
-  if (kind === 'post') return editorials.find((x) => x.id === ref)?.by ?? null;
   return null;
 }
 
@@ -378,6 +376,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
   ...mailHandlers,
   ...sheetHandlers,
   ...challengeHandlers,
+  ...learningHandlers,
   async toggle(c, a, p, i) {
     const id = key(i.id),
       list = String(i.list),
@@ -387,7 +386,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
       // Reading earns XP, so an inbox id or announcement must really be one this member was sent.
       if (list === 'read' && now(p.read.includes(id)) && !announcements.some((x) => x.id === id))
         need(await inInbox(c, a.id, id), 'That item does not exist.');
-      const k = list as 'solved' | 'done' | 'lessons' | 'read';
+      const k = list as 'solved' | 'done' | 'read';
       p[k] = flip(p[k], id, now(p[k].includes(id)));
     } else if (list === 'kudos') {
       need(!id.startsWith('shop:'), 'That is not something you can cheer.');
@@ -508,16 +507,6 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
       [a.id, poll, option],
     );
     if (once && !r.rowCount) throw new Fail(409, 'You have already rated this event.');
-  },
-  async quiz(_c, _a, p, i) {
-    const answers = data.quizAnswers[String(i.course)];
-    need(answers, 'That quiz does not exist.');
-    if (!Array.isArray(i.picks) || i.picks.length !== answers.length)
-      throw new Fail(400, 'Answer every question.');
-    p.quiz[String(i.course)] = answers.filter((ans, n) => (i.picks as unknown[])[n] === ans).length;
-  },
-  async quizReset(_c, _a, p, i) {
-    delete p.quiz[String(i.course)];
   },
   async handle(c, a, p, i) {
     const h = typeof i.value === 'string' ? i.value.trim() : '';
@@ -1720,6 +1709,12 @@ area(
   'sheetDelete',
   'challenge',
   'challengeDelete',
+  'courseAdd',
+  'courseDelete',
+  'quizAdd',
+  'quizImport',
+  'quizEdit',
+  'quizDelete',
   'teamCoach',
   'teamRename',
   'teamInvite',

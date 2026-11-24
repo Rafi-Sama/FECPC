@@ -1,6 +1,6 @@
 // Event reads for the member area, and certificate rendering to an image in the browser.
 import { useCallback, useEffect, useState } from 'react';
-import { csvCell, type PublicEvent } from '@fecpc/contracts';
+import { csvCell, EVENT_STATUS_LABEL, type EventStatus, type PublicEvent } from '@fecpc/contracts';
 import { fmtDate } from '@fecpc/content/site';
 
 /** One read from the `events` query area; null when it failed. */
@@ -86,6 +86,20 @@ export async function renderCertificate(html: string, type: 'png' | 'jpeg', name
     `image/${type}`,
     0.95,
   );
+}
+
+/** Short status for the event header badge: the status label, with the sign-up window applied but no dates. */
+export function eventBadgeStatus(e: {
+  status: EventStatus;
+  regOpen?: boolean;
+  regOpens?: string | null;
+}): string {
+  if (e.status === 'open' || e.status === 'published') {
+    if (e.regOpen) return EVENT_STATUS_LABEL.open;
+    if (e.regOpens && e.regOpens > clubNow()) return 'Opens soon';
+    if (e.status === 'open') return EVENT_STATUS_LABEL.closed;
+  }
+  return EVENT_STATUS_LABEL[e.status];
 }
 
 /** What sign-up looks like right now, rather than the bare status: the window can open or close it. */

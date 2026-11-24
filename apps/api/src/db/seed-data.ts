@@ -78,6 +78,16 @@ export async function setup(db: Db, password: string) {
           a.src,
         ],
       );
+    for (const c of data.courses)
+      await db.query(
+        `insert into learning_courses (title, instructor, duration_weeks, description, url) values ($1, $2, $3, $4, $5)`,
+        [c.title, c.instructor, c.duration_weeks, c.description, c.url],
+      );
+    for (const q of data.quizBank)
+      await db.query(
+        `insert into learning_quiz_questions (question, options, correct_index) values ($1, $2, $3)`,
+        [q.question, JSON.stringify(q.options), q.correct_index],
+      );
   } else {
     const hash = await hashPassword(password);
     await db.query(`update users set pass_hash = $1 where email like '%@fecpc.example'`, [hash]);
