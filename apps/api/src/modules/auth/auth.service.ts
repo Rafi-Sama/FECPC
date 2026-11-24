@@ -7,6 +7,7 @@ import { AuditService } from '../audit/audit.service.ts';
 import { PasswordHasher } from './password.ts';
 import { DomainException } from '../../platform/http/problem-details.filter.ts';
 import { ErrorCodes, type Role, type UserStatus } from '@fecpc/contracts';
+import { face } from '../member-area/db.ts';
 
 export interface AuthSessionResult {
   token: string;
@@ -22,7 +23,8 @@ export interface AuthSessionResult {
   };
 }
 
-const USER_COLS = `u.id, u.email, u.name, u.role, u.status, u.suspended, u.handle, u.squad, u.avatar_url`;
+// The photo as a link, like everywhere else: an uploaded photo is a data URL of up to 450 KB.
+const USER_COLS = `u.id, u.email, u.name, u.role, u.status, u.suspended, u.handle, u.squad, ${face('u')} as avatar_url`;
 const sha256 = (v: string) => createHash('sha256').update(v).digest('hex');
 const toUser = (r: any): AuthSessionResult['user'] => ({
   id: r.id,
@@ -71,10 +73,7 @@ export class AuthService {
     const result = row?.hash
       ? await PasswordHasher.verify(pass, row.hash)
       : (await PasswordHasher.dummyVerify(), { valid: false, needsRehash: false });
-    if (!result.valid) {
-      await this.throttling.recordFailure(email, ip);
-      throw badLogin();
-    }
+    if (!result.valid) throw badLogin();
     await this.throttling.clearOnSuccess(email, ip);
     // Only someone who knows the password learns that the account is suspended.
     if (isSuspended(row)) throw suspended();
@@ -197,22 +196,33 @@ export class AuthService {
     });
   }
 
-  /** Changes the password, signs out every session, and returns a fresh session for this device. */
-  async changePassword(userId: string, currentPass: string, newPass: string): Promise<string> {
+  /**
+   * Changes the password, signs out every session, and returns a fresh session for this device. Wrong current
+   * passwords count like failed sign-ins, so a stolen session cannot be used to guess the password.
+   */
+  async changePassword(
+    userId: string,
+    currentPass: string,
+    newPass: string,
+    ip: string,
+  ): Promise<string> {
     const row = (
       await this.db.query(
-        `SELECT u.role, coalesce(c.password_hash, u.pass_hash) AS hash
+        `SELECT u.role, u.email, coalesce(c.password_hash, u.pass_hash) AS hash
          FROM users u LEFT JOIN credentials c ON c.user_id = u.id WHERE u.id = $1`,
         [userId],
       )
     ).rows[0];
-    if (!row?.hash || !(await PasswordHasher.verify(currentPass, row.hash)).valid) {
+    if (!row) throw badLogin();
+    await this.throttling.checkThrottling(row.email, ip);
+    if (!row.hash || !(await PasswordHasher.verify(currentPass, row.hash)).valid) {
       throw new DomainException(
         'Current password incorrect.',
         HttpStatus.UNAUTHORIZED,
         ErrorCodes.INVALID_CREDENTIALS,
       );
     }
+    await this.throttling.clearOnSuccess(row.email, ip);
     const newHash = await PasswordHasher.hash(newPass);
 
     return this.db.run(async (client) => {
@@ -227,10 +237,6 @@ export class AuthService {
       });
       return this.createSession(userId);
     });
-  }
-
-  async revokeAllUserSessions(userId: string): Promise<void> {
-    await this.db.query(`DELETE FROM sessions WHERE user_id = $1`, [userId]);
   }
 
   /** Google's callback URL. It must be identical when sending the user to Google and when redeeming the code. */

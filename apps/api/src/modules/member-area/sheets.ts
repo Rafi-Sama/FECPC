@@ -1,13 +1,12 @@
 // Problem sheets. A weekly sheet is built from the Codeforces problemset every Monday (club time); curated sheets
 // are pasted Codeforces links from holders of full `sheet.curate` (CP Head, President). Solves come from the
 // Codeforces sync (`cf_solves`), so nothing here is ticked by hand or earns XP on its own.
-import { canFully, type Role, type SheetProblem } from '@fecpc/contracts';
+import { canFully, type SheetProblem } from '@fecpc/contracts';
 import { sheet as coreSheet } from '@fecpc/content/member-area';
 import { Fail, type Db } from './db.ts';
+import { need, type Actor, type Handler } from './rules.ts';
 import { TZ } from './state.ts';
 
-type Actor = { id: string; roles: Role[]; name: string; system: boolean };
-type In = Record<string, unknown>;
 type Picked = Omit<SheetProblem, 'club'>;
 export type CfProblem = {
   contestId?: number;
@@ -18,10 +17,15 @@ export type CfProblem = {
 };
 export type CfStat = { contestId?: number; index: string; solvedCount: number };
 
-let cache: { at: number; problems: CfProblem[]; stats: CfStat[] } | null = null;
-/** The whole Codeforces problemset, kept for 12 hours. Null when Codeforces does not answer. */
-async function problemset() {
+let cache: { at: number; problems: CfProblem[]; stats: CfStat[] } | null = null,
+  failedAt = 0;
+/**
+ * The whole Codeforces problemset, kept for 12 hours. Null when Codeforces does not answer; after a failure it is
+ * not asked again for a minute, so a caller inside a transaction never waits on it (see `act()`).
+ */
+export async function problemset() {
   if (cache && Date.now() - cache.at < 12 * 3600_000) return cache;
+  if (Date.now() - failedAt < 60_000) return cache;
   const res = await fetch('https://codeforces.com/api/problemset.problems', {
     signal: AbortSignal.timeout(15_000),
   }).catch(() => null);
@@ -29,7 +33,10 @@ async function problemset() {
     status?: string;
     result?: { problems: CfProblem[]; problemStatistics: CfStat[] };
   } | null;
-  if (j?.status !== 'OK' || !j.result) return cache;
+  if (j?.status !== 'OK' || !j.result) {
+    failedAt = Date.now();
+    return cache;
+  }
   return (cache = {
     at: Date.now(),
     problems: j.result.problems,
@@ -142,9 +149,6 @@ export function parseLinks(text: string): string[] {
   return [...new Set(ids)];
 }
 
-function need(ok: unknown, why = 'Your role cannot do that.'): asserts ok {
-  if (!ok) throw new Fail(403, why);
-}
 const line = (v: unknown, min: number, max: number, what: string) => {
   const t = typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f]/g, ' ').trim() : '';
   if (t.length < min || t.length > max)
@@ -157,10 +161,7 @@ const curator = (a: Actor) =>
     'Only the CP Head or President curates sheets.',
   );
 
-export const sheetHandlers: Record<
-  string,
-  (c: Db, a: Actor, p: unknown, i: In) => Promise<string | void>
-> = {
+export const sheetHandlers: Record<string, Handler> = {
   async sheetSave(c, a, _p, i) {
     curator(a);
     const title = line(i.title, 2, 60, 'The title'),
@@ -215,10 +216,7 @@ export const sheetHandlers: Record<
 
 const CHALLENGES_PER_DAY = 5;
 /** Arena challenges: any member posts one Codeforces problem for the club; the poster or a curator removes it. */
-export const challengeHandlers: Record<
-  string,
-  (c: Db, a: Actor, p: unknown, i: In) => Promise<string | void>
-> = {
+export const challengeHandlers: Record<string, Handler> = {
   async challenge(c, a, _p, i) {
     need(!a.system, 'This is an operator account, not a member. It cannot do that.');
     const ids = parseLinks(typeof i.link === 'string' ? i.link.slice(0, 500) : '');

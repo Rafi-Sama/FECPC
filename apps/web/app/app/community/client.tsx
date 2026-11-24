@@ -456,13 +456,11 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
 
   const handleIdeaUpvote = async (ideaId: number) => {
     const key = `idea:${ideaId}`;
-    const wasOn = s.kudos.includes(key);
+    if (s.kudos.includes(key)) return; // kudos are permanent
     setIdeaItems((prev) =>
-      prev.map((it) =>
-        it.id === ideaId ? { ...it, upvotes: Math.max(0, it.upvotes + (wasOn ? -1 : 1)) } : it,
-      ),
+      prev.map((it) => (it.id === ideaId ? { ...it, upvotes: it.upvotes + 1 } : it)),
     );
-    const ok = await act('toggle', { list: 'kudos', id: key });
+    const ok = await act('toggle', { list: 'kudos', id: key, on: true });
     if (!ok) await fetchIdeas(null, false);
   };
 
@@ -926,8 +924,8 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
                         type="button"
                         className={`cm-idea-vote-btn${upOn ? ' on' : ''}`}
                         aria-pressed={upOn}
-                        aria-label={upOn ? 'Remove upvote' : 'Upvote idea'}
-                        disabled={mine || me.system}
+                        aria-label={upOn ? 'Upvoted' : 'Upvote idea'}
+                        disabled={mine || me.system || upOn}
                         onClick={(e) => {
                           e.stopPropagation();
                           handleIdeaUpvote(it.id);

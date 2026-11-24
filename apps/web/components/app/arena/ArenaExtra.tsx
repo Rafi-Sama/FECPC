@@ -245,7 +245,7 @@ export function Trophies() {
   const rating = data?.rating ?? me.cf_rating ?? 0;
   const rounds = data?.history.length ?? clubRounds.get(me.id)?.length ?? 0;
   const streak = me.current_streak ?? me.streak;
-  const kudos = kudosOf(counts.kudos, me.id) + s.milestoneKudosReceived;
+  const kudos = kudosOf(counts.kudos, me.id); // the total: profile, ideas and milestones
   const week = sheets.find((x) => x.kind === 'weekly');
   const weekDone = week?.problems.filter((p) => isSolved(p.id)).length ?? 0;
   // Every badge is checked against real records; progress shows how close the member is.

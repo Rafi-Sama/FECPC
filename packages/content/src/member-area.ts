@@ -111,13 +111,6 @@ export const bounties = [
   { id: '20C', name: 'Dijkstra?', prize: 300, left: '3 days' },
   { id: '1195C', name: 'Basketball Exercise', prize: 120, left: '6 days' },
 ];
-export const shop = [
-  ['Sticker pack', 400],
-  ['Priority seat at the next seminar', 900],
-  ['Club T-shirt', 2500],
-  ['One-month fee discount', 4000],
-] as const;
-
 export const modules = [
   'Finance',
   'Green sheets',

@@ -121,8 +121,7 @@ export default function Profile() {
   useEffect(() => void reload(), [me, reload]); // an approved change arrives with fresh state
   const [editing, setEditing] = useState(false);
   // kudos on the profile itself, plus kudos on the member's milestones in the feed
-  const profileKudos = counts.kudos?.[`member:${me.id}`] ?? 0;
-  const kudos = profileKudos + s.milestoneKudosReceived;
+  const kudos = counts.kudos?.[`member:${me.id}`] ?? 0; // every kudos received, wherever it was given
   const { data, err } = useJudge();
   const days = data
     ? Array.from(
@@ -273,10 +272,7 @@ export default function Profile() {
                 'Codeforces not linked'
               )}
             </p>
-            <p
-              className="idcard-kudos"
-              title={`${profileKudos} on profile · ${s.milestoneKudosReceived} on milestones`}
-            >
+            <p className="idcard-kudos" title="Kudos on your profile, ideas and milestones">
               ♥ {kudos} kudos
             </p>
           </div>

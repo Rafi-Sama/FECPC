@@ -229,7 +229,7 @@ export const matrix = {
     super_admin: Y,
   },
   'member.deactivate': {
-    label: 'Deactivate member account',
+    label: 'Suspend or reinstate a member',
     president: Y,
     super_admin: Y,
   },

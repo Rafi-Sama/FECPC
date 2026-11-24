@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { signedIn } from '@/lib/api.ts';
 
 export type VjudgeProblemCell = {
   solved: boolean;
@@ -241,6 +242,8 @@ const unavailable = () =>
   NextResponse.json({ error: 'VJudge did not answer. Try Refresh in a minute.' }, { status: 502 });
 
 export async function GET(req: Request) {
+  if (!(await signedIn(req)))
+    return NextResponse.json({ error: 'Sign in again.' }, { status: 401 });
   const url = new URL(req.url);
   // Accept a bare contest ID or a full VJudge URL (e.g. https://vjudge.net/contest/123456#rank).
   const raw = url.searchParams.get('id') ?? '';

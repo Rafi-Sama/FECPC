@@ -21,8 +21,8 @@ export class ProblemDetailsFilter implements ExceptionFilter {
     const response = ctx.getResponse<FastifyReply>();
     const request = ctx.getRequest<FastifyRequest>();
 
-    const requestId =
-      (request.headers['x-request-id'] as string) || (request.id as string) || 'unknown-request-id';
+    // The request id is echoed back, so a client-supplied one must look like an id (logging uses the same rule).
+    const requestId = String(request.id ?? 'unknown-request-id');
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let code: ErrorCode = ErrorCodes.INTERNAL_ERROR;
@@ -47,10 +47,19 @@ export class ProblemDetailsFilter implements ExceptionFilter {
         if (!errors[path]) errors[path] = [];
         errors[path].push(issue.message);
       }
-    } else if (exception instanceof HttpException) {
-      status = exception.getStatus();
-      const res = exception.getResponse();
-      detail = typeof res === 'string' ? res : (res as any).message || exception.message;
+    } else if (exception instanceof HttpException || httpStatusOf(exception)) {
+      // Nest's HttpException, or a Fastify error (bad JSON, body too large, rate limit) carrying `statusCode`.
+      status =
+        exception instanceof HttpException ? exception.getStatus() : httpStatusOf(exception)!;
+      const res = exception instanceof HttpException ? exception.getResponse() : exception;
+      detail =
+        status >= 500
+          ? 'An unexpected error occurred.'
+          : typeof res === 'string'
+            ? res
+            : (res as { message?: string }).message || 'The request could not be handled.';
+      title = 'Request Failed';
+      code = ErrorCodes.BAD_REQUEST;
 
       if (status === HttpStatus.UNAUTHORIZED) {
         code = ErrorCodes.UNAUTHENTICATED;
@@ -70,6 +79,11 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       } else if (status === HttpStatus.BAD_REQUEST) {
         code = ErrorCodes.BAD_REQUEST;
         title = 'Bad Request';
+      } else if (status === HttpStatus.PAYLOAD_TOO_LARGE) {
+        title = 'Payload Too Large';
+      } else if (status >= 500) {
+        code = ErrorCodes.INTERNAL_ERROR;
+        title = 'Internal Server Error';
       }
     } else if (typeof exception === 'object' && exception !== null && 'code' in exception) {
       // Postgres error codes
@@ -92,8 +106,14 @@ export class ProblemDetailsFilter implements ExceptionFilter {
         code = ErrorCodes.BAD_REQUEST;
         title = 'Constraint Violation';
         detail = 'The submitted data violates a business rule constraint.';
-      } else if (pgCode === '40001' || pgCode === '40P01') {
-        // Serialization or deadlock
+      } else if (typeof pgCode === 'string' && pgCode.startsWith('22')) {
+        // Data exception: a value the client sent that the column cannot hold (out-of-range number, NUL byte, bad date)
+        status = HttpStatus.BAD_REQUEST;
+        code = ErrorCodes.BAD_REQUEST;
+        title = 'Bad Request';
+        detail = 'A value in the request is out of range or malformed.';
+      } else if (['40001', '40P01', '55P03', '57014'].includes(pgCode)) {
+        // Serialization, deadlock, lock timeout or statement timeout
         status = HttpStatus.SERVICE_UNAVAILABLE;
         code = ErrorCodes.SERVICE_UNAVAILABLE;
         title = 'Concurrency Conflict';
@@ -118,6 +138,12 @@ export class ProblemDetailsFilter implements ExceptionFilter {
 
     response.status(status).header('Content-Type', 'application/problem+json').send(problem);
   }
+}
+
+/** The 4xx/5xx status a non-Nest error (Fastify's, a plugin's) asks for, if any. */
+function httpStatusOf(e: unknown): number | undefined {
+  const n = (e as { statusCode?: unknown } | null)?.statusCode;
+  return typeof n === 'number' && n >= 400 && n <= 599 ? n : undefined;
 }
 
 /** "name: Too short" reads better than "The request payload … failed validation." */

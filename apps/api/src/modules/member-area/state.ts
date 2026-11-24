@@ -22,7 +22,6 @@ import {
 import type {
   AppState,
   Expense,
-  MilestoneDTO,
   MilestoneType,
   Office,
   PeopleSummary,
@@ -32,7 +31,8 @@ import type {
 import * as data from './office-data.ts';
 import { sheet } from '@fecpc/content/member-area';
 import { face, pool, type Db } from './db.ts';
-import { MILESTONE_FRESHNESS_DAYS } from './milestones.ts';
+import { JOINED } from './rules.ts';
+import { listRecentMilestones } from './milestones.ts';
 
 export const TZ = 'Asia/Dhaka';
 export const today = (now = new Date()) =>
@@ -44,15 +44,12 @@ export const seesMoney = (r: Who) => !!(can(r, 'payments.verify') || can(r, 'exp
 
 /** The member's own lists and preferences, as stored in users.progress. Unknown or missing fields fall back to empty. */
 export type Progress = {
-  handle: string;
   base: { solved: number; done: number };
   solved: string[];
   done: string[];
   read: string[];
-  shop: string[];
   flags: Record<string, boolean>;
   kv: Record<string, string>;
-  spent: number;
   checkin: string;
   /** Consecutive days checked in, ending on `checkin`. */
   run: number;
@@ -60,22 +57,19 @@ export type Progress = {
 export function progress(raw: Partial<Progress> | null): Progress {
   const p = raw ?? {};
   return {
-    handle: p.handle ?? '',
     base: { solved: p.base?.solved ?? 0, done: p.base?.done ?? 0 },
     solved: p.solved ?? [],
     done: p.done ?? [],
     read: p.read ?? [],
-    shop: p.shop ?? [],
     flags: p.flags ?? {},
     kv: p.kv ?? {},
-    spent: p.spent ?? 0,
     checkin: p.checkin ?? '',
     run: p.run ?? (p.checkin ? 1 : 0),
   };
 }
 
 const ROSTER = `json_build_object('id', id, 'no', member_no, 'name', name, 'handle', coalesce(nullif(cf_handle, ''), handle), 'cf_handle', nullif(coalesce(nullif(cf_handle, ''), handle), ''), 'batch', batch, 'dept', dept, 'squad', squad, 'role', title, 'is_alumni', role = 'alumni', 'rating', coalesce(cf_rating, rating), 'cf_rating', coalesce(cf_rating, nullif(rating, 0)), 'peak', peak,
-  'solved', greatest(problems_solved, solved), 'problems_solved', greatest(problems_solved, solved), 'avatar_url', case when avatar_key is null then avatar_url else '/api/avatars/' || id || '?v=' || avatar_key end, 'streak', greatest(current_streak, streak), 'current_streak', greatest(current_streak, streak), 'contests_participated', contests_participated, 'helper', helper, 'skills', skills, 'xp', solved * 12 + vj_solved * 12 + streak * 30 + helper * 8, 'roleKey', role, 'post', post, 'email', email, 'suspended', suspended, 'system', system, 'pending', pass_hash is null and google_sub is null)`;
+  'solved', greatest(problems_solved, solved), 'problems_solved', greatest(problems_solved, solved), 'avatar_url', case when avatar_key is null then avatar_url else '/api/avatars/' || id || '?v=' || avatar_key end, 'streak', greatest(current_streak, streak), 'current_streak', greatest(current_streak, streak), 'contests_participated', contests_participated, 'helper', helper, 'skills', skills, 'xp', solved * 12 + vj_solved * 12 + streak * 30 + helper * 8, 'roleKey', role, 'post', post, 'email', email, 'suspended', suspended, 'system', system, 'pending', not ${JOINED()})`;
 const EXPENSE = `json_build_object('id', 'EXP-' || e.id, 'by', e.by, 'name', w.name, 'what', e.what, 'amount', e.amount, 'event', e.event, 'status', e.status)`;
 // A challenge's solvers: the first ten since it was posted, ten from before, the member, and the two totals.
 const SOLVER = `cf_solves s join users su on su.id = s.user_id where s.problem = ch.problem and not su.system and not su.suspended`;
@@ -100,33 +94,11 @@ select u.email, u.progress, to_char(u.created_at at time zone '${TZ}', 'YYYY-MM-
   (select coalesce(sum(least(daily, 20)), 0)::int from (select date_trunc('day', v.created_at at time zone '${TZ}') d, count(*) daily from feed_votes v join feed_posts fp on fp.id = v.post_id where fp.user_id = $1 and v.user_id <> $1 and v.value = 1 group by 1) x) as feed_upvotes,
   (select count(*)::int from ideas where user_id = $1) as ideas_count,
   (select count(*)::int from idea_interests where user_id = $1 and status = 'accepted') as accepted_interests,
-  (select count(*)::int from milestone_kudos mk join milestones m on m.id = mk.milestone_id where m.user_id = $1 and mk.user_id <> $1) as milestone_kudos_received,
-  (select count(*)::int from milestone_kudos where user_id = $1 and created_at >= (date_trunc('day', now() at time zone 'UTC') at time zone 'UTC')) as kudos_today,
-  (select coalesce(json_agg(row_to_json(rm) order by rm.created_at desc, rm.id desc), '[]'::json)
-     from (
-       select m.id, m.user_id,
-         mu.name as member_name,
-         ${face('mu')} as member_avatar,
-         greatest(mu.problems_solved, mu.solved) as member_solved,
-         nullif(coalesce(nullif(mu.cf_handle, ''), mu.handle), '') as member_cf_handle,
-         coalesce(mu.cf_rating, mu.rating) as member_rating,
-         m.type, m.from_value, m.to_value, m.threshold, m.meta, m.created_at,
-         (select count(*)::int from milestone_kudos mk where mk.milestone_id = m.id) as kudos_count,
-         exists (select 1 from milestone_kudos mk where mk.milestone_id = m.id and mk.user_id = $1) as has_kudos,
-         case when m.user_id = $1 then (
-           select coalesce(json_agg(g.name order by mk.created_at desc), '[]'::json)
-           from (
-             select user_id, created_at from milestone_kudos where milestone_id = m.id and user_id <> $1 order by created_at desc limit 3
-           ) mk
-           join users g on g.id = mk.user_id
-         ) else '[]'::json end as recent_givers
-       from milestones m
-       join users mu on mu.id = m.user_id
-       where m.created_at > now() - interval '${MILESTONE_FRESHNESS_DAYS} days'
-         and not mu.system and not mu.suspended
-       order by m.created_at desc, m.id desc
-       limit 5
-     ) rm) as recent_milestones,
+  (select count(*)::int from (
+      select 1 from reactions where target = 'member:' || $1
+      union all select 1 from ideas i join reactions r on r.target = 'idea:' || i.id where i.user_id = $1
+      union all select 1 from milestone_kudos mk join milestones m on m.id = mk.milestone_id where m.user_id = $1 and mk.user_id <> $1
+    ) k) as kudos_received,
   (select coalesce(json_agg(json_build_object(
       'milestoneId', mk.milestone_id, 'userId', mk.user_id, 'from', g.name,
       'type', m.type, 'toValue', m.to_value
@@ -167,7 +139,13 @@ const SHARED = `
 select
   (select coalesce(json_object_agg(key, n), '{}') from (select key, count(*)::int n from attendance where key like 'vol:%' group by 1) x) as c_vol,
   (select coalesce(json_agg(json_build_array(poll_id, option, n)), '[]') from (select poll_id, option, count(*)::int n from votes where poll_id in (select 'poll:' || id from club_polls order by id desc limit 50) group by 1, 2) x) as c_votes,
-  (select coalesce(json_object_agg(target, n), '{}') from (select target, count(*)::int n from reactions where target like 'member:%' group by 1) x) as c_kudos,
+  (select coalesce(json_object_agg('member:' || owner, n), '{}') from (select owner, count(*)::int n from (
+      select substr(r.target, 8) as owner from reactions r where r.target like 'member:%'
+      union all
+      select i.user_id from reactions r join ideas i on i.id = substr(r.target, 6)::int where r.target ~ '^idea:[0-9]{1,9}$'
+      union all
+      select m.user_id from milestone_kudos mk join milestones m on m.id = mk.milestone_id where mk.user_id <> m.user_id
+    ) k group by owner) x) as c_kudos,
   (select coalesce(json_object_agg(pid, n), '{}') from (select pid, count(*)::int n from users, jsonb_array_elements_text(coalesce(progress -> 'solved', '[]')) pid where not system and not suspended and pid = any($1::text[]) group by 1) x) as c_solved,
   (select coalesce(json_object_agg(announcement_id, n), '{}') from (select announcement_id, count(*)::int n from announcement_reads where announcement_id in (select 'an:' || id from announcements order by id desc limit 50) group by 1) x) as c_ann_reads,
   (select count(*)::int from users where role = 'alumni' and not system and not suspended) as c_alumni,
@@ -421,10 +399,9 @@ export async function loadState(
     verified: row.verified,
     done: p.done,
     read: p.read,
-    spent: p.spent,
     checkin: p.checkin === today(),
     run: p.checkin === today() || p.checkin === yesterday() ? p.run : 0,
-    kudos: [...row.kudos, ...p.shop.map((x) => 'shop:' + x)],
+    kudos: row.kudos,
     reg: row.reg,
     dues: raw.system
       ? []
@@ -442,7 +419,7 @@ export async function loadState(
     feedUpvotes: row.feed_upvotes ?? 0,
     ideasCount: row.ideas_count ?? 0,
     acceptedInterests: row.accepted_interests ?? 0,
-    milestoneKudosReceived: row.milestone_kudos_received ?? 0,
+    kudosReceived: row.kudos_received ?? 0,
     flags,
     kv,
     queue: Object.fromEntries(
@@ -695,8 +672,7 @@ export async function loadState(
       votes,
       solved: row.c_solved,
       annReads: row.c_ann_reads,
-      kudosToday: row.kudos_today ?? 0,
-      recentMilestones: (row.recent_milestones ?? []) as MilestoneDTO[],
+      recentMilestones: await listRecentMilestones(db, userId),
       alumniCount: Number(row.c_alumni ?? 0),
       peopleCount: Number(row.c_people ?? 0),
       topHelpers: row.top_helpers,
@@ -734,7 +710,7 @@ export async function loadState(
 async function peopleSummary(db: Db): Promise<PeopleSummary> {
   const rows = (
     await db.query(
-      `select id, name, batch, suspended, pass_hash is null and google_sub is null as pending,
+      `select id, name, batch, suspended, not ${JOINED()} as pending,
          nullif(coalesce(nullif(cf_handle, ''), handle), '') is not null as linked,
          coalesce(cf_rating, nullif(rating, 0)) as rating, greatest(current_streak, streak) > 0 as daily
        from users where not system and role <> 'alumni' and id <> 'admin'
@@ -785,7 +761,7 @@ async function duesSummary(db: Db, fees: { term: number; post: number }, since: 
   const people = (
     await db.query(
       `select id, to_char(created_at at time zone '${TZ}', 'YYYY-MM-DD') joined, to_char(post_since, 'YYYY-MM-DD') post_since
-       from users where not system and not suspended and role <> 'alumni' and (pass_hash is not null or google_sub is not null)`,
+       from users where not system and not suspended and role <> 'alumni' and ${JOINED()}`,
     )
   ).rows as { id: string; joined: string; post_since: string | null }[];
   const live = new Map(

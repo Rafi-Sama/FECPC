@@ -1,5 +1,6 @@
 // Judge sync for one handle: profile, rating history and accepted problems from the Codeforces API.
-// Cached for 10 minutes so no screen ever hammers the judge.
+// Cached for 10 minutes so no screen ever hammers the judge. Members only.
+import { signedIn } from '@/lib/api.ts';
 // `?fresh=1` skips the cache for submissions only, so "I solved it" sees an accept made a minute ago.
 type Round = {
   contestId: number;
@@ -32,6 +33,7 @@ async function contestProblems() {
 }
 
 export async function GET(req: Request, { params }: { params: Promise<{ handle: string }> }) {
+  if (!(await signedIn(req))) return Response.json({ error: 'Sign in again.' }, { status: 401 });
   const { handle } = await params;
   const fresh = new URL(req.url).searchParams.has('fresh');
   if (!/^[\w.-]{3,24}$/.test(handle))

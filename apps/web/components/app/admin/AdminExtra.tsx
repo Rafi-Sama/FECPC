@@ -83,7 +83,7 @@ function Accounts() {
                     : role === 'super_admin'
                       ? sa
                       : assign),
-                suspend = !self && assign && (!top || sa),
+                suspend = !self && canFully(s.roles, 'member.deactivate') && (!top || sa),
                 stat = status(m);
               return (
                 <tr key={m.id}>
@@ -105,7 +105,7 @@ function Accounts() {
                   </td>
                   <td>
                     <span className="row" style={{ '--g': '6px' } as React.CSSProperties}>
-                      {sa && !self ? (
+                      {sa && !self && role !== 'president' ? (
                         <select
                           className="input sm"
                           aria-label={`Role of ${m.name}`}
@@ -121,11 +121,14 @@ function Accounts() {
                             if (reason) act('role', { user: m.id, role: to, reason });
                           }}
                         >
-                          {roles.map((r) => (
-                            <option key={r} value={r}>
-                              {roleName[r]}
-                            </option>
-                          ))}
+                          {/* The President changes only by appointment (below), never here. */}
+                          {roles
+                            .filter((r) => r !== 'president')
+                            .map((r) => (
+                              <option key={r} value={r}>
+                                {roleName[r]}
+                              </option>
+                            ))}
                         </select>
                       ) : (
                         <span className="pill">{roleName[role]}</span>

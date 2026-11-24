@@ -19,9 +19,15 @@ export class DbService implements OnModuleInit, OnModuleDestroy {
       statement_timeout: this.config.env.DB_STATEMENT_TIMEOUT_MS,
       query_timeout: this.config.env.DB_STATEMENT_TIMEOUT_MS,
       connectionTimeoutMillis: 5000,
-      idleTimeoutMillis: this.config.env.DB_IDLE_TX_TIMEOUT_MS,
-      // JIT compiles the big state query for seconds on every call and never pays off on short OLTP queries.
-      options: '-c jit=off',
+      idleTimeoutMillis: 30_000, // an unused pooled connection is closed after 30 s
+      // Session settings for every connection, so the member-area transactions (db.ts `tx`) get them too:
+      // JIT compiles the big state query for seconds and never pays off on short queries; a lock wait or a
+      // transaction left idle (a crashed handler) is cut off instead of holding rows.
+      options: [
+        '-c jit=off',
+        `-c lock_timeout=${this.config.env.DB_LOCK_TIMEOUT_MS}`,
+        `-c idle_in_transaction_session_timeout=${this.config.env.DB_IDLE_TX_TIMEOUT_MS}`,
+      ].join(' '),
     });
 
     this.pool.on('error', (err) => {
@@ -59,7 +65,6 @@ export class DbService implements OnModuleInit, OnModuleDestroy {
 
       try {
         await client.query('BEGIN');
-        await client.query(`SET LOCAL lock_timeout = '${this.config.env.DB_LOCK_TIMEOUT_MS}ms'`);
 
         const result = await this.als.run(client, () => fn(client));
         await client.query('COMMIT');

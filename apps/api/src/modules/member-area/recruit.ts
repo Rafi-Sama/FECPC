@@ -12,24 +12,17 @@ import {
   renderMail,
   type RecruitForm,
   type RecruitPublic,
-  type Role,
 } from '@fecpc/contracts';
-import { Fail, type Db } from './db.ts';
+import { Fail, tx, type Db } from './db.ts';
+import { audit, need, ROLES, type Actor, type Handler, type In } from './rules.ts';
 import { TZ } from './state.ts';
 import { enqueue, mailOutlook, mailReady } from './mail.ts';
 import { newToken, sha } from './tokens.ts';
 
-type Actor = { id: string; roles: Role[]; name: string; system: boolean };
-type In = Record<string, unknown>;
-
 const TOKEN = /^[A-Za-z0-9_-]{16}$/;
 const CSV_FORM: RecruitForm = { cf: true, why: false, questions: [] };
 
-function need(ok: unknown, why = 'Only the President and Secretary run recruitment.'): asserts ok {
-  if (!ok) throw new Fail(403, why);
-}
-const audit = (c: Db, a: Actor, what: string) =>
-  c.query(`insert into audit (who, what) values ($1, $2)`, [a.name, what]);
+const RECRUITERS = 'Only the President and Secretary run recruitment.';
 const firstError = (e: Record<string, string>) => Object.values(e)[0];
 const day = (iso: string) =>
   new Date(iso).toLocaleString('en-GB', {
@@ -215,12 +208,9 @@ export async function inviteNotice(c: Db, done: Decided[]): Promise<string> {
   return lines.filter(Boolean).join(manual.length > 1 ? '\n' : ' ');
 }
 
-export const recruitHandlers: Record<
-  string,
-  (c: Db, a: Actor, p: unknown, i: In) => Promise<string | void>
-> = {
+export const recruitHandlers: Record<string, Handler> = {
   async recruitCreate(c, a, _p, i) {
-    need(can(a.roles, 'application.approve'));
+    need(can(a.roles, 'application.approve'), RECRUITERS);
     const t = title(i.title),
       b = batchOf(i.batch),
       closes = closesAt(i.closes);
@@ -235,7 +225,7 @@ export const recruitHandlers: Record<
   },
 
   async recruitUpdate(c, a, _p, i) {
-    need(can(a.roles, 'application.approve'));
+    need(can(a.roles, 'application.approve'), RECRUITERS);
     const l = await linkFor(c, i.id),
       t = title(i.title),
       b = batchOf(i.batch),
@@ -257,7 +247,7 @@ export const recruitHandlers: Record<
   },
 
   async recruitClose(c, a, _p, i) {
-    need(can(a.roles, 'application.approve'));
+    need(can(a.roles, 'application.approve'), RECRUITERS);
     const l = await linkFor(c, i.id);
     if (l.closes_at <= new Date()) throw new Fail(409, 'That link is already closed.');
     await c.query(`update recruit_links set closes_at = now() where id = $1`, [l.id]);
@@ -266,7 +256,7 @@ export const recruitHandlers: Record<
 
   /** Accept or reject up to 100 pending applicants at once. Already-decided ones are skipped, never re-decided. */
   async recruitDecide(c, a, _p, i) {
-    need(can(a.roles, 'application.approve'));
+    need(can(a.roles, 'application.approve'), RECRUITERS);
     const to = i.to === 'accepted' || i.to === 'declined' ? i.to : null;
     if (!to) throw new Fail(400, 'Unknown decision.');
     const ids = [...new Set(Array.isArray(i.ids) ? i.ids.map(String) : [])];
@@ -290,7 +280,7 @@ export const recruitHandlers: Record<
 
   /** Deletes a link. Its pending and rejected applicants go with it; accepted ones stay as the members' record. */
   async recruitDelete(c, a, _p, i) {
-    need(can(a.roles, 'application.approve'));
+    need(can(a.roles, 'application.approve'), RECRUITERS);
     const l = await linkFor(c, i.id);
     const gone = (
       await c.query(
@@ -312,7 +302,7 @@ export const recruitHandlers: Record<
 
   /** Saves this recruitment's acceptance email; an empty body goes back to the built-in design. */
   async recruitMail(c, a, _p, i) {
-    need(can(a.roles, 'application.approve'));
+    need(can(a.roles, 'application.approve'), RECRUITERS);
     const l = await linkFor(c, i.id);
     if (!i.html) {
       await c.query(
@@ -337,7 +327,7 @@ export const recruitHandlers: Record<
 
   /** Rows from an officer's CSV become pending applicants, reviewed like any other. One insert, deduplicated. */
   async recruitImport(c, a, _p, i) {
-    need(can(a.roles, 'application.approve'));
+    need(can(a.roles, 'application.approve'), RECRUITERS);
     const l = await linkFor(c, i.id),
       rows = Array.isArray(i.rows) ? i.rows : [];
     if (!rows.length || rows.length > RECRUIT.importRows)
@@ -395,7 +385,7 @@ export async function recruitPublic(db: Db, token: string): Promise<RecruitPubli
 export async function applicantPhoto(db: Db, userId: string, id: string) {
   const u = (
     await db.query(
-      `select array_prepend(role, coalesce((select pr.roles from post_roles pr where pr.post = users.post), '{}')) as roles
+      `select ${ROLES}
        from users where id = $1 and not suspended`,
       [userId],
     )
@@ -446,37 +436,41 @@ export async function apply(db: Db, i: In, ip = '') {
   const { value: v, errors } = checkApplicant(i, checkForm(l.form).value);
   const err = firstError(errors);
   if (err) throw new Fail(400, err);
-  const ipHash = sha(ip);
-  const recent = (
-    await db.query(
-      `select count(*)::int as n from applications where ip_hash = $1 and created_at > now() - interval '1 hour'`,
-      [ipHash],
-    )
-  ).rows[0].n;
-  if (recent >= APPLY_PER_IP_PER_HOUR)
-    throw new Fail(429, 'Too many applications from this network. Try again in an hour.');
   if (process.env.TURNSTILE_SECRET_KEY && !(await humanCheck(i['cf-turnstile-response'], ip)))
     throw new Fail(400, 'The human check failed. Complete it and submit again.');
-  const r = await db.query(
-    `insert into applications (name, sid, dept, batch, email, phone, photo, cf, track, why, answers, link_id, src, ip_hash)
+  const ipHash = sha(ip);
+  // One network's applications are counted and written one at a time, so parallel posts cannot all pass the count.
+  await tx(async (db) => {
+    await db.query(`select pg_advisory_xact_lock(hashtext($1))`, [ipHash]);
+    const recent = (
+      await db.query(
+        `select count(*)::int as n from applications where ip_hash = $1 and created_at > now() - interval '1 hour'`,
+        [ipHash],
+      )
+    ).rows[0].n;
+    if (recent >= APPLY_PER_IP_PER_HOUR)
+      throw new Fail(429, 'Too many applications from this network. Try again in an hour.');
+    const r = await db.query(
+      `insert into applications (name, sid, dept, batch, email, phone, photo, cf, track, why, answers, link_id, src, ip_hash)
      select $1, $2, $3, $4, $5, $6, $7, $8, '', $9, $10, $11, 'Recruitment link', $12
      where not exists (select 1 from users where email = $5)
      on conflict do nothing`,
-    [
-      v.name,
-      v.sid,
-      v.dept,
-      l.batch,
-      v.email,
-      v.phone,
-      v.photo,
-      v.cf,
-      v.why,
-      JSON.stringify(v.answers),
-      l.id,
-      ipHash,
-    ],
-  );
-  if (!r.rowCount)
-    throw new Fail(409, 'An application or an account already exists for that email address.');
+      [
+        v.name,
+        v.sid,
+        v.dept,
+        l.batch,
+        v.email,
+        v.phone,
+        v.photo,
+        v.cf,
+        v.why,
+        JSON.stringify(v.answers),
+        l.id,
+        ipHash,
+      ],
+    );
+    if (!r.rowCount)
+      throw new Fail(409, 'An application or an account already exists for that email address.');
+  });
 }

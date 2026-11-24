@@ -62,7 +62,6 @@ export type S = {
   flags: Record<string, boolean>;
   kv: Record<string, string>;
   posts: number;
-  spent: number;
   checkin: boolean;
   /** Platform streak: consecutive daily check-ins, including today once checked in. */
   run: number;
@@ -70,7 +69,8 @@ export type S = {
   feedUpvotes: number;
   ideasCount: number;
   acceptedInterests: number;
-  milestoneKudosReceived: number;
+  /** Kudos received anywhere (profile, ideas, milestones); each is XP. */
+  kudosReceived: number;
 };
 /** A member as everyone sees them. `roleKey` and `suspended` are present only for officers who manage accounts. */
 export type Roster = Member & {
@@ -483,12 +483,11 @@ export type AppState = {
   /** Live totals across all members: poll votes, kudos, volunteer sign-ups, solves per problem, announcement reads, milestone kudos daily cap, recent milestones. */
   counts: {
     votes: Record<string, Record<string, number>>;
-    /** Kudos per member, keyed `member:<id>` (members with none are absent). */
+    /** Every kudos each member has received (on their profile, ideas and milestones), keyed `member:<id>`. */
     kudos: Record<string, number>;
     vol: Record<string, number>;
     solved: Record<string, number>;
     annReads: Record<string, number>;
-    kudosToday: number;
     recentMilestones: MilestoneDTO[];
     alumniCount?: number;
     /** Everyone a member sees on the roster (alumni included), known before the roster itself loads. */

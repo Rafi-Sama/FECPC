@@ -71,7 +71,10 @@ export function ProfileForm({
 }) {
   const { act } = useStore();
   const sure = useConfirm();
-  const fields = PROFILE_FIELDS.filter(([k]) => mode === 'edit' || !HANDLES.includes(k));
+  // A member links a judge handle themselves the first time; only a linked one is changed by request.
+  const fields = PROFILE_FIELDS.filter(
+    ([k]) => mode === 'edit' || !HANDLES.includes(k) || !!profile[k as 'cf_handle'],
+  );
   const start = toValues(profile);
   const [v, setV] = useState<Values>(start);
   const [note, setNote] = useState('');
@@ -84,6 +87,8 @@ export function ProfileForm({
   const pick = (x: Values) => Object.fromEntries(keys.map((k) => [k, x[k]])) as Partial<Values>;
   const { value, errors } = checkProfile(toInput(pick(v)));
   const current = checkProfile(toInput(pick(start))).value;
+  for (const k of HANDLES)
+    if (current[k] && value[k] === null) errors[k] = 'A judge handle can be changed, not removed.';
   const changes: ProfileChanges = profileDiff(value, current);
   const n = Object.keys(changes).length;
   const shown = (k: ProfileField) => (tried || changes[k] !== undefined ? errors[k] : undefined);
@@ -144,10 +149,7 @@ export function ProfileForm({
           </button>
         </header>
         {mode === 'request' && (
-          <p className="pf-lead">
-            Change what you need; the Secretary or President reviews it. Judge handles you change
-            yourself on your profile.
-          </p>
+          <p className="pf-lead">Change what you need; the Secretary or President reviews it.</p>
         )}
         <div className="pf-photo">
           <MemberFace url={v.avatar_url || null} name={v.name || profile.name} size={88} />

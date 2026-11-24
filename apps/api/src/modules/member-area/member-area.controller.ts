@@ -11,12 +11,15 @@ import {
   Res,
 } from '@nestjs/common';
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import { waitUntil } from '@vercel/functions';
 import { act, auditQuery, avatar, exportMembers, profileRequestPhoto } from './actions.ts';
 import { applicantPhoto, apply, recruitPublic } from './recruit.ts';
 import { Fail, pool } from './db.ts';
 import * as queries from './queries.ts';
 import { eventBanner, eventsQuery, publicEvents, verifyCertificate } from './events.ts';
 import { syncCodeforces, syncVjudge } from './milestones.ts';
+import { ensureWeekly } from './sheets.ts';
+import { sameSecret } from './tokens.ts';
 import { forgetShared, loadState, rosterJson } from './state.ts';
 import { drainMail } from './mail.ts';
 import { CurrentUser, type RequestUser } from '../auth/decorators.ts';
@@ -30,9 +33,6 @@ const AREAS = {
   events: eventsQuery,
   audit: auditQuery,
 };
-
-// shortcut: per-process throttle, reset on restart and not shared between instances; move it to the DB if the API scales out.
-const lastCodeforcesSync = new Map<string, number>();
 
 const object = (b: unknown): Record<string, unknown> => {
   if (!b || typeof b !== 'object' || Array.isArray(b)) throw new Fail(400, 'Send a JSON object.');
@@ -69,7 +69,8 @@ export class MemberAreaController {
   @HttpCode(200)
   async act(@CurrentUser() user: RequestUser, @Body() body: unknown) {
     const info = await act(user.id, object(body)); // act() clears the shared cache
-    void drainMail().catch(() => {}); // after the commit: mail queued by this action goes out now
+    // After the commit, mail queued by this action goes out; on Vercel the function stays alive until it is sent.
+    waitUntil(drainMail().catch(() => {}));
     return { state: await loadState(pool(), user.id), info: info ?? null };
   }
 
@@ -89,15 +90,34 @@ export class MemberAreaController {
   @Post('me/codeforces/sync')
   @HttpCode(200)
   async syncCodeforces(@CurrentUser() user: RequestUser) {
-    const now = Date.now();
-    if (now - (lastCodeforcesSync.get(user.id) ?? 0) < 60_000) return { synced: false };
-    lastCodeforcesSync.set(user.id, now);
+    // Once a minute per member, in the database so every API instance shares it.
+    const go = await pool().query(
+      `update users set judge_synced_at = now() where id = $1
+         and (judge_synced_at is null or judge_synced_at < now() - interval '1 minute')`,
+      [user.id],
+    );
+    if (!go.rowCount) return { synced: false };
     const [cf, vj] = await Promise.all([
       syncCodeforces(pool(), user.id),
       syncVjudge(pool(), user.id),
     ]);
     if (cf || vj) forgetShared();
     return { synced: !!(cf || vj), milestonesCreated: cf?.milestonesCreated ?? 0 };
+  }
+
+  /**
+   * The periodic work a long-running server does on timers: this week's sheet and the mail queue. Vercel Cron
+   * calls it daily with `Authorization: Bearer CRON_SECRET`; a free pinger may call it every few minutes.
+   */
+  @Public()
+  @Get('cron')
+  async cron(@Req() req: FastifyRequest) {
+    const s = process.env.CRON_SECRET;
+    if (!s || !sameSecret(req.headers.authorization, `Bearer ${s}`))
+      throw new Fail(404, 'Not found.');
+    await ensureWeekly(pool());
+    await drainMail();
+    return { ok: true };
   }
 
   /** A recruitment link's public form: title, batch, closing time and the optional questions. */

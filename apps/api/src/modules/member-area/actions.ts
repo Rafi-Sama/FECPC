@@ -1,12 +1,6 @@
 // Every change a member or officer can make. One entry point, one transaction, one row lock on the acting user.
 // This is the only place that decides what a role may DO; the interface merely hides what would be refused here.
-import {
-  APPROVAL_THRESHOLD,
-  announcements,
-  CONTRIBUTION,
-  sheet,
-  shop,
-} from '@fecpc/content/member-area';
+import { APPROVAL_THRESHOLD, announcements, CONTRIBUTION, sheet } from '@fecpc/content/member-area';
 import { cols, volunteerShifts, wiki } from '@fecpc/content/training';
 import {
   can,
@@ -20,7 +14,6 @@ import {
   type Role,
   RANKS,
   UNRATED_RANK,
-  earned,
 } from '@fecpc/contracts';
 import type {
   AlumniJob,
@@ -44,10 +37,20 @@ import type {
   MemberExperience,
   MemberProfile,
   MemberSummary,
-  MilestoneDTO,
 } from '@fecpc/contracts';
 import { newToken, sha } from './tokens.ts';
 import { Fail, face, tx, type Db } from './db.ts';
+import {
+  audit,
+  JOINED,
+  need,
+  pick,
+  posInt,
+  ROLES,
+  type Actor,
+  type Handler,
+  type In,
+} from './rules.ts';
 import { teamHandlers } from './teams.ts';
 import { eventHandlers } from './events.ts';
 import { decideApplication, inviteNotice, recruitHandlers } from './recruit.ts';
@@ -61,9 +64,8 @@ import {
   type ProfileChanges,
   type ProfileField,
 } from '@fecpc/contracts';
-import { challengeHandlers, sheetHandlers } from './sheets.ts';
+import { challengeHandlers, problemset, sheetHandlers } from './sheets.ts';
 import { learningHandlers } from './learning.ts';
-import { DAILY_KUDOS_CAP, MILESTONE_FRESHNESS_DAYS } from './milestones.ts';
 import {
   forgetShared,
   isAdmin,
@@ -76,12 +78,8 @@ import {
   type Progress,
 } from './state.ts';
 
-type Actor = { id: string; role: Role; roles: Role[]; name: string; system: boolean };
-// A member's effective roles: their own role plus what their post grants. For queries on an unaliased `users`.
-const ROLES = `array_prepend(role, coalesce((select pr.roles from post_roles pr where pr.post = users.post), '{}')) as roles`;
 const person = (a: Actor) =>
   need(!a.system, 'This is an operator account, not a member. It cannot do that.');
-type In = Record<string, unknown>;
 const KEY = /^[\w:.&' /+#-]{1,80}$/;
 const text = (v: unknown, min: number, max: number, what: string) => {
   // Plain text only: control characters are dropped, React escapes the rest on output.
@@ -102,11 +100,6 @@ const mdText = (v: unknown, min: number, max: number, what: string) => {
   if (t.length < min || t.length > max)
     throw new Fail(400, `${what} must be ${min} to ${max} characters.`);
   return t;
-};
-const posInt = (v: unknown, what: string) => {
-  const n = Number(v);
-  if (!Number.isInteger(n) || n < 1 || n > 2_000_000_000) throw new Fail(400, `Invalid ${what}.`);
-  return n;
 };
 export function excerptFromMarkdown(md: string, maxLen = 140): string {
   const flat = md
@@ -183,6 +176,15 @@ async function insertJob(c: Db, alumniId: string, j: ReturnType<typeof jobFields
   );
   return Number(r.rows[0].id);
 }
+/** A blog post's status from the editor's `published` switch or an explicit `status`; undefined when neither. */
+const blogStatus = (i: In) =>
+  typeof i.published === 'boolean'
+    ? i.published
+      ? ('published' as const)
+      : ('draft' as const)
+    : i.status === undefined
+      ? undefined
+      : pick(i.status, ['draft', 'published'] as const, 'status');
 const FEED_CATS = ['problem-solving', 'upsolving', 'topic'] as const;
 const FEED_CAT_ALIAS: Record<string, FeedCategory> = {
   'problem-solving': 'problem-solving',
@@ -198,15 +200,6 @@ const key = (v: unknown) => {
   if (typeof v !== 'string' || !KEY.test(v)) throw new Fail(400, 'That is not a valid item.');
   return v;
 };
-const pick = <T extends string>(v: unknown, from: readonly T[], what: string): T => {
-  if (!from.includes(v as T)) throw new Fail(400, `Unknown ${what}.`);
-  return v as T;
-};
-function need(ok: unknown, why = 'Your role cannot do that.'): asserts ok {
-  if (!ok) throw new Fail(403, why);
-}
-const audit = (c: Db, a: Actor, what: string) =>
-  c.query(`insert into audit (who, what) values ($1, $2)`, [a.name, what]);
 const tk = (n: number) => '৳' + n.toLocaleString('en');
 const flip = (list: string[], id: string, on: boolean) =>
   on ? (list.includes(id) ? list : [...list, id]) : list.filter((x) => x !== id);
@@ -236,8 +229,19 @@ async function kudosOwner(c: Db, id: string): Promise<string | null> {
   return null;
 }
 
-const inInbox = async (c: Db, userId: string, id: string) =>
-  (await loadState(c, userId))!.inbox.some((n) => n.id === id);
+// Whether `id` is in the member's inbox. Announcements are the 50 newest (as the state lists them), checked
+// directly; anything else is derived from the member's records, so it takes the whole state.
+const inInbox = async (c: Db, userId: string, id: string) => {
+  const an = /^an:(\d{1,9})$/.exec(id);
+  if (an)
+    return !!(
+      await c.query(
+        `select 1 from (select id from announcements order by id desc limit 50) x where id = $1`,
+        [+an[1]!],
+      )
+    ).rowCount;
+  return (await loadState(c, userId))!.inbox.some((n) => n.id === id);
+};
 
 async function setClub(c: Db, a: Actor, k: string, value: boolean | string) {
   await c.query(
@@ -353,10 +357,33 @@ const fieldList = (ch: ProfileChanges) =>
   Object.keys(ch)
     .map((k) => PROFILE_LABEL[k as ProfileField] ?? k)
     .join(', ');
+/**
+ * One Codeforces handle per member: a handle another member already uses would hand them that member's stats and
+ * XP. (Proving ownership of the handle is not checked; see docs/backend-audit.md.)
+ */
+async function handleFree(c: Db, h: string, userId: string) {
+  const taken = await c.query(
+    `select 1 from users where id <> $2 and not system
+       and lower(coalesce(nullif(cf_handle, ''), handle)) = lower($1)`,
+    [h, userId],
+  );
+  if (taken.rowCount) throw new Fail(409, 'Another member already uses that Codeforces handle.');
+}
+
+const CHANGE_BY_REQUEST =
+  'Your handle is already linked. Ask for a change from your profile; the Secretary or President approves it.';
+/** A judge handle can change but never be removed, and a Codeforces handle belongs to one member. */
+async function handlesOk(c: Db, userId: string, ch: ProfileChanges) {
+  if (ch.cf_handle === null || ch.vjudge_handle === null)
+    throw new Fail(400, 'A judge handle can be changed, not removed.');
+  if (typeof ch.cf_handle === 'string') await handleFree(c, ch.cf_handle, userId);
+}
+
 /** Writes checked changes. A new judge handle also resets what was synced from the old one. */
 async function applyProfile(c: Db, userId: string, ch: ProfileChanges) {
   const cols = (Object.keys(ch) as ProfileField[]).filter((k) => PROFILE_COLS.includes(k));
   if (!cols.length) return;
+  await handlesOk(c, userId, ch);
   const at = (k: ProfileField) => `$${cols.indexOf(k) + 2}`;
   const sets = cols.map((k) => (k === 'skills' ? `skills = ${at(k)}::text[]` : `${k} = ${at(k)}`));
   if (cols.includes('cf_handle')) sets.push(`handle = coalesce(${at('cf_handle')}, '')`);
@@ -370,7 +397,7 @@ async function applyProfile(c: Db, userId: string, ch: ProfileChanges) {
   ]);
 }
 
-const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<string | void>> = {
+const handlers: Record<string, Handler<Progress>> = {
   ...teamHandlers,
   ...eventHandlers,
   ...recruitHandlers,
@@ -390,7 +417,6 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
       const k = list as 'solved' | 'done' | 'read';
       p[k] = flip(p[k], id, now(p[k].includes(id)));
     } else if (list === 'kudos') {
-      need(!id.startsWith('shop:'), 'That is not something you can cheer.');
       need(!id.startsWith('milestone:'), 'Use kudosMilestone for milestone kudos.');
       const has =
         (await c.query(`select 1 from reactions where user_id = $1 and target = $2`, [a.id, id]))
@@ -400,9 +426,9 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
         need(owner, 'That is not something you can cheer.');
         need(owner !== a.id, 'You cannot cheer your own work.');
       }
-      if (now(has))
-        await c.query(`insert into reactions values ($1, $2) on conflict do nothing`, [a.id, id]);
-      else await c.query(`delete from reactions where user_id = $1 and target = $2`, [a.id, id]);
+      // Kudos are permanent: each one is XP for whoever received it.
+      need(now(has), 'Kudos cannot be taken back.');
+      await c.query(`insert into reactions values ($1, $2) on conflict do nothing`, [a.id, id]);
     } else if (list === 'present') {
       // volunteer shifts; class attendance needs the room code (see `attend`)
       const shift = volunteerShifts.find((v) => 'vol:' + v[0] === id);
@@ -509,27 +535,29 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     );
     if (once && !r.rowCount) throw new Fail(409, 'You have already rated this event.');
   },
-  async handle(c, a, p, i) {
+  // The first link is the member's own; after that a judge handle changes only through an approved profile
+  // request (profileRequest), and is never removed.
+  async handle(c, a, _p, i) {
     const h = typeof i.value === 'string' ? i.value.trim() : '';
-    if (h && !/^[\w.-]{3,24}$/.test(h))
-      throw new Fail(400, 'That is not a valid Codeforces handle.');
-    p.handle = h;
-    await c.query(`update users set cf_handle = $2, handle = $3 where id = $1`, [
-      a.id,
-      h || null,
-      h,
-    ]);
-    if (h) await audit(c, a, `linked Codeforces handle ${h}`);
+    if (!/^[\w.-]{3,24}$/.test(h)) throw new Fail(400, 'That is not a valid Codeforces handle.');
+    await handleFree(c, h, a.id);
+    const r = await c.query(
+      `update users set cf_handle = $2, handle = $2 where id = $1 and coalesce(nullif(cf_handle, ''), handle, '') = ''`,
+      [a.id, h],
+    );
+    if (!r.rowCount) throw new Fail(409, CHANGE_BY_REQUEST);
+    await audit(c, a, `linked Codeforces handle ${h}`);
   },
   async vjudge(c, a, _p, i) {
     const h = typeof i.value === 'string' ? i.value.trim() : '';
-    if (h && !/^[\w.-]{2,30}$/.test(h)) throw new Fail(400, 'That is not a valid VJudge username.');
-    // A new or removed handle starts from zero; syncVjudge fills the count from VJudge itself.
-    await c.query(
-      `update users set vj_solved = case when vjudge_handle is distinct from $2 then 0 else vj_solved end, vjudge_handle = $2 where id = $1`,
-      [a.id, h || null],
+    if (!/^[\w.-]{2,30}$/.test(h)) throw new Fail(400, 'That is not a valid VJudge username.');
+    // syncVjudge fills the count from VJudge itself.
+    const r = await c.query(
+      `update users set vj_solved = 0, vjudge_handle = $2 where id = $1 and coalesce(vjudge_handle, '') = ''`,
+      [a.id, h],
     );
-    if (h) await audit(c, a, `linked VJudge handle ${h}`);
+    if (!r.rowCount) throw new Fail(409, CHANGE_BY_REQUEST);
+    await audit(c, a, `linked VJudge handle ${h}`);
   },
   async pay(c, a, _p, i) {
     person(a);
@@ -571,18 +599,6 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
       a,
       `set ${kind === 'term' ? 'member' : 'post'} dues to ${tk(amount)} per 3 months`,
     );
-  },
-  async redeem(c, a, p, i) {
-    person(a);
-    const item = shop.find((x) => x[0] === i.item);
-    need(item, 'That reward does not exist.');
-    if (p.shop.includes(item![0])) throw new Fail(409, 'You have already redeemed that.');
-    const st = (await loadState(c, a.id))!; // read inside the transaction, under the row lock, so XP cannot be spent twice
-    if (st.me.xp + earned(st.s) - st.s.spent < item![1])
-      throw new Fail(409, 'You do not have enough XP for that yet.');
-    p.shop.push(item![0]);
-    p.spent += item![1];
-    await audit(c, a, `redeemed "${item![0]}" for ${item![1]} XP`);
   },
   async announce(c, a, _p, i) {
     need(can(a.roles, 'announce.post'));
@@ -935,7 +951,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
       need(n, 'That payment does not exist.');
       const note = to === 'rejected' ? text(i.reason, 3, 200, 'The reason for rejecting') : null; // the member is shown this
       const r = await c.query(
-        `update payments set status = $2, decided_by = $3, note = $4 where id = $1 and status = 'pending' and user_id <> $3 returning amount, via`,
+        `update payments set status = $2, decided_by = $3, note = $4, decided_at = now(), updated_at = now() where id = $1 and status = 'pending' and user_id <> $3 returning amount, via`,
         [+n[1]!, to, a.id, note],
       );
       if (!r.rows[0])
@@ -992,11 +1008,10 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
           x.decided_by !== a.id,
           'A second officer has to make the final decision on an expense you passed up.',
         );
-      await c.query(`update expenses set status = $2, decided_by = $3 where id = $1`, [
-        +n[1]!,
-        to,
-        a.id,
-      ]);
+      await c.query(
+        `update expenses set status = $2, decided_by = $3, decided_at = now(), updated_at = now() where id = $1`,
+        [+n[1]!, to, a.id],
+      );
       return void (await audit(
         c,
         a,
@@ -1134,12 +1149,21 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
       reason = text(i.reason, 3, 200, 'The reason'),
       user = key(i.user);
     need(user !== a.id, 'You cannot change your own role.');
+    // One President, always: the office only changes hands through appointPresident.
+    need(
+      role !== 'president',
+      'Appoint a new President instead; the current one becomes a member.',
+    );
     // The public title follows the role and the post is cleared, so a demoted officer keeps neither.
     const r = await c.query(
-      `update users set role = $2, title = $3, post = null where id = $1 and not system returning name`,
+      `update users set role = $2, title = $3, post = null where id = $1 and not system and role <> 'president' returning name`,
       [user, role, role === 'member' ? null : roleName[role]],
     );
-    if (!r.rows[0]) throw new Fail(404, 'That member does not exist.');
+    if (!r.rows[0])
+      throw new Fail(
+        404,
+        'That member does not exist, or is the President: appoint a new one instead.',
+      );
     await audit(c, a, `assigned role ${roleName[role]} to ${r.rows[0].name} (reason: ${reason})`);
   },
   async post(c, a, _p, i) {
@@ -1200,13 +1224,17 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
       `${i.on ? 'gave' : 'took'} ${roleName[role]} ${i.on ? 'to' : 'from'} post ${postName[post]}`,
     );
   },
+  /** Suspends (signed out everywhere, no sign-in) or reinstates a member. */
   async suspend(c, a, _p, i) {
-    need(canFully(a.roles, 'roles.assign'));
+    need(
+      canFully(a.roles, 'member.deactivate'),
+      'Only the President or Super Admin suspends members.',
+    );
     const user = key(i.user);
     if (typeof i.on !== 'boolean') throw new Fail(400, 'Expected on or off.');
     need(user !== a.id, 'You cannot suspend yourself.');
     const r = await c.query(
-      `update users set suspended = $2, status = case when $2 then 'suspended' when pass_hash is null and google_sub is null then 'invited' else 'active' end
+      `update users set suspended = $2, status = case when $2 then 'suspended' when not ${JOINED()} then 'invited' else 'active' end
        where id = $1 and not system and (role not in ('president', 'super_admin') or $3) returning name`,
       [user, i.on, a.role === 'super_admin'],
     );
@@ -1221,7 +1249,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     need(user !== a.id, 'Change your own password from your profile.');
     const t = (
       await c.query(
-        `select role, ${ROLES}, name, pass_hash is not null as joined from users where id = $1 and not suspended for update`,
+        `select role, ${ROLES}, name, ${JOINED()} as joined from users where id = $1 and not suspended for update`,
         [user],
       )
     ).rows[0];
@@ -1252,17 +1280,23 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     await applyProfile(c, t.id, ch);
     await audit(c, a, `edited ${t.name}'s profile: ${fieldList(ch)}`);
   },
-  /** A member asks for new values (anything but judge handles, which they change themselves). */
+  /** A member asks for new values. A judge handle not linked yet is linked directly (handle, vjudge) instead. */
   async profileRequest(c, a, _p, i) {
     person(a);
     const raw = (i.changes && typeof i.changes === 'object' ? i.changes : {}) as In;
-    if ('cf_handle' in raw || 'vjudge_handle' in raw)
-      throw new Fail(400, 'Change your judge handles yourself, on your profile.');
     const { value, errors } = checkProfile(raw);
     const err = Object.values(errors)[0];
     if (err) throw new Fail(400, err);
-    const ch = profileDiff(value, await currentProfile(c, a.id));
+    const now = await currentProfile(c, a.id);
+    const ch = profileDiff(value, now);
     if (!Object.keys(ch).length) throw new Fail(400, 'Nothing differs from your current details.');
+    for (const k of ['cf_handle', 'vjudge_handle'] as const)
+      if (ch[k] !== undefined && !now[k])
+        throw new Fail(
+          400,
+          'Link your judge handles yourself on your profile; only changes need approval.',
+        );
+    await handlesOk(c, a.id, ch);
     const note = i.note ? text(i.note, 0, 300, 'The note') || null : null;
     // One open request per member: asking again replaces it.
     await c.query(
@@ -1316,13 +1350,18 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
   async kudosMilestone(c, a, _p, i) {
     person(a);
     const milestoneId = posInt(i.milestoneId, 'milestone');
-    const res = await giveMilestoneKudosTx(c, a, milestoneId);
-    if (!res.ok && res.reason === 'DAILY_LIMIT') {
-      throw new Fail(429, 'DAILY LIMIT REACHED. TRY AGAIN TOMORROW.');
-    }
+    return giveMilestoneKudosTx(c, a, milestoneId);
   },
   async saveAlumni(c, a, _p, i) {
     const alumniId = key(i.alumniId);
+    need(
+      (
+        await c.query(`select 1 from users where id = $1 and role = 'alumni' and not system`, [
+          alumniId,
+        ])
+      ).rowCount,
+      'That alumnus does not exist.',
+    );
     const has =
       (
         await c.query(`select 1 from alumni_saves where user_id = $1 and alumni_id = $2`, [
@@ -1335,29 +1374,32 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
         a.id,
         alumniId,
       ]);
-      return 'UNSAVED';
-    } else {
-      await c.query(
-        `insert into alumni_saves (user_id, alumni_id) values ($1, $2) on conflict do nothing`,
-        [a.id, alumniId],
-      );
-      return 'SAVED';
+      return { saved: false };
     }
+    await c.query(
+      `insert into alumni_saves (user_id, alumni_id) values ($1, $2) on conflict do nothing`,
+      [a.id, alumniId],
+    );
+    return { saved: true };
   },
   async setAvailableForQuestions(c, a, _p, i) {
-    const targetId = typeof i.alumniId === 'string' && KEY.test(i.alumniId) ? i.alumniId : a.id;
+    const raw = i.alumniId ?? i.userId;
+    const targetId = typeof raw === 'string' && KEY.test(raw) ? raw : a.id;
     need(
       targetId === a.id || canFully(a.roles, 'alumni.toggleQuestions'),
       'Only the account owner or the President can change availability for questions.',
     );
-    const val = Boolean(i.value);
-    await c.query(`update users set available_for_questions = $1 where id = $2 and not system`, [
-      val,
-      targetId,
-    ]);
+    const val = Boolean(i.available ?? i.value);
+    const r = await c.query(
+      `update users set available_for_questions = $1 where id = $2 and not system`,
+      [val, targetId],
+    );
+    if (!r.rowCount) throw new Fail(404, 'That member does not exist.');
     await audit(c, a, `set availability for questions for ${targetId} to ${val}`);
+    return { success: true, value: val, available: val };
   },
   async createAlumniJob(c, a, _p, i) {
+    person(a);
     need(canFully(a.roles, 'alumni.job.post'), 'Only alumni or admins can post alumni jobs.');
     const j = jobFields(i);
     const alumniId =
@@ -1369,10 +1411,21 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     const owner = (await c.query(`select id from users where id = $1 and not system`, [alumniId]))
       .rows[0];
     if (!owner) throw new Fail(404, 'Target member does not exist.');
-    await insertJob(c, alumniId, j);
+    const jobId = await insertJob(c, alumniId, j);
     await audit(c, a, `posted alumni job: ${j.company} — ${j.role}`);
+    return {
+      success: true,
+      jobId,
+      id: jobId,
+      company: j.company,
+      role: j.role,
+      title: j.role,
+      vacancies: j.vacancies,
+      mine: alumniId === a.id,
+    };
   },
   async deleteAlumniJob(c, a, _p, i) {
+    person(a);
     const jobId = posInt(i.jobId, 'job');
     const row = (
       await c.query(`select id, alumni_id, company, role from alumni_jobs where id = $1`, [jobId])
@@ -1384,28 +1437,25 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     );
     await c.query(`delete from alumni_jobs where id = $1`, [jobId]);
     await audit(c, a, `deleted alumni job #${jobId} (${row.company} — ${row.role})`);
+    return { success: true, deleted: true };
   },
   async toggleInterviewProblem(c, a, _p, i) {
     person(a);
     const problemId = posInt(i.problemId, 'problem');
-    const has =
-      (
-        await c.query(
-          `select 1 from interview_user_progress where user_id = $1 and problem_id = $2`,
-          [a.id, problemId],
-        )
-      ).rowCount! > 0;
-    if (has) {
-      await c.query(`delete from interview_user_progress where user_id = $1 and problem_id = $2`, [
-        a.id,
-        problemId,
-      ]);
-    } else {
-      await c.query(
-        `insert into interview_user_progress (user_id, problem_id) values ($1, $2) on conflict do nothing`,
-        [a.id, problemId],
-      );
-    }
+    need(
+      (await c.query(`select 1 from interview_problems where id = $1`, [problemId])).rowCount,
+      'That problem does not exist.',
+    );
+    const gone = await c.query(
+      `delete from interview_user_progress where user_id = $1 and problem_id = $2`,
+      [a.id, problemId],
+    );
+    if (gone.rowCount) return { problemId, solved: false };
+    await c.query(
+      `insert into interview_user_progress (user_id, problem_id) values ($1, $2) on conflict do nothing`,
+      [a.id, problemId],
+    );
+    return { problemId, solved: true };
   },
   async createInterviewProblem(c, a, _p, i) {
     need(
@@ -1420,11 +1470,12 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     const topic = (await c.query(`select id from interview_topics where id = $1`, [topicId]))
       .rows[0];
     if (!topic) throw new Fail(404, 'That topic does not exist.');
-    await c.query(
-      `insert into interview_problems (topic_id, title, url, difficulty, created_by) values ($1, $2, $3, $4, $5)`,
+    const ins = await c.query(
+      `insert into interview_problems (topic_id, title, url, difficulty, created_by) values ($1, $2, $3, $4, $5) returning id`,
       [topicId, title, url, diff, a.id],
     );
     await audit(c, a, `added problem to topic #${topicId}: ${title}`);
+    return { success: true, problemId: Number(ins.rows[0].id) };
   },
   async deleteInterviewProblem(c, a, _p, i) {
     const problemId = posInt(i.problemId, 'problem');
@@ -1440,6 +1491,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     );
     await c.query(`delete from interview_problems where id = $1`, [problemId]);
     await audit(c, a, `deleted interview problem #${problemId}: ${p.title}`);
+    return { success: true, deleted: true };
   },
   async createInterviewTip(c, a, _p, i) {
     need(
@@ -1454,11 +1506,12 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     }
     const title = text(i.title, 2, 140, 'Title');
     const bodyMd = mdText(i.body_md ?? i.body, 1, 20_000, 'Body');
-    await c.query(
-      `insert into interview_tips (author_id, topic_id, title, body_md) values ($1, $2, $3, $4)`,
+    const ins = await c.query(
+      `insert into interview_tips (author_id, topic_id, title, body_md) values ($1, $2, $3, $4) returning id`,
       [a.id, topicId, title, bodyMd],
     );
     await audit(c, a, `posted interview tip: ${title}`);
+    return { success: true, id: Number(ins.rows[0].id) };
   },
   async deleteInterviewTip(c, a, _p, i) {
     const tipId = posInt(i.tipId, 'tip');
@@ -1472,8 +1525,10 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     );
     await c.query(`delete from interview_tips where id = $1`, [tipId]);
     await audit(c, a, `deleted interview tip #${tipId}: ${tip.title}`);
+    return { success: true, deleted: true };
   },
   async createBlogPost(c, a, _p, i) {
+    person(a);
     need(canFully(a.roles, 'blog.post.create'), 'Only alumni or admins can write blog posts.');
     const title = text(i.title, 2, 120, 'Title');
     const subtitle = i.subtitle ? text(i.subtitle, 1, 200, 'Subtitle') : null;
@@ -1485,7 +1540,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     const tags = Array.isArray(i.tags)
       ? i.tags.map((t) => String(t).trim().toLowerCase()).filter(Boolean)
       : [];
-    const status = pick(i.status ?? 'draft', ['draft', 'published'] as const, 'status');
+    const status = blogStatus(i) ?? 'draft';
     let slug = i.slug
       ? text(i.slug, 2, 100, 'Slug')
           .toLowerCase()
@@ -1505,9 +1560,9 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
       slug = `${slug}-${Date.now().toString(36)}`;
     }
     const publishedAt = status === 'published' ? new Date() : null;
-    await c.query(
+    const ins = await c.query(
       `insert into blog_posts (author_id, slug, title, subtitle, excerpt, body_md, cover_url, tags, status, published_at)
-       values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10)`,
+       values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10) returning id`,
       [
         a.id,
         slug,
@@ -1522,6 +1577,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
       ],
     );
     await audit(c, a, `created blog post: ${title} (${status})`);
+    return { success: true, id: Number(ins.rows[0].id), slug, author_id: a.id };
   },
   async updateBlogPost(c, a, _p, i) {
     const id = posInt(i.id, 'post');
@@ -1553,7 +1609,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     const tags = Array.isArray(i.tags)
       ? i.tags.map((t) => String(t).trim().toLowerCase()).filter(Boolean)
       : undefined;
-    const status = i.status ? pick(i.status, ['draft', 'published'] as const, 'status') : undefined;
+    const status = blogStatus(i);
     let publishedAt = post.published_at;
     if (status === 'published' && !publishedAt) {
       publishedAt = new Date();
@@ -1587,6 +1643,174 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
       ],
     );
     await audit(c, a, `updated blog post #${id}: ${title}`);
+    return { success: true, title };
+  },
+  async saveInterviewRoadmap(c, a, _p, i) {
+    roadmapManager(a);
+    const name = text(i.name, 2, 80, 'Roadmap name');
+    const desc = i.description ? text(i.description, 0, 300, 'Description') || null : null;
+    if (!Array.isArray(i.topics) || i.topics.length < 1 || i.topics.length > 200)
+      throw new Fail(400, 'A roadmap needs 1 to 200 topics.');
+
+    const nodes = (i.topics as RoadmapNodeIn[]).map((n) => ({
+      key: text(n.key, 1, 64, 'Topic key'),
+      id: n.id == null ? null : posInt(n.id, 'topic'),
+      parentKey: n.parentKey == null ? null : text(n.parentKey, 1, 64, 'Parent key'),
+      name: text(n.name, 2, 80, 'Topic name'),
+      description: n.description ? text(n.description, 0, 300, 'Description') || null : null,
+      link: optionalUrl(n.link, 'Topic link'),
+      x: Math.min(5000, Math.max(0, Math.round(Number(n.x) || 0))),
+      y: Math.min(5000, Math.max(0, Math.round(Number(n.y) || 0))),
+      problems:
+        n.problems === undefined
+          ? null
+          : (() => {
+              if (!Array.isArray(n.problems) || n.problems.length > 200)
+                throw new Fail(400, 'A topic can have at most 200 problems.');
+              return (n.problems as ProblemIn[]).map((q) => {
+                const title = text(q.title, 2, 120, 'Problem title');
+                const url = optionalUrl(q.url, `Link for “${title}”`);
+                if (!url) throw new Fail(400, `“${title}” needs a link.`);
+                return {
+                  id: q.id == null ? null : posInt(q.id, 'problem'),
+                  title,
+                  url,
+                  difficulty: pick(q.difficulty, DIFFICULTIES, `difficulty for “${title}”`),
+                };
+              });
+            })(),
+    }));
+    if (nodes.reduce((t, n) => t + (n.problems?.length ?? 0), 0) > 3000)
+      throw new Fail(400, 'A roadmap can have at most 3000 problems.');
+    const byKey = new Map(nodes.map((n) => [n.key, n]));
+    if (byKey.size !== nodes.length) throw new Fail(400, 'Topic keys must be unique.');
+    for (const n of nodes)
+      if (n.parentKey !== null && !byKey.has(n.parentKey))
+        throw new Fail(400, `"${n.name}" points at a missing parent.`);
+
+    // Parents first; anything never reached sits on a cycle.
+    const order: typeof nodes = [];
+    const queue = nodes.filter((n) => n.parentKey === null);
+    while (queue.length) {
+      const n = queue.shift()!;
+      order.push(n);
+      queue.push(...nodes.filter((c) => c.parentKey === n.key));
+    }
+    if (order.length !== nodes.length) throw new Fail(400, 'Topics cannot form a cycle.');
+
+    let roadmapId: number;
+    if (i.roadmapId == null) {
+      const kind = pick(i.kind ?? 'prep', ['prep', 'learn'] as const, 'roadmap kind');
+      // Learn has exactly one roadmap; the unique index backs this up against a race.
+      if (
+        kind === 'learn' &&
+        (await c.query(`select 1 from interview_roadmaps where kind = 'learn'`)).rowCount
+      )
+        throw new Fail(409, 'The learning roadmap already exists. Edit it instead.');
+      roadmapId = Number(
+        (
+          await c.query(
+            `insert into interview_roadmaps (name, description, created_by, kind) values ($1, $2, $3, $4) returning id`,
+            [name, desc, a.id, kind],
+          )
+        ).rows[0].id,
+      );
+    } else {
+      roadmapId = posInt(i.roadmapId, 'roadmap');
+      const r = await c.query(
+        `update interview_roadmaps set name = $2, description = $3 where id = $1 returning id`,
+        [roadmapId, name, desc],
+      );
+      if (!r.rowCount) throw new Fail(404, 'That roadmap does not exist.');
+    }
+
+    const owned = new Set(
+      (
+        await c.query(`select id from interview_topics where roadmap_id = $1 for update`, [
+          roadmapId,
+        ])
+      ).rows.map((r) => Number(r.id)),
+    );
+    const dbId = new Map<string, number>();
+    for (const [i, n] of order.entries()) {
+      const parentId = n.parentKey === null ? null : dbId.get(n.parentKey)!;
+      if (n.id !== null) {
+        if (!owned.has(n.id)) throw new Fail(400, `"${n.name}" is not in this roadmap.`);
+        await c.query(
+          `update interview_topics set name = $2, description = $3, parent_id = $4, x = $5, y = $6, order_index = $7, link = $8 where id = $1`,
+          [n.id, n.name, n.description, parentId, n.x, n.y, i, n.link],
+        );
+        dbId.set(n.key, n.id);
+      } else {
+        const ins = await c.query(
+          `insert into interview_topics (roadmap_id, name, description, parent_id, x, y, order_index, created_by, link)
+           values ($1, $2, $3, $4, $5, $6, $7, $8, $9) returning id`,
+          [roadmapId, n.name, n.description, parentId, n.x, n.y, i, a.id, n.link],
+        );
+        dbId.set(n.key, Number(ins.rows[0].id));
+      }
+    }
+    // Problems: only topics that sent a list are touched, and only rows that changed are written.
+    const existing = new Map(
+      (
+        await c.query(
+          `select p.id, p.topic_id, p.title, p.url, p.difficulty from interview_problems p
+           join interview_topics t on t.id = p.topic_id where t.roadmap_id = $1 for update of p`,
+          [roadmapId],
+        )
+      ).rows.map((r) => [Number(r.id), r]),
+    );
+    const kept = new Set<number>();
+    for (const n of nodes) {
+      if (!n.problems) continue;
+      const topicId = dbId.get(n.key)!;
+      for (const q of n.problems) {
+        if (q.id === null) {
+          await c.query(
+            `insert into interview_problems (topic_id, title, url, difficulty, created_by) values ($1, $2, $3, $4, $5)`,
+            [topicId, q.title, q.url, q.difficulty, a.id],
+          );
+          continue;
+        }
+        const old = existing.get(q.id);
+        if (!old || kept.has(q.id)) throw new Fail(400, `“${q.title}” is not in this roadmap.`);
+        kept.add(q.id);
+        if (
+          Number(old.topic_id) !== topicId ||
+          old.title !== q.title ||
+          old.url !== q.url ||
+          old.difficulty !== q.difficulty
+        )
+          await c.query(
+            `update interview_problems set topic_id = $2, title = $3, url = $4, difficulty = $5 where id = $1`,
+            [q.id, topicId, q.title, q.url, q.difficulty],
+          );
+      }
+    }
+    const listed = new Set(nodes.filter((n) => n.problems).map((n) => n.id));
+    const dropped = [...existing.values()]
+      .filter((r) => listed.has(Number(r.topic_id)) && !kept.has(Number(r.id)))
+      .map((r) => Number(r.id));
+    if (dropped.length)
+      await c.query(`delete from interview_problems where id = any($1::int[])`, [dropped]);
+    // After the problem moves above. Every kept topic hangs off a kept parent, so this only removes
+    // dropped subtrees (and the problems still in them).
+    await c.query(`delete from interview_topics where roadmap_id = $1 and id <> all($2::int[])`, [
+      roadmapId,
+      [...dbId.values()],
+    ]);
+    await audit(c, a, `saved interview roadmap #${roadmapId}: ${name}`);
+    return { roadmapId };
+  },
+  async deleteInterviewRoadmap(c, a, _p, i) {
+    roadmapManager(a);
+    const roadmapId = posInt(i.roadmapId, 'roadmap');
+    const r = await c.query(`delete from interview_roadmaps where id = $1 returning name`, [
+      roadmapId,
+    ]);
+    if (!r.rowCount) throw new Fail(404, 'That roadmap does not exist.');
+    await audit(c, a, `deleted interview roadmap #${roadmapId}: ${r.rows[0].name}`);
+    return { deleted: true };
   },
   async deleteBlogPost(c, a, _p, i) {
     const id = posInt(i.id, 'post');
@@ -1599,6 +1823,7 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     );
     await c.query(`delete from blog_posts where id = $1`, [id]);
     await audit(c, a, `deleted blog post #${id}: ${post.title}`);
+    return { success: true, deleted: true };
   },
   async makeAlumni(c, a, _p, i) {
     need(
@@ -1613,21 +1838,6 @@ const handlers: Record<string, (c: Db, a: Actor, p: Progress, i: In) => Promise<
     );
     if (!r.rows[0]) throw new Fail(404, 'That member does not exist, or cannot be modified.');
     await audit(c, a, `transitioned ${r.rows[0].name} to Alumni`);
-  },
-  async deactivateMember(c, a, _p, i) {
-    need(
-      canFully(a.roles, 'member.deactivate'),
-      'Only the President or Super Admin can deactivate members.',
-    );
-    const userId = key(i.userId);
-    need(userId !== a.id, 'You cannot deactivate yourself.');
-    const r = await c.query(
-      `update users set suspended = true, status = 'suspended' where id = $1 and not system and (role not in ('president', 'super_admin') or $2) returning name`,
-      [userId, a.role === 'super_admin'],
-    );
-    if (!r.rows[0]) throw new Fail(404, 'That member does not exist, or is a Super Admin.');
-    await c.query(`delete from sessions where user_id = $1`, [userId]);
-    await audit(c, a, `deactivated ${r.rows[0].name}`);
   },
 };
 
@@ -1652,7 +1862,6 @@ area(
   'appointPresident',
   'invite',
   'suspend',
-  'deactivateMember',
   'makeAlumni',
   'profile',
   'updateProfile',
@@ -1692,7 +1901,6 @@ area(
   'deleteFeedPost',
   'closeIdea',
   'updateIdea',
-  'redeem',
 );
 area(
   'Workspace',
@@ -1716,7 +1924,6 @@ area(
   'quizImport',
   'quizEdit',
   'quizDelete',
-  'teamCoach',
   'teamRename',
   'teamInvite',
   'teamJoin',
@@ -1742,10 +1949,32 @@ const areaOf = (type: string, i: In): AuditArea | '' =>
   type === 'decide' ? (i.kind === 'application' ? 'Recruitment' : 'Finance') : (AREA[type] ?? '');
 
 /** Runs one action for `userId`. Throws Fail for anything the caller got wrong; returns an optional one-time notice. */
-export async function act(userId: string, input: unknown): Promise<string | void> {
+/** Runs one action for `userId`: a notice (string), data for the caller (object), or nothing. */
+/**
+ * One member's changes: 120 a minute and 3000 a day, far above any real use, so one account cannot flood the club.
+ * Counted on the member's row, which `act()` has locked, so every API instance shares the count.
+ */
+export async function throttleWrites(c: Db, userId: string) {
+  const w = (
+    await c.query(
+      `update users set
+         writes_min = case when writes_at = date_trunc('minute', now()) then writes_min + 1 else 1 end,
+         writes_day = case when writes_at >= date_trunc('day', now()) then writes_day + 1 else 1 end,
+         writes_at = date_trunc('minute', now())
+       where id = $1 returning writes_min, writes_day`,
+      [userId],
+    )
+  ).rows[0];
+  if (w.writes_min > 120 || w.writes_day > 3000)
+    throw new Fail(429, 'Too many changes in a short time. Wait a minute and try again.');
+}
+
+export async function act(userId: string, input: unknown): Promise<unknown> {
   const i = (input && typeof input === 'object' ? input : {}) as In,
     run = handlers[String(i.type)];
   if (!run || !Object.hasOwn(handlers, String(i.type))) throw new Fail(400, 'Unknown action.');
+  // These read the Codeforces problemset (up to 15 s cold): fetch it before the transaction holds the actor's row.
+  if (i.type === 'challenge' || i.type === 'sheetSave') await problemset();
   return tx(async (c) => {
     const u = (
       await c.query(
@@ -1754,6 +1983,7 @@ export async function act(userId: string, input: unknown): Promise<string | void
       )
     ).rows[0];
     if (!u) throw new Fail(401, 'Sign in again.');
+    await throttleWrites(c, userId);
     // Every audit line this action writes is filed under its section (read by the audit insert trigger).
     await c.query(`select set_config('fecpc.area', $1, true)`, [areaOf(String(i.type), i)]);
     const p = progress(u.progress),
@@ -1780,11 +2010,7 @@ export async function exportMembers(userId: string) {
       ])
     ).rows[0];
     if (!u || !can(u.roles, 'data.export')) throw new Fail(403, 'Your role cannot export data.');
-    await audit(
-      c,
-      { id: userId, role: u.role, roles: u.roles, name: u.name, system: false },
-      'exported member data (CSV)',
-    );
+    await audit(c, u, 'exported member data (CSV)');
     const rows = (
       await c.query(
         `select name, handle, batch, dept, rating, solved, case when suspended then 'suspended' else 'active' end as status from users where not system order by name`,
@@ -2501,77 +2727,13 @@ export async function fetchAlumniJobs(
   return { added, jobs };
 }
 
-export type KudosMilestoneResult =
-  | {
-      ok: true;
-      alreadyGiven: boolean;
-      milestoneId: number;
-      kudosCount: number;
-      hasKudos: true;
-      kudosToday: number;
-    }
-  | {
-      ok: false;
-      reason: 'DAILY_LIMIT';
-      kudosToday: number;
-    };
-
-/**
- * Returns the number of milestone kudos `userId` has given today (UTC day, resets at 00:00 UTC).
- */
-export async function getKudosTodayCount(db: Db, userId: string): Promise<number> {
-  const row = (
-    await db.query(
-      `select count(*)::int as n
-       from milestone_kudos
-       where user_id = $1
-         and created_at >= (date_trunc('day', now() at time zone 'UTC') at time zone 'UTC')`,
-      [userId],
-    )
-  ).rows[0];
-  return Number(row?.n ?? 0);
-}
-
-/**
- * Lists recent milestones from the last 14 days, newest first, capped at `limit` (default 5).
- * Includes live kudos counts, whether the viewer has already given kudos, and (for the owner)
- * up to 3 recent giver names.
- */
-export async function listRecentMilestones(
-  db: Db,
-  userId: string,
-  input: { limit?: number } = {},
-): Promise<MilestoneDTO[]> {
-  const limit = Math.min(50, Math.max(1, Math.floor(Number(input.limit) || 5)));
-  const rows = (
-    await db.query(
-      `select m.id, m.user_id,
-         u.name as member_name,
-         ${face('u')} as member_avatar,
-         greatest(u.problems_solved, u.solved) as member_solved,
-         nullif(coalesce(nullif(u.cf_handle, ''), u.handle), '') as member_cf_handle,
-         coalesce(u.cf_rating, u.rating) as member_rating,
-         m.type, m.from_value, m.to_value, m.threshold, m.meta, m.created_at,
-         (select count(*)::int from milestone_kudos mk where mk.milestone_id = m.id) as kudos_count,
-         exists (select 1 from milestone_kudos mk where mk.milestone_id = m.id and mk.user_id = $1) as has_kudos,
-         case when m.user_id = $1 then (
-           select coalesce(json_agg(g.name order by mk.created_at desc), '[]'::json)
-           from (
-             select user_id, created_at from milestone_kudos where milestone_id = m.id and user_id <> $1 order by created_at desc limit 3
-           ) mk
-           join users g on g.id = mk.user_id
-         ) else '[]'::json end as recent_givers
-       from milestones m
-       join users u on u.id = m.user_id
-       where m.created_at > now() - ($2 || ' days')::interval
-         and not u.system and not u.suspended
-       order by m.created_at desc, m.id desc
-       limit $3`,
-      [userId, String(MILESTONE_FRESHNESS_DAYS), limit],
-    )
-  ).rows as MilestoneDTO[];
-  return rows;
-}
+export type KudosMilestoneResult = {
+  ok: true;
+  alreadyGiven: boolean;
+  milestoneId: number;
+  kudosCount: number;
+  hasKudos: true;
+};
 
 /**
  * Shared transactional implementation for giving a permanent, non-revocable kudos
@@ -2587,37 +2749,6 @@ async function giveMilestoneKudosTx(
   ).rows[0];
   if (!milestone) throw new Fail(404, 'That milestone does not exist.');
   need(milestone.user_id !== a.id, 'You cannot give kudos to your own milestone.');
-
-  // Deduplication check: replaying an already-given milestone returns idempotently without hitting the cap.
-  const existing =
-    (
-      await c.query(`select 1 from milestone_kudos where milestone_id = $1 and user_id = $2`, [
-        milestoneId,
-        a.id,
-      ])
-    ).rowCount! > 0;
-  if (existing) {
-    const [countRes, todayCount] = await Promise.all([
-      c.query(`select count(*)::int as n from milestone_kudos where milestone_id = $1`, [
-        milestoneId,
-      ]),
-      getKudosTodayCount(c, a.id),
-    ]);
-    return {
-      ok: true,
-      alreadyGiven: true,
-      milestoneId,
-      kudosCount: Number(countRes.rows[0]?.n ?? 0),
-      hasKudos: true,
-      kudosToday: todayCount,
-    };
-  }
-
-  // Server-side daily cap guard (20/day UTC, enforced under user row lock).
-  const todayCount = await getKudosTodayCount(c, a.id);
-  if (todayCount >= DAILY_KUDOS_CAP) {
-    return { ok: false, reason: 'DAILY_LIMIT', kudosToday: todayCount };
-  }
 
   const ins = await c.query(
     `insert into milestone_kudos (milestone_id, user_id)
@@ -2637,32 +2768,7 @@ async function giveMilestoneKudosTx(
     milestoneId,
     kudosCount: Number(countRes.rows[0]?.n ?? 0),
     hasKudos: true,
-    kudosToday: todayCount + (inserted ? 1 : 0),
   };
-}
-
-/**
- * Gives one permanent kudos on a specific milestone.
- * Enforces server-side auth, non-system account, non-self check, deduplication (`ON CONFLICT DO NOTHING`),
- * and the 20/day UTC cap. Awards +2 XP and an inbox notification to the milestone owner on first kudos only.
- */
-export async function kudosMilestone(
-  userId: string,
-  input: { milestoneId: number | string },
-): Promise<KudosMilestoneResult> {
-  const milestoneId = posInt(input.milestoneId, 'milestone');
-  return tx(async (c) => {
-    const u = (
-      await c.query(
-        `select id, role, ${ROLES}, name, system from users where id = $1 and not suspended for update`,
-        [userId],
-      )
-    ).rows[0];
-    if (!u) throw new Fail(401, 'Sign in again.');
-    const actor: Actor = { id: u.id, role: u.role, roles: u.roles, name: u.name, system: u.system };
-    person(actor);
-    return giveMilestoneKudosTx(c, actor, milestoneId);
-  });
 }
 
 /* ========================================================================== */
@@ -2801,65 +2907,6 @@ export async function listAlumni(
   };
 }
 
-export async function saveAlumni(
-  a: Db | string,
-  b: string | { alumniId: string },
-  c?: { alumniId: string },
-): Promise<{ saved: boolean }> {
-  const { actorId: userId, input } = parseActorAndInput(a, b, c);
-  const alumniId = key(input.alumniId);
-  return tx(async (conn) => {
-    const has =
-      (
-        await conn.query(`select 1 from alumni_saves where user_id = $1 and alumni_id = $2`, [
-          userId,
-          alumniId,
-        ])
-      ).rowCount! > 0;
-    if (has) {
-      await conn.query(`delete from alumni_saves where user_id = $1 and alumni_id = $2`, [
-        userId,
-        alumniId,
-      ]);
-      return { saved: false };
-    } else {
-      await conn.query(
-        `insert into alumni_saves (user_id, alumni_id) values ($1, $2) on conflict do nothing`,
-        [userId, alumniId],
-      );
-      return { saved: true };
-    }
-  });
-}
-
-export async function setAvailableForQuestions(
-  a: Db | string,
-  b: string | { value?: boolean; available?: boolean; alumniId?: string; userId?: string },
-  c?: { value?: boolean; available?: boolean; alumniId?: string; userId?: string },
-): Promise<{ success: boolean; value: boolean; available: boolean }> {
-  const { actorId: userId, input } = parseActorAndInput(a, b, c);
-  return tx(async (conn) => {
-    const u = (
-      await conn.query(`select id, role, ${ROLES} from users where id = $1 and not suspended`, [
-        userId,
-      ])
-    ).rows[0];
-    if (!u) throw new Fail(401, 'Sign in again.');
-    const rawTarget = input.userId ?? input.alumniId;
-    const targetId = typeof rawTarget === 'string' && KEY.test(rawTarget) ? rawTarget : userId;
-    need(
-      targetId === userId || canFully(u.roles, 'alumni.toggleQuestions'),
-      'Only the account owner or the President can change availability for questions.',
-    );
-    const val = input.available !== undefined ? Boolean(input.available) : Boolean(input.value);
-    await conn.query(`update users set available_for_questions = $1 where id = $2 and not system`, [
-      val,
-      targetId,
-    ]);
-    return { success: true, value: val, available: val };
-  });
-}
-
 /* ========================================================================== */
 /*                                   JOBS                                     */
 /* ========================================================================== */
@@ -2958,114 +3005,6 @@ export async function listAlumniJobs(
   };
 }
 
-export async function createAlumniJob(
-  a: Db | string,
-  b:
-    | string
-    | {
-        company: string;
-        company_logo_url?: string | null;
-        title?: string;
-        role?: string;
-        vacancies?: number;
-        location?: string | null;
-        job_type?: string | null;
-        experience?: string | null;
-        salary?: string | null;
-        description?: string | null;
-        responsibilities?: string[];
-        requirements?: string[];
-        deadline?: string | null;
-        url: string;
-      },
-  c?: {
-    company: string;
-    company_logo_url?: string | null;
-    title?: string;
-    role?: string;
-    vacancies?: number;
-    location?: string | null;
-    job_type?: string | null;
-    experience?: string | null;
-    salary?: string | null;
-    description?: string | null;
-    responsibilities?: string[];
-    requirements?: string[];
-    deadline?: string | null;
-    url: string;
-  },
-): Promise<{
-  success: boolean;
-  jobId: number;
-  id: number;
-  company: string;
-  role: string;
-  title: string;
-  vacancies: number;
-  mine: boolean;
-}> {
-  const { actorId: userId, input } = parseActorAndInput(a, b, c);
-  return tx(async (conn) => {
-    const u = (
-      await conn.query(
-        `select id, role, ${ROLES}, name, system from users where id = $1 and not suspended`,
-        [userId],
-      )
-    ).rows[0];
-    if (!u) throw new Fail(401, 'Sign in again.');
-    const actor: Actor = { id: u.id, role: u.role, roles: u.roles, name: u.name, system: u.system };
-    person(actor);
-    need(canFully(actor.roles, 'alumni.job.post'), 'Only alumni or admins can post alumni jobs.');
-
-    const j = jobFields(input as In);
-    const jobId = await insertJob(conn, userId, j);
-    await audit(conn, actor, `posted alumni job: ${j.company} — ${j.role}`);
-    return {
-      success: true,
-      jobId,
-      id: jobId,
-      company: j.company,
-      role: j.role,
-      title: j.role,
-      vacancies: j.vacancies,
-      mine: true,
-    };
-  });
-}
-
-export async function deleteAlumniJob(
-  a: Db | string,
-  b: string | { jobId: number | string },
-  c?: { jobId: number | string },
-): Promise<{ success: boolean; deleted: boolean }> {
-  const { actorId: userId, input } = parseActorAndInput(a, b, c);
-  return tx(async (conn) => {
-    const u = (
-      await conn.query(
-        `select id, role, ${ROLES}, name, system from users where id = $1 and not suspended`,
-        [userId],
-      )
-    ).rows[0];
-    if (!u) throw new Fail(401, 'Sign in again.');
-    const actor: Actor = { id: u.id, role: u.role, roles: u.roles, name: u.name, system: u.system };
-    person(actor);
-    const jobId = posInt(input.jobId, 'job');
-    const row = (
-      await conn.query(`select id, alumni_id, company, role from alumni_jobs where id = $1`, [
-        jobId,
-      ])
-    ).rows[0];
-    if (!row) throw new Fail(404, 'That job listing does not exist.');
-    need(
-      row.alumni_id === userId || canFully(actor.roles, 'alumni.job.fetch'),
-      'Only the author or an admin can delete this job.',
-    );
-    await conn.query(`delete from alumni_jobs where id = $1`, [jobId]);
-    await audit(conn, actor, `deleted alumni job #${jobId} (${row.company} — ${row.role})`);
-    return { success: true, deleted: true };
-  });
-}
-
 /* ========================================================================== */
 /*                             INTERVIEW PREP                                 */
 /* ========================================================================== */
@@ -3111,197 +3050,14 @@ type ProblemIn = { id?: unknown; title?: unknown; url?: unknown; difficulty?: un
 const DIFFICULTIES = ['easy', 'medium', 'hard'] as const;
 
 // Loads the actor inside the transaction and requires full `interview.roadmap.manage`.
-async function roadmapManager(conn: Db, userId: string): Promise<Actor> {
-  const u = (
-    await conn.query(
-      `select id, role, ${ROLES}, name, system from users where id = $1 and not suspended`,
-      [userId],
-    )
-  ).rows[0];
-  if (!u) throw new Fail(401, 'Sign in again.');
-  const actor: Actor = { id: u.id, role: u.role, roles: u.roles, name: u.name, system: u.system };
-  person(actor);
+/** Roadmaps are kept by full `interview.roadmap.manage` holders (CP Head, President). */
+const roadmapManager = (a: Actor) => {
+  person(a);
   need(
-    canFully(actor.roles, 'interview.roadmap.manage'),
+    canFully(a.roles, 'interview.roadmap.manage'),
     'Only the CP head or president can manage roadmaps.',
   );
-  return actor;
-}
-
-/**
- * Creates (no roadmapId) or replaces a roadmap and its whole topic tree in one go. Nodes carry a
- * client `key` and `parentKey`; existing topics also send their `id`. Topics left out are deleted
- * with their problems. A topic that sends `problems` gets exactly that list: rows with an `id` are
- * edited in place (keeping members' progress), rows without one are added, missing ones deleted.
- */
-export async function saveInterviewRoadmap(
-  actorId: string,
-  input: {
-    roadmapId?: unknown;
-    kind?: unknown;
-    name?: unknown;
-    description?: unknown;
-    topics?: unknown;
-  },
-): Promise<{ roadmapId: number }> {
-  return tx(async (conn) => {
-    const actor = await roadmapManager(conn, actorId);
-    const name = text(input.name, 2, 80, 'Roadmap name');
-    const desc = input.description ? text(input.description, 0, 300, 'Description') || null : null;
-    if (!Array.isArray(input.topics) || input.topics.length < 1 || input.topics.length > 200)
-      throw new Fail(400, 'A roadmap needs 1 to 200 topics.');
-
-    const nodes = (input.topics as RoadmapNodeIn[]).map((n) => ({
-      key: text(n.key, 1, 64, 'Topic key'),
-      id: n.id == null ? null : posInt(n.id, 'topic'),
-      parentKey: n.parentKey == null ? null : text(n.parentKey, 1, 64, 'Parent key'),
-      name: text(n.name, 2, 80, 'Topic name'),
-      description: n.description ? text(n.description, 0, 300, 'Description') || null : null,
-      link: optionalUrl(n.link, 'Topic link'),
-      x: Math.min(5000, Math.max(0, Math.round(Number(n.x) || 0))),
-      y: Math.min(5000, Math.max(0, Math.round(Number(n.y) || 0))),
-      problems:
-        n.problems === undefined
-          ? null
-          : (() => {
-              if (!Array.isArray(n.problems) || n.problems.length > 200)
-                throw new Fail(400, 'A topic can have at most 200 problems.');
-              return (n.problems as ProblemIn[]).map((q) => {
-                const title = text(q.title, 2, 120, 'Problem title');
-                const url = optionalUrl(q.url, `Link for “${title}”`);
-                if (!url) throw new Fail(400, `“${title}” needs a link.`);
-                return {
-                  id: q.id == null ? null : posInt(q.id, 'problem'),
-                  title,
-                  url,
-                  difficulty: pick(q.difficulty, DIFFICULTIES, `difficulty for “${title}”`),
-                };
-              });
-            })(),
-    }));
-    if (nodes.reduce((t, n) => t + (n.problems?.length ?? 0), 0) > 3000)
-      throw new Fail(400, 'A roadmap can have at most 3000 problems.');
-    const byKey = new Map(nodes.map((n) => [n.key, n]));
-    if (byKey.size !== nodes.length) throw new Fail(400, 'Topic keys must be unique.');
-    for (const n of nodes)
-      if (n.parentKey !== null && !byKey.has(n.parentKey))
-        throw new Fail(400, `"${n.name}" points at a missing parent.`);
-
-    // Parents first; anything never reached sits on a cycle.
-    const order: typeof nodes = [];
-    const queue = nodes.filter((n) => n.parentKey === null);
-    while (queue.length) {
-      const n = queue.shift()!;
-      order.push(n);
-      queue.push(...nodes.filter((c) => c.parentKey === n.key));
-    }
-    if (order.length !== nodes.length) throw new Fail(400, 'Topics cannot form a cycle.');
-
-    let roadmapId: number;
-    if (input.roadmapId == null) {
-      const kind = pick(input.kind ?? 'prep', ['prep', 'learn'] as const, 'roadmap kind');
-      // Learn has exactly one roadmap; the unique index backs this up against a race.
-      if (
-        kind === 'learn' &&
-        (await conn.query(`select 1 from interview_roadmaps where kind = 'learn'`)).rowCount
-      )
-        throw new Fail(409, 'The learning roadmap already exists. Edit it instead.');
-      roadmapId = Number(
-        (
-          await conn.query(
-            `insert into interview_roadmaps (name, description, created_by, kind) values ($1, $2, $3, $4) returning id`,
-            [name, desc, actor.id, kind],
-          )
-        ).rows[0].id,
-      );
-    } else {
-      roadmapId = posInt(input.roadmapId, 'roadmap');
-      const r = await conn.query(
-        `update interview_roadmaps set name = $2, description = $3 where id = $1 returning id`,
-        [roadmapId, name, desc],
-      );
-      if (!r.rowCount) throw new Fail(404, 'That roadmap does not exist.');
-    }
-
-    const owned = new Set(
-      (
-        await conn.query(`select id from interview_topics where roadmap_id = $1 for update`, [
-          roadmapId,
-        ])
-      ).rows.map((r) => Number(r.id)),
-    );
-    const dbId = new Map<string, number>();
-    for (const [i, n] of order.entries()) {
-      const parentId = n.parentKey === null ? null : dbId.get(n.parentKey)!;
-      if (n.id !== null) {
-        if (!owned.has(n.id)) throw new Fail(400, `"${n.name}" is not in this roadmap.`);
-        await conn.query(
-          `update interview_topics set name = $2, description = $3, parent_id = $4, x = $5, y = $6, order_index = $7, link = $8 where id = $1`,
-          [n.id, n.name, n.description, parentId, n.x, n.y, i, n.link],
-        );
-        dbId.set(n.key, n.id);
-      } else {
-        const ins = await conn.query(
-          `insert into interview_topics (roadmap_id, name, description, parent_id, x, y, order_index, created_by, link)
-           values ($1, $2, $3, $4, $5, $6, $7, $8, $9) returning id`,
-          [roadmapId, n.name, n.description, parentId, n.x, n.y, i, actor.id, n.link],
-        );
-        dbId.set(n.key, Number(ins.rows[0].id));
-      }
-    }
-    // Problems: only topics that sent a list are touched, and only rows that changed are written.
-    const existing = new Map(
-      (
-        await conn.query(
-          `select p.id, p.topic_id, p.title, p.url, p.difficulty from interview_problems p
-           join interview_topics t on t.id = p.topic_id where t.roadmap_id = $1 for update of p`,
-          [roadmapId],
-        )
-      ).rows.map((r) => [Number(r.id), r]),
-    );
-    const kept = new Set<number>();
-    for (const n of nodes) {
-      if (!n.problems) continue;
-      const topicId = dbId.get(n.key)!;
-      for (const q of n.problems) {
-        if (q.id === null) {
-          await conn.query(
-            `insert into interview_problems (topic_id, title, url, difficulty, created_by) values ($1, $2, $3, $4, $5)`,
-            [topicId, q.title, q.url, q.difficulty, actor.id],
-          );
-          continue;
-        }
-        const old = existing.get(q.id);
-        if (!old || kept.has(q.id)) throw new Fail(400, `“${q.title}” is not in this roadmap.`);
-        kept.add(q.id);
-        if (
-          Number(old.topic_id) !== topicId ||
-          old.title !== q.title ||
-          old.url !== q.url ||
-          old.difficulty !== q.difficulty
-        )
-          await conn.query(
-            `update interview_problems set topic_id = $2, title = $3, url = $4, difficulty = $5 where id = $1`,
-            [q.id, topicId, q.title, q.url, q.difficulty],
-          );
-      }
-    }
-    const listed = new Set(nodes.filter((n) => n.problems).map((n) => n.id));
-    const dropped = [...existing.values()]
-      .filter((r) => listed.has(Number(r.topic_id)) && !kept.has(Number(r.id)))
-      .map((r) => Number(r.id));
-    if (dropped.length)
-      await conn.query(`delete from interview_problems where id = any($1::int[])`, [dropped]);
-    // After the problem moves above. Every kept topic hangs off a kept parent, so this only removes
-    // dropped subtrees (and the problems still in them).
-    await conn.query(
-      `delete from interview_topics where roadmap_id = $1 and id <> all($2::int[])`,
-      [roadmapId, [...dbId.values()]],
-    );
-    await audit(conn, actor, `saved interview roadmap #${roadmapId}: ${name}`);
-    return { roadmapId };
-  });
-}
+};
 
 /** Every problem in a roadmap, for the editor. */
 export async function listInterviewProblems(
@@ -3319,22 +3075,6 @@ export async function listInterviewProblems(
     )
   ).rows;
   return { problems: rows as InterviewProblem[] };
-}
-
-export async function deleteInterviewRoadmap(
-  actorId: string,
-  input: { roadmapId?: unknown },
-): Promise<{ deleted: boolean }> {
-  return tx(async (conn) => {
-    const actor = await roadmapManager(conn, actorId);
-    const roadmapId = posInt(input.roadmapId, 'roadmap');
-    const r = await conn.query(`delete from interview_roadmaps where id = $1 returning name`, [
-      roadmapId,
-    ]);
-    if (!r.rowCount) throw new Fail(404, 'That roadmap does not exist.');
-    await audit(conn, actor, `deleted interview roadmap #${roadmapId}: ${r.rows[0].name}`);
-    return { deleted: true };
-  });
 }
 
 export async function listInterviewTopics(
@@ -3427,308 +3167,6 @@ export async function getInterviewTopicDetail(
   const tips = tipsRes.rows as InterviewTip[];
 
   return { topic, problems, tips };
-}
-
-function parseActorAndInput<T>(
-  a: Db | string,
-  b: string | T,
-  c?: T,
-): { actorId: string; input: T } {
-  if (typeof a === 'string') {
-    return { actorId: a, input: b as T };
-  }
-  return { actorId: b as string, input: c as T };
-}
-
-export async function toggleInterviewProblem(
-  a: Db | string,
-  b: string | { problemId: number | string },
-  c?: { problemId: number | string },
-): Promise<{ problemId: number; solved: boolean }> {
-  const { actorId: userId, input } = parseActorAndInput(a, b, c);
-  const problemId = posInt(input.problemId, 'problem');
-  return tx(async (conn) => {
-    const u = (
-      await conn.query(`select id, system from users where id = $1 and not suspended`, [userId])
-    ).rows[0];
-    if (!u) throw new Fail(401, 'Sign in again.');
-    need(!u.system, 'Operator accounts cannot track progress.');
-    const has =
-      (
-        await conn.query(
-          `select 1 from interview_user_progress where user_id = $1 and problem_id = $2`,
-          [userId, problemId],
-        )
-      ).rowCount! > 0;
-    if (has) {
-      await conn.query(
-        `delete from interview_user_progress where user_id = $1 and problem_id = $2`,
-        [userId, problemId],
-      );
-      return { problemId, solved: false };
-    } else {
-      await conn.query(
-        `insert into interview_user_progress (user_id, problem_id) values ($1, $2) on conflict do nothing`,
-        [userId, problemId],
-      );
-      return { problemId, solved: true };
-    }
-  });
-}
-
-export async function createInterviewTopic(
-  a: Db | string,
-  b: string | { name: string; description?: string; roadmapId?: unknown; parentId?: unknown },
-  c?: { name: string; description?: string; roadmapId?: unknown; parentId?: unknown },
-): Promise<{ success: boolean; topicId: number }> {
-  const { actorId: userId, input } = parseActorAndInput(a, b, c);
-  return tx(async (conn) => {
-    const u = (
-      await conn.query(
-        `select id, role, ${ROLES}, name, system from users where id = $1 and not suspended`,
-        [userId],
-      )
-    ).rows[0];
-    if (!u) throw new Fail(401, 'Sign in again.');
-    const actor: Actor = { id: u.id, role: u.role, roles: u.roles, name: u.name, system: u.system };
-    person(actor);
-    need(
-      canFully(actor.roles, 'interview.topic.create'),
-      'Only the CP head or president can create interview topics.',
-    );
-
-    const name = text(input.name, 2, 80, 'Topic name');
-    const desc = input.description ? text(input.description, 1, 300, 'Description') : null;
-    const roadmapId = posInt(input.roadmapId, 'roadmap');
-    const parentId = input.parentId == null ? null : posInt(input.parentId, 'parent topic');
-    if (parentId !== null) {
-      const p = await conn.query(
-        `select 1 from interview_topics where id = $1 and roadmap_id = $2`,
-        [parentId, roadmapId],
-      );
-      if (!p.rowCount) throw new Fail(404, 'That parent topic is not in this roadmap.');
-    } else {
-      const r = await conn.query(`select 1 from interview_roadmaps where id = $1`, [roadmapId]);
-      if (!r.rowCount) throw new Fail(404, 'That roadmap does not exist.');
-    }
-    const maxOrder =
-      (
-        await conn.query(
-          `select coalesce(max(order_index), 0) as max_ord from interview_topics where roadmap_id = $1`,
-          [roadmapId],
-        )
-      ).rows[0]?.max_ord ?? 0;
-    const ins = await conn.query(
-      `insert into interview_topics (name, description, created_by, order_index, roadmap_id, parent_id) values ($1, $2, $3, $4, $5, $6) returning id`,
-      [name, desc, userId, maxOrder + 1, roadmapId, parentId],
-    );
-    await audit(conn, actor, `created interview topic: ${name}`);
-    return { success: true, topicId: Number(ins.rows[0].id) };
-  });
-}
-
-export async function createInterviewProblem(
-  a: Db | string,
-  b:
-    | string
-    | {
-        topicId?: number | string;
-        topic_id?: number | string;
-        title: string;
-        url: string;
-        difficulty: string;
-      },
-  c?: {
-    topicId?: number | string;
-    topic_id?: number | string;
-    title: string;
-    url: string;
-    difficulty: string;
-  },
-): Promise<{ success: boolean; problemId: number }> {
-  const { actorId: userId, input } = parseActorAndInput(a, b, c);
-  return tx(async (conn) => {
-    const u = (
-      await conn.query(
-        `select id, role, ${ROLES}, name, system from users where id = $1 and not suspended`,
-        [userId],
-      )
-    ).rows[0];
-    if (!u) throw new Fail(401, 'Sign in again.');
-    const actor: Actor = { id: u.id, role: u.role, roles: u.roles, name: u.name, system: u.system };
-    person(actor);
-    need(
-      canFully(actor.roles, 'interview.problem.create'),
-      'Only alumni or admins can add interview problems.',
-    );
-
-    const rawTopicId = input.topicId ?? input.topic_id;
-    const topicId = posInt(rawTopicId, 'topic');
-    const title = text(input.title, 2, 120, 'Title');
-    const url = optionalUrl(input.url, 'Problem URL');
-    if (!url) throw new Fail(400, 'Problem URL is required.');
-    const diff = pick(input.difficulty, ['easy', 'medium', 'hard'] as const, 'difficulty');
-    const topic = (await conn.query(`select id from interview_topics where id = $1`, [topicId]))
-      .rows[0];
-    if (!topic) throw new Fail(404, 'That topic does not exist.');
-
-    const ins = await conn.query(
-      `insert into interview_problems (topic_id, title, url, difficulty, created_by) values ($1, $2, $3, $4, $5) returning id`,
-      [topicId, title, url, diff, userId],
-    );
-    await audit(conn, actor, `added problem to topic #${topicId}: ${title}`);
-    return { success: true, problemId: Number(ins.rows[0].id) };
-  });
-}
-
-export async function deleteInterviewProblem(
-  a: Db | string,
-  b: string | { problemId: number | string },
-  c?: { problemId: number | string },
-): Promise<{ success: boolean; deleted: boolean }> {
-  const { actorId: userId, input } = parseActorAndInput(a, b, c);
-  return tx(async (conn) => {
-    const u = (
-      await conn.query(
-        `select id, role, ${ROLES}, name, system from users where id = $1 and not suspended`,
-        [userId],
-      )
-    ).rows[0];
-    if (!u) throw new Fail(401, 'Sign in again.');
-    const actor: Actor = { id: u.id, role: u.role, roles: u.roles, name: u.name, system: u.system };
-    person(actor);
-    const problemId = posInt(input.problemId, 'problem');
-    const p = (
-      await conn.query(`select id, created_by, title from interview_problems where id = $1`, [
-        problemId,
-      ])
-    ).rows[0];
-    if (!p) throw new Fail(404, 'That problem does not exist.');
-    need(
-      canFully(actor.roles, 'interview.roadmap.manage'),
-      'Only the CP head or president can delete problems.',
-    );
-    await conn.query(`delete from interview_problems where id = $1`, [problemId]);
-    await audit(conn, actor, `deleted interview problem #${problemId}: ${p.title}`);
-    return { success: true, deleted: true };
-  });
-}
-
-export async function createInterviewTip(
-  a: Db | string,
-  b:
-    | string
-    | {
-        topicId?: number | string | null;
-        topic_id?: number | string | null;
-        title: string;
-        body_md: string;
-      },
-  c?: {
-    topicId?: number | string | null;
-    topic_id?: number | string | null;
-    title: string;
-    body_md: string;
-  },
-): Promise<{
-  success: boolean;
-  tipId: number;
-  id: number;
-  author_id: string;
-  author_name: string;
-  title: string;
-  body_md: string;
-}> {
-  const { actorId: userId, input } = parseActorAndInput(a, b, c);
-  return tx(async (conn) => {
-    const u = (
-      await conn.query(
-        `select id, role, ${ROLES}, name, system from users where id = $1 and not suspended`,
-        [userId],
-      )
-    ).rows[0];
-    if (!u) throw new Fail(401, 'Sign in again.');
-    const actor: Actor = { id: u.id, role: u.role, roles: u.roles, name: u.name, system: u.system };
-    person(actor);
-    need(
-      canFully(actor.roles, 'interview.tip.create'),
-      'Only alumni or admins can create interview tips.',
-    );
-
-    const rawTopicId = input.topicId ?? input.topic_id;
-    const topicId = rawTopicId ? posInt(rawTopicId, 'topic') : null;
-    if (topicId) {
-      const topic = (await conn.query(`select id from interview_topics where id = $1`, [topicId]))
-        .rows[0];
-      if (!topic) throw new Fail(404, 'That topic does not exist.');
-    }
-    const title = text(input.title, 2, 140, 'Title');
-    const bodyMd = mdText(input.body_md, 1, 20_000, 'Body');
-
-    const ins = await conn.query(
-      `insert into interview_tips (author_id, topic_id, title, body_md) values ($1, $2, $3, $4) returning id`,
-      [userId, topicId, title, bodyMd],
-    );
-    await audit(conn, actor, `posted interview tip: ${title}`);
-    const tipId = Number(ins.rows[0].id);
-    return {
-      success: true,
-      tipId,
-      id: tipId,
-      author_id: userId,
-      author_name: u.name,
-      title,
-      body_md: bodyMd,
-    };
-  });
-}
-
-export async function deleteInterviewTip(
-  a: Db | string,
-  b: string | { tipId: number | string },
-  c?: { tipId: number | string },
-): Promise<{ success: boolean; deleted: boolean }> {
-  const { actorId: userId, input } = parseActorAndInput(a, b, c);
-  return tx(async (conn) => {
-    const u = (
-      await conn.query(
-        `select id, role, ${ROLES}, name, system from users where id = $1 and not suspended`,
-        [userId],
-      )
-    ).rows[0];
-    if (!u) throw new Fail(401, 'Sign in again.');
-    const actor: Actor = { id: u.id, role: u.role, roles: u.roles, name: u.name, system: u.system };
-    person(actor);
-    const tipId = posInt(input.tipId, 'tip');
-    const tip = (
-      await conn.query(`select id, author_id, title from interview_tips where id = $1`, [tipId])
-    ).rows[0];
-    if (!tip) throw new Fail(404, 'That tip does not exist.');
-    need(
-      tip.author_id === userId || canFully(actor.roles, 'interview.roadmap.manage'),
-      'Only the author or an admin can delete this tip.',
-    );
-    await conn.query(`delete from interview_tips where id = $1`, [tipId]);
-    await audit(conn, actor, `deleted interview tip #${tipId}: ${tip.title}`);
-    return { success: true, deleted: true };
-  });
-}
-
-export async function listInterviewExperiences(db: Db): Promise<{ experiences: InterviewTip[] }> {
-  const rows = (
-    await db.query(
-      `select tip.id, tip.author_id, tip.topic_id, tip.title, tip.body_md, tip.created_at, tip.updated_at,
-         u.name as author_name,
-         coalesce(nullif(u.cf_handle, ''), u.handle) as author_handle,
-         ${face('u')} as author_avatar,
-         coalesce(u.cf_rating, u.rating) as author_rating
-       from interview_tips tip
-       join users u on u.id = tip.author_id
-       where tip.topic_id is null
-       order by tip.created_at desc`,
-    )
-  ).rows;
-  return { experiences: rows as InterviewTip[] };
 }
 
 /* ========================================================================== */
@@ -3924,252 +3362,6 @@ export async function getBlogPost(
     tags: Array.isArray(row.tags) ? row.tags : [],
     read_time_min,
   } as BlogPost;
-}
-
-export async function createBlogPost(
-  a: Db | string,
-  b:
-    | string
-    | {
-        title: string;
-        subtitle?: string | null;
-        excerpt?: string | null;
-        body_md: string;
-        cover_url?: string | null;
-        tags?: string[];
-        slug?: string | null;
-        status?: 'draft' | 'published';
-      },
-  c?: {
-    title: string;
-    subtitle?: string | null;
-    excerpt?: string | null;
-    body_md: string;
-    cover_url?: string | null;
-    tags?: string[];
-    slug?: string | null;
-    status?: 'draft' | 'published';
-  },
-): Promise<{ success: boolean; id: number; slug: string; author_id: string }> {
-  const { actorId: userId, input } = parseActorAndInput(a, b, c);
-  return tx(async (conn) => {
-    const u = (
-      await conn.query(
-        `select id, role, ${ROLES}, name, system from users where id = $1 and not suspended`,
-        [userId],
-      )
-    ).rows[0];
-    if (!u) throw new Fail(401, 'Sign in again.');
-    const actor: Actor = { id: u.id, role: u.role, roles: u.roles, name: u.name, system: u.system };
-    person(actor);
-    need(canFully(actor.roles, 'blog.post.create'), 'Only alumni or admins can write blog posts.');
-
-    const title = text(input.title, 2, 120, 'Title');
-    const subtitle = input.subtitle ? text(input.subtitle, 1, 200, 'Subtitle') : null;
-    const bodyMd = mdText(input.body_md, 1, 50_000, 'Story');
-    const excerpt = input.excerpt
-      ? text(input.excerpt, 1, 280, 'Excerpt')
-      : excerptFromMarkdown(bodyMd, 140);
-    const coverUrl =
-      typeof input.cover_url === 'string' && input.cover_url.trim() ? input.cover_url.trim() : null;
-    const tags = Array.isArray(input.tags)
-      ? input.tags.map((t) => String(t).trim().toLowerCase()).filter(Boolean)
-      : [];
-    const status = pick(input.status ?? 'draft', ['draft', 'published'] as const, 'status');
-    let slug = input.slug
-      ? text(input.slug, 2, 100, 'Slug')
-          .toLowerCase()
-          .replace(/[^a-z0-9-]+/g, '-')
-          .replace(/^-+|-+$/g, '')
-      : '';
-    if (!slug) {
-      slug = title
-        .toLowerCase()
-        .replace(/[^a-z0-9-]+/g, '-')
-        .replace(/^-+|-+$/g, '')
-        .slice(0, 80);
-    }
-    const exists =
-      (await conn.query(`select 1 from blog_posts where slug = $1`, [slug])).rowCount! > 0;
-    if (exists) {
-      slug = `${slug}-${Date.now().toString(36)}`;
-    }
-    const publishedAt = status === 'published' ? new Date() : null;
-
-    const ins = await conn.query(
-      `insert into blog_posts (author_id, slug, title, subtitle, excerpt, body_md, cover_url, tags, status, published_at)
-       values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10) returning id, slug`,
-      [
-        userId,
-        slug,
-        title,
-        subtitle,
-        excerpt,
-        bodyMd,
-        coverUrl,
-        JSON.stringify(tags),
-        status,
-        publishedAt,
-      ],
-    );
-    await audit(conn, actor, `created blog post: ${title} (${status})`);
-    return {
-      success: true,
-      id: Number(ins.rows[0].id),
-      slug: String(ins.rows[0].slug),
-      author_id: userId,
-    };
-  });
-}
-
-export async function updateBlogPost(
-  a: Db | string,
-  b:
-    | string
-    | {
-        id: number | string;
-        title?: string;
-        subtitle?: string | null;
-        excerpt?: string | null;
-        body_md?: string;
-        cover_url?: string | null;
-        tags?: string[];
-        slug?: string;
-        status?: 'draft' | 'published';
-      },
-  c?: {
-    id: number | string;
-    title?: string;
-    subtitle?: string | null;
-    excerpt?: string | null;
-    body_md?: string;
-    cover_url?: string | null;
-    tags?: string[];
-    slug?: string;
-    status?: 'draft' | 'published';
-  },
-): Promise<{ success: boolean; title?: string }> {
-  const { actorId: userId, input } = parseActorAndInput(a, b, c);
-  return tx(async (conn) => {
-    const u = (
-      await conn.query(
-        `select id, role, ${ROLES}, name, system from users where id = $1 and not suspended`,
-        [userId],
-      )
-    ).rows[0];
-    if (!u) throw new Fail(401, 'Sign in again.');
-    const actor: Actor = { id: u.id, role: u.role, roles: u.roles, name: u.name, system: u.system };
-    person(actor);
-    const id = posInt(input.id, 'post');
-    const post = (
-      await conn.query(
-        `select id, author_id, title, status, published_at from blog_posts where id = $1`,
-        [id],
-      )
-    ).rows[0];
-    if (!post) throw new Fail(404, 'That post does not exist.');
-    need(
-      post.author_id === userId || canFully(actor.roles, 'blog.post.delete'),
-      'Only the author or an admin can edit this post.',
-    );
-
-    const title = input.title ? text(input.title, 2, 120, 'Title') : post.title;
-    const subtitle =
-      input.subtitle !== undefined
-        ? input.subtitle
-          ? text(input.subtitle, 1, 200, 'Subtitle')
-          : null
-        : null;
-    const bodyMd = input.body_md ? mdText(input.body_md, 1, 50_000, 'Story') : null;
-    const excerpt =
-      input.excerpt !== undefined
-        ? input.excerpt
-          ? text(input.excerpt, 1, 280, 'Excerpt')
-          : null
-        : bodyMd
-          ? excerptFromMarkdown(bodyMd, 140)
-          : null;
-    const coverUrl =
-      input.cover_url !== undefined
-        ? typeof input.cover_url === 'string' && input.cover_url.trim()
-          ? input.cover_url.trim()
-          : null
-        : undefined;
-    const tags = Array.isArray(input.tags)
-      ? input.tags.map((t) => String(t).trim().toLowerCase()).filter(Boolean)
-      : undefined;
-    const status = input.status
-      ? pick(input.status, ['draft', 'published'] as const, 'status')
-      : undefined;
-    let publishedAt = post.published_at;
-    if (status === 'published' && !publishedAt) {
-      publishedAt = new Date();
-    }
-
-    await conn.query(
-      `update blog_posts set
-         title = coalesce($2, title),
-         subtitle = case when $3::int is null then subtitle else $4 end,
-         excerpt = case when $5::int is null then excerpt else $6 end,
-         body_md = coalesce($7, body_md),
-         cover_url = case when $8::int is null then cover_url else $9 end,
-         tags = case when $10::int is null then tags else $11::jsonb end,
-         status = coalesce($12, status),
-         published_at = coalesce($13, published_at),
-         updated_at = now()
-       where id = $1`,
-      [
-        id,
-        input.title ? title : null,
-        input.subtitle !== undefined ? 1 : null,
-        subtitle,
-        input.excerpt !== undefined || bodyMd ? 1 : null,
-        excerpt,
-        bodyMd,
-        coverUrl !== undefined ? 1 : null,
-        coverUrl,
-        tags !== undefined ? 1 : null,
-        tags ? JSON.stringify(tags) : null,
-        status ?? null,
-        publishedAt ?? null,
-      ],
-    );
-
-    await audit(conn, actor, `updated blog post #${id}: ${title}`);
-    return { success: true, title };
-  });
-}
-
-export async function deleteBlogPost(
-  a: Db | string,
-  b: string | { id: number | string },
-  c?: { id: number | string },
-): Promise<{ success: boolean; deleted: boolean }> {
-  const { actorId: userId, input } = parseActorAndInput(a, b, c);
-  return tx(async (conn) => {
-    const u = (
-      await conn.query(
-        `select id, role, ${ROLES}, name, system from users where id = $1 and not suspended`,
-        [userId],
-      )
-    ).rows[0];
-    if (!u) throw new Fail(401, 'Sign in again.');
-    const actor: Actor = { id: u.id, role: u.role, roles: u.roles, name: u.name, system: u.system };
-    person(actor);
-    const id = posInt(input.id, 'post');
-    const post = (
-      await conn.query(`select id, author_id, title from blog_posts where id = $1`, [id])
-    ).rows[0];
-    if (!post) throw new Fail(404, 'That post does not exist.');
-    need(
-      post.author_id === userId || canFully(actor.roles, 'blog.post.delete'),
-      'Only the author or an admin can delete this post.',
-    );
-
-    await conn.query(`delete from blog_posts where id = $1`, [id]);
-    await audit(conn, actor, `deleted blog post #${id}: ${post.title}`);
-    return { success: true, deleted: true };
-  });
 }
 
 /** The photo in a pending profile change request, for the officers who review it. */

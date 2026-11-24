@@ -86,6 +86,24 @@ export const RULES = {
   cf: /^[\w.-]{3,24}$/,
   photo: /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/,
 };
+/**
+ * A photo upload: a data URL of at most `max` characters whose bytes really are the declared format, so a renamed
+ * HTML or script file is never stored and served back as an image.
+ */
+export function photoOk(v: string, max: number = RECRUIT.photoBytes): boolean {
+  const m =
+    v.length <= max ? /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/.exec(v) : null;
+  if (!m) return false;
+  let head: string;
+  try {
+    head = (globalThis as unknown as { atob(s: string): string }).atob(m[2]!.slice(0, 24));
+  } catch {
+    return false;
+  }
+  if (m[1] === 'png') return head.startsWith('\x89PNG');
+  if (m[1] === 'jpeg') return head.startsWith('\xff\xd8\xff');
+  return head.startsWith('RIFF') && head.slice(8, 12) === 'WEBP';
+}
 export const RULE_TEXT = {
   name: 'Use 2 to 80 letters (spaces, dots, hyphens and apostrophes are fine).',
   sid: 'Use 3 to 30 letters, digits, hyphens or slashes.',
@@ -142,8 +160,7 @@ export function checkApplicant(
   if (!RULES.phone.test(phone)) e.phone = RULE_TEXT.phone;
   if (needPhoto) {
     if (!photo) e.photo = 'Add a photo of your face.';
-    else if (photo.length > RECRUIT.photoBytes || !RULES.photo.test(photo))
-      e.photo = RULE_TEXT.photo;
+    else if (!photoOk(photo)) e.photo = RULE_TEXT.photo;
   }
   if (form.cf && cf && !RULES.cf.test(cf)) e.cf = RULE_TEXT.cf;
   if (why.length > 1000) e.why = 'Keep it under 1000 characters.';

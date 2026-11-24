@@ -22,7 +22,7 @@
  PostgreSQL 16  ── one schema file (apps/api/src/db/schema.sql)
 
  packages/contracts  ── rules and shapes both apps share (roles, capabilities, XP, ranks, AppState, auth schemas)
- packages/content    ── the club's static content (placeholder people, events, sheet, shop…)
+ packages/content    ── the club's static content (placeholder people, events, sheet…)
 ```
 
 The browser never talks to the API directly. Everything goes through the web app's own `/api/*` routes, so
@@ -100,7 +100,7 @@ turns into a problem+json response.
 | Package            | Contains                                                                                                                                                                                                                                            | Used by   |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
 | `@fecpc/contracts` | roles and statuses, the capability matrix (`can`, `canFully`, `isAdmin`, `isCommittee`), XP and levels, Codeforces rank tiers, `AppState` and the other state types, notification wording, error codes and problem+json shape, auth request schemas | both apps |
-| `@fecpc/content`   | `site` (public people, events, certificates, badges), `member-area` (sheet, shop, invoices, announcements, resources), `training` (wiki, templates, contest-day data, volunteer shifts)                                             | both apps |
+| `@fecpc/content`   | `site` (public people, events, certificates, badges), `member-area` (sheet, invoices, announcements, resources), `training` (wiki, templates, contest-day data, volunteer shifts)                                                                   | both apps |
 | `@fecpc/config-*`  | shared ESLint, Prettier and TypeScript settings                                                                                                                                                                                                     | tooling   |
 
 The packages ship TypeScript source. Turbopack compiles them for the web app, esbuild and tsx do it for the
@@ -112,10 +112,10 @@ so they never reach the browser.
 
 ## Outside services
 
-| Service                       | Called from                                                                                                   | Purpose                                                                                           |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Codeforces API                | web `/api/cf/[handle]` (cached 10 min) and API `POST /v1/me/codeforces/sync` (max once per 10 min per member) | profile, rating history, solves; milestones                                                       |
-| VJudge                        | web `/api/vjudge` (cached 30 s)                                                                               | contest standings for contest day; a 502 with a message when VJudge does not answer  |
-| Codeforces contest list       | web `lib/cf.ts`                                                                                               | upcoming contests                                                                                 |
-| Greenhouse / Lever job boards | API `fetchAlumniJobs` query                                                                                   | public job listings for alumni                                                                    |
-| Google / GitHub OAuth         | API `POST /v1/auth/{google,github}`                                                                           | sign-in; the API redeems the code with the client secret                                          |
+| Service                       | Called from                                                                                                   | Purpose                                                                             |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Codeforces API                | web `/api/cf/[handle]` (cached 10 min) and API `POST /v1/me/codeforces/sync` (max once per 10 min per member) | profile, rating history, solves; milestones                                         |
+| VJudge                        | web `/api/vjudge` (cached 30 s)                                                                               | contest standings for contest day; a 502 with a message when VJudge does not answer |
+| Codeforces contest list       | web `lib/cf.ts`                                                                                               | upcoming contests                                                                   |
+| Greenhouse / Lever job boards | API `fetchAlumniJobs` query                                                                                   | public job listings for alumni                                                      |
+| Google / GitHub OAuth         | API `POST /v1/auth/{google,github}`                                                                           | sign-in; the API redeems the code with the client secret                            |

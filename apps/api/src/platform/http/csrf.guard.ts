@@ -29,7 +29,12 @@ export class CsrfGuard implements CanActivate {
     if (req.headers['x-requested-with'] === 'fecpc') return true;
 
     // HTML forms cannot send JSON, so requiring it blocks the classic form-post attack.
-    if (!String(req.headers['content-type'] ?? '').includes('application/json')) {
+    // The essence, not a substring: `text/plain; x=application/json` is a "simple" type any site may send.
+    const type = String(req.headers['content-type'] ?? '')
+      .split(';')[0]!
+      .trim()
+      .toLowerCase();
+    if (type !== 'application/json') {
       throw deny('Missing required security header or content type.');
     }
 

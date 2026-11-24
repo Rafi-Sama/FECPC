@@ -4998,32 +4998,6 @@ select.member-filter-ctrl {
   padding: 6px 0;
 }
 
-.ms-footer {
-  font-family: var(--f-label);
-  font-size: 11px;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--dim);
-  text-align: right;
-  padding-top: 10px;
-  border-top: 1px solid var(--line);
-}
-
-.ms-limit {
-  color: #ff5a1f;
-  font-weight: 700;
-}
-
-.ms-limit-msg {
-  margin-top: 4px;
-  font-family: var(--f-label);
-  font-size: 11px;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: #ff5a1f;
-  font-weight: 700;
-}
-
 /* Alumni, Jobs, Prep & Blogs cards */
 .job-card {
   transition:

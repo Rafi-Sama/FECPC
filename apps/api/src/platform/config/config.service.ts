@@ -20,7 +20,12 @@ export const EnvSchema = z.object({
   RATE_LIMIT_GLOBAL_PER_MIN: z.coerce.number().int().positive().default(300),
 
   DATABASE_URL: z.string().min(1).default('postgres://fecpc:fecpc_dev@127.0.0.1:5433/fecpc'),
-  DB_POOL_MAX: z.coerce.number().int().positive().default(20),
+  // Each serverless instance has its own pool, so a free database's connection limit is shared among many.
+  DB_POOL_MAX: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(process.env.VERCEL ? 5 : 20),
   DB_STATEMENT_TIMEOUT_MS: z.coerce.number().int().positive().default(15000),
   DB_LOCK_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   DB_IDLE_TX_TIMEOUT_MS: z.coerce.number().int().positive().default(30000),
@@ -40,6 +45,13 @@ export const EnvSchema = z.object({
   /** Optional SMTP for acceptance emails, e.g. smtps://user:app-password@smtp.gmail.com:465. */
   SMTP_URL: z.string().optional(),
   MAIL_FROM: z.string().optional(),
+  /**
+   * Set where the API has a public address (Vercel): every request except health and cron must carry it in
+   * X-Proxy-Secret, which only the web app knows (its API_PROXY_SECRET). At least 32 characters.
+   */
+  API_PROXY_SECRET: z.string().min(32).optional(),
+  /** Bearer token for GET /v1/cron (weekly sheet, mail queue). Vercel Cron sends it as CRON_SECRET. */
+  CRON_SECRET: z.string().min(16).optional(),
   /** Optional Cloudflare Turnstile secret; when set, the join form must pass the human check. */
   TURNSTILE_SECRET_KEY: z.string().optional(),
 });

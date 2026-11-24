@@ -71,8 +71,8 @@ password from an invite link, or Google sign-in).
   outcome; a verified payment has a printable receipt.
 - **Expenses.** A committee member files a request. Up to ৳5,000 the Treasurer decides; above it the Treasurer
   can only pass it up and the President decides. Nobody decides their own request.
-- **XP and levels.** Solving, check-ins, wiki reads, posts, kudos and verified payments earn XP
-  (`packages/contracts/src/xp.ts`). XP can be spent in the shop; spending never lowers the level.
+- **XP and levels.** Solving, check-ins, wiki reads, posts, kudos given and received, and verified payments
+  earn XP (`packages/contracts/src/xp.ts`). XP only grows.
 - **Milestones.** Crossing a Codeforces rank, a solved-count threshold or a streak creates a milestone that
-  others can give kudos to (20 per person per day). Stats refresh when a member opens a page that shows their
+  others can give kudos to. Kudos are permanent and count in one lifetime total per member. Stats refresh when a member opens a page that shows their
   Codeforces data (at most every 10 minutes).

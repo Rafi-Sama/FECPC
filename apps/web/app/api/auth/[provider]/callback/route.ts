@@ -1,5 +1,5 @@
 import { cookies } from 'next/headers';
-import { API } from '@/lib/api.ts';
+import { API, toApi } from '@/lib/api.ts';
 
 const NAMES: Record<string, string> = { google: 'Google', github: 'GitHub' };
 
@@ -26,7 +26,7 @@ export async function GET(req: Request, ctx: RouteContext<'/api/auth/[provider]/
   try {
     const res = await fetch(`${API()}/v1/auth/${provider}`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: toApi('', { 'content-type': 'application/json' }),
       body: JSON.stringify({ code }),
       signal: AbortSignal.timeout(25_000),
     });

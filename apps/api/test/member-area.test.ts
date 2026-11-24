@@ -14,15 +14,12 @@ import {
   exportMembers,
   getFeedPostDetail,
   getIdeaDetail,
-  getKudosTodayCount,
   avatar,
   getMemberProfile,
-  kudosMilestone,
   listFeedPosts,
   listFeedReports,
   listIdeas,
   listMembers,
-  listRecentMilestones,
 } from '../src/modules/member-area/actions.ts';
 import { getTeam, lineDiff } from '../src/modules/member-area/teams.ts';
 import { auditQuery } from '../src/modules/member-area/actions.ts';
@@ -39,11 +36,11 @@ import { sha } from '../src/modules/member-area/tokens.ts';
 import { pool, usePool } from '../src/modules/member-area/db.ts';
 import {
   backfillMilestones,
-  DAILY_KUDOS_CAP,
   detectCrossovers,
   syncCodeforces,
   syncUserCodeforcesStats,
   countVjudgeSolved,
+  listRecentMilestones,
 } from '../src/modules/member-area/milestones.ts';
 import { setup } from '../src/db/seed-data.ts';
 import { loadState, today } from '../src/modules/member-area/state.ts';
@@ -54,6 +51,8 @@ process.env.DATABASE_URL = (
 ).replace(/\/[^/]+$/, '/fecpc_test'); // never the development database
 const PW = 'test-password-123';
 const db = () => pool();
+/** An action's answer, for actions that answer with data (the `queries` writes). */
+const does = (who: string, input: Record<string, unknown>) => act(who, input) as Promise<any>;
 
 // The API's real sign-in service, on the same pool as the member-area actions.
 process.env.SMTP_URL = ''; // never send real mail from tests, even when .env.local configures it
@@ -132,12 +131,12 @@ test('auth: expired sessions stop working', async () => {
 });
 test('auth: changing a password signs out every other device', async () => {
   const old = await login('mim@fecpc.example', PW);
-  await refused(401, auth.changePassword('mim', 'not-my-password', 'another-password-1'));
+  await refused(401, auth.changePassword('mim', 'not-my-password', 'another-password-1', ''));
   assert.equal(
     PasswordChangeSchema.safeParse({ currentPassword: PW, newPassword: 'short' }).success,
     false,
   );
-  const fresh = await auth.changePassword('mim', PW, 'another-password-1');
+  const fresh = await auth.changePassword('mim', PW, 'another-password-1', '');
   assert.equal(await sessionUser(old.token), null);
   assert.equal(await sessionUser(fresh), 'mim');
   await refused(401, login('mim@fecpc.example', PW));
@@ -460,7 +459,7 @@ test('contest day: the scoreboard list is chosen by contest.run holders and seen
   await act('nadia', { type: 'contestDay', contests });
   assert.equal(JSON.parse((await st('priya')).s.kv.contests!)[0].id, '612840');
 });
-test('ICPC teams: invite-only joining, own notebook pages, and only the team, its coach or the CP Head see it', async () => {
+test('ICPC teams: invite-only joining, own notebook pages, and only the team, or the CP Head see it', async () => {
   await refused(403, act('admin', { type: 'teamInvite', user: 'shuvo' }));
   await refused(403, act('shuvo', { type: 'teamJoin', from: 'priya' })); // no invitation
   await act('priya', { type: 'teamInvite', user: 'shuvo' });
@@ -542,9 +541,7 @@ test('ICPC teams: invite-only joining, own notebook pages, and only the team, it
   assert.equal((await getTeam(db(), 'nadia', { teamId: id })).team!.mine, false); // the CP Head oversees
   await act('nadia', { type: 'teamRename', teamId: id, name: 'Test Lambdas 2' });
   await refused(403, act('nadia', { type: 'teamNote', topic: 'DSU', code: 'x' })); // and writes only her own pages
-  await refused(403, act('priya', { type: 'teamCoach', teamId: id, user: 'mehedi' }));
-  await act('nadia', { type: 'teamCoach', teamId: id, user: 'mehedi' });
-  assert.equal((await getTeam(db(), 'mehedi', { teamId: id })).team!.name, 'Test Lambdas 2');
+  await refused(403, getTeam(db(), 'mehedi', { teamId: id })); // no coaches: outsiders stay out
 
   await act('priya', { type: 'teamInvite', user: 'imran' });
   await act('priya', { type: 'teamInvite', user: 'mim' });
@@ -823,7 +820,7 @@ test('waivers: requests are gone; a waiver granted earlier still settles its inv
   );
 });
 
-const PHOTO = 'data:image/webp;base64,UklGRg==';
+const PHOTO = 'data:image/webp;base64,' + Buffer.from('RIFF\0\0\0\0WEBPVP8 ').toString('base64');
 const inDays = (n: number) => new Date(Date.now() + n * 864e5).toISOString();
 /** Opens a recruitment link as the Secretary and returns its token. */
 const openLink = async (batch: number, form: unknown = undefined) => {
@@ -1178,22 +1175,11 @@ test('preferences are validated', async () => {
   );
   await refused(400, act('tasnim', { type: 'kv', key: 'note', value: 'x'.repeat(201) }));
   await refused(400, act('tasnim', { type: 'handle', value: 'a b' }));
-  await act('tasnim', { type: 'handle', value: 'tourist' });
+  await refused(409, act('tasnim', { type: 'handle', value: 'tourist' })); // linked: changes go through a request
+  await db().query(`update users set cf_handle = null, handle = '' where id = 'tasnim'`);
+  await refused(400, act('tasnim', { type: 'handle', value: '' })); // nothing to unlink to
+  await act('tasnim', { type: 'handle', value: 'tourist' }); // the first link is direct
   assert.equal((await st('tasnim')).s.handle, 'tourist');
-});
-test('XP shop: needs the XP, once per item, and two simultaneous purchases cannot overspend', async () => {
-  await refused(403, act('tasnim', { type: 'redeem', item: 'Free laptop' }));
-  await refused(409, act('mim', { type: 'redeem', item: 'One-month fee discount' })); // 2,208 XP, costs 4,000
-  await act('tasnim', { type: 'redeem', item: 'Sticker pack' });
-  await refused(409, act('tasnim', { type: 'redeem', item: 'Sticker pack' }));
-  const r = await Promise.allSettled(
-    ['Club T-shirt', 'One-month fee discount'].map((item) =>
-      act('tasnim', { type: 'redeem', item }),
-    ),
-  ); // 2,500 + 4,000 > what is left
-  assert.equal(r.filter((x) => x.status === 'fulfilled').length, 1);
-  const t = await st('tasnim');
-  assert.ok(t.me.xp + earned(t.s) - t.s.spent >= 0);
 });
 test('announcements: posted by officers, seen by everyone, stored as plain text', async () => {
   await refused(403, act('tasnim', { type: 'announce', title: 'Free pizza' }));
@@ -1358,7 +1344,6 @@ test('the operator account is not a member: no ballot, no dues, no purchases', a
       sender: '01712345678',
     }),
   );
-  await refused(403, act('admin', { type: 'redeem', item: 'Sticker pack' }));
   const a = await st('admin');
   assert.equal(a.me.system, true);
   assert.equal(
@@ -1370,8 +1355,8 @@ test('the operator account is not a member: no ballot, no dues, no purchases', a
 test('sign-in limits: per address and per account, so rotating addresses does not help', async () => {
   for (let n = 0; n < 5; n++)
     await refused(401, login('shuvo@fecpc.example', 'wrong-password-' + n, '10.0.0.1'));
-  await refused(429, login('shuvo@fecpc.example', PW, '10.0.0.1')); // 5 from one address
-  for (let n = 0; n < 15; n++)
+  await refused(429, login('shuvo@fecpc.example', PW, '10.0.0.1')); // 5 from one address (this 6th counts too)
+  for (let n = 0; n < 14; n++)
     await refused(401, login('shuvo@fecpc.example', 'wrong-password-' + n, '10.0.1.' + n));
   await refused(429, login('shuvo@fecpc.example', PW, '10.9.9.9')); // 20 for the account, from anywhere
   await db().query(`update login_attempts set window_start = now() - interval '16 minutes'`);
@@ -1643,18 +1628,18 @@ test('members redesign: getMemberProfile privacy, updateProfile, alumni jobs, an
   assert.ok((shahriarProf.jobs_fetched?.length ?? 0) >= 1);
   const posted = shahriarProf.jobs_manual?.find((j) => j.company === 'Pathao');
   assert.ok(posted);
-  await refused(403, act('tasnim', { type: 'deleteAlumniJob', jobId: posted!.id }));
-  await act('shahriar', { type: 'deleteAlumniJob', jobId: posted!.id });
+  await refused(403, does('tasnim', { type: 'deleteAlumniJob', jobId: posted!.id }));
+  await does('shahriar', { type: 'deleteAlumniJob', jobId: posted!.id });
 
-  // Admin actions: makeAlumni, deactivateMember
+  // Admin actions: makeAlumni, suspend
   await refused(403, act('sadia', { type: 'makeAlumni', userId: 'mim' }));
-  await refused(403, act('tanvir', { type: 'deactivateMember', userId: 'tanvir' }));
+  await refused(403, act('tanvir', { type: 'suspend', user: 'tanvir', on: true }));
 
   await act('tanvir', { type: 'makeAlumni', userId: 'mim' });
   assert.equal((await st('mim')).s.role, 'alumni');
   assert.equal((await getMemberProfile(db(), 'tasnim', { userId: 'mim' })).is_alumni, true);
 
-  await act('tanvir', { type: 'deactivateMember', userId: 'mim' });
+  await act('tanvir', { type: 'suspend', user: 'mim', on: true });
   assert.equal(await loadState(db(), 'mim'), null);
   await refused(404, getMemberProfile(db(), 'tasnim', { userId: 'mim' }));
   const afterDeact = await listMembers(db(), 'tasnim', { q: 'Mim' });
@@ -1670,9 +1655,8 @@ test('milestones: backfill, CF sync crossover detection, freshness window, perma
   assert.equal(backfilled.length, 5, 'sidebar hydrates up to 5 recent backfilled milestones');
   assert.equal(await backfillMilestones(db()), 0, 'backfill is idempotent');
 
-  // Hydrated state includes recentMilestones & kudosToday
+  // Hydrated state includes recentMilestones
   const initState = await st('tasnim');
-  assert.equal(initState.counts.kudosToday, 0);
   assert.equal(initState.counts.recentMilestones.length, 5);
 
   // 2. Pure crossover detection for all three types
@@ -1741,38 +1725,35 @@ test('milestones: backfill, CF sync crossover detection, freshness window, perma
   assert.ok((await st('nadia')).s.kudos.includes('member:tasnim'));
 
   // 5. Self-kudos is refused; giving kudos awards +2 XP to owner (NOT giver) + one notification
-  await refused(403, kudosMilestone('tasnim', { milestoneId: tasnimPromo!.id }));
+  await refused(403, does('tasnim', { type: 'kudosMilestone', milestoneId: tasnimPromo!.id }));
 
   const ownerXpBefore = earned((await st('tasnim')).s);
   const giverXpBefore = earned((await st('nadia')).s);
 
-  const k1 = await kudosMilestone('nadia', { milestoneId: tasnimPromo!.id });
+  const k1 = await does('nadia', { type: 'kudosMilestone', milestoneId: tasnimPromo!.id });
   assert.equal(k1.ok, true);
   if (k1.ok) {
     assert.equal(k1.alreadyGiven, false);
     assert.equal(k1.kudosCount, 1);
     assert.equal(k1.hasKudos, true);
-    assert.equal(k1.kudosToday, 1);
   }
 
   // Replaying same milestone kudos is idempotent: no extra count, no extra XP, no duplicate notification
-  const k1Replay = await kudosMilestone('nadia', { milestoneId: tasnimPromo!.id });
+  const k1Replay = await does('nadia', { type: 'kudosMilestone', milestoneId: tasnimPromo!.id });
   assert.equal(k1Replay.ok, true);
   if (k1Replay.ok) {
     assert.equal(k1Replay.alreadyGiven, true);
     assert.equal(k1Replay.kudosCount, 1);
-    assert.equal(k1Replay.kudosToday, 1);
   }
 
   const ownerAfter = await st('tasnim');
   const giverAfter = await st('nadia');
   assert.equal(
     earned(ownerAfter.s) - ownerXpBefore,
-    XP.milestoneKudosReceived,
+    XP.kudosReceived,
     'owner earns +2 XP on first kudos',
   );
   assert.equal(earned(giverAfter.s) - giverXpBefore, 0, 'giver earns 0 XP');
-  assert.equal(giverAfter.counts.kudosToday, 1);
 
   const ownerNotifs = ownerAfter.inbox.filter((n) => n.id === `n:mk:${tasnimPromo!.id}:nadia`);
   assert.equal(ownerNotifs.length, 1, 'exactly one notification per unique giver');
@@ -1788,10 +1769,9 @@ test('milestones: backfill, CF sync crossover detection, freshness window, perma
   assert.equal(otherRow.has_kudos, false);
   assert.deepEqual(otherRow.recent_givers, []);
 
-  // 6. Server-side daily cap enforcement (20/day UTC)
-  // Create 21 distinct milestones for another user so `priya` can hit 20/20 and be blocked on 21st
-  const capIds: number[] = [];
-  for (let i = 1; i <= DAILY_KUDOS_CAP + 1; i++) {
+  // 6. No daily cap: kudos never reset, so 21 in a day all count
+  const many: number[] = [];
+  for (let i = 1; i <= 21; i++) {
     const r = await db().query(
       `insert into milestones (user_id, type, from_value, to_value, threshold)
        values ('farhan', 'contest_streak', $1, $2, $3)
@@ -1799,27 +1779,12 @@ test('milestones: backfill, CF sync crossover detection, freshness window, perma
        returning id`,
       [String(i * 30 - 30), String(i * 30), i * 30],
     );
-    capIds.push(Number(r.rows[0]!.id));
+    many.push(Number(r.rows[0]!.id));
   }
-  for (let i = 0; i < DAILY_KUDOS_CAP; i++) {
-    const res = await kudosMilestone('priya', { milestoneId: capIds[i]! });
-    assert.equal(res.ok, true);
-  }
-  assert.equal(await getKudosTodayCount(db(), 'priya'), DAILY_KUDOS_CAP);
-  assert.equal((await st('priya')).counts.kudosToday, DAILY_KUDOS_CAP);
-
-  // 21st new milestone today must be rejected server-side with DAILY_LIMIT
-  const overCap = await kudosMilestone('priya', { milestoneId: capIds[DAILY_KUDOS_CAP]! });
-  assert.deepEqual(overCap, { ok: false, reason: 'DAILY_LIMIT', kudosToday: DAILY_KUDOS_CAP });
-  await refused(
-    429,
-    act('priya', { type: 'kudosMilestone', milestoneId: capIds[DAILY_KUDOS_CAP]! }),
-  );
-
-  // Replaying an already-given milestone still returns ok: true, alreadyGiven: true
-  const replayAtCap = await kudosMilestone('priya', { milestoneId: capIds[0]! });
-  assert.equal(replayAtCap.ok, true);
-  if (replayAtCap.ok) assert.equal(replayAtCap.alreadyGiven, true);
+  for (const id of many)
+    assert.equal((await does('priya', { type: 'kudosMilestone', milestoneId: id })).ok, true);
+  const replay = await does('priya', { type: 'kudosMilestone', milestoneId: many[0]! });
+  assert.equal(replay.ok && replay.alreadyGiven, true);
 
   // 7. 14-day freshness window & empty state
   await db().query(`update milestones set created_at = now() - interval '15 days'`);
@@ -1830,14 +1795,13 @@ test('milestones: backfill, CF sync crossover detection, freshness window, perma
 
 test('officers cannot act on accounts at or above their rank; suspension blocks sign-in', async () => {
   const reason = 'rank test';
-  await act('admin', { type: 'role', user: 'nusrat', role: 'president', reason });
-  await refused(403, act('tanvir', { type: 'role', user: 'nusrat', role: 'member', reason }));
-  await refused(404, act('tanvir', { type: 'post', user: 'nusrat', post: 'member' }));
-  await refused(404, act('tanvir', { type: 'suspend', user: 'nusrat', on: true }));
-  await refused(404, act('tanvir', { type: 'makeAlumni', userId: 'nusrat' }));
-  await refused(404, act('tanvir', { type: 'deactivateMember', userId: 'nusrat' }));
+  // The President (tanvir) against the Super Admin's account.
+  await refused(403, act('tanvir', { type: 'role', user: 'admin', role: 'member', reason }));
+  await refused(404, act('tanvir', { type: 'post', user: 'admin', post: 'member' }));
+  await refused(404, act('tanvir', { type: 'suspend', user: 'admin', on: true }));
+  await refused(404, act('tanvir', { type: 'makeAlumni', userId: 'admin' }));
   await refused(403, act('rahim', { type: 'role', user: 'tasnim', role: 'member', reason })); // a plain member assigns nothing
-  await act('admin', { type: 'role', user: 'nusrat', role: 'secretary', reason });
+  await act('admin', { type: 'role', user: 'nusrat', role: 'secretary', reason }); // later tests use her as Secretary
 
   await act('tanvir', { type: 'suspend', user: 'imran', on: true });
   await refused(403, login('imran@fecpc.example', PW)); // sign-in sees the suspension
@@ -1891,7 +1855,7 @@ test('codeforces sync: uses the handle stored for the member, never one from the
   }) as typeof fetch;
   try {
     await db().query(
-      `update users set progress = progress || '{"handle":"priya_cf"}' where id = 'priya'`,
+      `update users set cf_handle = 'priya_cf', handle = 'priya_cf' where id = 'priya'`,
     );
     const res = await syncCodeforces(db(), 'priya');
     assert.equal(res?.handle, 'priya_cf');
@@ -1953,7 +1917,7 @@ test('profile: Codeforces rating and solve count never come from a client', asyn
   assert.equal(after.bio, 'hi', 'the rest of the profile still saves');
 });
 
-test('VJudge: Codeforces solves are not counted twice; a new handle starts from zero', async () => {
+test('VJudge: Codeforces solves are not counted twice; a changed handle starts from zero', async () => {
   assert.equal(
     countVjudgeSolved({
       acRecords: { CodeForces: ['1A'], Gym: ['100001A'], UVA: ['100', '100', '101'], SPOJ: ['X'] },
@@ -1966,11 +1930,15 @@ test('VJudge: Codeforces solves are not counted twice; a new handle starts from 
   await db().query(`update users set vj_solved = 40 where id = 'tasnim'`);
   const before = await st('tasnim');
   assert.deepEqual([before.s.vjudge, before.s.vjSolved], ['tasnim_vj', 40]);
-  await act('tasnim', { type: 'vjudge', value: 'tasnim_vj' });
-  assert.equal((await st('tasnim')).s.vjSolved, 40, 'relinking the same handle keeps the count');
-  await act('tasnim', { type: 'vjudge', value: '' });
+  await refused(409, act('tasnim', { type: 'vjudge', value: 'other_vj' })); // changes go through a request
+  await refused(400, act('tasnim', { type: 'vjudge', value: '' })); // never unlinked
+  await refused(
+    400,
+    act('sadia', { type: 'updateProfile', user: 'tasnim', vjudge_handle: '' }), // not even by an officer
+  );
+  await act('sadia', { type: 'updateProfile', user: 'tasnim', vjudge_handle: 'other_vj' });
   const after = await st('tasnim');
-  assert.deepEqual([after.s.vjudge, after.s.vjSolved], ['', 0]);
+  assert.deepEqual([after.s.vjudge, after.s.vjSolved], ['other_vj', 0]);
   assert.equal(before.me.xp - after.me.xp, 40 * 12, 'VJudge solves count toward XP');
 });
 
@@ -1979,6 +1947,15 @@ test('appointPresident: Super Admin only, email re-checked, the old President st
     act(by, { type: 'appointPresident', user, email });
   await refused(403, appoint('tanvir', 'tasnim', 'tasnim@fecpc.example'));
   await refused(404, appoint('admin', 'tasnim', 'anika@fecpc.example')); // email must match the account
+  // One President: `role` neither makes a second one nor removes the current one.
+  await refused(
+    403,
+    act('admin', { type: 'role', user: 'tasnim', role: 'president', reason: 'two' }),
+  );
+  await refused(
+    404,
+    act('admin', { type: 'role', user: 'tanvir', role: 'member', reason: 'none' }),
+  );
   await appoint('admin', 'tasnim', ' Tasnim@FECPC.example ');
   const [t, old] = [await st('tasnim'), await st('tanvir')];
   assert.deepEqual(
@@ -2022,9 +1999,9 @@ test('accounts: reinstating keeps an unjoined account invited; alumni lose their
 test("alumni: availability is the owner's or the President's; jobs are bounded and links are http(s)", async () => {
   await refused(
     403,
-    act('anika', { type: 'setAvailableForQuestions', value: false, alumniId: 'shahriar' }),
+    does('anika', { type: 'setAvailableForQuestions', value: false, alumniId: 'shahriar' }),
   );
-  await act('tanvir', { type: 'setAvailableForQuestions', value: true, alumniId: 'shahriar' });
+  await does('tanvir', { type: 'setAvailableForQuestions', value: true, alumniId: 'shahriar' });
   const job = { type: 'createAlumniJob', company: 'Acme', title: 'SWE', url: 'https://acme.test' };
   await refused(400, act('shahriar', { ...job, company_logo_url: 'javascript:alert(1)' }));
   await refused(400, act('shahriar', { ...job, deadline: 'soon' }));
@@ -2651,7 +2628,18 @@ test('mail: acceptances and event approvals are emailed with the saved designs; 
 test('profile change requests: members ask, officers approve (applied) or reject (with a reason)', async () => {
   const ask = (u: string, changes: object, note?: string) =>
     act(u, { type: 'profileRequest', changes, ...(note ? { note } : {}) });
-  await refused(400, ask('nadia', { cf_handle: 'someone' })); // judge handles are self-service
+  await refused(400, ask('nadia', { cf_handle: '' })); // a judge handle is never removed
+  await refused(400, ask('nadia', { vjudge_handle: 'nadia_vj' })); // not linked yet: she links it herself
+  await refused(409, ask('nadia', { cf_handle: (await st('priya')).s.handle })); // another member's
+  // A linked handle changes on approval only.
+  await ask('nadia', { cf_handle: 'nadia_new' });
+  assert.notEqual((await st('nadia')).s.handle, 'nadia_new');
+  await act('sadia', {
+    type: 'profileRequestDecide',
+    id: (await st('nadia')).profileRequest!.id,
+    to: 'approved',
+  });
+  assert.equal((await st('nadia')).s.handle, 'nadia_new');
   await refused(400, ask('nadia', { phone: '12' }));
   const nadia = await getMemberProfile(db(), 'nadia', { userId: 'nadia' });
   await refused(400, ask('nadia', { name: nadia.name })); // nothing differs

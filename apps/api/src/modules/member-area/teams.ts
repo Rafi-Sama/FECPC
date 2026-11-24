@@ -1,17 +1,13 @@
 // ICPC teams: who is on which team, and each member's own notebook (kept with the person, team or not).
-// Every handler checks its own permission: a team's members act on it; its coach and full `teams.oversee`
-// holders (CP Head and above) may see and rename it. Nobody else reads a team's notebook.
-import { canFully, type Role } from '@fecpc/contracts';
+// Every handler checks its own permission: a team's members act on it; full `teams.oversee` holders (CP Head
+// and above) may see and rename it. Nobody else reads a team's notebook.
+import { canFully } from '@fecpc/contracts';
 import { templates } from '@fecpc/content/training';
 import { Fail, type Db } from './db.ts';
+import { need, ROLES, type Actor, type Handler } from './rules.ts';
 
-type Actor = { id: string; roles: Role[]; name: string; system: boolean };
-type In = Record<string, unknown>;
 export const TEAM_SIZE = 3;
 
-function need(ok: unknown, why = 'Your role cannot do that.'): asserts ok {
-  if (!ok) throw new Fail(403, why);
-}
 const member = (a: Actor) =>
   need(!a.system, 'This is an operator account, not a member. It cannot do that.');
 const line = (v: unknown, max: number, what: string) => {
@@ -32,21 +28,17 @@ export const teamOf = async (c: Db, userId: string): Promise<number | null> =>
   (await c.query(`select team_id from icpc_members where user_id = $1`, [userId])).rows[0]
     ?.team_id ?? null;
 
-/** 'member' for the team's own people, 'staff' for its coach and CP Head and above, else null. */
+/** 'member' for the team's own people, 'staff' for CP Head and above, else null. */
 async function access(c: Db, a: Actor, teamId: number): Promise<'member' | 'staff' | null> {
   const t = (
     await c.query(
-      `select coach, exists (select 1 from icpc_members where team_id = $1 and user_id = $2) as mine
+      `select exists (select 1 from icpc_members where team_id = $1 and user_id = $2) as mine
        from icpc_teams where id = $1`,
       [teamId, a.id],
     )
   ).rows[0];
   if (!t) throw new Fail(404, 'That team does not exist.');
-  return t.mine
-    ? 'member'
-    : t.coach === a.id || canFully(a.roles, 'teams.oversee')
-      ? 'staff'
-      : null;
+  return t.mine ? 'member' : canFully(a.roles, 'teams.oversee') ? 'staff' : null;
 }
 const log = (c: Db, teamId: number, a: Actor, what: string) =>
   c.query(`insert into icpc_log (team_id, user_id, what) values ($1, $2, $3)`, [
@@ -86,15 +78,12 @@ export function lineDiff(before: string, after: string): [number, number] {
   return [plus, [...left.values()].reduce((a, b) => a + b, 0)];
 }
 
-export const teamHandlers: Record<
-  string,
-  (c: Db, a: Actor, p: unknown, i: In) => Promise<string | void>
-> = {
+export const teamHandlers: Record<string, Handler> = {
   async teamRename(c, a, _p, i) {
     const id = i.teamId === undefined ? await mine(c, a) : Number(i.teamId);
     need(
       Number.isInteger(id) && (await access(c, a, id)),
-      'Only the team, its coach or the CP Head can rename it.',
+      'Only the team or the CP Head can rename it.',
     );
     const name = teamName(i.name);
     const r = await c.query(
@@ -261,42 +250,12 @@ export const teamHandlers: Record<
       owner === a.id ? null : a.id,
     ]);
   },
-  async teamCoach(c, a, _p, i) {
-    need(canFully(a.roles, 'teams.oversee'), 'Only the CP Head assigns coaches.');
-    const id = Number(i.teamId),
-      coach = i.user ? String(i.user) : null;
-    if (coach)
-      need(
-        (
-          await c.query(`select 1 from users where id = $1 and not system and not suspended`, [
-            coach,
-          ])
-        ).rowCount,
-        'That member does not exist.',
-      );
-    const r = await c.query(
-      `update icpc_teams set coach = $2 where id = $1 returning name, (select name from users where id = $2) as coach`,
-      [id, coach],
-    );
-    if (!r.rows[0]) throw new Fail(404, 'That team does not exist.');
-    await c.query(`insert into audit (who, what) values ($1, $2)`, [
-      a.name,
-      r.rows[0].coach
-        ? `assigned ${r.rows[0].coach} as coach of team ${r.rows[0].name}`
-        : `removed the coach of team ${r.rows[0].name}`,
-    ]);
-    await log(c, id, a, coach ? 'assigned a coach' : 'removed the coach');
-  },
 };
 
-/** One team for the teams page: the viewer's own, or (`teamId`) one they coach or oversee. */
+/** One team for the teams page: the viewer's own, or (`teamId`) one they oversee. */
 export async function getTeam(db: Db, userId: string, input: { teamId?: unknown }) {
-  const a = (
-    await db.query(
-      `select id, system, array_prepend(role, coalesce((select pr.roles from post_roles pr where pr.post = users.post), '{}')) as roles from users where id = $1`,
-      [userId],
-    )
-  ).rows[0] as Actor;
+  const a = (await db.query(`select id, system, ${ROLES} from users where id = $1`, [userId]))
+    .rows[0] as Actor;
   const oversee = canFully(a.roles, 'teams.oversee');
   const own = await teamOf(db, userId);
   const id = input.teamId === undefined || input.teamId === null ? own : Number(input.teamId);
@@ -331,8 +290,8 @@ export async function getTeam(db: Db, userId: string, input: { teamId?: unknown 
     await db.query(
       `select t.id, t.name, count(m.user_id)::int as size from icpc_teams t
        left join icpc_members m on m.team_id = t.id
-       where $1 or t.coach = $2 group by t.id order by t.name`,
-      [oversee, userId],
+       where $1 group by t.id order by t.name`,
+      [oversee],
     )
   ).rows as { id: number; name: string; size: number }[];
   if (!id || !Number.isInteger(id))
@@ -345,12 +304,9 @@ export async function getTeam(db: Db, userId: string, input: { teamId?: unknown 
       ...(await notebooks(db, [userId], null)),
     };
   const how = await access(db, a, id);
-  need(how, 'Only the team, its coach or the CP Head can open it.');
+  need(how, 'Only the team or the CP Head can open it.');
   const [team, members, pool] = await Promise.all([
-    db.query(
-      `select t.id, t.name, t.coach, c.name as coach_name from icpc_teams t left join users c on c.id = t.coach where t.id = $1`,
-      [id],
-    ),
+    db.query(`select t.id, t.name from icpc_teams t where t.id = $1`, [id]),
     db.query(
       `select u.id, u.name, u.handle from icpc_members m join users u on u.id = m.user_id where m.team_id = $1 order by u.name`,
       [id],

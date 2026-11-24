@@ -8,7 +8,6 @@ export function MilestoneRow({
   milestone,
   isOwner,
   isSystem,
-  atDailyCap,
   pending = false,
   onGiveKudos,
   onOpenMember,
@@ -16,7 +15,6 @@ export function MilestoneRow({
   milestone: MilestoneDTO;
   isOwner: boolean;
   isSystem: boolean;
-  atDailyCap: boolean;
   pending?: boolean;
   onGiveKudos: (milestoneId: number) => void;
   onOpenMember: (userId: string, trigger?: HTMLElement | null) => void;
@@ -68,14 +66,14 @@ export function MilestoneRow({
       );
     }
 
-    if (isSystem || atDailyCap) {
+    if (isSystem) {
       return (
         <button
           type="button"
           className="btn xs line ms-kudos-btn"
           disabled
-          title={isSystem ? 'Operator accounts cannot give kudos' : 'Daily limit reached'}
-          aria-label={isSystem ? 'Cannot give kudos' : 'Daily limit reached'}
+          title="Operator accounts cannot give kudos"
+          aria-label="Cannot give kudos"
         >
           Kudos{milestone.kudos_count > 0 && ` ${milestone.kudos_count}`}
         </button>

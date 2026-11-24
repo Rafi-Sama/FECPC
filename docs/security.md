@@ -70,22 +70,28 @@ accepted. Browsers can only send it from an allowed origin, because CORS preflig
 
 `modules/auth/login-throttling.service.ts`
 
-Failed sign-ins within 15 minutes: at most **5 per (email, address)**, **20 per email** from anywhere, **50 per
-address** across all emails. Over the limit: `429`, even for the right password. A successful sign-in clears its
-(email, address) counter. Each counter restarts its window once the old one has passed.
+Sign-in attempts within 15 minutes: at most **5 per (email, address)**, **20 per email** from anywhere, **50 per
+address** across all emails. Over the limit: `429`, even for the right password. Each attempt is counted before
+its password is checked, so parallel guesses cannot all slip past the limit; a refused attempt counts too. A
+successful sign-in clears its (email, address) counter. Each counter restarts its window once the old one has passed. A wrong current
+password in **Change password** counts the same way, so a stolen session cannot be used to guess the password.
 
 The client address is only trusted from the configured number of proxy hops (`TRUST_PROXY` in the API). The web
 app forwards the browser's address only when its own `TRUST_PROXY=1`. If those are wrong, every request seems to
 come from one address. The per-email limit still applies, but the per-address limit then works against
-everyone at once. See [Deployment](deployment.md).
+everyone at once. See [Deployment](deployment.md). The web app's own server-side calls (`serverState`,
+`serverQuery`) forward the visitor's address the same way, so server-rendered pages are counted per visitor in
+the API's global rate limit, not all under the web server's address.
 
 There is also a global limit of `RATE_LIMIT_GLOBAL_PER_MIN` (300) requests per minute per address on every
-route.
+route, and each member may make at most 120 changes a minute and 3000 a day (`throttleWrites` in `act()`, which
+every write passes through), so one account cannot flood the club with posts.
 
 The public recruitment form (`POST /v1/applications`) only accepts a known, open link token, re-checks every
-field with the shared `checkApplicant` (photos must be PNG, JPEG or WebP data URLs), and has a honeypot field (`website`: filled means a bot,
+field with the shared `checkApplicant` (photos must be PNG, JPEG or WebP data URLs whose bytes really are that
+format: `photoOk`, also used for profile photos and event banners), and has a honeypot field (`website`: filled means a bot,
 which gets a fake success), a limit of 10 applications per client address per hour (counted in the database
-by hashed address), and, when `TURNSTILE_SECRET_KEY` is set, a Cloudflare Turnstile check. An application
+by hashed address, under a per-address lock so parallel posts cannot all pass the count), and, when `TURNSTILE_SECRET_KEY` is set, a Cloudflare Turnstile check. An application
 gives no sign-in: the account exists only after a President or Secretary accepts it.
 
 ## Input and output
@@ -97,8 +103,15 @@ gives no sign-in: the account exists only after a President or Secretary accepts
 - Every stored URL (profile links, job links and logos, blog covers, prep problems) must be `http(s)://`;
   markdown links render only for `http(s)://` and site-relative URLs. No component renders raw HTML.
 - Markdown and text are stored as plain text and rendered by React, which escapes them.
-- Errors are problem+json with a safe `detail`. Unexpected errors log the details server-side and answer a
-  generic 500.
+- Errors are problem+json with a safe `detail`. A value Postgres cannot hold (out-of-range number, NUL byte;
+  error class `22`) answers 400; lock and statement timeouts answer 503. Unexpected errors log the details
+  server-side and answer a generic 500.
+- The web app sends security headers on every response (`apps/web/next.config.ts`): a Content-Security-Policy
+  (scripts only from the site and Turnstile, no framing, no `<base>` or off-site form targets, no plugins),
+  `X-Frame-Options: DENY`, `nosniff`, HSTS, a strict referrer policy. The CSP has no nonce, so pages stay
+  static; inline scripts are allowed for Next's hydration data.
+- The CSRF check compares the content type's essence: `text/plain; x=application/json` is not JSON.
+- HTML previews (mail, certificates) render in `sandbox=""` iframes, which run no scripts.
 - The member CSV export neutralises spreadsheet formulas (`= + - @` prefixes) and contains no emails.
 - Logs redact cookies, authorization headers, passwords, tokens, transaction IDs and phone numbers.
 
@@ -106,9 +119,10 @@ gives no sign-in: the account exists only after a President or Secretary accepts
 
 - Codeforces stats (rating, solves, streak) are fetched by the server for the member's own stored handle
   (`POST /v1/me/codeforces/sync`). Members cannot set them through the profile.
-- The web app's `/api/cf/[handle]` and `/api/vjudge` only read public data, validate the identifier (handle
-  pattern; numeric contest ID), use fixed hosts and time out after 6–10 s. They are cached to avoid hammering
-  the judges.
+- The web app's `/api/cf/[handle]` and `/api/vjudge` answer signed-in members only (`signedIn` asks the API's
+  `GET /v1/auth/session`), so nobody else can use the server to hammer the judges or fill its cache. They only
+  read public data, validate the identifier (handle pattern; numeric contest ID), use fixed hosts and time out
+  after 6–10 s, and are cached.
 - Outside job boards: the slug is validated, the hosts are fixed, and at most 5 boards per request.
 
 ## Production checklist
@@ -116,7 +130,12 @@ gives no sign-in: the account exists only after a President or Secretary accepts
 - `APP_ENV=production` (Secure `__Host-` cookie) and HTTPS everywhere.
 - `CORS_ORIGINS` = the public origin(s) only. `APP_PUBLIC_URL` = the public origin.
 - `TRUST_PROXY` correct on both apps (see [Deployment](deployment.md)).
-- Keep the API on a private network: only the web app needs to reach it.
+- Keep the API on a private network: only the web app needs to reach it. It listens on `HOST=0.0.0.0` by
+  default and trusts `X-Forwarded-For` from one hop, so if its port is public anyone can pick their own
+  address and sidestep every per-address limit. Firewall it, or set `HOST=127.0.0.1` when both apps share a
+  machine. Where it must be public (Vercel), set `API_PROXY_SECRET` on both apps: the API then answers 404 to
+  any request without it (except `/health` and `/v1/cron`, which checks `CRON_SECRET`), and takes the client
+  address only from the web app's `X-Client-Ip`. The secret is compared in constant time and redacted from logs.
 - Strong database credentials. Run `pnpm db:migrate` with an account that can create tables; the API itself
   only needs read and write access.
 - Remove or replace the seeded placeholder accounts. Never seed production with a guessable `SEED_PASSWORD`.

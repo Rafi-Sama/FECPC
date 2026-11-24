@@ -50,6 +50,12 @@ export class AuthController {
     return { user: result.user };
   }
 
+  /** 200 for a live, unsuspended session (the global AuthGuard checks it). Web routes that do their own work use it. */
+  @Get('session')
+  session() {
+    return { ok: true };
+  }
+
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   async logout(@Req() req: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply) {
@@ -83,12 +89,14 @@ export class AuthController {
   async changePassword(
     @CurrentUser() user: RequestUser,
     @Body(new ZodValidationPipe(PasswordChangeSchema)) body: PasswordChange,
+    @Req() req: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ) {
     const token = await this.authService.changePassword(
       user.id,
       body.currentPassword,
       body.newPassword,
+      req.ip,
     );
     this.setSession(reply, token);
     return { ok: true };

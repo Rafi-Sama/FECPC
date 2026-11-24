@@ -1076,3 +1076,12 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_key text
 ALTER TABLE club_events ADD COLUMN IF NOT EXISTS banner_key text
   GENERATED ALWAYS AS (CASE WHEN banner LIKE 'data:%' THEN left(md5(banner), 10) END) STORED;
 CREATE INDEX IF NOT EXISTS feed_posts_user ON feed_posts (user_id);
+
+-- When the member last asked for a Codeforces/VJudge sync: the once-a-minute throttle, shared by every API instance.
+alter table users add column if not exists judge_synced_at timestamptz;
+
+-- Per-member write cap (throttleWrites in member-area/actions.ts): changes this minute and today. On the row
+-- act() already locks, so every API instance (serverless included) shares the count.
+alter table users add column if not exists writes_at  timestamptz;
+alter table users add column if not exists writes_min int not null default 0;
+alter table users add column if not exists writes_day int not null default 0;

@@ -7,6 +7,7 @@
 import nodemailer, { type Transporter } from 'nodemailer';
 import { can, checkMailTemplate, MAIL_SAMPLE, renderMail, type Role } from '@fecpc/contracts';
 import { Fail, pool, tx, type Db } from './db.ts';
+import { audit, type Handler } from './rules.ts';
 
 /** Gmail's free limit is about 500 a day; the default leaves room for the account's everyday mail. */
 export const mailLimit = () => {
@@ -173,13 +174,9 @@ export async function mailStatus(db: Db) {
   };
 }
 
-type Actor = { id: string; roles: Role[]; name: string };
 const sender = (roles: Role[]) => can(roles, 'application.approve') || can(roles, 'event.publish');
 
-export const mailHandlers: Record<
-  string,
-  (c: Db, a: Actor, p: unknown, i: Record<string, unknown>) => Promise<string | void>
-> = {
+export const mailHandlers: Record<string, Handler> = {
   /** Sends the template being edited, filled with sample values, to the officer's own address. */
   async mailTest(c, a, _p, i) {
     if (!sender(a.roles)) throw new Fail(403, 'Your role does not send club email.');
@@ -203,10 +200,7 @@ export const mailHandlers: Record<
       `update mail_queue set status = 'queued', attempts = 0, error = null, next_at = now()
        where status = 'failed' and html is not null and (expires_at is null or expires_at > now())`,
     );
-    await c.query(`insert into audit (who, what) values ($1, $2)`, [
-      a.name,
-      `retried ${r.rowCount} failed email${r.rowCount === 1 ? '' : 's'}`,
-    ]);
+    await audit(c, a, `retried ${r.rowCount} failed email${r.rowCount === 1 ? '' : 's'}`);
     return r.rowCount
       ? `${r.rowCount} email${r.rowCount === 1 ? '' : 's'} back in the queue.`
       : 'Nothing to retry: the rest would arrive too late. Send those people a new link instead.';

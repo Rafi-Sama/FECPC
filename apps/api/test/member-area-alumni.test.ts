@@ -3,30 +3,15 @@ import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import {
   act,
-  createAlumniJob,
-  createBlogPost,
-  createInterviewProblem,
-  createInterviewTip,
-  createInterviewTopic,
-  deleteAlumniJob,
   fetchAlumniJobs,
-  deleteBlogPost,
-  deleteInterviewRoadmap,
-  deleteInterviewTip,
   getBlogPost,
   getInterviewTopicDetail,
   listAlumni,
   listAlumniJobs,
   listBlogPosts,
-  listInterviewExperiences,
   listInterviewProblems,
   listInterviewTopics,
-  saveAlumni,
-  saveInterviewRoadmap,
   listInterviewRoadmaps,
-  setAvailableForQuestions,
-  toggleInterviewProblem,
-  updateBlogPost,
 } from '../src/modules/member-area/actions.ts';
 import { Fail, pool } from '../src/modules/member-area/db.ts';
 import { setup } from '../src/db/seed-data.ts';
@@ -36,6 +21,8 @@ process.env.DATABASE_URL = (
 ).replace(/\/[^/]+$/, '/fecpc_test');
 const PW = 'test-password-123';
 const db = () => pool();
+/** An action's answer, for actions that answer with data (the `queries` writes). */
+const does = (who: string, input: Record<string, unknown>) => act(who, input) as Promise<any>;
 const refused = (status: number, p: Promise<unknown>) =>
   assert.rejects(
     p,
@@ -68,22 +55,23 @@ test('alumni directory: listing, filtering, availability toggle & saving', async
 
   // Save / Unsave
   assert.equal(resSearch.alumni[0]!.saved, false);
-  const saveRes1 = await saveAlumni(db(), 'tasnim', { alumniId: 'shahriar' });
+  const saveRes1 = await does('tasnim', { type: 'saveAlumni', alumniId: 'shahriar' });
   assert.equal(saveRes1.saved, true);
 
   const resAfterSave = await listAlumni(db(), 'tasnim', { q: 'Northwind' });
   assert.equal(resAfterSave.alumni[0]!.saved, true);
 
-  const saveRes2 = await saveAlumni(db(), 'tasnim', { alumniId: 'shahriar' });
+  const saveRes2 = await does('tasnim', { type: 'saveAlumni', alumniId: 'shahriar' });
   assert.equal(saveRes2.saved, false);
 
   // Availability toggle: non-owner/non-admin refused
   await refused(
     403,
-    setAvailableForQuestions(db(), 'tasnim', { userId: 'shahriar', available: false }),
+    does('tasnim', { type: 'setAvailableForQuestions', userId: 'shahriar', available: false }),
   );
   // Owner can toggle
-  const availRes = await setAvailableForQuestions(db(), 'shahriar', {
+  const availRes = await does('shahriar', {
+    type: 'setAvailableForQuestions',
     userId: 'shahriar',
     available: false,
   });
@@ -91,7 +79,7 @@ test('alumni directory: listing, filtering, availability toggle & saving', async
   const checkShahriar = await listAlumni(db(), 'tasnim', { q: 'shahriar' });
   assert.equal(checkShahriar.alumni[0]!.available_for_questions, false);
   // Restore
-  await setAvailableForQuestions(db(), 'shahriar', { userId: 'shahriar', available: true });
+  await does('shahriar', { type: 'setAvailableForQuestions', userId: 'shahriar', available: true });
 });
 
 test('alumni jobs: listing, filters, create with validation & live preview schema', async () => {
@@ -110,7 +98,8 @@ test('alumni jobs: listing, filters, create with validation & live preview schem
   // Create job: permission check (regular member refused)
   await refused(
     403,
-    createAlumniJob(db(), 'tasnim', {
+    does('tasnim', {
+      type: 'createAlumniJob',
       company: 'Test Corp',
       role: 'Junior Dev',
       location: 'Dhaka',
@@ -120,7 +109,8 @@ test('alumni jobs: listing, filters, create with validation & live preview schem
   );
 
   // Alumni can post job
-  const newJob = await createAlumniJob(db(), 'shahriar', {
+  const newJob = await does('shahriar', {
+    type: 'createAlumniJob',
     company: 'TestCorp',
     role: 'Senior React Engineer',
     title: 'Senior React Engineer',
@@ -145,12 +135,12 @@ test('alumni jobs: listing, filters, create with validation & live preview schem
   assert.equal(jobsView.jobs[0]!.mine, false);
 
   // Delete job: non-owner refused
-  await refused(403, deleteAlumniJob(db(), 'tasnim', { jobId: newJob.id }));
+  await refused(403, does('tasnim', { type: 'deleteAlumniJob', jobId: newJob.id }));
   // Admin-panel officers (here the Treasurer) get no say over listings; the matrix gives it to the President.
-  await refused(403, deleteAlumniJob(db(), 'anika', { jobId: newJob.id }));
+  await refused(403, does('anika', { type: 'deleteAlumniJob', jobId: newJob.id }));
   await refused(403, fetchAlumniJobs(db(), 'anika', { userId: 'shahriar' }));
   // Owner deletes
-  const delRes = await deleteAlumniJob(db(), 'shahriar', { jobId: newJob.id });
+  const delRes = await does('shahriar', { type: 'deleteAlumniJob', jobId: newJob.id });
   assert.equal(delRes.deleted, true);
 });
 
@@ -170,22 +160,19 @@ test('interview prep: topics, tree progress, problems, tips & experiences', asyn
   const initialSolved = prob.solved;
 
   // Toggle problem solve status
-  const toggled = await toggleInterviewProblem(db(), 'tasnim', { problemId: prob.id });
+  const toggled = await does('tasnim', { type: 'toggleInterviewProblem', problemId: prob.id });
   assert.equal(toggled.solved, !initialSolved);
 
   // Detail reflects updated solved_count
   const detailAfter = await getInterviewTopicDetail(db(), 'tasnim', { topicId: dsa!.id });
   assert.equal(detailAfter.topic.solvedCount, detail.topic.solvedCount + (toggled.solved ? 1 : -1));
 
-  // Regular member cannot create problem or topic
+  // Regular member cannot create a problem
   await refused(
     403,
-    createInterviewTopic(db(), 'tasnim', { name: 'Graphs Topic', description: 'All about graphs' }),
-  );
-  await refused(
-    403,
-    createInterviewProblem(db(), 'tasnim', {
-      topic_id: dsa!.id,
+    does('tasnim', {
+      type: 'createInterviewProblem',
+      topicId: dsa!.id,
       title: 'Graph Cycle',
       url: 'https://leetcode.com/1',
       difficulty: 'medium',
@@ -193,23 +180,24 @@ test('interview prep: topics, tree progress, problems, tips & experiences', asyn
   );
 
   // Alumni can create tip
-  const newTip = await createInterviewTip(db(), 'shahriar', {
-    topic_id: dsa!.id,
+  const newTip = await does('shahriar', {
+    type: 'createInterviewTip',
+    topicId: dsa!.id,
     title: 'How to approach two pointer problems',
     body_md: 'Start by sorting if array is not sorted...',
   });
-  assert.equal(newTip.author_name, 'Shahriar Kabir');
+  assert.equal(
+    (await db().query(`select author_id from interview_tips where id = $1`, [newTip.id])).rows[0]
+      .author_id,
+    'shahriar',
+  );
 
   // Non-owner cannot delete tip
-  await refused(403, deleteInterviewTip(db(), 'tasnim', { tipId: newTip.id }));
-  await refused(403, deleteInterviewTip(db(), 'anika', { tipId: newTip.id }));
+  await refused(403, does('tasnim', { type: 'deleteInterviewTip', tipId: newTip.id }));
+  await refused(403, does('anika', { type: 'deleteInterviewTip', tipId: newTip.id }));
   // Owner can delete tip
-  const delTip = await deleteInterviewTip(db(), 'shahriar', { tipId: newTip.id });
+  const delTip = await does('shahriar', { type: 'deleteInterviewTip', tipId: newTip.id });
   assert.equal(delTip.deleted, true);
-
-  // List interview experiences
-  const exps = await listInterviewExperiences(db());
-  assert.ok(exps.experiences.length >= 1, 'seeded experiences exist');
 });
 
 test('interview roadmaps: CP head and president CRUD a topic tree', async () => {
@@ -218,10 +206,11 @@ test('interview roadmaps: CP head and president CRUD a topic tree', async () => 
     { key: 'a', parentKey: 'r', name: 'Arrays', x: 0, y: 180 },
     { key: 'b', parentKey: 'r', name: 'Strings', x: 400, y: 180 },
   ];
-  await refused(403, saveInterviewRoadmap('tasnim', { name: 'Mine', topics: tree }));
+  await refused(403, does('tasnim', { type: 'saveInterviewRoadmap', name: 'Mine', topics: tree }));
   await refused(
     400,
-    saveInterviewRoadmap('nadia', {
+    does('nadia', {
+      type: 'saveInterviewRoadmap',
       name: 'Loop',
       topics: [
         { key: 'x', parentKey: 'y', name: 'One' },
@@ -231,14 +220,19 @@ test('interview roadmaps: CP head and president CRUD a topic tree', async () => 
   );
 
   // Two children under one root.
-  const { roadmapId } = await saveInterviewRoadmap('nadia', { name: 'Warm-up', topics: tree });
+  const { roadmapId } = await does('nadia', {
+    type: 'saveInterviewRoadmap',
+    name: 'Warm-up',
+    topics: tree,
+  });
   const first = (await listInterviewTopics(db(), 'tasnim', { roadmapId })).topics;
   const id = (n: string) => first.find((t) => t.name === n)!.id;
   assert.equal(first.length, 3);
   assert.equal(first.filter((t) => t.parent_id === id('Basics')).length, 2);
 
   // President edits: rename root, drop Arrays, hang a new topic under Strings.
-  await saveInterviewRoadmap('tanvir', {
+  await does('tanvir', {
+    type: 'saveInterviewRoadmap',
     roadmapId,
     name: 'Warm-up',
     topics: [
@@ -254,7 +248,8 @@ test('interview roadmaps: CP head and president CRUD a topic tree', async () => 
   // Topic ids from another roadmap are refused.
   await refused(
     400,
-    saveInterviewRoadmap('nadia', {
+    does('nadia', {
+      type: 'saveInterviewRoadmap',
       roadmapId,
       name: 'Warm-up',
       topics: [{ key: 'z', id: 1, parentKey: null, name: 'Stolen' }],
@@ -277,7 +272,8 @@ test('interview roadmaps: CP head and president CRUD a topic tree', async () => 
   ];
   await refused(
     400,
-    saveInterviewRoadmap('nadia', {
+    does('nadia', {
+      type: 'saveInterviewRoadmap',
       roadmapId,
       name: 'Warm-up',
       topics: tree3({
@@ -286,7 +282,8 @@ test('interview roadmaps: CP head and president CRUD a topic tree', async () => 
       }),
     }),
   );
-  await saveInterviewRoadmap('nadia', {
+  await does('nadia', {
+    type: 'saveInterviewRoadmap',
     roadmapId,
     name: 'Warm-up',
     topics: tree3({
@@ -308,7 +305,7 @@ test('interview roadmaps: CP head and president CRUD a topic tree', async () => 
   let probs = (await listInterviewProblems(db(), { roadmapId })).problems;
   assert.equal(probs.length, 2);
   const anagram = probs.find((q) => q.title === 'Valid Anagram')!;
-  await toggleInterviewProblem(db(), 'tasnim', { problemId: anagram.id });
+  await does('tasnim', { type: 'toggleInterviewProblem', problemId: anagram.id });
   const topics3 = (await listInterviewTopics(db(), 'tasnim', { roadmapId })).topics;
   assert.equal(
     topics3.find((t) => t.name === 'Strings')!.link,
@@ -316,7 +313,8 @@ test('interview roadmaps: CP head and president CRUD a topic tree', async () => 
   );
 
   // Edit one in place and move it to Tries, drop the other: progress survives the edit.
-  await saveInterviewRoadmap('tanvir', {
+  await does('tanvir', {
+    type: 'saveInterviewRoadmap',
     roadmapId,
     name: 'Warm-up',
     topics: tree3({
@@ -337,7 +335,8 @@ test('interview roadmaps: CP head and president CRUD a topic tree', async () => 
   // Someone else's problem id is refused.
   await refused(
     400,
-    saveInterviewRoadmap('nadia', {
+    does('nadia', {
+      type: 'saveInterviewRoadmap',
       roadmapId,
       name: 'Warm-up',
       topics: tree3({
@@ -347,8 +346,8 @@ test('interview roadmaps: CP head and president CRUD a topic tree', async () => 
     }),
   );
 
-  await refused(403, deleteInterviewRoadmap('tasnim', { roadmapId }));
-  await deleteInterviewRoadmap('nadia', { roadmapId });
+  await refused(403, does('tasnim', { type: 'deleteInterviewRoadmap', roadmapId }));
+  await does('nadia', { type: 'deleteInterviewRoadmap', roadmapId });
   assert.equal((await listInterviewTopics(db(), 'tasnim', { roadmapId })).topics.length, 0);
 });
 
@@ -367,7 +366,8 @@ test('blog posts: create, read, update, tags filter, delete & permissions', asyn
   // Regular member cannot create blog post
   await refused(
     403,
-    createBlogPost(db(), 'tasnim', {
+    does('tasnim', {
+      type: 'createBlogPost',
       title: 'My Journey',
       body_md: 'Here is my story...',
       tags: ['Career'],
@@ -375,7 +375,8 @@ test('blog posts: create, read, update, tags filter, delete & permissions', asyn
   );
 
   // Alumni can create blog post
-  const created = await createBlogPost(db(), 'shahriar', {
+  const created = await does('shahriar', {
+    type: 'createBlogPost',
     title: '10 Lessons From 5 Years in Big Tech',
     subtitle: 'What school never taught me',
     body_md: '# Introduction\n\nSoftware engineering in practice is about people and trade-offs.',
@@ -388,24 +389,22 @@ test('blog posts: create, read, update, tags filter, delete & permissions', asyn
   // Non-owner cannot update
   await refused(
     403,
-    updateBlogPost(db(), 'tahmina', {
-      id: created.id,
-      title: 'Hacked Title',
-    }),
+    does('tahmina', { type: 'updateBlogPost', id: created.id, title: 'Hacked Title' }),
   );
 
   // Owner can update
-  const updated = await updateBlogPost(db(), 'shahriar', {
+  const updated = await does('shahriar', {
+    type: 'updateBlogPost',
     id: created.id,
     title: '10 Lessons From 5 Years in Big Tech (Updated)',
   });
   assert.equal(updated.title, '10 Lessons From 5 Years in Big Tech (Updated)');
 
   // Non-owner cannot delete
-  await refused(403, deleteBlogPost(db(), 'tasnim', { id: created.id }));
+  await refused(403, does('tasnim', { type: 'deleteBlogPost', id: created.id }));
 
   // Owner can delete
-  const delBlog = await deleteBlogPost(db(), 'shahriar', { id: created.id });
+  const delBlog = await does('shahriar', { type: 'deleteBlogPost', id: created.id });
   assert.equal(delBlog.deleted, true);
 });
 
@@ -435,16 +434,17 @@ test('learning roadmap: one only, kept by the CP Head and President, never liste
   const tree = [{ key: 'r', parentKey: null, name: 'C++ basics' }];
   await refused(
     403,
-    saveInterviewRoadmap('tasnim', { kind: 'learn', name: 'Learn', topics: tree }),
+    does('tasnim', { type: 'saveInterviewRoadmap', kind: 'learn', name: 'Learn', topics: tree }),
   );
-  const { roadmapId } = await saveInterviewRoadmap('nadia', {
+  const { roadmapId } = await does('nadia', {
+    type: 'saveInterviewRoadmap',
     kind: 'learn',
     name: 'Learn',
     topics: tree,
   });
   await refused(
     409,
-    saveInterviewRoadmap('tanvir', { kind: 'learn', name: 'Again', topics: tree }),
+    does('tanvir', { type: 'saveInterviewRoadmap', kind: 'learn', name: 'Again', topics: tree }),
   );
   const learn = (await listInterviewRoadmaps(db(), 'tasnim', 'learn')).roadmaps;
   assert.deepEqual(
@@ -455,7 +455,7 @@ test('learning roadmap: one only, kept by the CP Head and President, never liste
     !(await listInterviewRoadmaps(db(), 'tasnim')).roadmaps.some((r) => r.id === roadmapId),
   );
   // Editing keeps it the learning roadmap.
-  await saveInterviewRoadmap('tanvir', { roadmapId, name: 'Learn v2', topics: tree });
+  await does('tanvir', { type: 'saveInterviewRoadmap', roadmapId, name: 'Learn v2', topics: tree });
   assert.equal(
     (await listInterviewRoadmaps(db(), 'tasnim', 'learn')).roadmaps[0]!.name,
     'Learn v2',

@@ -17,7 +17,6 @@ import { earned, level } from '@fecpc/contracts';
 type Toast = { id: number; text: string; kind?: 'big' | 'bad' };
 type Store = AppState & {
   xp: number;
-  kudosToday: number;
   recentMilestones: MilestoneDTO[];
   /** Give one permanent kudos on a milestone, with optimistic update + rollback. */
   giveKudos: (milestoneId: number) => Promise<void>;
@@ -31,7 +30,7 @@ type Store = AppState & {
   who: (id: string) => Roster | { id: string; name: string; handle: string; rating: number };
 };
 const Ctx = createContext<Store>(null!);
-const total = (st: AppState) => st.me.xp + earned(st.s) - st.s.spent;
+const total = (st: AppState) => st.me.xp + earned(st.s);
 
 export function StoreProvider({
   initial,
@@ -125,18 +124,12 @@ export function StoreProvider({
       const target = (before.counts.recentMilestones ?? []).find((m) => m.id === milestoneId);
       if (!target || target.has_kudos || target.user_id === before.me.id || before.me.system)
         return;
-      if ((before.counts.kudosToday ?? 0) >= 20) {
-        toast('KUDOS FAILED. DAILY LIMIT REACHED.', 'bad');
-        return;
-      }
-
       const mine = ++seq.current;
-      // Optimistically flip row to Kudos ✓, increment milestone count, and increment kudosToday
+      // Optimistically flip row to Kudos ✓ and increment the milestone's count
       setSt((prev) => ({
         ...prev,
         counts: {
           ...prev.counts,
-          kudosToday: (prev.counts.kudosToday ?? 0) + 1,
           recentMilestones: (prev.counts.recentMilestones ?? []).map((m) =>
             m.id === milestoneId ? { ...m, has_kudos: true, kudos_count: m.kudos_count + 1 } : m,
           ),
@@ -152,7 +145,6 @@ export function StoreProvider({
           ...prev,
           counts: {
             ...prev.counts,
-            kudosToday: Math.max(0, (prev.counts.kudosToday ?? 1) - 1),
             recentMilestones: (prev.counts.recentMilestones ?? []).map((m) =>
               m.id === milestoneId
                 ? { ...m, has_kudos: false, kudos_count: Math.max(0, m.kudos_count - 1) }
@@ -179,12 +171,7 @@ export function StoreProvider({
         };
         if (!res.ok || j.ok === false) {
           rollback(j.state);
-          toast(
-            j.reason === 'DAILY_LIMIT' || res.status === 429
-              ? 'KUDOS FAILED. DAILY LIMIT REACHED.'
-              : 'KUDOS FAILED. TRY AGAIN.',
-            'bad',
-          );
+          toast('KUDOS FAILED. TRY AGAIN.', 'bad');
           return;
         }
         if (j.state) take(mine, j.state);
@@ -235,7 +222,6 @@ export function StoreProvider({
       ...st,
       members,
       xp: total(st),
-      kudosToday: st.counts.kudosToday ?? 0,
       recentMilestones: st.counts.recentMilestones ?? [],
       giveKudos,
       act,

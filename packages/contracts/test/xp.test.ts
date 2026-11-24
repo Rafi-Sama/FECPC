@@ -15,13 +15,11 @@ const base: Earn = {
   votes: {},
   read: [],
   posts: 0,
-  spent: 0,
 };
 
-test('xp: base state earns nothing, actions add up, shop items never earn', () => {
+test('xp: base state earns nothing, and actions add up', () => {
   assert.equal(earned(base), 0);
   assert.equal(earned({ ...base, checkin: true }), XP.checkin);
-  assert.equal(earned({ ...base, kudos: ['shop:Sticker pack'] }), 0);
   const all3 = {
     ...base,
     solved: [...base.solved, 'y'],
@@ -58,13 +56,13 @@ test('xp: community redesign actions award XP and election votes award nothing',
       feedUpvotes: 3,
       ideasCount: 1,
       acceptedInterests: 2,
-      milestoneKudosReceived: 4,
+      kudosReceived: 4,
     }),
     2 * XP.feedPost +
       3 * XP.feedUpvote +
       1 * XP.idea +
       2 * XP.interestAccepted +
-      4 * XP.milestoneKudosReceived,
+      4 * XP.kudosReceived,
   );
-  assert.equal(XP.milestoneKudosReceived, 2);
+  assert.equal(XP.kudosReceived, 2);
 });

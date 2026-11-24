@@ -14,7 +14,7 @@ export const XP = {
   feedUpvote: 2,
   idea: 10,
   interestAccepted: 5,
-  milestoneKudosReceived: 2,
+  kudosReceived: 2,
 } as const;
 
 export const LEVEL = 1500;
@@ -47,15 +47,15 @@ export type Earn = {
   votes: Record<string, unknown>;
   read: string[];
   posts: number;
-  spent: number;
   feedPosts?: number;
   feedUpvotes?: number;
   ideasCount?: number;
   acceptedInterests?: number;
-  milestoneKudosReceived?: number;
+  /** Kudos received anywhere: profile, ideas, milestones. */
+  kudosReceived?: number;
 };
 
-const given = (s: Earn) => s.kudos.filter((k) => !k.startsWith('shop:')).length;
+const given = (s: Earn) => s.kudos.length;
 /** Ticks made on the platform (after the pre-platform base) that Codeforces confirmed. A tick alone earns nothing. */
 export const verifiedNew = (s: Earn) =>
   s.solved.slice(s.base.solved).filter((id) => s.verified.includes(id)).length;
@@ -70,7 +70,7 @@ export function quests(s: Earn) {
 
 /**
  * Total XP earned on the platform, on top of the member's pre-platform base.
- * Only verified payments count. Spending never lowers this amount.
+ * Only verified payments count.
  */
 export function earned(s: Earn): number {
   const q = quests(s).filter((x) => x.done).length;
@@ -91,14 +91,14 @@ export function earned(s: Earn): number {
     (s.feedUpvotes ?? 0) * XP.feedUpvote +
     (s.ideasCount ?? 0) * XP.idea +
     (s.acceptedInterests ?? 0) * XP.interestAccepted +
-    (s.milestoneKudosReceived ?? 0) * XP.milestoneKudosReceived +
+    (s.kudosReceived ?? 0) * XP.kudosReceived +
     (q === 3 ? XP.quest : 0)
   );
 }
 
 /**
  * Calculates level from lifetime earned XP.
- * Level is monotone non-decreasing (spending in shop never drops level).
+ * Level grows with lifetime XP.
  */
 export function level(total: number): { lv: number; into: number; title: string } {
   const lv = Math.floor(Math.max(0, total) / LEVEL) + 1;

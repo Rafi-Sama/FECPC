@@ -34,8 +34,7 @@ const ok = await act('decide', { kind: 'payment', id: q.id, to: 'verified' });
   the state.
 - **Refresh when the tab is looked at again** (`visibilitychange`), to pick up other people's changes such as
   a verified payment.
-- **`giveKudos(milestoneId)`** updates optimistically, with rollback, and enforces the daily cap on the client
-  too.
+- **`giveKudos(milestoneId)`** updates optimistically, with rollback.
 - **The roster loads on its own.** It grows with the club, so it is not in the page HTML or in any state answer:
   the store fetches `/api/roster` after the page has loaded and revalidates it (ETag, usually a `304`) whenever
   new state arrives. `members` is empty until then, so a first screen must not depend on it: totals come from

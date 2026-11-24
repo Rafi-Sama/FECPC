@@ -26,7 +26,7 @@ Generated from `packages/contracts/src/capabilities.ts`.
 | --------------------------- | ---------------------------------------------------------------- | :----: | :----: | :-----: | :-------: | :-------: | :-------: | :---------: |
 | `profile.own`               | Edit own profile, see own dues                                   |   ✓    |   ✓    |    ✓    |     ✓     |     ✓     |     ✓     |      ✓      |
 | `directory.view`            | View member directory                                            |   ✓    |   ✓    |    ✓    |     ✓     |     ✓     |     ✓     |      ✓      |
-| `teams.oversee`             | Oversee ICPC teams and assign coaches                            |        |        |    ✓    |           |           |     ✓     |      ✓      |
+| `teams.oversee`             | Oversee ICPC teams                                               |        |        |    ✓    |           |           |     ✓     |      ✓      |
 | `sheet.stats`               | See sheet completion statistics                                  |        |        |    ✓    |           |           |     ✓     |      ✓      |
 | `sheet.curate`              | Publish curated problem sheets                                   |        |        |    ✓    |           |           |     ✓     |      ✓      |
 | `learning.curate`           | Keep the course list and the daily quiz bank                     |        |        |    ✓    |           |           |     ✓     |      ✓      |
@@ -56,7 +56,7 @@ Generated from `packages/contracts/src/capabilities.ts`.
 | `roles.assign`              | Assign roles                                                     |        |        |         |           |           |     ✓     |      ✓      |
 | `member.editDetails`        | Edit a member's profile; approve their change requests (audited) |        |        |         |           |     ✓     |     ✓     |      ✓      |
 | `member.makeAlumni`         | Transition member to alumni                                      |        |        |         |           |           |     ✓     |      ✓      |
-| `member.deactivate`         | Deactivate member account                                        |        |        |         |           |           |     ✓     |      ✓      |
+| `member.deactivate`         | Suspend or reinstate a member                                    |        |        |         |           |           |     ✓     |      ✓      |
 | `audit.view`                | View audit log                                                   |        |        |         |           |           |     ✓     |      ✓      |
 | `data.export`               | Export the member list                                           |        |        |         |     ✓     |     ✓     |     ✓     |      ✓      |
 

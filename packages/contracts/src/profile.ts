@@ -1,6 +1,6 @@
 // Member profile data. Members do not edit it themselves: they request a change, and the Secretary or
 // President approves it (or edits directly). Both paths check values here, in the browser and in the API.
-import { cleanPhone, oneLine, RECRUIT, RULE_TEXT, RULES } from './recruit.ts';
+import { cleanPhone, oneLine, photoOk, RULE_TEXT, RULES } from './recruit.ts';
 
 /** Every field a profile change can touch, in the order forms show them. */
 export const PROFILE_FIELDS = [
@@ -62,7 +62,7 @@ export function checkProfile(i: Record<string, unknown>): {
   };
   if (has('avatar_url')) {
     const v = typeof i.avatar_url === 'string' ? i.avatar_url : '';
-    opt('avatar_url', v, v.length <= RECRUIT.photoBytes && RULES.photo.test(v), RULE_TEXT.photo);
+    opt('avatar_url', v, photoOk(v), RULE_TEXT.photo);
   }
   if (has('name')) {
     value.name = oneLine(i.name);

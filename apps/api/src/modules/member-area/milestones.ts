@@ -4,11 +4,10 @@
 // - Daily milestone kudos cap: 20 per user per day, resetting at 00:00 UTC.
 // - Sidebar freshness window: 14 days (older milestones stay on the member's profile only).
 import { previousRankTitle, rankFor } from '@fecpc/contracts';
-import type { MilestoneType } from '@fecpc/contracts';
+import type { MilestoneDTO, MilestoneType } from '@fecpc/contracts';
 import { sheet } from '@fecpc/content/member-area';
-import { tx, type Db } from './db.ts';
+import { face, tx, type Db } from './db.ts';
 
-export const DAILY_KUDOS_CAP = 20;
 export const MILESTONE_FRESHNESS_DAYS = 14;
 export const SOLVED_THRESHOLDS = [100, 250, 500, 750, 1000, 1500, 2000, 3000] as const;
 export const STREAK_STEP = 30;
@@ -207,7 +206,8 @@ export async function syncCodeforces(
 ): Promise<{ handle: string; milestonesCreated: number } | null> {
   const handle = (
     await db.query(
-      `select coalesce(nullif(progress->>'handle', ''), nullif(cf_handle, ''), handle) as h
+      // The account's column is the one copy: the member and officers both write it (progress.handle is stale).
+      `select coalesce(nullif(cf_handle, ''), handle) as h
        from users where id = $1 and not system and not suspended`,
       [userId],
     )
@@ -430,4 +430,45 @@ export async function syncVjudge(
     solved,
   ]);
   return { handle, solved };
+}
+
+/**
+ * Recent milestones (the last MILESTONE_FRESHNESS_DAYS), newest first, capped at `limit` (default 5).
+ * Includes live kudos counts, whether the viewer has already given kudos, and (for the owner)
+ * up to 3 recent giver names.
+ */
+export async function listRecentMilestones(
+  db: Db,
+  userId: string,
+  input: { limit?: number } = {},
+): Promise<MilestoneDTO[]> {
+  const limit = Math.min(50, Math.max(1, Math.floor(Number(input.limit) || 5)));
+  const rows = (
+    await db.query(
+      `select m.id, m.user_id,
+         u.name as member_name,
+         ${face('u')} as member_avatar,
+         greatest(u.problems_solved, u.solved) as member_solved,
+         nullif(coalesce(nullif(u.cf_handle, ''), u.handle), '') as member_cf_handle,
+         coalesce(u.cf_rating, u.rating) as member_rating,
+         m.type, m.from_value, m.to_value, m.threshold, m.meta, m.created_at,
+         (select count(*)::int from milestone_kudos mk where mk.milestone_id = m.id) as kudos_count,
+         exists (select 1 from milestone_kudos mk where mk.milestone_id = m.id and mk.user_id = $1) as has_kudos,
+         case when m.user_id = $1 then (
+           select coalesce(json_agg(g.name order by mk.created_at desc), '[]'::json)
+           from (
+             select user_id, created_at from milestone_kudos where milestone_id = m.id and user_id <> $1 order by created_at desc limit 3
+           ) mk
+           join users g on g.id = mk.user_id
+         ) else '[]'::json end as recent_givers
+       from milestones m
+       join users u on u.id = m.user_id
+       where m.created_at > now() - ($2 || ' days')::interval
+         and not u.system and not u.suspended
+       order by m.created_at desc, m.id desc
+       limit $3`,
+      [userId, String(MILESTONE_FRESHNESS_DAYS), limit],
+    )
+  ).rows as MilestoneDTO[];
+  return rows;
 }

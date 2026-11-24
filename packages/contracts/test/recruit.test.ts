@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { checkApplicant, checkForm, DEFAULT_FORM, readApplicantCsv } from '../src/recruit.ts';
+import {
+  checkApplicant,
+  checkForm,
+  DEFAULT_FORM,
+  photoOk,
+  readApplicantCsv,
+} from '../src/recruit.ts';
 
 const ok = {
   name: '  Nadia   Rahman ',
@@ -8,7 +14,7 @@ const ok = {
   dept: 'cse',
   email: 'Nadia@Example.com',
   phone: '017-1234 5678',
-  photo: 'data:image/webp;base64,AAAA',
+  photo: 'data:image/webp;base64,' + btoa('RIFF\0\0\0\0WEBPVP8 '),
 };
 
 test('checkApplicant cleans valid input and flags each bad field', () => {
@@ -72,4 +78,15 @@ test('readApplicantCsv maps headers in any order and flags bad and repeated rows
     'Department',
     'Phone number',
   ]);
+});
+
+test('photoOk: the bytes must be the declared image format', () => {
+  const as = (type: string, bytes: string) => `data:image/${type};base64,${btoa(bytes)}`;
+  assert.ok(photoOk(as('png', '\x89PNG\r\n\x1a\n')));
+  assert.ok(photoOk(as('jpeg', '\xff\xd8\xff\xe0')));
+  assert.ok(photoOk(as('webp', 'RIFF\0\0\0\0WEBP')));
+  assert.ok(!photoOk(as('png', '<html><script>x</script>')));
+  assert.ok(!photoOk(as('webp', 'RIFF\0\0\0\0AVI ')));
+  assert.ok(!photoOk('data:image/svg+xml;base64,' + btoa('<svg/>')));
+  assert.ok(!photoOk(as('png', '\x89PNG' + 'x'.repeat(100)), 50));
 });

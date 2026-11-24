@@ -398,7 +398,7 @@ export function ProfileModal({
                     <KudosButton
                       on={hasKudos}
                       total={kudosTotal}
-                      onToggle={() => void act('toggle', { list: 'kudos', id: kudosId })}
+                      onToggle={() => void act('toggle', { list: 'kudos', id: kudosId, on: true })}
                     />
                   )}
                   {canEdit && (
@@ -611,8 +611,9 @@ function KudosButton({
       type="button"
       className={`btn sm kudos${on ? '' : ' line'}`}
       aria-pressed={on}
+      disabled={on}
       onClick={() => {
-        if (!on) setBurst((b) => b + 1);
+        setBurst((b) => b + 1);
         onToggle();
       }}
     >

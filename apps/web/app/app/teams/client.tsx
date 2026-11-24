@@ -15,8 +15,6 @@ export type TeamData = {
   team: {
     id: number;
     name: string;
-    coach: string | null;
-    coach_name: string | null;
     mine: boolean;
     size: number;
   } | null;
@@ -1058,7 +1056,7 @@ export default function Teams({ initial }: { initial: TeamData | null }) {
           </section>
         )}
         {onTeam && view === 'strength' && d.stats && (
-          <TeamOverview stats={d.stats} names={nameOf} coach={t.coach_name} me={me.id} />
+          <TeamOverview stats={d.stats} names={nameOf} me={me.id} />
         )}
       </div>
 
@@ -1513,12 +1511,10 @@ const MEMBER_COLORS = ['#1f3bff', '#ff5a1f', '#0fa968'];
 function TeamOverview({
   stats,
   names,
-  coach,
   me,
 }: {
   stats: TeamStats;
   names: (id: string) => string;
-  coach: string | null;
   me: string;
 }) {
   const color = (id: string) =>
@@ -1546,7 +1542,6 @@ function TeamOverview({
       <section className="tov-board" style={{ gridColumn: '1 / -1' }}>
         <div className="tov-board-head">
           <span>team overview</span>
-          <span>coach · {coach ?? 'not assigned'}</span>
         </div>
         <div className="tov-kpis">
           {kpis.map(([k, v, c]) => (

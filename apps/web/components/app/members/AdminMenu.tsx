@@ -55,11 +55,11 @@ export function AdminMenu({
 
   if (!allowed) return null;
 
-  const run = async (action: 'makeAlumni' | 'deactivateMember', confirmMsg?: string) => {
+  const run = async (action: 'makeAlumni' | 'suspend', confirmMsg?: string) => {
     if (confirmMsg && !(await sure(confirmMsg))) return;
     setBusy(true);
     try {
-      const ok = await act(action, { userId });
+      const ok = await act(action, action === 'suspend' ? { user: userId, on: true } : { userId });
       if (ok) {
         setOpen(false);
         onDone?.();
@@ -181,12 +181,12 @@ export function AdminMenu({
               disabled={busy}
               onClick={() =>
                 run(
-                  'deactivateMember',
-                  `Deactivate ${memberName}? They will be signed out immediately and removed from the active roster.`,
+                  'suspend',
+                  `Suspend ${memberName}? They will be signed out immediately and removed from the active roster.`,
                 )
               }
             >
-              Deactivate
+              Suspend
             </button>
           )}
         </div>

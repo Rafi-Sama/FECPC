@@ -16,6 +16,8 @@ export class MemberAreaModule implements OnModuleInit {
   // Legacy handlers share the API's connection pool instead of opening a second one.
   onModuleInit() {
     usePool(this.db.getPool());
+    // A serverless instance sleeps between requests, so timers never fire there: GET /v1/cron does this instead.
+    if (process.env.VERCEL) return;
     // The weekly sheet appears within a few hours of Monday 00:00 club time, whenever the API is up.
     const weekly = () => void ensureWeekly(pool()).catch(() => {});
     weekly();

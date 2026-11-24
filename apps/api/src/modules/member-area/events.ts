@@ -15,6 +15,7 @@ import {
   EVENT_TYPES,
   eventSlug,
   fillTemplate,
+  photoOk,
   type ClubEvent,
   type EventDetail,
   type EventField,
@@ -22,15 +23,11 @@ import {
   type Role,
 } from '@fecpc/contracts';
 import { Fail, type Db } from './db.ts';
+import { audit, need, pick, posInt, ROLES, type Handler, type In } from './rules.ts';
 import { enqueue, mailOutlook, mailReady } from './mail.ts';
 import { TZ } from './state.ts';
 
-type Actor = { id: string; roles: Role[]; name: string; system: boolean };
-type In = Record<string, unknown>;
-
-function need(ok: unknown, why = 'Only the President and Secretary run events.'): asserts ok {
-  if (!ok) throw new Fail(403, why);
-}
+const ORGANISERS = 'Only the President and Secretary run events.';
 const organiser = (roles: Role[]) => !!can(roles, 'event.publish');
 const str = (v: unknown, min: number, max: number, what: string, multiline = false) => {
   const t =
@@ -46,15 +43,6 @@ const str = (v: unknown, min: number, max: number, what: string, multiline = fal
     throw new Fail(400, `${what} must be ${min} to ${max} characters.`);
   return t;
 };
-const pick = <T extends string>(v: unknown, from: readonly T[], what: string): T => {
-  if (!from.includes(v as T)) throw new Fail(400, `Unknown ${what}.`);
-  return v as T;
-};
-const posInt = (v: unknown, what: string) => {
-  const n = Number(v);
-  if (!Number.isInteger(n) || n < 1 || n > 2_000_000_000) throw new Fail(400, `Invalid ${what}.`);
-  return n;
-};
 const url = (v: unknown, what: string) => {
   const t = typeof v === 'string' ? v.trim() : '';
   if (!t) return null;
@@ -65,13 +53,10 @@ const url = (v: unknown, what: string) => {
 const banner = (v: unknown) => {
   const t = typeof v === 'string' ? v.trim() : '';
   if (!t) return null;
-  const [, kind, b64] = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(t) ?? [];
-  if (kind && b64 && t.length <= 700_000) {
+  if (t.startsWith('data:')) {
     // The bytes must really be the declared format, or the banner renders blank.
-    const head = Buffer.from(b64.slice(0, 24), 'base64').toString('latin1');
-    const magic = { png: '\x89PNG', jpeg: '\xff\xd8\xff', webp: 'RIFF' }[kind as 'png'];
-    if (!head.startsWith(magic) || (kind === 'webp' && head.slice(8, 12) !== 'WEBP'))
-      throw new Fail(400, 'The banner image is damaged. Pick it again.');
+    if (!photoOk(t, 700_000))
+      throw new Fail(400, 'The banner image is damaged or too large. Pick it again.');
     return t;
   }
   return url(t, 'The banner');
@@ -129,8 +114,6 @@ const phone = (v: unknown) => {
 const REG_OPEN = (e: string) =>
   `((${e}status = 'open' or (${e}status = 'published' and ${e}reg_opens is not null))
     and (${e}reg_opens is null or ${e}reg_opens <= now()) and (${e}reg_closes is null or ${e}reg_closes > now()))`;
-const audit = (c: Db, a: Actor, what: string) =>
-  c.query(`insert into audit (who, what) values ($1, $2)`, [a.name, what]);
 
 async function eventRow(c: Db, id: unknown, lock = false) {
   const e = (
@@ -261,13 +244,10 @@ async function approvalMails(
   return { queued: rows.length, late };
 }
 
-export const eventHandlers: Record<
-  string,
-  (c: Db, a: Actor, p: unknown, i: In) => Promise<string | void>
-> = {
+export const eventHandlers: Record<string, Handler> = {
   /** Create (no `id`) or edit an event. Its type is `eventType`, since `type` names the action. */
   async eventSave(c, a, _p, i) {
-    need(organiser(a.roles));
+    need(organiser(a.roles), ORGANISERS);
     const title = str(i.title, 3, 140, 'The title');
     const v = [
       title,
@@ -366,7 +346,7 @@ export const eventHandlers: Record<
     await audit(c, a, `created event ${id}`);
   },
   async eventDelete(c, a, _p, i) {
-    need(organiser(a.roles));
+    need(organiser(a.roles), ORGANISERS);
     const e = await eventRow(c, i.id, true);
     if (
       (await c.query(`select 1 from event_certificates where event_id = $1 limit 1`, [e.id]))
@@ -378,7 +358,7 @@ export const eventHandlers: Record<
   },
   /** Create (no `id`) or edit a role an event recruits for. */
   async roleSave(c, a, _p, i) {
-    need(organiser(a.roles));
+    need(organiser(a.roles), ORGANISERS);
     const e = await eventRow(c, i.eventId, true);
     const mode = pick(i.mode ?? 'platform', ['platform', 'form'] as const, 'registration method');
     const v = [
@@ -404,7 +384,7 @@ export const eventHandlers: Record<
     await audit(c, a, `saved role "${v[0]}" on event ${e.id}`);
   },
   async roleDelete(c, a, _p, i) {
-    need(organiser(a.roles));
+    need(organiser(a.roles), ORGANISERS);
     const e = await eventRow(c, i.eventId, true);
     const r = await roleRow(c, e.id, i.id);
     await c.query(`delete from event_roles where id = $1`, [r.id]);
@@ -477,7 +457,7 @@ export const eventHandlers: Record<
   },
   /** Approve, reject or reopen entries (`ids`), all from one event. */
   async entryStatus(c, a, _p, i) {
-    need(organiser(a.roles));
+    need(organiser(a.roles), ORGANISERS);
     const status = pick(i.status, ['pending', 'approved', 'rejected'] as const, 'status');
     const reason =
       status === 'rejected' ? str(i.reason ?? '', 3, 300, 'The reason for declining') : null;
@@ -521,7 +501,7 @@ export const eventHandlers: Record<
   },
   /** Saves this event's approval email; an empty body goes back to the built-in design. */
   async eventMail(c, a, _p, i) {
-    need(organiser(a.roles));
+    need(organiser(a.roles), ORGANISERS);
     const e = await eventRow(c, i.eventId, true);
     if (!i.html) {
       await c.query(`update club_events set mail_subject = null, mail_html = null where id = $1`, [
@@ -544,7 +524,7 @@ export const eventHandlers: Record<
   },
   /** Mark an approved participant 1st, 2nd or 3rd (`place` null clears it). */
   async entryPlace(c, a, _p, i) {
-    need(organiser(a.roles));
+    need(organiser(a.roles), ORGANISERS);
     const place = i.place === null || i.place === undefined ? null : Number(i.place);
     if (place !== null && ![1, 2, 3].includes(place)) throw new Fail(400, 'Unknown place.');
     const r = await c.query(
@@ -582,7 +562,7 @@ export const eventHandlers: Record<
   },
   /** Save (or with empty `html`, remove) the raw HTML+CSS template for one certificate kind. */
   async certTemplate(c, a, _p, i) {
-    need(organiser(a.roles));
+    need(organiser(a.roles), ORGANISERS);
     const e = await eventRow(c, i.eventId, true);
     const kind = await kindOk(c, e.id, i.kind);
     const html = typeof i.html === 'string' ? i.html.trim() : '';
@@ -602,7 +582,7 @@ export const eventHandlers: Record<
    * names, each with an `email`): those rows, with the `kind` template.
    */
   async certIssue(c, a, _p, i) {
-    need(organiser(a.roles));
+    need(organiser(a.roles), ORGANISERS);
     const e = await eventRow(c, i.eventId, true);
     if (e.status !== 'completed')
       throw new Fail(409, 'Certificates are issued once the event is completed.');
@@ -703,7 +683,7 @@ export const eventHandlers: Record<
   },
   /** Let members download their certificates (or stop it). */
   async certDistribute(c, a, _p, i) {
-    need(organiser(a.roles));
+    need(organiser(a.roles), ORGANISERS);
     const e = await eventRow(c, i.eventId, true);
     const on = i.on === true;
     if (on && e.status !== 'completed') throw new Fail(409, 'Complete the event first.');
@@ -740,7 +720,7 @@ from club_events e`;
 export async function eventsQuery(db: Db, userId: string, b: In): Promise<unknown> {
   const u = (
     await db.query(
-      `select email, array_prepend(role, coalesce((select pr.roles from post_roles pr where pr.post = users.post), '{}')) roles
+      `select email, ${ROLES}
        from users where id = $1 and not suspended`,
       [userId],
     )

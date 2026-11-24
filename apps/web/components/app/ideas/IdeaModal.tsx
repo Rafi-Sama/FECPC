@@ -82,8 +82,8 @@ export function IdeaModal({
   const upvoted = detail ? s.kudos.includes(`idea:${detail.id}`) : false;
 
   const handleUpvote = async () => {
-    if (!detail) return;
-    const ok = await act('toggle', { list: 'kudos', id: `idea:${detail.id}` });
+    if (!detail || upvoted) return;
+    const ok = await act('toggle', { list: 'kudos', id: `idea:${detail.id}`, on: true });
     if (ok) {
       await load(detail.id);
       onMutated();
@@ -297,7 +297,7 @@ export function IdeaModal({
                         type="button"
                         className={`btn xs ${upvoted ? '' : 'line'}`}
                         aria-pressed={upvoted}
-                        disabled={isPoster}
+                        disabled={isPoster || upvoted}
                         onClick={handleUpvote}
                       >
                         ▲ {detail.upvotes}

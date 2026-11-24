@@ -109,9 +109,10 @@ export function HandleBox() {
   const { s, act } = useStore();
   const { data, err, busy } = useJudge();
   const [v, setV] = useState('');
-  if (s.handle && !err)
+  // Linked once; after that it changes through a profile request (Secretary or President approves).
+  if (s.handle)
     return (
-      <p className="body" aria-live="polite">
+      <p className={`body${err ? ' bad' : ''}`} aria-live="polite">
         {busy ? (
           `syncing ${s.handle} from Codeforces…`
         ) : data ? (
@@ -119,10 +120,11 @@ export function HandleBox() {
             linked: <strong className="acc">{data.handle}</strong> · {data.rank} {data.rating} ·{' '}
             {data.solved.length} solved · synced from Codeforces
           </>
-        ) : null}{' '}
-        <button className="link sample" onClick={() => act('handle', { value: '' })}>
-          unlink
-        </button>
+        ) : (
+          <>
+            <strong>{s.handle}</strong>: {err} Request a change from your profile.
+          </>
+        )}
       </p>
     );
   return (
@@ -150,18 +152,6 @@ export function HandleBox() {
           required
         />
       </label>
-      {err && (
-        <p className="body bad" role="alert" style={{ flexBasis: '100%' }}>
-          {err}{' '}
-          <button
-            type="button"
-            className="link sample"
-            onClick={() => act('handle', { value: '' })}
-          >
-            clear
-          </button>
-        </p>
-      )}
     </SaveForm>
   );
 }
@@ -173,10 +163,7 @@ export function VjudgeBox() {
   if (s.vjudge)
     return (
       <p className="body">
-        VJudge: <strong className="acc">{s.vjudge}</strong> · {s.vjSolved} solved outside Codeforces{' '}
-        <button className="link sample" onClick={() => act('vjudge', { value: '' })}>
-          unlink
-        </button>
+        VJudge: <strong className="acc">{s.vjudge}</strong> · {s.vjSolved} solved outside Codeforces
       </p>
     );
   return (

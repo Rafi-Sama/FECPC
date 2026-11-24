@@ -18,9 +18,55 @@ cd apps/api && pnpm start             # node dist/main.js
 cd apps/web && pnpm start             # next start
 ```
 
-The API bundle keeps npm packages external, so deploy `apps/api` with its `node_modules`, together with
-`packages/contracts` and `packages/content`. Node runs those packages from their TypeScript source through
-type stripping, so use Node 22.18 or newer (`.nvmrc` pins 26).
+The API bundle keeps npm packages external but includes the workspace packages (`@fecpc/contracts`,
+`@fecpc/content`), so deploy `apps/api` with its `node_modules`. Node 22 or newer (`.nvmrc` pins 26).
+
+## Free hosting: Vercel + Neon
+
+Everything runs on free tiers: two Vercel projects from this repository (web and API) and a Neon Postgres
+database. Vercel has no private network, so the API gets a public address and refuses every request that does
+not carry `API_PROXY_SECRET`, which only the web app knows.
+
+```
+Browser ──▶ Vercel project "web" (apps/web) ──API_PROXY_SECRET──▶ Vercel project "api" (apps/api, one function) ──▶ Neon
+                                                    Vercel Cron, daily ──CRON_SECRET──▶ GET /v1/cron
+```
+
+1. **Database.** Create a Neon project (free). Copy the **direct** connection string (the host without
+   `-pooler`): the API sets `jit`, `lock_timeout` and `idle_in_transaction_session_timeout` as connection
+   options, which Neon's pooler does not pass on. Each function instance keeps at most 5 connections
+   (`DB_POOL_MAX` defaults to 5 on Vercel), well within the free tier.
+2. **Secrets.** `openssl rand -hex 32` twice: one for `API_PROXY_SECRET`, one for `CRON_SECRET`.
+3. **API project.** New Vercel project from the repo, root directory `apps/api`. `apps/api/vercel.json` does the
+   rest: it installs, runs `pnpm db:migrate` on production deployments (the schema is idempotent), builds
+   `dist/vercel.js`, routes every path to `api/index.js` and schedules the daily cron. Environment:
+   `APP_ENV=production`, `DATABASE_URL`, `API_PROXY_SECRET`, `CRON_SECRET`, `APP_PUBLIC_URL` and
+   `CORS_ORIGINS` (both the web project's production URL), `TRUST_PROXY=1`, plus the optional mail, Google,
+   GitHub and Turnstile values below.
+4. **Web project.** New Vercel project from the repo, root directory `apps/web` (Next.js is detected).
+   Environment: `API_INTERNAL_URL` (the API project's URL), the same `API_PROXY_SECRET`, `TRUST_PROXY=1`, and
+   the optional sign-in and Turnstile values.
+5. **First Super Admin.** Run the one-time-link SQL under [Operations](#operations) against Neon.
+
+What changes on serverless, and why it still works:
+
+- **Timers do not run** while a function sleeps. `GET /v1/cron` does their work (this week's sheet, the mail
+  queue). Vercel's free plan calls it once a day (00:05 club time, so Monday's sheet appears at once). Do not
+  add a frequent pinger: every call wakes the database, and a free database metered by awake time (Neon:
+  100 CU-hours a month) would run out and stop until the next month. Mail retries and large mailings
+  (20 a minute) therefore continue on the next action or the next daily run.
+- **Mail after an action** is sent before the function sleeps (`waitUntil`), so single emails go out at once.
+- **Per-client limits** that matter are in the database: sign-in attempts, applications, the per-member write
+  cap and the Codeforces sync. The global rate limit is per function instance there, so it is weaker; Vercel's
+  own DDoS protection sits in front.
+- **Limits of the free tiers.** Neon: 0.5 GB (photos are downscaled to 512 px in the browser, about 50 KB each)
+  and the database sleeps after 5 idle minutes (the first request then waits about a second). Vercel: 60 s per
+  request is configured; the slowest call (a cold Codeforces problem set) takes about 15 s.
+- **Preview deployments** get other URLs, which `CORS_ORIGINS` does not list, so their sign-in is refused. Test
+  on production or add the preview URL.
+
+Self-hosting on one machine (below) needs none of this: leave `API_PROXY_SECRET` empty and keep the API
+private.
 
 ## Environment
 
@@ -45,6 +91,8 @@ Set real environment variables. Do not ship `.env.local` files.
 | `SMTP_URL`, `MAIL_FROM`                                                                 | optional; e.g. `smtps://club%40gmail.com:<app-password>@smtp.gmail.com:465` (a Gmail app password, not the account password). Without them, accepting an application shows the invite link to the officer and event approvals are not emailed |
 | `MAIL_DAILY_LIMIT`                                                                      | optional, default `400`: emails sent per rolling 24 h. Free Gmail allows about 500; keep headroom for the account's own mail. See [Email](#email)                                                                                             |
 | `TURNSTILE_SECRET_KEY`                                                                  | optional; Cloudflare Turnstile secret. When set, the join form must pass the human check                                                                                                                                                      |
+| `API_PROXY_SECRET`                                                                      | where the API has a public address (Vercel): 32+ random characters, the same as the web app's. Every request but `/health` and `/v1/cron` must carry it                                                                                       |
+| `CRON_SECRET`                                                                           | bearer token for `GET /v1/cron`; on Vercel, Vercel Cron sends it                                                                                                                                                                              |
 
 ### Web
 
@@ -55,6 +103,7 @@ Set real environment variables. Do not ship `.env.local` files.
 | `GOOGLE_CLIENT_ID`, `GOOGLE_REDIRECT_URI` | optional; same values as the API                                                           |
 | `GITHUB_CLIENT_ID`                        | optional; same value as the API                                                            |
 | `TURNSTILE_SITE_KEY`                      | optional; the public half of the API's `TURNSTILE_SECRET_KEY`                              |
+| `API_PROXY_SECRET`                        | the API's `API_PROXY_SECRET`, when it has one                                              |
 
 ### Getting the client address right
 
@@ -78,8 +127,9 @@ private network.
 
 ## Email
 
-All email goes through the `mail_queue` table and is sent by the API itself (a timer every minute, after each
-action, and at startup), so it needs no paid service, worker or cron job:
+All email goes through the `mail_queue` table and is sent by the API itself (after each action; on a server
+also by a timer every minute and at startup; on Vercel by `GET /v1/cron`), so it needs no paid service or
+worker:
 
 - **Daily limit.** At most `MAIL_DAILY_LIMIT` messages per rolling 24 hours, at most 20 per minute. Anything over
   waits in the queue for the window to roll over. If Gmail still answers with a quota error, the whole queue
@@ -118,5 +168,5 @@ recruitment or event starts from the latest saved design.
 
 - **Logs** are JSON (pino), one line per request, with a request ID (`X-Request-Id` is honoured). Cookies,
   passwords, tokens, transaction IDs and phone numbers are redacted.
-- **Scaling out:** the global rate limit and the Codeforces sync throttle are in process memory. With
-  several API instances, move them to the database or Redis first.
+- **Scaling out:** only the global rate limit is in process memory (sign-in, application, write-cap and
+  Codeforces-sync limits are in the database). With several instances it counts per instance.

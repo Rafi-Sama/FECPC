@@ -52,7 +52,7 @@ and extra columns on existing tables.
 | `club`                                 | Shared switches and values (`flag:` and `kv:` keys) changed by officers | users              |
 | `milestones`                           | Crossed Codeforces ranks, solved thresholds and streaks                 | users              |
 | `post_roles`                           | Which existing roles each club post grants; edited by the Super Admin   | —                  |
-| `milestone_kudos`                      | Kudos on milestones (20 per giver per day)                              | milestones, users  |
+| `milestone_kudos`                      | Kudos on milestones (permanent)                                         | milestones, users  |
 
 ### Money
 
@@ -106,7 +106,7 @@ Prefixed `icpc_` because some older databases carry an unrelated, unused `teams`
 
 | Table               | Purpose                                                                                                                                                                                     | FK                |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
-| `icpc_teams`        | Team name (unique) and coach                                                                                                                                                                | users             |
+| `icpc_teams`        | Team name (unique); `coach` is unused                                                                                                                                                       | users             |
 | `icpc_members`      | Who is on which team; one team per member, at most three                                                                                                                                    | icpc_teams, users |
 | `notebook`          | One notebook page per member per topic; stays with the member, team or not                                                                                                                  | users             |
 | `notebook_log`      | Each member's notebook history (added, renamed, removed, edited with +/− lines); `by` names a teammate who edited the page                                                                  | users             |
@@ -115,7 +115,7 @@ Prefixed `icpc_` because some older databases carry an unrelated, unused `teams`
 | `users.cf_contests` | Each member's last five rated Codeforces rounds (rank, rating change, problems solved in the round); written by the Codeforces sync, read by the contests page's club report                | —                 |
 | `sheets`            | Problem sheets: one `weekly` row per week (built Mondays from the Codeforces problemset by `ensureWeekly`, never repeating a problem) and `custom` rows curated by the CP Head or President | users             |
 | `icpc_notes`        | Legacy; emptied into `notebook` on migrate                                                                                                                                                  | icpc_teams, users |
-| `icpc_log`          | The team's own events (joined, left, renamed, coach)                                                                                                                                        | icpc_teams, users |
+| `icpc_log`          | The team's own events (joined, left, renamed)                                                                                                                                               | icpc_teams, users |
 
 ### Alumni and careers
 
@@ -133,7 +133,7 @@ Prefixed `icpc_` because some older databases carry an unrelated, unused `teams`
 ## Where state lives
 
 - **Personal progress** is in `users.progress` (JSON): Codeforces handle, base XP numbers, solved sheet
-  problems, done resources, read items, shop purchases, XP spent, last check-in,
+  problems, done resources, read items, last check-in,
   preference flags and values. Only `act()` writes it, under a row lock.
 - **Everything shared between members** has its own table, so counts (registrations, kudos, votes, solves per
   problem) are computed with SQL across members.

@@ -23,14 +23,20 @@ const swcPlugin: esbuild.Plugin = {
   },
 };
 
-/** One bundle, dist/main.js. npm packages (including the workspace packages) stay external. */
+// npm packages stay external; the workspace packages (@fecpc/*, TypeScript source) are bundled, so the runtime
+// never has to strip types from files it reaches through node_modules.
+const deps = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
+  dependencies: Record<string, string>;
+};
+
+/** dist/main.js (a Node server) and dist/vercel.js (Vercel's request handler). */
 export const options: esbuild.BuildOptions = {
-  entryPoints: { main: 'src/main.ts' },
+  entryPoints: { main: 'src/main.ts', vercel: 'src/vercel.ts' },
   bundle: true,
   platform: 'node',
   format: 'esm',
   target: 'node22',
-  packages: 'external',
+  external: Object.keys(deps.dependencies).filter((d) => !d.startsWith('@fecpc/')),
   outdir: 'dist',
   plugins: [swcPlugin],
 };

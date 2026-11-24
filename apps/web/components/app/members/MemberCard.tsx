@@ -29,8 +29,9 @@ export function MemberCard({
 
   const handleKudos = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
-    if (!hasKudos) setPopKey((k) => k + 1);
-    void act('toggle', { list: 'kudos', id: kudosId });
+    if (hasKudos) return; // kudos are permanent
+    setPopKey((k) => k + 1);
+    void act('toggle', { list: 'kudos', id: kudosId, on: true });
   };
 
   return (
@@ -95,6 +96,7 @@ export function MemberCard({
                 type="button"
                 className={`btn xs ${hasKudos ? '' : 'line'}`}
                 aria-pressed={hasKudos}
+                disabled={hasKudos}
                 onClick={handleKudos}
               >
                 {hasKudos ? 'Kudos ✓' : 'Kudos'}

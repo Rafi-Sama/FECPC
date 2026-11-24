@@ -1,15 +1,10 @@
 // Courses and the daily quiz. Holders of full `learning.curate` (CP Head, President) keep the course list and the
 // question bank; every member answers today's five once each. Answers are revealed in state only after a pick.
-import { canFully, type Role } from '@fecpc/contracts';
+import { canFully } from '@fecpc/contracts';
 import { Fail, type Db } from './db.ts';
+import { audit, need, type Actor, type Handler, type In } from './rules.ts';
 import { TZ } from './state.ts';
 
-type Actor = { id: string; roles: Role[]; name: string; system: boolean };
-type In = Record<string, unknown>;
-
-function need(ok: unknown, why: string): asserts ok {
-  if (!ok) throw new Fail(403, why);
-}
 const curator = (a: Actor) =>
   need(
     !a.system && canFully(a.roles, 'learning.curate'),
@@ -42,18 +37,13 @@ const question = (v: unknown, n = '') => {
     answer: index(o.answer, `${n}The answer`),
   };
 };
-const audit = (c: Db, a: Actor, what: string) =>
-  c.query(`insert into audit (who, what) values ($1, $2)`, [a.name, what]);
 const insertQuestion = (c: Db, a: Actor, q: ReturnType<typeof question>) =>
   c.query(
     `insert into learning_quiz_questions (question, options, correct_index, created_by) values ($1, $2, $3, $4)`,
     [q.question, JSON.stringify(q.options), q.answer, a.id],
   );
 
-export const learningHandlers: Record<
-  string,
-  (c: Db, a: Actor, p: unknown, i: In) => Promise<string | void>
-> = {
+export const learningHandlers: Record<string, Handler> = {
   async courseAdd(c, a, _p, i) {
     curator(a);
     const title = line(i.title, 1, 80, 'The title'),
