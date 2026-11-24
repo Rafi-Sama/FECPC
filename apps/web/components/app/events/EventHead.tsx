@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { EVENT_STATUS_LABEL, EVENT_TYPES, type EventDetail } from '@fecpc/contracts';
+import { EVENT_STATUS_LABEL, EVENT_STATUSES, EVENT_TYPES, type EventDetail } from '@fecpc/contracts';
 import { bannerStyle, clubNow, fmtWhen, liveStatus } from '@/lib/events';
 import { DatePicker } from '../shared/DatePicker';
 import { SaveForm } from '../SaveBar';
@@ -122,13 +122,6 @@ export function EventHead({
     setV((x) => ({ ...x, ...p }));
   };
 
-  const tags = (
-    <>
-      <span className="tag dark">{liveStatus(e) ?? EVENT_STATUS_LABEL[e.status]}</span>
-      {e.fee > 0 && <span className="tag">৳{e.fee}</span>}
-    </>
-  );
-
   if (!editable) {
     return (
       <main style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
@@ -150,10 +143,13 @@ export function EventHead({
             </h1>
             <div className="meta">
               <span className="on">{e.type}</span>
-              <span className="bl">● {liveStatus(e) ?? EVENT_STATUS_LABEL[e.status]}</span>
+              <span className="ev-meta-status">
+                <span className="ev-status-dot" data-status={e.status} />
+                {liveStatus(e) ?? EVENT_STATUS_LABEL[e.status]}
+              </span>
               <span>{fmtWhen(e.startsAt)}</span>
-              {e.place && <span>{e.place}</span>}
-              {e.seats !== null && <span>{e.seats} seats</span>}
+              <span>{e.place || 'No venue specified'}</span>
+              <span>{e.seats !== null ? `${e.seats} seats` : 'No seat limit'}</span>
               <span>{e.fee > 0 ? `৳${e.fee}` : 'Free'}</span>
             </div>
           </div>
@@ -206,7 +202,6 @@ export function EventHead({
         set={set}
         error={error}
         setError={setError}
-        tags={tags}
         aside={aside}
         isOrganizer
       />
@@ -223,7 +218,6 @@ export function HeadFields({
   set,
   error,
   setError,
-  tags,
   aside,
   creating,
   isOrganizer = true,
@@ -257,6 +251,9 @@ export function HeadFields({
             type="file"
             hidden
             accept="image/png,image/jpeg,image/webp"
+            onClick={(e) => {
+              (e.target as HTMLInputElement).value = '';
+            }}
             onChange={(x) => {
               const f = x.target.files?.[0];
               x.target.value = '';
@@ -309,6 +306,7 @@ export function HeadFields({
           <div className="meta">
             <span className="on">
               <select
+                form={FORM}
                 value={v.type}
                 onChange={(x) => set({ type: x.target.value })}
                 aria-label="Event type"
@@ -320,11 +318,25 @@ export function HeadFields({
                 ))}
               </select>
             </span>
-            {tags ? (
-              <span className="bl">{tags}</span>
-            ) : (
-              <span className="bl">● Sign-up open</span>
-            )}
+            <span className="ev-meta-status">
+              <span className="ev-status-dot" data-status={v.status ?? 'draft'} />
+              <select
+                form={FORM}
+                value={v.status ?? 'draft'}
+                onChange={(x) => set({ status: x.target.value as any })}
+                aria-label="Event status"
+              >
+                {EVENT_STATUSES.map((s) => (
+                  <option
+                    key={s}
+                    value={s}
+                    disabled={s === 'completed' && (!v.startsAt || v.startsAt > clubNow())}
+                  >
+                    {EVENT_STATUS_LABEL[s]}
+                  </option>
+                ))}
+              </select>
+            </span>
             <span>
               <DatePicker
                 time
@@ -342,7 +354,7 @@ export function HeadFields({
                 aria-label="Place"
                 placeholder="Add a place"
                 maxLength={140}
-                size={Math.max(8, (v.place ?? '').length + 1)}
+                style={{ width: '100%', minWidth: 0 }}
                 value={v.place}
                 onChange={(x) => set({ place: x.target.value })}
               />
@@ -353,16 +365,16 @@ export function HeadFields({
                 type="number"
                 min={1}
                 placeholder="No limit"
-                style={{ width: 56 }}
+                style={{ width: 68 }}
                 value={v.seats ?? ''}
                 onChange={(e) => set({ seats: e.target.value ? +e.target.value : null })}
               />
-              <span className="mono" style={{ fontSize: 11, color: 'var(--dim)' }}>
+              <span className="mono" style={{ fontSize: 13, color: 'var(--dim)', textTransform: 'uppercase' }}>
                 seats
               </span>
             </span>
             <span>
-              <span className="mono" style={{ fontSize: 11, color: 'var(--dim)' }}>
+              <span className="mono" style={{ fontSize: 13, color: 'var(--dim)' }}>
                 ৳
               </span>
               <input
@@ -370,7 +382,7 @@ export function HeadFields({
                 type="number"
                 min={0}
                 placeholder="Free"
-                style={{ width: 44 }}
+                style={{ width: 60 }}
                 value={v.fee || ''}
                 onChange={(e) => set({ fee: Math.max(0, parseInt(e.target.value, 10) || 0) })}
               />
@@ -500,11 +512,29 @@ export function HeadFields({
           </div>
           {v.mode !== 'form' && (
             <div className="sec">
-              <h2 style={{ fontSize: 16 }}>Extra questions</h2>
-              <p className="sub" style={{ marginBottom: 16 }}>
-                We always ask for name and phone. Add anything else you need to know.
-              </p>
-              <FieldsEditor value={v.fields ?? []} onChange={(fields) => set({ fields })} />
+              <div className="row between" style={{ alignItems: 'flex-start', marginBottom: 12 }}>
+                <div>
+                  <h2 style={{ fontSize: 16, margin: 0 }}>Extra questions</h2>
+                  <p className="sub" style={{ margin: '4px 0 0 0' }}>
+                    We always ask for name and phone. Add anything else you need to know.
+                  </p>
+                </div>
+                <button
+                  className="eb"
+                  type="button"
+                  onClick={() =>
+                    set({ fields: [...(v.fields ?? []), { label: '', required: false }] })
+                  }
+                >
+                  + Add a question
+                </button>
+              </div>
+              <FieldsEditor
+                hideHeader
+                hideAddButton
+                value={v.fields ?? []}
+                onChange={(fields) => set({ fields })}
+              />
             </div>
           )}
         </div>

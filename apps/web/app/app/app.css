@@ -5659,12 +5659,7 @@ select.member-filter-ctrl {
   background: var(--panel);
   border: 1px solid var(--line2);
   box-shadow: 6px 6px 0 var(--line2);
-  transition: transform 0.2s, box-shadow 0.2s;
-  overflow: hidden;
-}
-.ev-detail .post:hover {
-  transform: translate(-1px, -1px);
-  box-shadow: 7px 7px 0 var(--line2);
+  /* Do not add overflow: hidden or transform here; it traps fixed popovers like DatePicker */
 }
 
 /* Banner Component */
@@ -5791,58 +5786,127 @@ select.member-filter-ctrl {
   border-bottom-color: var(--acc);
 }
 
-/* Segmented Meta Strip */
+/* Segmented Meta Table Grid */
 .ev-detail .meta {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0;
-  margin: 16px 0 0;
-  border: 1px solid var(--line);
-  width: max-content;
+  margin: 18px 0 0;
+  border-top: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+  width: 100%;
   max-width: 100%;
   background: var(--panel);
+  position: relative;
+  z-index: 2;
+  box-sizing: border-box;
 }
+
+@media (max-width: 720px) {
+  .ev-detail .meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 440px) {
+  .ev-detail .meta {
+    grid-template-columns: 1fr;
+  }
+}
+
 .ev-detail .meta > span,
 .ev-detail .meta > div {
   font-family: var(--f-mono, monospace);
-  font-size: 12px;
-  padding: 6px 12px;
+  font-size: 14px;
+  padding: 10px 14px;
   border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
   color: var(--hi);
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 4px;
-  transition: background 0.2s;
+  gap: 8px;
+  min-width: 0;
+  box-sizing: border-box;
+  background: var(--panel);
 }
-.ev-detail .meta > span:last-child,
-.ev-detail .meta > div:last-child {
-  border-right: 0;
-}
+
 .ev-detail .meta .on {
   background: var(--ink);
   color: var(--panel);
-  border-color: var(--ink);
 }
-.ev-detail .meta .on select {
+
+.ev-detail .meta select {
   background: transparent;
   color: inherit;
   border: 0;
   font: inherit;
+  font-family: var(--f-mono, monospace);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
   outline: none;
   cursor: pointer;
+  padding: 0;
+  width: 100%;
+  min-width: 0;
 }
+
+.ev-detail .meta select option {
+  background: var(--panel);
+  color: var(--hi);
+  font-family: var(--f-mono, monospace);
+  font-size: 14px;
+  text-transform: none;
+}
+
+.ev-detail .meta .ev-meta-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--hi);
+  cursor: pointer;
+  width: 100%;
+  min-width: 0;
+}
+
+.ev-detail .meta .ev-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex: none;
+  background: var(--acc);
+}
+.ev-detail .meta .ev-status-dot[data-status="draft"] { background: var(--mut); }
+.ev-detail .meta .ev-status-dot[data-status="published"] { background: var(--hi); }
+.ev-detail .meta .ev-status-dot[data-status="open"] { background: #10b981; }
+.ev-detail .meta .ev-status-dot[data-status="ongoing"] { background: var(--acc); }
+.ev-detail .meta .ev-status-dot[data-status="closed"] { background: #f59e0b; }
+.ev-detail .meta .ev-status-dot[data-status="completed"] { background: var(--dim); }
+.ev-detail .meta .ev-status-dot[data-status="cancelled"] { background: var(--bad); }
+
 .ev-detail .meta .bl {
   color: var(--acc);
   font-weight: 600;
 }
+
 .ev-detail .meta input {
   background: transparent;
   border: 0;
   color: inherit;
   font: inherit;
+  font-family: var(--f-mono, monospace);
+  font-size: 14px;
   padding: 0;
   outline: none;
 }
+
+.ev-detail .meta .datepick {
+  width: 100%;
+}
+
 .ev-detail .meta .datepick__btn {
   background: transparent !important;
   border: 0 !important;
@@ -5850,8 +5914,14 @@ select.member-filter-ctrl {
   padding: 0 !important;
   height: auto !important;
   min-height: 0 !important;
-  font-size: 12px !important;
+  min-width: 0 !important;
+  font: inherit !important;
+  font-size: 14px !important;
+  font-family: var(--f-mono, monospace) !important;
   box-shadow: none !important;
+  cursor: pointer !important;
+  white-space: nowrap !important;
+  width: 100% !important;
 }
 
 /* Tabs & Editor */
@@ -5947,21 +6017,48 @@ select.member-filter-ctrl {
     grid-template-columns: 1fr;
   }
 }
-.ev-detail .ctl {
+/* Datepicker inside form controls: remove nested inner border box */
+.ev-detail .f .datepick.ctl,
+.f .datepick.ctl {
+  padding: 0 !important;
+  display: flex !important;
+  align-items: stretch !important;
+}
+.ev-detail .f .datepick.ctl .datepick__btn,
+.f .datepick.ctl .datepick__btn {
+  border: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  width: 100% !important;
+  height: 100% !important;
+  padding: 0 12px !important;
+  font-size: 14px !important;
+  font-family: inherit !important;
+  color: inherit !important;
+  cursor: pointer !important;
+}
+
+.ev-detail .ctl,
+.evm-modal .ctl,
+.evm-modal input[type="search"],
+.evm-modal select {
   width: 100%;
-  height: 42px;
+  height: 40px;
   border: 1px solid var(--line);
-  background: var(--bg);
+  background: var(--panel) !important;
   font-family: var(--f-body, sans-serif);
   font-size: 14px;
-  color: var(--hi);
+  color: var(--hi) !important;
   padding: 0 12px;
   outline: none;
   border-radius: 0;
   box-sizing: border-box;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
-.ev-detail .ctl:focus {
+.ev-detail .ctl:focus,
+.evm-modal .ctl:focus,
+.evm-modal input[type="search"]:focus,
+.evm-modal select:focus {
   border-color: var(--acc);
   box-shadow: 2px 2px 0 var(--acc);
 }
@@ -6073,7 +6170,7 @@ select.member-filter-ctrl {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 15px 16px;
+  padding: 10px 14px;
   text-decoration: none;
   color: inherit;
   border: 0;
@@ -6101,7 +6198,7 @@ select.member-filter-ctrl {
   transition: transform 0.2s;
 }
 .ev-detail .item:hover {
-  padding-left: 22px;
+  padding-left: 18px;
   background: var(--bg);
 }
 .ev-detail .item:hover::before {
@@ -6112,18 +6209,18 @@ select.member-filter-ctrl {
 }
 .ev-detail .item .tx b {
   display: block;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--hi);
 }
 .ev-detail .item .tx span {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--dim);
 }
 .ev-detail .item .ar {
   font-family: var(--f-mono, monospace);
-  font-size: 13px;
+  font-size: 15px;
   color: var(--dim);
   transition: transform 0.2s, color 0.2s;
 }
@@ -6369,55 +6466,164 @@ select.member-filter-ctrl {
 }
 
 /* Event dialogs: match the heavy brutalist <dialog> in the design reference. */
+.evm-backdrop,
 .ev-detail .evm-backdrop {
-  background: rgba(13, 13, 11, 0.72);
+  --bg: #ece9e1;
+  --panel: #f6f4ee;
+  --ink: #0d0d0b;
+  --hi: #0d0d0b;
+  --mut: #33312b;
+  --dim: #5e5a50;
+  --line: rgba(13, 13, 11, 0.16);
+  --line2: #0d0d0b;
+  --acc: #1f3bff;
+  --on: #ece9e1;
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 99999 !important;
+  background: rgba(13, 13, 11, 0.72) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: clamp(16px, 4vh, 48px) 16px !important;
+  overflow-y: auto !important;
 }
+.evm-backdrop.t-d,
+.ev-detail .evm-backdrop.t-d {
+  --bg: #0c0c0d;
+  --panel: #131314;
+  --ink: #f2efe9;
+  --hi: #f2efe9;
+  --mut: #c9c5bc;
+  --dim: #a29e95;
+  --line: #2a2927;
+  --line2: #55524c;
+  --acc: #ff5a1f;
+  --on: #0c0c0d;
+}
+.evm-modal,
 .ev-detail .evm-modal {
+  position: relative;
+  z-index: 100000 !important;
+  width: 100%;
   max-width: 720px;
+  margin: auto;
   padding: 0;
   gap: 0;
   overflow: hidden;
   border: 2px solid var(--ink);
-  background: var(--panel);
-  box-shadow: 12px 12px 0 rgba(13, 13, 11, 0.28);
+  background: var(--panel) !important;
+  color: var(--ink);
+  box-shadow: 12px 12px 0 rgba(13, 13, 11, 0.35);
+  box-sizing: border-box;
 }
+.evm-modal.wide,
 .ev-detail .evm-modal.wide {
   max-width: 980px;
 }
+.evm-modal-head,
 .ev-detail .evm-modal-head {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 0.85rem 1.25rem;
+  padding: 12px 20px;
   border-bottom: 2px solid var(--ink);
   background: var(--bg);
+  box-sizing: border-box;
 }
+.evm-modal-head .h3,
 .ev-detail .evm-modal-head .h3 {
   margin: 0;
   font-family: var(--f-label);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
+  color: var(--hi);
 }
+.evm-modal .cm-modal-close,
 .ev-detail .evm-modal .cm-modal-close {
   min-width: 34px;
   min-height: 34px;
   border: 2px solid var(--ink);
   background: var(--panel);
   color: var(--ink);
+  font-size: 20px;
+  font-weight: 700;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  line-height: 1;
 }
+.evm-modal .cm-modal-close:hover,
 .ev-detail .evm-modal .cm-modal-close:hover {
   background: var(--acc);
   border-color: var(--acc);
   color: var(--on);
 }
+.evm-modal-body,
 .ev-detail .evm-modal-body {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  min-height: 0;
-  padding: 1.25rem;
+  padding: 24px;
+  background: var(--panel);
+  color: var(--ink);
+  max-height: calc(85vh - 70px);
   overflow-y: auto;
+  box-sizing: border-box;
+}
+
+/* Modal content & controls: ensure light theme inside modals */
+.evm-modal input[type="search"],
+.evm-modal input[type="text"],
+.evm-modal select,
+.evm-modal .ctl {
+  background: var(--bg) !important;
+  color: var(--hi) !important;
+  border: 1px solid var(--line2) !important;
+  font-family: var(--f-body, sans-serif);
+  font-size: 14px;
+}
+.evm-modal input[type="search"]::placeholder,
+.evm-modal input[type="text"]::placeholder {
+  color: var(--dim) !important;
+}
+.evm-modal .eb {
+  background: var(--panel) !important;
+  color: var(--hi) !important;
+  border: 1px solid var(--line2) !important;
+}
+.evm-modal .eb:hover {
+  background: var(--ink) !important;
+  color: var(--on) !important;
+}
+.evm-modal .mini-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-family: var(--f-label);
+}
+.evm-modal .mini-table th {
+  text-align: left;
+  padding: 0.65rem 0.5rem;
+  border-bottom: 2px solid var(--line2);
+  color: var(--dim);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: var(--bg);
+}
+.evm-modal .mini-table td {
+  padding: 0.65rem 0.5rem;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+  background: var(--panel);
+  color: var(--hi);
+}
+.evm-modal .mini-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--acc) 6%, var(--panel));
 }
 
 /* Certificate preview dialog */

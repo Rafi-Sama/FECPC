@@ -14,7 +14,6 @@ import {
   certHeadline,
   DEFAULT_CERT,
   DEFAULT_MAIL,
-  EVENT_STATUS_LABEL,
   MAIL_SAMPLE,
   renderMail,
   fillTemplate,
@@ -22,16 +21,13 @@ import {
   type EventDetail,
   type EventEntry,
   type EventRole,
-  type EventStatus,
 } from '@fecpc/contracts';
-import { liveStatus } from '@/lib/events';
 
 /** Command sidebar for event organizers (Status, Responses, Roles, Certificates, Email, Feedback, Settings) */
 export function EventAdmin({ e, reload }: { e: EventDetail; reload: () => void }) {
   const { act } = useStore();
   const router = useRouter();
   const confirmIt = useConfirm();
-  const [editStatus, setEditStatus] = useState(false);
   const [certModalOpen, setCertModalOpen] = useState(false);
   const [certKind, setCertKind] = useState('participant');
   const [modal, setModal] = useState<'responses' | 'roles' | 'certs' | 'email' | 'feedback' | null>(
@@ -78,108 +74,7 @@ export function EventAdmin({ e, reload }: { e: EventDetail; reload: () => void }
 
   return (
     <>
-      {/* Panel 1: Event Status */}
-      <div className="panel">
-        <div className="ph">
-          <span className="mono" style={{ color: 'var(--hi)' }}>
-            Status
-          </span>
-          <button
-            type="button"
-            className="eb"
-            onClick={() => setEditStatus(!editStatus)}
-          >
-            {editStatus ? 'Cancel' : 'Edit'}
-          </button>
-        </div>
-        <div className="st">
-          <span className="state">
-            <i />
-            {liveStatus(e) ?? EVENT_STATUS_LABEL[e.status]}
-          </span>
-          <div className="big" style={{ marginTop: 14 }}>
-            {e.seats !== null ? (
-              <>
-                {Math.max(0, e.seats - e.taken)}
-                <span
-                  style={{
-                    fontSize: 16,
-                    fontWeight: 500,
-                    color: 'var(--dim)',
-                    letterSpacing: 0,
-                  }}
-                >
-                  {' '}
-                  / {e.seats} seats left
-                </span>
-              </>
-            ) : (
-              <>
-                {e.taken}
-                <span
-                  style={{
-                    fontSize: 16,
-                    fontWeight: 500,
-                    color: 'var(--dim)',
-                    letterSpacing: 0,
-                  }}
-                >
-                  {' '}
-                  registered
-                </span>
-              </>
-            )}
-          </div>
-          <div className="bar">
-            <i
-              style={{
-                width: `${
-                  e.seats && e.seats > 0
-                    ? Math.min(100, Math.round((e.taken / e.seats) * 100))
-                    : e.taken > 0
-                      ? 100
-                      : 0
-                }%`,
-              }}
-            />
-          </div>
-
-          {editStatus && (
-            <div style={{ marginTop: 14 }}>
-              <select
-                className="ctl"
-                style={{ height: 38, fontSize: 13 }}
-                value={e.status}
-                onChange={async (x) => {
-                  const s = x.target.value as EventStatus;
-                  if (await act('eventStatus', { id: e.id, status: s })) {
-                    setEditStatus(false);
-                    reload();
-                  }
-                }}
-              >
-                {(
-                  [
-                    'draft',
-                    'published',
-                    'open',
-                    'closed',
-                    'ongoing',
-                    'completed',
-                    'cancelled',
-                  ] as const
-                ).map((st) => (
-                  <option key={st} value={st}>
-                    {EVENT_STATUS_LABEL[st]}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Panel 2: Launchpad Rail */}
+      {/* Launchpad Rail */}
       <div className="panel">
         <button
           type="button"

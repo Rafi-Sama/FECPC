@@ -1,5 +1,7 @@
 'use client';
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import { useStore } from '../Store';
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -21,6 +23,13 @@ export function EventModal({
 }) {
   const box = useRef<HTMLDivElement>(null);
   const close = useRef<HTMLButtonElement>(null);
+  const [mounted, setMounted] = useState(false);
+  const { s } = useStore();
+  const th = s?.flags?.dark ? 't-d' : 't-b';
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const previous = document.body.style.overflow;
@@ -60,16 +69,20 @@ export function EventModal({
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  return (
+  if (!mounted) return null;
+
+  const target = document.getElementById('main') || document.body;
+
+  return createPortal(
     <div
-      className="cm-backdrop evm-backdrop"
+      className={`cm-backdrop evm-backdrop ${th}`}
       data-modal
       role="dialog"
       aria-modal="true"
       aria-label={title}
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div ref={box} className={`cm-modal evm-modal${wide ? ' wide' : ''}`}>
+      <div ref={box} className={`cm-modal evm-modal ev-detail${wide ? ' wide' : ''}`}>
         <div className="cm-modal-head evm-modal-head">
           <h2 className="h3">{title}</h2>
           <button
@@ -84,6 +97,7 @@ export function EventModal({
         </div>
         <div className="evm-modal-body">{children}</div>
       </div>
-    </div>
+    </div>,
+    target,
   );
 }

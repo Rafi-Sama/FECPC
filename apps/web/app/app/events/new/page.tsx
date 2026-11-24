@@ -11,7 +11,6 @@ import {
   BLANK,
   pickDraft,
   SignupEdit,
-  StatusField,
   useSaveEvent,
   type Draft,
 } from '@/components/app/events/EventForm';
@@ -87,13 +86,6 @@ function Editor({ from }: { from: EventDetail | null }) {
         set={set}
         error={error}
         setError={setError}
-        aside={
-          <aside className="stack ev-aside">
-            <section className="panel stack ev-card" aria-label="Publishing">
-              <StatusField v={v} set={set} copy={!!from} />
-            </section>
-          </aside>
-        }
       />
       <SaveForm
         id={FORM}
