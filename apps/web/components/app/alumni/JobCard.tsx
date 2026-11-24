@@ -205,6 +205,8 @@ export function JobCard({
             >
               {job.company_logo_url ? (
                 <img
+                  loading="lazy"
+                  decoding="async"
                   src={job.company_logo_url}
                   alt={`${job.company} logo`}
                   style={{

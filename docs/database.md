@@ -23,17 +23,17 @@ and extra columns on existing tables.
 
 ### People and access
 
-| Table            | Purpose                                                                                                                                                                                                                                 | FK    |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
-| `users`          | Every account: identity, role, status and `suspended`, title, `post`, profile, Codeforces stats, `vjudge_handle` and `vj_solved`, `progress` (personal JSON state), `system` (operator), invite hash, `google_sub`, `github_id`         | —     |
-| `credentials`    | Current password hash (kept in step with `users.pass_hash`)                                                                                                                                                                             | users |
-| `sessions`       | SHA-256 of each session token, expiry, created and last-seen times                                                                                                                                                                      | users |
-| `invite_tokens`  | One-time set-password tokens (hashed); `users.invite_hash` holds the other form                                                                                                                                                         | users |
-| `login_attempts` | Failed sign-in counters per (email, address) with a 15-minute window                                                                                                                                                                    | —     |
-| `mail_queue`     | Outgoing email: queued, sent (body cleared) or failed, with retries and an expiry; kept 30 days. See [Deployment](deployment.md#email)                                                                                                  | —     |
-| `applications`   | Applicants from a recruitment link or a CSV import, and their decisions                                                                                                                                                                 | users |
-| `audit`          | Readable audit lines for the admin panel (who, what, when, section). Append-only: a trigger refuses edits and deletes; the section (`area`) comes from the action (`act()` sets `fecpc.area`) or, failing that, from `audit_area(what)` | —     |
-| `audit_log`      | Structured audit records (actor, action, entity, summary, IP hash); rows cannot be changed                                                                                                                                              | users |
+| Table            | Purpose                                                                                                                                                                                                                                                                                     | FK    |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| `users`          | Every account: identity, role, status and `suspended`, title, `post`, profile, Codeforces stats, `vjudge_handle` and `vj_solved`, `progress` (personal JSON state), `system` (operator), invite hash, `google_sub`, `github_id`. `avatar_key` (generated) versions an uploaded photo's link | —     |
+| `credentials`    | Current password hash (kept in step with `users.pass_hash`)                                                                                                                                                                                                                                 | users |
+| `sessions`       | SHA-256 of each session token, expiry, created and last-seen times                                                                                                                                                                                                                          | users |
+| `invite_tokens`  | One-time set-password tokens (hashed); `users.invite_hash` holds the other form                                                                                                                                                                                                             | users |
+| `login_attempts` | Failed sign-in counters per (email, address) with a 15-minute window                                                                                                                                                                                                                        | —     |
+| `mail_queue`     | Outgoing email: queued, sent (body cleared) or failed, with retries and an expiry; kept 30 days. See [Deployment](deployment.md#email)                                                                                                                                                      | —     |
+| `applications`   | Applicants from a recruitment link or a CSV import, and their decisions                                                                                                                                                                                                                     | users |
+| `audit`          | Readable audit lines for the admin panel (who, what, when, section). Append-only: a trigger refuses edits and deletes; the section (`area`) comes from the action (`act()` sets `fecpc.area`) or, failing that, from `audit_area(what)`                                                     | —     |
+| `audit_log`      | Structured audit records (actor, action, entity, summary, IP hash); rows cannot be changed                                                                                                                                                                                                  | users |
 
 ### Member activity
 
@@ -154,6 +154,10 @@ To start over locally:
 psql postgres://fecpc:fecpc_dev@127.0.0.1:5433/fecpc -c 'drop schema public cascade; create schema public'
 pnpm db:setup
 ```
+
+For performance testing, `apps/api/scripts/perf-seed.sql` adds a club ten times the size of a large one (5,000
+members, 500k solves, 1,000 events, 200k audit rows) to a seeded throwaway database. See
+[Performance audit](performance-audit.md#reproduce).
 
 ## Test database
 

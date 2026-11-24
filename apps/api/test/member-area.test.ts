@@ -15,6 +15,7 @@ import {
   getFeedPostDetail,
   getIdeaDetail,
   getKudosTodayCount,
+  avatar,
   getMemberProfile,
   kudosMilestone,
   listFeedPosts,
@@ -86,7 +87,7 @@ const googleSays = (profile: object) => {
 };
 /** The member-dues period every seeded account is in: they all joined this month. */
 const TERM = 'TERM-' + today().slice(0, 7);
-const st = async (id: string) => (await loadState(db(), id))!;
+const st = async (id: string) => (await loadState(db(), id, { roster: true }))!;
 /** The newest audit entries, as the President sees them. */
 const logOf = async (id: string, b: Record<string, unknown> = {}) =>
   (await auditQuery(db(), id, b)).rows;
@@ -206,6 +207,7 @@ test('visibility: each role receives only the datasets it has a capability for',
     'expenses',
     'fund',
     'ops',
+    'people',
     'queue',
     'suggestions',
   ]);
@@ -215,6 +217,7 @@ test('visibility: each role receives only the datasets it has a capability for',
     'feedback',
     'mail',
     'ops',
+    'people',
     'profileRequests',
     'recruit',
     'suggestions',
@@ -924,10 +927,10 @@ test('recruitment: links are officer-only; the form is validated; batch comes fr
   );
   // the form's student ID and phone stay with the account, for the member's own eyes
   const own = await getMemberProfile(db(), 'rina_akter', { userId: 'rina_akter' });
-  assert.deepEqual(
-    [own.student_id, own.phone, own.avatar_url],
-    ['2026-331-077', '01712345678', PHOTO],
-  );
+  assert.deepEqual([own.student_id, own.phone], ['2026-331-077', '01712345678']);
+  // the photo travels as a link to GET /v1/avatars/:id, which serves the uploaded bytes
+  assert.match(own.avatar_url!, /^\/api\/avatars\/rina_akter\?v=[0-9a-f]{10}$/);
+  assert.equal((await avatar(db(), 'rina_akter')).body.toString('base64'), PHOTO.split(',')[1]);
   const other = await getMemberProfile(db(), 'tasnim', { userId: 'rina_akter' });
   assert.deepEqual([other.student_id, other.phone, other.email], [undefined, undefined, undefined]);
   const log = (

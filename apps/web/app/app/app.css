@@ -92,6 +92,9 @@
 @media (max-width: 860px) {
   .shell {
     grid-template-columns: 1fr;
+    /* The top bar keeps its height; spare height goes to the page. Stretching both rows made the bar shrink with
+       a jump (CLS) once a page's data arrived and the page grew past the screen. */
+    grid-template-rows: auto 1fr;
   }
 
   .side {
@@ -2809,7 +2812,8 @@ kbd {
 }
 
 /* top bar: search, theme, inbox and the account menu live here so the sidebar is only navigation */
-.body {
+/* Scoped: `.body` is also the paragraph text class, which must stay inline-flowing. */
+.shell > .body {
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -5332,7 +5336,14 @@ select.member-filter-ctrl {
 }
 
 .page {
-  animation: page-in 0.32s ease-out;
+  /* Slide only: an opacity fade hides the page from first paint and delays LCP until after hydration. */
+  animation: page-rise 0.32s ease-out;
+}
+
+@keyframes page-rise {
+  from {
+    transform: translateY(8px);
+  }
 }
 
 @keyframes page-in {
@@ -5466,7 +5477,7 @@ select.member-filter-ctrl {
   display: flex;
   flex-direction: column;
   min-height: 380px;
-  animation: page-in 0.4s ease-out both;
+  animation: page-rise 0.4s ease-out both; /* no fade: a hidden tile cannot be the page's first paint */
   animation-delay: calc(var(--i, 0) * 50ms);
   transition:
     transform 0.2s ease,
@@ -5708,10 +5719,10 @@ select.member-filter-ctrl {
   position: relative;
   overflow: hidden;
   width: 100%;
-  aspect-ratio: 16 / 9;
+  /* Standard event cover, 1200 × 630: the image is framed the same at every width. */
+  aspect-ratio: 1200 / 630;
   height: auto;
   min-height: 0;
-  max-height: 480px;
   padding: 0;
   border: 0;
   border-bottom: 1px solid var(--line2);

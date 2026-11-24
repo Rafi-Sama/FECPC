@@ -26,6 +26,16 @@ const TOP_CONTRIBUTORS = [
   { rank: 5, name: 'Rifat Hasan', color: '#006400', votes: 52 },
 ];
 
+/** The whole post, or null when it could not be loaded. */
+async function loadPost(slug: string): Promise<BlogPost | null> {
+  const res = await fetch('/api/alumni', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'getBlogPost', slug }),
+  }).catch(() => null);
+  return res?.ok ? ((await res.json()) as BlogPost) : null;
+}
+
 export function BlogsTab({
   searchQuery,
   activeReadSlug,
@@ -115,22 +125,37 @@ export function BlogsTab({
     };
   }, [fetchPosts]);
 
+  // The list holds the start of each post only; the reader shows the preview while the whole post loads.
+  const opened = useRef('');
+  const openFull = useCallback(async (post: BlogPost) => {
+    if (opened.current === post.slug) return; // opened by the click, then again by the slug it set
+    opened.current = post.slug;
+    setActivePost(post);
+    const full = await loadPost(post.slug);
+    if (!full) return;
+    setActivePost((cur) =>
+      cur?.id === full.id ? { ...full, read_time_min: post.read_time_min } : cur,
+    );
+  }, []);
+
   // Open post if activeReadSlug provided
   useEffect(() => {
     if (activeReadSlug && posts.length > 0) {
       const found = posts.find((p) => p.slug === activeReadSlug);
-      if (found) setActivePost(found);
+      if (found) void openFull(found);
     } else if (!activeReadSlug) {
+      opened.current = '';
       setActivePost(null);
     }
-  }, [activeReadSlug, posts]);
+  }, [activeReadSlug, posts, openFull]);
 
   const handleOpenPost = (post: BlogPost) => {
-    setActivePost(post);
+    void openFull(post);
     onSelectReadSlug?.(post.slug);
   };
 
   const handleClosePost = () => {
+    opened.current = '';
     setActivePost(null);
     onSelectReadSlug?.(null);
   };
@@ -149,9 +174,13 @@ export function BlogsTab({
     onShowToast?.('Post deleted');
   };
 
-  const handleStartEdit = (post: BlogPost) => {
+  // The editor always gets the whole post: saving a list preview would cut the post short.
+  const handleStartEdit = async (post: BlogPost) => {
+    const full = await loadPost(post.slug);
+    if (!full) return onShowToast?.('Could not load the post. Try again.');
+    opened.current = '';
     setActivePost(null);
-    setEditingPost(post);
+    setEditingPost(full);
     setEditorOpen(true);
   };
 

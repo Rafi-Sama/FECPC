@@ -64,7 +64,10 @@ The member area was first built as a single Next.js app with the backend inside 
 - **One state payload per member** (`AppState` in `packages/contracts/src/state.ts`). Pages render from the
   store and never fetch on their own, apart from the paged queries above. After every change the server sends
   the whole fresh state, so every page is always consistent with the database, and there is no client cache to
-  invalidate. At club scale (tens to hundreds of members) the payload is small.
+  invalidate. Everything that grows with the club stays out of it: the roster is its own request
+  (`GET /v1/me/roster`), lists in it are capped, and photos and banners are links. The roster and the club-wide
+  half of the state are cached in the API process for 10 seconds and cleared by every action. With 5,000 members
+  the state is about 225 KB for a member (see [Performance audit](performance-audit.md)).
 - **One action endpoint** with a `type`. Every write goes through `act()`, which gives each one a transaction,
   a row lock on the actor, input validation and a permission check in one place. A new feature is one new
   handler.

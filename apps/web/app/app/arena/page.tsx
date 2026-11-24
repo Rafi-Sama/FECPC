@@ -13,7 +13,7 @@ import { SolveCheck, useDaily } from '@/components/app/home/Daily';
 const tabs = ['DAILY', 'CHALLENGES', 'RANKS', 'FANTASY', 'TROPHIES'] as const;
 
 export default function Arena() {
-  const { me, xp, members, sheets } = useStore();
+  const { me, xp, members, sheets, counts } = useStore();
   const { isSolved } = useSolved();
   const potd = useDaily();
   const [tab, setTab] = useState<(typeof tabs)[number]>('DAILY');
@@ -31,7 +31,7 @@ export default function Arena() {
         <div>
           <span className="label">Club rank</span>
           <strong>
-            #{rank || '—'} <small>of {members.length}</small>
+            #{rank || '—'} <small>of {counts.peopleCount}</small>
           </strong>
         </div>
         <div>

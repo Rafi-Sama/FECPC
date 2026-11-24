@@ -141,7 +141,7 @@ export default function Today({
                 </span>
                 {!x.done && (
                   <Link className="btn xs line" href={questLink[i]}>
-                    Go
+                    Go<span className="sr">: {x.text}</span>
                   </Link>
                 )}
               </li>

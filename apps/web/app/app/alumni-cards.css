@@ -100,31 +100,15 @@ body.t-d {
   animation: miniCardIn 0.6s var(--ease) both;
 }
 
+/* Lists show many cards at once, so a card enters as one piece (transform and opacity, which the compositor runs)
+   and loops run only on hover. Staggered per-element, per-pixel, per-letter and clip-path entrances, and two
+   endless loops per card, cost ~0.5–1.5 s of style recalculation on a phone (docs/performance-audit.md). */
 @keyframes miniCardIn {
   from {
     opacity: 0;
     transform: translateY(24px);
-    clip-path: inset(0 0 100% 0);
   }
 
-  to {
-    opacity: 1;
-    transform: none;
-    clip-path: inset(0 0 0 0);
-  }
-}
-
-.alumni-mini [data-r] {
-  opacity: 0;
-  transform: translateY(12px);
-}
-
-.alumni-mini.go [data-r] {
-  animation: miniRise 0.55s var(--ease) both;
-  animation-delay: calc(var(--i, 0) * 70ms + 200ms);
-}
-
-@keyframes miniRise {
   to {
     opacity: 1;
     transform: none;
@@ -171,16 +155,6 @@ body.t-d {
   transform: translateX(-120%);
 }
 
-.alumni-mini.go .mini-banner::after {
-  animation: miniSweep 1s 0.3s var(--ease) 1;
-}
-
-@keyframes miniSweep {
-  to {
-    transform: translateX(120%);
-  }
-}
-
 .alumni-mini .mini-tagline {
   position: relative;
   z-index: 1;
@@ -210,22 +184,6 @@ body.t-d {
   user-select: none;
   transform: translate(var(--mx, 0px), var(--my, 0px));
   transition: transform 0.25s var(--ease);
-}
-
-.alumni-mini.go .mini-wm {
-  animation: miniWmIn 1s 0.15s var(--ease) both;
-}
-
-@keyframes miniWmIn {
-  from {
-    opacity: 0;
-    transform: translate(60px, 0);
-  }
-
-  to {
-    opacity: 0.5;
-    transform: translate(0, 0);
-  }
 }
 
 /* Avatar overlapping banner */
@@ -262,24 +220,6 @@ body.t-d {
   fill: var(--hi);
   transform-box: fill-box;
   transform-origin: center;
-  opacity: 0;
-}
-
-.alumni-mini.go .mini-avatar rect {
-  animation: miniPix 0.3s var(--snap) both;
-  animation-delay: calc(450ms + var(--p) * 40ms);
-}
-
-@keyframes miniPix {
-  from {
-    opacity: 0;
-    transform: scale(0);
-  }
-
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
 }
 
 .alumni-mini .mini-avatar:hover rect {
@@ -308,6 +248,9 @@ body.t-d {
   position: absolute;
   inset: -5px;
   border: 2px solid #22c55e;
+}
+
+.alumni-mini:hover .mini-live::after {
   animation: miniPing 1.8s var(--snap) infinite;
 }
 
@@ -342,20 +285,6 @@ body.t-d {
 
 .alumni-mini .mini-name span {
   display: inline-block;
-  opacity: 0;
-  transform: translateY(60%);
-}
-
-.alumni-mini.go .mini-name span {
-  animation: miniLetter 0.5s var(--ease) both;
-  animation-delay: calc(400ms + var(--c) * 26ms);
-}
-
-@keyframes miniLetter {
-  to {
-    opacity: 1;
-    transform: none;
-  }
 }
 
 .alumni-mini .mini-role {
@@ -474,9 +403,12 @@ body.t-d {
   width: 10px;
   height: 10px;
   background: var(--acc);
-  animation: miniBlink 1.2s step-end infinite;
   display: inline-block;
   flex: none;
+}
+
+.alumni-mini:hover .mini-open i {
+  animation: miniBlink 1.2s step-end infinite;
 }
 
 .alumni-mini .mini-open.closed i {

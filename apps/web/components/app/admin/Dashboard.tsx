@@ -29,16 +29,20 @@ function Rows({ rows }: { rows: [string, number, string?][] }) {
 
 /** The executive overview, counted from the live state payload. A role only sees what it can act on. */
 export function Dashboard({ go, exp }: { go: (tab: string) => void; exp: boolean }) {
-  const { members, office, term, fundTotal, counts } = useStore();
-  const people = members.filter((m) => m.id !== 'admin' && !m.is_alumni);
-  const active = people.filter((m) => !m.suspended && !m.pending);
-  const linked = active.filter((m) => m.cf_handle);
-  const rated = linked
-    .map((m) => m.cf_rating ?? 0)
-    .filter((r) => r > 0)
-    .sort((a, b) => a - b);
-  const median = rated.length ? rated[Math.floor(rated.length / 2)]! : 0;
-  const daily = active.filter((m) => (m.current_streak ?? m.streak) > 0).length;
+  const { office, term, fundTotal, counts } = useStore();
+  // Counted on the server (office.people), so the dashboard never waits for the roster.
+  const p = office.people ?? {
+    active: 0,
+    invited: 0,
+    suspended: 0,
+    linked: 0,
+    rated: 0,
+    median: 0,
+    daily: 0,
+    ranks: [],
+    batches: [],
+    unlinked: [],
+  };
   const today = new Date().toLocaleDateString('en-CA');
 
   const todo: [number, string, string | (() => void)][] = [
@@ -71,27 +75,19 @@ export function Dashboard({ go, exp }: { go: (tab: string) => void; exp: boolean
 
   const dues = office.dues; // counted on the server per account, for finance roles
 
-  const ranks = new Map<string, [number, string]>();
-  for (const r of rated) {
-    const k = rankFor(r);
-    ranks.set(k.title, [(ranks.get(k.title)?.[0] ?? 0) + 1, k.color]);
-  }
-  const batches = new Map<number, number>();
-  for (const m of active) batches.set(m.batch, (batches.get(m.batch) ?? 0) + 1);
-
   const kpis: [string, string | number, string][] = [
     [
       'Active members',
-      active.length,
-      `${people.filter((m) => m.pending).length} invited, not joined · ${people.filter((m) => m.suspended).length} suspended · ${counts.alumniCount ?? members.filter((m) => m.is_alumni).length} alumni`,
+      p.active,
+      `${p.invited} invited, not joined · ${p.suspended} suspended · ${counts.alumniCount} alumni`,
     ],
     [
       'Codeforces linked',
-      `${pct(linked.length, active.length)}%`,
-      `${linked.length} of ${active.length} · ${active.length - linked.length} without a handle`,
+      `${pct(p.linked, p.active)}%`,
+      `${p.linked} of ${p.active} · ${p.active - p.linked} without a handle`,
     ],
-    ['Solving daily', daily, `${pct(daily, active.length)}% of active members on a streak`],
-    ['Median rating', median || '—', median ? rankFor(median).title : 'nobody rated yet'],
+    ['Solving daily', p.daily, `${pct(p.daily, p.active)}% of active members on a streak`],
+    ['Median rating', p.median || '—', p.median ? rankFor(p.median).title : 'nobody rated yet'],
   ];
 
   return (
@@ -176,41 +172,27 @@ export function Dashboard({ go, exp }: { go: (tab: string) => void; exp: boolean
       )}
 
       <section className="panel c6">
-        <p className="label">Ratings · {rated.length} rated members</p>
-        {rated.length ? (
-          <Rows rows={[...ranks].map(([t, [n, c]]) => [t, n, c])} />
-        ) : (
-          <p className="body">No rated members yet.</p>
-        )}
+        <p className="label">Ratings · {p.rated} rated members</p>
+        {p.rated ? <Rows rows={p.ranks} /> : <p className="body">No rated members yet.</p>}
       </section>
 
       <section className="panel c6">
         <p className="label">Active members by batch</p>
-        <Rows
-          rows={[...batches]
-            .sort((a, b) => b[0] - a[0])
-            .map(([b, n]) => [b ? `Batch ${b}` : 'No batch', n])}
-        />
+        <Rows rows={p.batches.map(([b, n]) => [b ? `Batch ${b}` : 'No batch', n])} />
       </section>
 
-      {active.length > linked.length && (
+      {p.active > p.linked && (
         <section className="panel c6">
-          <p className="label">No Codeforces handle · {active.length - linked.length}</p>
+          <p className="label">No Codeforces handle · {p.active - p.linked}</p>
           <ul className="list">
-            {active
-              .filter((m) => !m.cf_handle)
-              .slice(0, 8)
-              .map((m) => (
-                <li key={m.id}>
-                  <Link
-                    className="link grow"
-                    href={`/app/directory?q=${encodeURIComponent(m.name)}`}
-                  >
-                    {m.name}
-                  </Link>
-                  <span className="label">{m.batch ? `Batch ${m.batch}` : ''}</span>
-                </li>
-              ))}
+            {p.unlinked.map((m) => (
+              <li key={m.id}>
+                <Link className="link grow" href={`/app/directory?q=${encodeURIComponent(m.name)}`}>
+                  {m.name}
+                </Link>
+                <span className="label">{m.batch ? `Batch ${m.batch}` : ''}</span>
+              </li>
+            ))}
           </ul>
         </section>
       )}

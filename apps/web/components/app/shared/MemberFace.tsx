@@ -21,8 +21,8 @@ export function MemberFace({
   fg?: string;
   bg?: string;
 }) {
-  const { members } = useStore();
-  const src = url ?? (id ? members.find((m) => m.id === id)?.avatar_url : null);
+  const { who } = useStore();
+  const src = url ?? (id ? (who(id) as { avatar_url?: string | null }).avatar_url : null);
   return src ? (
     <img
       src={src}
@@ -30,6 +30,8 @@ export function MemberFace({
       width={size}
       height={size}
       className="face"
+      loading="lazy"
+      decoding="async"
       style={{ width: size, height: size }}
     />
   ) : (

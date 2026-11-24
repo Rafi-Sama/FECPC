@@ -506,13 +506,13 @@ export default function Finance() {
     .sort((a, b) => a.due.localeCompare(b.due))[0];
   const ledger = term.expenses;
   const categories = useMemo(() => {
-    const values = new Map<string, number>();
-    for (const item of ledger) values.set(item.cat, (values.get(item.cat) ?? 0) + item.amount);
-    const total = [...values.values()].reduce((sum, value) => sum + value, 0) || 1;
-    return [...values.entries()]
-      .map(([name, value]) => ({ name, value, percent: Math.round((value / total) * 100) }))
-      .sort((a, b) => b.value - a.value);
-  }, [ledger]);
+    const total = term.categories.reduce((sum, c) => sum + c.amount, 0) || 1;
+    return term.categories.map((c) => ({
+      name: c.cat,
+      value: c.amount,
+      percent: Math.round((c.amount / total) * 100),
+    }));
+  }, [term.categories]);
   const flowMax = Math.max(1, ...term.flow.flatMap((m) => [m.in, m.out]));
   const filteredLedger = ledger.filter((item) =>
     `${item.what} ${item.cat} ${item.date}`.toLowerCase().includes(query.toLowerCase()),

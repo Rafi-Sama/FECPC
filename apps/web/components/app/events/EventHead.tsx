@@ -267,6 +267,11 @@ export function HeadFields({
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [descTab, setDescTab] = useState<'write' | 'preview'>('write');
+  const errorRef = useRef<HTMLParagraphElement>(null);
+  // Save lives in the pinned bar at the top; a refusal printed at the foot of a long form would go unseen.
+  useEffect(() => {
+    if (error) errorRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [error]);
 
   return (
     <main style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
@@ -276,7 +281,7 @@ export function HeadFields({
           tabIndex={0}
           className={`banner${!v.banner ? ' has-pattern' : ''}`}
           aria-label="Upload banner image"
-          title="Click anywhere to choose or change banner image"
+          title="Click anywhere to choose or change banner image (1200 × 630)"
           style={bannerStyle(v.banner ?? null)}
           onClick={() => fileInputRef.current?.click()}
           onKeyDown={(e) => {
@@ -401,7 +406,7 @@ export function HeadFields({
                 type="number"
                 min={1}
                 placeholder="No limit"
-                style={{ width: 68 }}
+                style={{ width: 96 }}
                 value={v.seats ?? ''}
                 onChange={(e) => set({ seats: e.target.value ? +e.target.value : null })}
               />
@@ -580,7 +585,7 @@ export function HeadFields({
       )}
 
       {error && (
-        <p className="bad" role="alert" style={{ fontSize: 14 }}>
+        <p ref={errorRef} className="bad" role="alert" style={{ fontSize: 14 }}>
           {error}
         </p>
       )}

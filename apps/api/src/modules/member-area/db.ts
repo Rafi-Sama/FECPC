@@ -14,6 +14,13 @@ export const pool = (): pg.Pool => {
     idleTimeoutMillis: 30_000,
   }));
 };
+/**
+ * A member's photo as the client should load it. Uploaded photos are data URLs of up to 450 KB, so lists carry a
+ * versioned link to GET /v1/avatars/:id instead (cached by the browser); `alias` is the users row.
+ */
+export const face = (alias: string) =>
+  `case when ${alias}.avatar_key is null then ${alias}.avatar_url else '/api/avatars/' || ${alias}.id || '?v=' || ${alias}.avatar_key end`;
+
 /** Anything that can run a query: the pool, or one client inside a transaction. */
 export type Db = Pick<pg.Pool, 'query'>;
 

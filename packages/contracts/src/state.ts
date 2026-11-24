@@ -78,7 +78,7 @@ export type Roster = Member & {
   problems_solved: number;
   cf_rating?: number | null;
   cf_handle?: string | null;
-  /** Last five rated Codeforces rounds, newest first, from the server's sync. */
+  /** Last five rated Codeforces rounds, newest first, from the server's sync. Not in the roster (see clubRounds). */
   cf_contests?: CfRound[];
   current_streak?: number;
   contests_participated?: number;
@@ -393,7 +393,27 @@ export type AnnouncementItem = {
   read_count: number;
 };
 /** Officer-only datasets. Each key is present only when the role holds the capability that guards it. */
+/** Member counts for the admin dashboard, counted on the server so the dashboard does not wait for the roster. */
+export type PeopleSummary = {
+  active: number;
+  invited: number;
+  suspended: number;
+  /** Active members with a Codeforces handle, and how many of those have a rating. */
+  linked: number;
+  rated: number;
+  median: number;
+  /** Active members on a solving streak. */
+  daily: number;
+  /** Rated active members per rank, lowest rank first: [title, count, colour]. */
+  ranks: [string, number, string][];
+  /** Active members per batch, newest batch first. */
+  batches: [number, number][];
+  /** The first eight active members without a handle, highest rated first. */
+  unlinked: { id: string; name: string; batch: number }[];
+};
+
 export type Office = {
+  people?: PeopleSummary;
   queue?: {
     id: string;
     name: string;
@@ -463,6 +483,7 @@ export type AppState = {
   /** Live totals across all members: poll votes, kudos, volunteer sign-ups, solves per problem, announcement reads, milestone kudos daily cap, recent milestones. */
   counts: {
     votes: Record<string, Record<string, number>>;
+    /** Kudos per member, keyed `member:<id>` (members with none are absent). */
     kudos: Record<string, number>;
     vol: Record<string, number>;
     solved: Record<string, number>;
@@ -470,6 +491,16 @@ export type AppState = {
     kudosToday: number;
     recentMilestones: MilestoneDTO[];
     alumniCount?: number;
+    /** Everyone a member sees on the roster (alumni included), known before the roster itself loads. */
+    peopleCount: number;
+    /** The five members with the most helper points, highest first. */
+    topHelpers: {
+      id: string;
+      name: string;
+      helper: number;
+      solved: number;
+      avatar_url: string | null;
+    }[];
     jobsCount?: number;
     prepTopicsCount?: number;
     blogsCount?: number;
@@ -494,8 +525,10 @@ export type AppState = {
     since: string;
     incoming: number;
     spent: number;
-    /** Approved expenses this term, newest first; every member sees them. */
+    /** The latest 100 approved expenses this term, newest first; every member sees them. */
     expenses: { date: string; what: string; cat: string; amount: number; by: string | null }[];
+    /** Every approved expense this term, summed per category, largest first. */
+    categories: { cat: string; amount: number }[];
     /** Verified payments in and approved expenses out, per month, the last six months. */
     flow: { month: string; in: number; out: number }[];
   };
@@ -504,7 +537,10 @@ export type AppState = {
   profileRequest: ProfileRequest | null;
   /** The current weekly sheet first, then curated sheets, newest first. `club` = members Codeforces says solved it. */
   sheets: Sheet[];
-  /** Arena challenges from the last 30 days, newest first. `solvers[].at` is the first accept on Codeforces. */
+  /**
+   * The 30 newest Arena challenges from the last 30 days, newest first. `solvers[].at` is the first accept on Codeforces;
+   * `solvers` holds the first ten since the challenge, ten from before and the member, `since`/`earlier` the totals.
+   */
   challenges: {
     id: number;
     problem: string;
@@ -513,6 +549,8 @@ export type AppState = {
     by: string;
     at: string;
     solvers: { id: string; at: string | null }[];
+    since: number;
+    earlier: number;
   }[];
   /** Fantasy league: this week's and next week's Mondays, and every team picked for last, this or next week. */
   fantasy: { week: string; next: string; teams: { by: string; week: string; picks: string }[] };
@@ -566,6 +604,15 @@ export type Sheet = {
   by: string | null;
   at: string;
   problems: SheetProblem[];
+};
+
+/** One member's rounds for the contests page (`members` query `clubRounds`). */
+export type ClubRounds = {
+  id: string;
+  name: string;
+  handle: string | null;
+  cf_rating: number | null;
+  cf_contests: CfRound[];
 };
 
 export type CfRound = {

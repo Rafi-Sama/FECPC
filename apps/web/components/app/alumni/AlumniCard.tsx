@@ -121,6 +121,8 @@ export function AlumniCard({
       >
         {alumnus.avatar_url ? (
           <img
+            loading="lazy"
+            decoding="async"
             src={alumnus.avatar_url}
             alt={alumnus.name}
             style={{ width: '100%', height: '100%', objectFit: 'cover' }}

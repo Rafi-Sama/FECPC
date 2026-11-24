@@ -47,7 +47,7 @@ import type {
   MilestoneDTO,
 } from '@fecpc/contracts';
 import { newToken, sha } from './tokens.ts';
-import { Fail, tx, type Db } from './db.ts';
+import { Fail, face, tx, type Db } from './db.ts';
 import { teamHandlers } from './teams.ts';
 import { eventHandlers } from './events.ts';
 import { decideApplication, inviteNotice, recruitHandlers } from './recruit.ts';
@@ -65,6 +65,7 @@ import { challengeHandlers, sheetHandlers } from './sheets.ts';
 import { learningHandlers } from './learning.ts';
 import { DAILY_KUDOS_CAP, MILESTONE_FRESHNESS_DAYS } from './milestones.ts';
 import {
+  forgetShared,
   isAdmin,
   isCommittee,
   loadState,
@@ -1767,7 +1768,7 @@ export async function act(userId: string, input: unknown): Promise<string | void
     if (after !== before)
       await c.query(`update users set progress = $2 where id = $1`, [userId, after]);
     return info;
-  });
+  }).finally(forgetShared); // what everyone sees may have changed (also on a refusal: harmless)
 }
 
 /** Member export for officers. The download itself is the audited event. */
@@ -1864,16 +1865,17 @@ export async function listFeedPosts(
   }
 
   params.push(limit + 1);
-  // Hot: net votes decay with age in hours (gravity 1.5), so fresh, well-voted posts rise.
+  // Hot: net votes decay with age in hours (gravity 1.5), so fresh, well-voted posts rise. In float8: extract()
+  // returns numeric, and numeric power() over every post took 0.3 s at 20k posts.
   const orderBy =
     sort === 'top'
       ? `fp.score desc, fp.id desc`
       : sort === 'hot'
-        ? `(fp.score + 1) / power(extract(epoch from now() - fp.created_at) / 3600 + 2, 1.5) desc, fp.id desc`
+        ? `(fp.score + 1) / power(extract(epoch from now() - fp.created_at)::float8 / 3600 + 2, 1.5) desc, fp.id desc`
         : `fp.created_at desc, fp.id desc`;
   const sql = `
     select fp.id, fp.user_id, u.name as author_name, greatest(u.problems_solved, u.solved) as author_solved,
-      u.rating as author_rating, u.title as author_role, u.avatar_url as author_avatar,
+      u.rating as author_rating, u.title as author_role, ${face('u')} as author_avatar,
       fp.title, left(fp.body_md, 400) as body_md, fp.category, fp.score,
       coalesce(v.value, 0)::int as my_vote,
       fp.created_at, fp.updated_at
@@ -1930,7 +1932,7 @@ export async function getFeedPostDetail(
   const row = (
     await db.query(
       `select fp.id, fp.user_id, u.name as author_name, greatest(u.problems_solved, u.solved) as author_solved,
-        u.rating as author_rating, u.title as author_role, u.avatar_url as author_avatar, u.streak as author_streak,
+        u.rating as author_rating, u.title as author_role, ${face('u')} as author_avatar, u.streak as author_streak,
         fp.title, fp.body_md, fp.category, fp.score,
         coalesce(v.value, 0)::int as my_vote,
         (select count(*)::int from feed_posts x where x.user_id = fp.user_id) as author_posts_count,
@@ -2023,7 +2025,7 @@ export async function listIdeas(
   const sql = `
     with base as (
       select i.id, i.user_id, u.name as author_name, greatest(u.problems_solved, u.solved) as author_solved,
-        u.rating as author_rating, u.avatar_url as author_avatar,
+        u.rating as author_rating, ${face('u')} as author_avatar,
         i.title, left(i.body_md, 400) as body_md, i.type, i.status, i.roles,
         (select count(*)::int from reactions r where r.target = 'idea:' || i.id) as upvotes,
         (select count(*)::int from idea_interests ii where ii.idea_id = i.id) as interested_count,
@@ -2060,7 +2062,7 @@ export async function getIdeaDetail(
   const row = (
     await db.query(
       `select i.id, i.user_id, u.name as author_name, greatest(u.problems_solved, u.solved) as author_solved,
-        u.rating as author_rating, u.avatar_url as author_avatar,
+        u.rating as author_rating, ${face('u')} as author_avatar,
         i.title, i.body_md, i.type, i.status, i.roles,
         (select count(*)::int from reactions r where r.target = 'idea:' || i.id) as upvotes,
         (select count(*)::int from idea_interests ii where ii.idea_id = i.id) as interested_count,
@@ -2087,7 +2089,7 @@ export async function getIdeaDetail(
     detail.interested = (
       await db.query(
         `select ii.user_id, u.name, u.rating, greatest(u.problems_solved, u.solved) as problems_solved,
-          u.avatar_url, ii.response, ii.status, ii.created_at, ii.decided_at
+          ${face('u')} as avatar_url, ii.response, ii.status, ii.created_at, ii.decided_at
         from idea_interests ii
         join users u on u.id = ii.user_id
         where ii.idea_id = $1
@@ -2191,7 +2193,7 @@ export async function listMembers(
          greatest(u.current_streak, u.streak) as current_streak,
          u.contests_participated,
          u.skills,
-         u.avatar_url
+         ${face('u')} as avatar_url
        from users u
        where ${whereSql}
        order by coalesce(u.cf_rating, u.rating) desc, greatest(u.problems_solved, u.solved) desc, u.name asc
@@ -2235,7 +2237,7 @@ export async function getMemberProfile(
        greatest(u.current_streak, u.streak) as current_streak,
        u.contests_participated,
        u.skills,
-       u.avatar_url,
+       ${face('u')} as avatar_url,
        u.bio,
        u.github_url,
        u.linkedin_url,
@@ -2545,7 +2547,7 @@ export async function listRecentMilestones(
     await db.query(
       `select m.id, m.user_id,
          u.name as member_name,
-         u.avatar_url as member_avatar,
+         ${face('u')} as member_avatar,
          greatest(u.problems_solved, u.solved) as member_solved,
          nullif(coalesce(nullif(u.cf_handle, ''), u.handle), '') as member_cf_handle,
          coalesce(u.cf_rating, u.rating) as member_rating,
@@ -2759,7 +2761,7 @@ export async function listAlumni(
        coalesce(u.cf_rating, nullif(u.rating, 0)) as cf_rating,
        greatest(u.problems_solved, u.solved) as problems_solved,
        u.skills,
-       u.avatar_url,
+       ${face('u')} as avatar_url,
        u.location,
        u.available_for_questions,
        exists (select 1 from alumni_saves s where s.user_id = $${viewerParamIdx} and s.alumni_id = u.id) as "isSaved"
@@ -2871,6 +2873,7 @@ export async function listAlumniJobs(
     sort?: string;
     src?: string;
     source?: string;
+    offset?: number;
   } = {},
 ): Promise<{ jobs: AlumniJob[]; total: number }> {
   const conditions: string[] = [
@@ -2931,15 +2934,16 @@ export async function listAlumniJobs(
          j.company_logo_url, j.url, j.source, j.fetched_at,
          coalesce(j.posted_at, j.created_at) as posted_at,
          j.created_at,
-         (j.alumni_id = $1) as mine
+         (j.alumni_id = $1) as mine, count(*) over () as total
        from alumni_jobs j
        where ${whereSql}
-       order by ${orderSql}`,
-      params,
+       order by ${orderSql}
+       limit 30 offset $${pIdx}`,
+      [...params, Math.max(0, Math.floor(Number(input.offset) || 0))],
     )
   ).rows;
 
-  const jobs = rows.map((r) => ({
+  const jobs = rows.map(({ total: _t, ...r }) => ({
     ...r,
     responsibilities: Array.isArray(r.responsibilities) ? r.responsibilities : [],
     requirements: Array.isArray(r.requirements) ? r.requirements : [],
@@ -2947,9 +2951,10 @@ export async function listAlumniJobs(
     mine: Boolean(r.mine),
   })) as AlumniJob[];
 
+  // 30 a page; `total` counts every match.
   return {
     jobs,
-    total: jobs.length,
+    total: Number(rows[0]?.total ?? 0),
   };
 }
 
@@ -3398,7 +3403,7 @@ export async function getInterviewTopicDetail(
       `select tip.id, tip.author_id, tip.topic_id, tip.title, tip.body_md, tip.created_at, tip.updated_at,
          u.name as author_name,
          coalesce(nullif(u.cf_handle, ''), u.handle) as author_handle,
-         u.avatar_url as author_avatar,
+         ${face('u')} as author_avatar,
          coalesce(u.cf_rating, u.rating) as author_rating
        from interview_tips tip
        join users u on u.id = tip.author_id
@@ -3715,7 +3720,7 @@ export async function listInterviewExperiences(db: Db): Promise<{ experiences: I
       `select tip.id, tip.author_id, tip.topic_id, tip.title, tip.body_md, tip.created_at, tip.updated_at,
          u.name as author_name,
          coalesce(nullif(u.cf_handle, ''), u.handle) as author_handle,
-         u.avatar_url as author_avatar,
+         ${face('u')} as author_avatar,
          coalesce(u.cf_rating, u.rating) as author_rating
        from interview_tips tip
        join users u on u.id = tip.author_id
@@ -3750,13 +3755,11 @@ export async function listBlogPosts(
     : null;
   const admin = viewerRow && canFully(viewerRow.roles, 'blog.post.delete');
 
-  const conditions: string[] = [];
-  const params: unknown[] = [viewerId || null];
-  let pIdx = 2;
-
-  if (!admin) {
-    conditions.push(`(b.status = 'published' or (b.author_id = $1 and $1 is not null))`);
-  }
+  // Drafts: the author's own, or every draft for a blog admin. The condition always uses $1 and $2: a statement
+  // must use every parameter it is sent, and leaving it out for admins failed their whole list.
+  const conditions: string[] = [`(b.status = 'published' or b.author_id = $1 or $2)`];
+  const params: unknown[] = [viewerId || null, !!admin];
+  let pIdx = 3;
 
   if (
     input.tag &&
@@ -3800,11 +3803,12 @@ export async function listBlogPosts(
   const queryParams = [...params, pageSize, offset];
   const rows = (
     await db.query(
-      `select b.id, b.author_id, b.slug, b.title, b.subtitle, b.excerpt, b.body_md,
+      `select b.id, b.author_id, b.slug, b.title, b.subtitle, b.excerpt, left(b.body_md, 400) as body_md,
+         array_length(regexp_split_to_array(btrim(b.body_md), '\\s+'), 1) as words,
          b.cover_url, b.tags, b.status, b.published_at, b.views, b.created_at, b.updated_at,
          u.name as author_name,
          coalesce(nullif(u.cf_handle, ''), u.handle) as author_handle,
-         u.avatar_url as author_avatar,
+         ${face('u')} as author_avatar,
          coalesce(u.cf_rating, u.rating) as author_rating,
          u.title as author_role
        from blog_posts b
@@ -3826,15 +3830,12 @@ export async function listBlogPosts(
   ).rows;
   const tags = tagRows.map((r) => String(r.tag)).filter(Boolean);
 
-  const posts = rows.map((r) => {
-    const wordCount = (r.body_md || '').split(/\s+/).filter(Boolean).length;
-    const read_time_min = Math.max(1, Math.round(wordCount / 200));
-    return {
-      ...r,
-      tags: Array.isArray(r.tags) ? r.tags : [],
-      read_time_min,
-    };
-  }) as BlogPost[];
+  // A list carries the first 400 characters of each post (cards show an excerpt); getBlogPost has the whole post.
+  const posts = rows.map(({ words, ...r }) => ({
+    ...r,
+    tags: Array.isArray(r.tags) ? r.tags : [],
+    read_time_min: Math.max(1, Math.round((words ?? 0) / 200)),
+  })) as BlogPost[];
 
   return { posts, total, tags };
 }
@@ -3872,7 +3873,7 @@ export async function getBlogPost(
            b.cover_url, b.tags, b.status, b.published_at, b.views, b.created_at, b.updated_at,
            u.name as author_name,
            coalesce(nullif(u.cf_handle, ''), u.handle) as author_handle,
-           u.avatar_url as author_avatar,
+           ${face('u')} as author_avatar,
            coalesce(u.cf_rating, u.rating) as author_rating,
            u.title as author_role
          from blog_posts b
@@ -3889,7 +3890,7 @@ export async function getBlogPost(
            b.cover_url, b.tags, b.status, b.published_at, b.views, b.created_at, b.updated_at,
            u.name as author_name,
            coalesce(nullif(u.cf_handle, ''), u.handle) as author_handle,
-           u.avatar_url as author_avatar,
+           ${face('u')} as author_avatar,
            coalesce(u.cf_rating, u.rating) as author_rating,
            u.title as author_role
          from blog_posts b
@@ -4180,6 +4181,20 @@ export async function profileRequestPhoto(db: Db, viewerId: string, id: string) 
   const p = /^\d{1,12}$/.test(id)
     ? (await db.query(`select changes->>'avatar_url' p from profile_requests where id = $1`, [id]))
         .rows[0]?.p
+    : null;
+  const m = typeof p === 'string' ? /^data:(image\/(?:png|jpeg|webp));base64,(.+)$/.exec(p) : null;
+  if (!m) throw new Fail(404, 'No photo.');
+  return { type: m[1]!, body: Buffer.from(m[2]!, 'base64') };
+}
+
+/** A member's uploaded photo, for any signed-in member (the roster already links it). */
+export async function avatar(db: Db, id: string) {
+  const p = /^[a-z0-9_]{2,40}$/.test(id)
+    ? (
+        await db.query(`select avatar_url p from users where id = $1 and avatar_key is not null`, [
+          id,
+        ])
+      ).rows[0]?.p
     : null;
   const m = typeof p === 'string' ? /^data:(image\/(?:png|jpeg|webp));base64,(.+)$/.exec(p) : null;
   if (!m) throw new Fail(404, 'No photo.');

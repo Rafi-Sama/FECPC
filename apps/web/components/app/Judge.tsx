@@ -26,6 +26,20 @@ export type Judge = {
 };
 const cache = new Map<string, Judge>();
 const listeners = new Set<() => void>();
+// Several widgets on one page ask for the same handle at once; they share one request.
+const inflight = new Map<
+  string,
+  Promise<{ ok: boolean; j: Judge & { error?: string }; first: boolean }>
+>();
+function load(handle: string) {
+  const known = inflight.get(handle);
+  if (known) return known.then((x) => ({ ...x, first: false }));
+  const p = fetch(`/api/cf/${encodeURIComponent(handle)}`)
+    .then(async (r) => ({ ok: r.ok, j: await r.json(), first: true }))
+    .finally(() => inflight.delete(handle));
+  inflight.set(handle, p);
+  return p;
+}
 
 /** Asks Codeforces again, past the cache; every useJudge() picks up the new data. Null when it did not answer. */
 export async function recheck(handle: string): Promise<Judge | null> {
@@ -60,19 +74,16 @@ export function useJudge() {
     let live = true;
     setBusy(true);
     setErr('');
-    fetch(`/api/cf/${encodeURIComponent(s.handle)}`)
-      .then(async (r) => {
-        const j = await r.json();
+    load(s.handle)
+      .then(({ ok, j, first }) => {
+        if (ok) cache.set(s.handle, j);
+        // Let the server record the member's own stats and milestones. It fetches Codeforces itself.
+        if (ok && first) void syncJudges();
         if (!live) return;
-        if (!r.ok) {
-          setErr(j.error);
+        if (!ok) {
+          setErr(j.error ?? 'Codeforces did not answer.');
           setData(null);
-        } else {
-          cache.set(s.handle, j);
-          setData(j);
-          // Let the server record the member's own stats and milestones. It fetches Codeforces itself.
-          void syncJudges();
-        }
+        } else setData(j);
       })
       .catch(() => live && setErr('Could not reach the server.'))
       .finally(() => live && setBusy(false));

@@ -1067,3 +1067,12 @@ CREATE TABLE IF NOT EXISTS learning_quiz_answers (
 );
 
 CREATE INDEX IF NOT EXISTS learning_quiz_answers_member_date_idx ON learning_quiz_answers (member_id, quiz_date);
+
+-- 24. Performance (docs/performance-audit.md): club-wide solver counts look cf_solves up by problem.
+CREATE INDEX IF NOT EXISTS cf_solves_problem ON cf_solves (problem);
+-- Uploaded photos are data URLs; lists link to /v1/avatars/:id?v=<avatar_key> instead of carrying the bytes.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_key text
+  GENERATED ALWAYS AS (CASE WHEN avatar_url LIKE 'data:%' THEN left(md5(avatar_url), 10) END) STORED;
+ALTER TABLE club_events ADD COLUMN IF NOT EXISTS banner_key text
+  GENERATED ALWAYS AS (CASE WHEN banner LIKE 'data:%' THEN left(md5(banner), 10) END) STORED;
+CREATE INDEX IF NOT EXISTS feed_posts_user ON feed_posts (user_id);

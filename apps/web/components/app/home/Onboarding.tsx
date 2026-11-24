@@ -41,7 +41,7 @@ export function Onboarding() {
             </span>
             {!d && (
               <Link className="btn xs line" href={href}>
-                Go
+                Go<span className="sr">: {t}</span>
               </Link>
             )}
           </li>

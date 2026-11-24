@@ -8,6 +8,7 @@ import { Trophy } from '@/components/pixel/Sprites';
 import { MemberFace } from '../shared/MemberFace';
 import { SolveCheck } from '../home/Daily';
 import { useConfirm } from '../shared/PromptDialog';
+import { useClubRounds } from './rounds';
 
 const css = (o: Record<string, string | number>) => o as React.CSSProperties;
 const WEEK = 7 * 864e5;
@@ -19,13 +20,14 @@ const day = (monday: string) =>
   new Date(start(monday)).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 
 /** A member's fantasy points for one week: rating change plus 5 per problem solved, in every rated round. */
-const points = (m: Roster | undefined, monday: string) =>
-  (m?.cf_contests ?? [])
+const points = (rounds: CfRound[] | undefined, monday: string) =>
+  (rounds ?? [])
     .filter((r: CfRound) => r.at >= start(monday) && r.at < start(monday) + WEEK)
     .reduce((a, r) => a + r.delta + 5 * r.solved, 0);
 
 export function Fantasy() {
   const { s, me, act, members, fantasy } = useStore();
+  const rounds = useClubRounds();
   const byId = useMemo(() => new Map(members.map((m) => [m.id, m])), [members]);
   const last = shift(fantasy.week, -7);
   const league = (monday: string) =>
@@ -36,7 +38,7 @@ export function Fantasy() {
         return {
           by: t.by,
           picks,
-          pts: picks.reduce((a, id) => a + points(byId.get(id), monday), 0),
+          pts: picks.reduce((a, id) => a + points(rounds.get(id), monday), 0),
         };
       })
       .sort((a, b) => b.pts - a.pts);
@@ -48,7 +50,7 @@ export function Fantasy() {
     .filter((m) => m.cf_rating && !m.is_alumni && !m.suspended)
     .map((m) => ({
       m,
-      form: (m.cf_contests ?? []).slice(0, 3).reduce((a, r) => a + r.delta + 5 * r.solved, 0),
+      form: (rounds.get(m.id) ?? []).slice(0, 3).reduce((a, r) => a + r.delta + 5 * r.solved, 0),
     }))
     .sort((a, b) => b.form - a.form);
   const name = (id: string) => byId.get(id)?.name ?? id;
@@ -91,7 +93,7 @@ export function Fantasy() {
                   <br />
                   <span className="label">
                     {t.picks
-                      .map((id) => `${name(id)} ${points(byId.get(id), fantasy.week)}`)
+                      .map((id) => `${name(id)} ${points(rounds.get(id), fantasy.week)}`)
                       .join(' · ')}
                   </span>
                 </span>
@@ -146,7 +148,7 @@ export function Fantasy() {
               <tbody>
                 {pool.map(({ m, form }) => {
                   const on = mine.includes(m.id),
-                    r = m.cf_contests?.[0];
+                    r = rounds.get(m.id)?.[0];
                   return (
                     <tr key={m.id} className={on ? 'you' : ''}>
                       <td>
@@ -199,6 +201,7 @@ const kudosOf = (counts: Record<string, number>, id: string) => counts[`member:$
 
 export function Trophies() {
   const { s, me, members, counts, sheets } = useStore();
+  const clubRounds = useClubRounds();
   const { data } = useJudge();
   const { isSolved } = useSolved();
   const people = members.filter((m) => !m.suspended);
@@ -228,7 +231,10 @@ export function Trophies() {
       'Best round this month',
       top(
         (m) =>
-          Math.max(0, ...(m.cf_contests ?? []).filter((r) => r.at > month).map((r) => r.delta)),
+          Math.max(
+            0,
+            ...(clubRounds.get(m.id) ?? []).filter((r) => r.at > month).map((r) => r.delta),
+          ),
         (n) => `+${n}`,
       ),
     ],
@@ -237,7 +243,7 @@ export function Trophies() {
 
   const solved = data?.solved.length ?? me.problems_solved;
   const rating = data?.rating ?? me.cf_rating ?? 0;
-  const rounds = data?.history.length ?? me.cf_contests?.length ?? 0;
+  const rounds = data?.history.length ?? clubRounds.get(me.id)?.length ?? 0;
   const streak = me.current_streak ?? me.streak;
   const kudos = kudosOf(counts.kudos, me.id) + s.milestoneKudosReceived;
   const week = sheets.find((x) => x.kind === 'weekly');
@@ -434,7 +440,7 @@ export function Challenges() {
                   {ch.problem} {ch.name}
                 </a>
                 <p className="label">
-                  by {name(ch.by)} · {ago(Date.now() - t0)} ago · {race.length} solved since
+                  by {name(ch.by)} · {ago(Date.now() - t0)} ago · {ch.since} solved since
                 </p>
               </div>
               <div className="row" style={css({ '--g': '10px' })}>
@@ -479,6 +485,7 @@ export function Challenges() {
             {before.length > 0 && (
               <p className="label">
                 Already solved before: {before.map((x) => name(x.id)).join(', ')}
+                {ch.earlier > before.length && ` and ${ch.earlier - before.length} more`}
               </p>
             )}
             {!ch.solvers.some((x) => x.id === me.id) && <SolveCheck id={ch.problem} />}

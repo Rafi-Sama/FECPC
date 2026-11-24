@@ -22,7 +22,7 @@ sign-up below); `?copy=<id>` starts from a past event. The page proposes the new
 the event after saving; the API refuses a malformed or taken one.
 
 Lists and the calendar decide "past" by the clock (`isOver` in `apps/web/lib/events.ts`): an event is past once
-it started over a day ago, or has started and is completed or cancelled. A future date is never past. Pages show the live state
+it is completed (final, whatever its date), started over a day ago, or has started and is cancelled. Pages show the live state
 ("Sign-up opens …", "Sign-up open until …") rather than the bare status. Role applications are accepted while
 the event is `published`, `open` or `closed`.
 

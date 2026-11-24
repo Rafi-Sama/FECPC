@@ -1,5 +1,5 @@
 // Event reads for the member area, and certificate rendering to an image in the browser.
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { csvCell, EVENT_STATUS_LABEL, type EventStatus, type PublicEvent } from '@fecpc/contracts';
 import { fmtDate } from '@fecpc/content/site';
 
@@ -13,12 +13,17 @@ export async function eventsQuery<T>(body: Record<string, unknown>): Promise<T |
   return res?.ok ? ((await res.json()) as T) : null;
 }
 
-/** Loads once and on `reload()`; `data` is undefined while loading, null when it failed. */
-export function useEventsQuery<T>(body: Record<string, unknown>) {
+/**
+ * Loads once and on `reload()`; `data` is undefined while loading, null when it failed. `initial`, when the page
+ * rendered it on the server, is shown at once and the first load is skipped.
+ */
+export function useEventsQuery<T>(body: Record<string, unknown>, initial?: T) {
   const key = JSON.stringify(body);
-  const [data, setData] = useState<T | null | undefined>(undefined);
+  const [data, setData] = useState<T | null | undefined>(initial);
+  const served = useRef(initial !== undefined);
   const reload = useCallback(async () => setData(await eventsQuery<T>(JSON.parse(key))), [key]);
   useEffect(() => {
+    if (served.current) return void (served.current = false);
     void reload();
   }, [reload]);
   return { data, reload };
@@ -124,9 +129,10 @@ export const clubNow = (agoMs = 0) =>
     .slice(0, 16);
 
 /**
- * Over: it started over a day ago, or it has started and is completed or cancelled. The clock wins, so an event
- * dated in the future is never past, whatever its status says.
+ * Over: completed (final, whatever its date says), started over a day ago, or started and cancelled. A cancelled
+ * event still dated in the future stays listed, so members see it was called off.
  */
 export const isOver = (e: { startsAt: string; status: string }) =>
+  e.status === 'completed' ||
   e.startsAt < clubNow(864e5) ||
-  (e.startsAt <= clubNow() && (e.status === 'completed' || e.status === 'cancelled'));
+  (e.startsAt <= clubNow() && e.status === 'cancelled');

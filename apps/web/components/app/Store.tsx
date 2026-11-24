@@ -1,6 +1,7 @@
 'use client';
 import {
   createContext,
+  startTransition,
   useCallback,
   useContext,
   useEffect,
@@ -51,10 +52,37 @@ export function StoreProvider({
     setToasts((t) => [...t, { id, text, kind }]);
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), kind === 'bad' ? 5000 : 2600);
   }, []);
-  // Answers can arrive out of order when the member clicks quickly; only the newest request may replace the state.
-  const take = useCallback((mine: number, next: AppState) => {
-    if (mine === seq.current) setSt(next);
+  // The roster grows with the club, so it is not in the page or in state answers. It loads after the page and is
+  // revalidated (ETag, usually a 304) whenever new state arrives; unchanged, it is not parsed again.
+  const [members, setMembers] = useState<Roster[]>(initial.members);
+  const rosterTag = useRef<string | null>(null);
+  const roster = useCallback(async () => {
+    try {
+      const res = await fetch('/api/roster');
+      const tag = res.headers.get('etag');
+      if (!res.ok || (tag && tag === rosterTag.current)) return;
+      rosterTag.current = tag;
+      const next = ((await res.json()) as { members: Roster[] }).members;
+      // Every screen reads the store, so this re-render is big: a transition lets React split it up.
+      startTransition(() => setMembers(next));
+    } catch {}
   }, []);
+  useEffect(() => {
+    // After the page has painted, so the roster never competes with the first view.
+    const go = () => void roster();
+    if (document.readyState !== 'complete') addEventListener('load', go, { once: true });
+    else setTimeout(go, 0);
+    return () => removeEventListener('load', go);
+  }, [roster]);
+  // Answers can arrive out of order when the member clicks quickly; only the newest request may replace the state.
+  const take = useCallback(
+    (mine: number, next: AppState) => {
+      if (mine !== seq.current) return;
+      setSt(next);
+      void roster();
+    },
+    [roster],
+  );
 
   const act = useCallback<Store['act']>(
     async (type, arg) => {
@@ -202,9 +230,10 @@ export function StoreProvider({
   }, [syncJudges]);
 
   const value = useMemo<Store>(() => {
-    const byId = new Map(st.members.map((m) => [m.id, m]));
+    const byId = new Map(members.map((m) => [m.id, m]));
     return {
       ...st,
+      members,
       xp: total(st),
       kudosToday: st.counts.kudosToday ?? 0,
       recentMilestones: st.counts.recentMilestones ?? [],
@@ -214,7 +243,7 @@ export function StoreProvider({
       toast,
       who: (id) => byId.get(id) ?? { id, name: id, handle: id, rating: 0 },
     };
-  }, [st, act, giveKudos, syncJudges, toast]);
+  }, [st, members, act, giveKudos, syncJudges, toast]);
   return (
     <Ctx.Provider value={value}>
       {children}

@@ -34,10 +34,10 @@ const tier = (r: number | null) => (r ? rankFor(r).color : 'var(--dim)');
 
 /** One sheet: progress, then every problem with its difficulty, tags and how many members solved it. */
 function SheetView({ sh, actions }: { sh: Sheet; actions?: React.ReactNode }) {
-  const { s, members } = useStore();
+  const { s, counts } = useStore();
   const { isSolved } = useSolved();
   const done = sh.problems.filter((p) => isSolved(p.id)).length,
-    total = Math.max(1, members.length);
+    total = Math.max(1, counts.peopleCount);
   return (
     <section className="panel" style={{ gridColumn: '1 / -1' }}>
       <div className="sheet-head">
@@ -107,7 +107,7 @@ function SheetView({ sh, actions }: { sh: Sheet; actions?: React.ReactNode }) {
               </span>
               <span role="cell" className="sheet-club">
                 <span className="num">
-                  {p.club} <span className="dim">of {members.length}</span>
+                  {p.club} <span className="dim">of {counts.peopleCount}</span>
                 </span>
                 <span className="meter" style={css({ '--v': `${(p.club / total) * 100}%` })}>
                   <i />

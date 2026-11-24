@@ -719,15 +719,19 @@ const ENTRY = (
   admin: boolean,
 ) => `json_build_object('id', x.id, 'roleId', x.role_id, 'status', x.status, 'place', x.place,
   'name', x.name, 'phone', x.phone, 'answers', x.answers, 'at', x.at, 'reason', x.reason${admin ? `, 'userId', x.user_id, 'email', u.email, 'batch', u.batch::text` : ''})`;
+// Uploaded banners are data URLs of up to 700 KB; lists link to GET /v1/events/:id/banner?v=<banner_key> instead.
+const BANNER = `case when e.banner_key is null then e.banner else '/api/events/' || e.id || '/banner?v=' || e.banner_key end`;
+// `list`: the events page's cards, which need the first 200 characters of the description and no form questions.
 const EVENT = (
   admin: boolean,
-) => `select e.id, e.title, e.type, e.place, e.about, e.banner, ${LOCAL('e.starts_at')} "startsAt",
+  list = false,
+) => `select e.id, e.title, e.type, e.place, ${list ? 'left(e.about, 200)' : 'e.about'} about, ${list ? BANNER : 'e.banner'} banner, ${LOCAL('e.starts_at')} "startsAt",
   ${LOCAL('e.reg_opens')} "regOpens", ${LOCAL('e.reg_closes')} "regCloses", e.status, e.seats, e.fee, e.mode, e.form_url "formUrl",
-  e.approval, e.fields, e.certs,
+  e.approval, ${list ? `'[]'::jsonb` : 'e.fields'} fields, e.certs,
   ${REG_OPEN('e.')} "regOpen",
   (select count(*)::int from event_entries x where x.event_id = e.id and x.role_id is null and x.status in ('pending','approved')) taken,
-  (select coalesce(json_agg(json_build_object('id', r.id, 'title', r.title, 'about', r.about, 'mode', r.mode, 'formUrl', r.form_url,
-     'approval', r.approval, 'fields', r.fields${admin ? `, 'counts', (select coalesce(json_object_agg(status, n), '{}') from (select status, count(*)::int n from event_entries x where x.role_id = r.id group by 1) s)` : ''}) order by r.id), '[]')
+  (select coalesce(json_agg(json_build_object('id', r.id, 'title', r.title, 'about', ${list ? `''` : 'r.about'}, 'mode', r.mode, 'formUrl', r.form_url,
+     'approval', r.approval, 'fields', ${list ? `'[]'::jsonb` : 'r.fields'}${admin ? `, 'counts', (select coalesce(json_object_agg(status, n), '{}') from (select status, count(*)::int n from event_entries x where x.role_id = r.id group by 1) s)` : ''}) order by r.id), '[]')
    from event_roles r where r.event_id = e.id) roles,
   (select coalesce(json_agg(${ENTRY(false)} order by x.id), '[]') from event_entries x where x.event_id = e.id and x.user_id = $1) mine
 from club_events e`;
@@ -744,12 +748,24 @@ export async function eventsQuery(db: Db, userId: string, b: In): Promise<unknow
   if (!u) throw new Fail(401, 'Sign in again.');
   const admin = organiser(u.roles);
   const hidden = admin ? '' : `e.status <> 'draft'`;
-  if (b.action === 'list')
+  if (b.action === 'list') {
+    // `upcoming`: only what can still happen (the events page's first tab); the rest loads when asked for.
+    const where = [
+      hidden,
+      b.upcoming === true && `e.status <> 'completed' and e.starts_at > now() - interval '1 day'`,
+    ].filter(Boolean);
+    // `limit`: the first screen of upcoming events, rendered with the page; the rest follows from the browser.
+    const limit =
+      b.upcoming === true && Number.isInteger(b.limit)
+        ? Math.min(200, Math.max(1, Number(b.limit)))
+        : 0;
     return (
-      await db.query(`${EVENT(admin)} ${hidden && 'where ' + hidden} order by e.starts_at`, [
-        userId,
-      ])
+      await db.query(
+        `${EVENT(admin, true)} ${where.length ? 'where ' + where.join(' and ') : ''} order by e.starts_at ${limit ? `limit ${limit}` : ''}`,
+        [userId],
+      )
     ).rows as ClubEvent[];
+  }
   if (b.action !== 'event') throw new Fail(404, 'Not found.');
   const e = (
     await db.query(`${EVENT(admin)} where e.id = $2 ${hidden && 'and ' + hidden}`, [
@@ -813,11 +829,21 @@ export async function eventsQuery(db: Db, userId: string, b: In): Promise<unknow
 export async function publicEvents(db: Db): Promise<PublicEvent[]> {
   return (
     await db.query(
-      `select e.id, e.title, e.type, e.place, e.about, e.banner, ${LOCAL('e.starts_at')} "startsAt", e.seats, e.fee,
+      `select e.id, e.title, e.type, e.place, e.about, ${BANNER} banner, ${LOCAL('e.starts_at')} "startsAt", e.seats, e.fee,
          (select count(*)::int from event_entries x where x.event_id = e.id and x.role_id is null and x.status in ('pending','approved')) taken
        from club_events e where e.status in ('published','open','closed','ongoing') and e.starts_at > now() - interval '1 day' order by e.starts_at limit 50`,
     )
   ).rows;
+}
+
+/** An event's uploaded banner. The link carries its version, so only someone shown the event can name it. */
+export async function eventBanner(db: Db, id: string, v: string) {
+  const b = (
+    await db.query(`select banner from club_events where id = $1 and banner_key = $2`, [id, v])
+  ).rows[0]?.banner;
+  const m = typeof b === 'string' ? /^data:(image\/(?:png|jpeg|webp));base64,(.+)$/.exec(b) : null;
+  if (!m) throw new Fail(404, 'No banner.');
+  return { type: m[1]!, body: Buffer.from(m[2]!, 'base64') };
 }
 
 /** A certificate by its code, for the public verify page; null when there is none. */

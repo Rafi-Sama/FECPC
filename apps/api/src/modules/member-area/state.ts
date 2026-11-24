@@ -1,5 +1,6 @@
 // Builds everything one member's screens need, in one query (two for officers).
 // This is the only place that decides what a role may SEE: a dataset the role has no capability for is never sent.
+import { createHash } from 'node:crypto';
 import { mailStatus } from './mail.ts';
 import {
   formatMilestoneTitle,
@@ -14,6 +15,7 @@ import {
   type ProfileRequest,
   isAdmin,
   isCommittee,
+  rankFor,
   type Role,
   type Who,
 } from '@fecpc/contracts';
@@ -23,11 +25,13 @@ import type {
   MilestoneDTO,
   MilestoneType,
   Office,
+  PeopleSummary,
   Roster,
   S,
 } from '@fecpc/contracts';
 import * as data from './office-data.ts';
-import type { Db } from './db.ts';
+import { sheet } from '@fecpc/content/member-area';
+import { face, pool, type Db } from './db.ts';
 import { MILESTONE_FRESHNESS_DAYS } from './milestones.ts';
 
 export const TZ = 'Asia/Dhaka';
@@ -71,8 +75,12 @@ export function progress(raw: Partial<Progress> | null): Progress {
 }
 
 const ROSTER = `json_build_object('id', id, 'no', member_no, 'name', name, 'handle', coalesce(nullif(cf_handle, ''), handle), 'cf_handle', nullif(coalesce(nullif(cf_handle, ''), handle), ''), 'batch', batch, 'dept', dept, 'squad', squad, 'role', title, 'is_alumni', role = 'alumni', 'rating', coalesce(cf_rating, rating), 'cf_rating', coalesce(cf_rating, nullif(rating, 0)), 'peak', peak,
-  'solved', greatest(problems_solved, solved), 'problems_solved', greatest(problems_solved, solved), 'avatar_url', avatar_url, 'cf_contests', cf_contests, 'streak', greatest(current_streak, streak), 'current_streak', greatest(current_streak, streak), 'contests_participated', contests_participated, 'helper', helper, 'skills', skills, 'xp', solved * 12 + vj_solved * 12 + streak * 30 + helper * 8, 'roleKey', role, 'post', post, 'email', email, 'suspended', suspended, 'system', system, 'pending', pass_hash is null and google_sub is null)`;
+  'solved', greatest(problems_solved, solved), 'problems_solved', greatest(problems_solved, solved), 'avatar_url', case when avatar_key is null then avatar_url else '/api/avatars/' || id || '?v=' || avatar_key end, 'streak', greatest(current_streak, streak), 'current_streak', greatest(current_streak, streak), 'contests_participated', contests_participated, 'helper', helper, 'skills', skills, 'xp', solved * 12 + vj_solved * 12 + streak * 30 + helper * 8, 'roleKey', role, 'post', post, 'email', email, 'suspended', suspended, 'system', system, 'pending', pass_hash is null and google_sub is null)`;
 const EXPENSE = `json_build_object('id', 'EXP-' || e.id, 'by', e.by, 'name', w.name, 'what', e.what, 'amount', e.amount, 'event', e.event, 'status', e.status)`;
+// A challenge's solvers: the first ten since it was posted, ten from before, the member, and the two totals.
+const SOLVER = `cf_solves s join users su on su.id = s.user_id where s.problem = ch.problem and not su.system and not su.suspended`;
+// counts.solved is shown for the fixed starter sheet only, so only its problems are counted.
+const CORE_IDS = sheet.map((p) => p.id);
 const MINE = `
 select u.email, u.progress, to_char(u.created_at at time zone '${TZ}', 'YYYY-MM-DD') as joined, to_char(u.post_since, 'YYYY-MM-DD') as post_since,
   (select coalesce(json_agg(json_build_object('id', e.id, 'title', e.title, 'fee', e.fee, 'date', to_char(e.starts_at at time zone '${TZ}', 'YYYY-MM-DD')) order by e.starts_at), '[]')
@@ -98,7 +106,7 @@ select u.email, u.progress, to_char(u.created_at at time zone '${TZ}', 'YYYY-MM-
      from (
        select m.id, m.user_id,
          mu.name as member_name,
-         mu.avatar_url as member_avatar,
+         ${face('mu')} as member_avatar,
          greatest(mu.problems_solved, mu.solved) as member_solved,
          nullif(coalesce(nullif(mu.cf_handle, ''), mu.handle), '') as member_cf_handle,
          coalesce(mu.cf_rating, mu.rating) as member_rating,
@@ -138,22 +146,38 @@ select u.email, u.progress, to_char(u.created_at at time zone '${TZ}', 'YYYY-MM-
      from idea_interests ii join ideas i on i.id = ii.idea_id join users w on w.id = ii.user_id where i.user_id = $1 and ii.status = 'pending') as incoming_interests,
   (select coalesce(json_agg(json_build_object('ideaId', ii.idea_id, 'status', ii.status, 'title', i.title) order by ii.decided_at desc), '[]')
      from idea_interests ii join ideas i on i.id = ii.idea_id where ii.user_id = $1 and ii.status <> 'pending') as decided_interests,
-  (select coalesce(json_agg(${EXPENSE} order by e.id desc), '[]') from expenses e join users w on w.id = e.by where e.by = $1) as my_exp,
+  (select coalesce(json_agg(${EXPENSE} order by e.id desc), '[]') from (select * from expenses where by = $1 order by id desc limit 200) e join users w on w.id = e.by) as my_exp,
+  (select coalesce(json_agg(json_build_object('id', ch.id, 'problem', ch.problem, 'name', ch.name, 'rating', ch.rating,
+      'by', ch.by, 'at', ch.at,
+      'solvers', (select coalesce(json_agg(json_build_object('id', x.user_id, 'at', x.at) order by x.at nulls last), '[]') from (
+          (select s.user_id, s.at from ${SOLVER} and s.at >= ch.at order by s.at limit 10)
+          union (select s.user_id, s.at from ${SOLVER} and (s.at < ch.at or s.at is null) order by s.at nulls last limit 10)
+          union (select s.user_id, s.at from cf_solves s where s.problem = ch.problem and s.user_id = $1)) x),
+      'since', (select count(*)::int from ${SOLVER} and s.at >= ch.at),
+      'earlier', (select count(*)::int from ${SOLVER} and (s.at < ch.at or s.at is null))) order by ch.at desc), '[]')
+     from (select * from challenges where at > now() - interval '30 days' order by at desc limit 30) ch) as challenges,
+  (select coalesce(json_agg(json_build_object('id', q.id, 'question', q.question, 'options', q.options,
+      'picked', a.selected_index, 'answer', case when a.member_id is not null then q.correct_index end) order by d.position), '[]')
+     from learning_quiz_daily_picks d join learning_quiz_questions q on q.id = d.question_id
+     left join learning_quiz_answers a on a.member_id = $1 and a.quiz_date = d.quiz_date and a.question_id = q.id
+     where d.quiz_date = (now() at time zone '${TZ}')::date) as quiz
+from users u where u.id = $1 and not u.suspended`;
+// The club-wide part of the state: the same for every member, so it is computed once and kept briefly.
+const SHARED = `
+select
   (select coalesce(json_object_agg(key, n), '{}') from (select key, count(*)::int n from attendance where key like 'vol:%' group by 1) x) as c_vol,
-  (select coalesce(json_agg(json_build_array(poll_id, option, n)), '[]') from (select poll_id, option, count(*)::int n from votes where poll_id not like 'fb:%' group by 1, 2) x) as c_votes,
-  (select coalesce(json_object_agg(target, n), '{}') from (select target, count(*)::int n from reactions group by 1) x) as c_kudos,
-  (select coalesce(json_object_agg(pid, n), '{}') from (select pid, count(*)::int n from users, jsonb_array_elements_text(coalesce(progress -> 'solved', '[]')) pid where not system and not suspended group by 1) x) as c_solved,
-  (select coalesce(json_object_agg(announcement_id, n), '{}') from (select announcement_id, count(*)::int n from announcement_reads group by 1) x) as c_ann_reads,
+  (select coalesce(json_agg(json_build_array(poll_id, option, n)), '[]') from (select poll_id, option, count(*)::int n from votes where poll_id in (select 'poll:' || id from club_polls order by id desc limit 50) group by 1, 2) x) as c_votes,
+  (select coalesce(json_object_agg(target, n), '{}') from (select target, count(*)::int n from reactions where target like 'member:%' group by 1) x) as c_kudos,
+  (select coalesce(json_object_agg(pid, n), '{}') from (select pid, count(*)::int n from users, jsonb_array_elements_text(coalesce(progress -> 'solved', '[]')) pid where not system and not suspended and pid = any($1::text[]) group by 1) x) as c_solved,
+  (select coalesce(json_object_agg(announcement_id, n), '{}') from (select announcement_id, count(*)::int n from announcement_reads where announcement_id in (select 'an:' || id from announcements order by id desc limit 50) group by 1) x) as c_ann_reads,
   (select count(*)::int from users where role = 'alumni' and not system and not suspended) as c_alumni,
+  (select count(*)::int from users where not system and not suspended) as c_people,
+  (select coalesce(json_agg(json_build_object('id', h.id, 'name', h.name, 'helper', h.helper, 'solved', greatest(h.problems_solved, h.solved),
+      'avatar_url', ${face('h')}) order by h.helper desc, h.rating desc, h.id), '[]')
+     from (select * from users where not system and not suspended order by helper desc, rating desc, id limit 5) h) as top_helpers,
   (select count(*)::int from alumni_jobs where (source = 'manual' or fetched_at > now() - interval '30 days') and (deadline is null or deadline >= current_date)) as c_jobs,
   (select count(*)::int from interview_topics) as c_prep_topics,
   (select count(*)::int from blog_posts where status = 'published') as c_blogs,
-  (select coalesce(json_agg(json_build_object('id', ch.id, 'problem', ch.problem, 'name', ch.name, 'rating', ch.rating,
-      'by', ch.by, 'at', ch.at,
-      'solvers', (select coalesce(json_agg(json_build_object('id', s.user_id, 'at', s.at) order by s.at nulls last), '[]')
-        from cf_solves s join users su on su.id = s.user_id
-        where s.problem = ch.problem and not su.system and not su.suspended)) order by ch.at desc), '[]')
-     from challenges ch where ch.at > now() - interval '30 days') as challenges,
   (select json_build_object('week', w::text, 'next', (w + 7)::text, 'teams', coalesce((
       select json_agg(json_build_object('by', f.id, 'week', substr(kv.k, 9), 'picks', kv.v))
       from users f, jsonb_each_text(coalesce(f.progress->'kv', '{}')) kv(k, v)
@@ -167,7 +191,7 @@ select u.email, u.progress, to_char(u.created_at at time zone '${TZ}', 'YYYY-MM-
      where sh.kind = 'custom' or sh.week = (select max(week) from sheets)) as sheets,
   (select coalesce(json_agg(json_build_object(
       'id', 'an:' || a.id, 'user_id', a.user_id, 'title', a.title, 'body_md', coalesce(a.body_md, ''), 'by', w.name,
-      'by_role', w.title, 'by_solved', greatest(w.problems_solved, w.solved), 'by_avatar', w.avatar_url,
+      'by_role', w.title, 'by_solved', greatest(w.problems_solved, w.solved), 'by_avatar', ${face('w')},
       'at', a.created_at, 'edited_at', a.edited_at, 'pinned', a.pinned,
       'requires_ack', a.requires_ack,
       'read_count', (select count(*)::int from announcement_reads ar where ar.announcement_id = 'an:' || a.id)
@@ -176,16 +200,9 @@ select u.email, u.progress, to_char(u.created_at at time zone '${TZ}', 'YYYY-MM-
   (select coalesce(json_agg(json_build_object('id', 'poll:' || p.id, 'user_id', p.user_id, 'q', p.question,
       'opts', p.options, 'by', w.name, 'at', p.created_at) order by p.id desc), '[]')
      from (select * from club_polls order by id desc limit 50) p join users w on w.id = p.user_id) as polls,
-  (select coalesce(json_agg(${ROSTER} order by rating desc, id), '[]') from users) as members,
   (select coalesce(json_object_agg(key, value), '{}') from club) as club,
   (select coalesce(json_agg(json_build_object('id', c.id, 'title', c.title, 'instructor', c.instructor, 'weeks', c.duration_weeks,
-      'description', c.description, 'url', c.url) order by c.created_at desc), '[]') from learning_courses c) as courses,
-  (select coalesce(json_agg(json_build_object('id', q.id, 'question', q.question, 'options', q.options,
-      'picked', a.selected_index, 'answer', case when a.member_id is not null then q.correct_index end) order by d.position), '[]')
-     from learning_quiz_daily_picks d join learning_quiz_questions q on q.id = d.question_id
-     left join learning_quiz_answers a on a.member_id = $1 and a.quiz_date = d.quiz_date and a.question_id = q.id
-     where d.quiz_date = (now() at time zone '${TZ}')::date) as quiz
-from users u where u.id = $1 and not u.suspended`;
+      'description', c.description, 'url', c.url) order by c.created_at desc), '[]') from learning_courses c) as courses`;
 const QUIZ_BANK = `
 select coalesce(json_agg(json_build_object('id', q.id, 'question', q.question, 'options', q.options, 'answer', q.correct_index,
     'today', exists (select 1 from learning_quiz_daily_picks d where d.question_id = q.id and d.quiz_date = (now() at time zone '${TZ}')::date))
@@ -234,8 +251,11 @@ select
   (select coalesce(sum(amount), 0)::int from expenses, term where status = 'approved' and created_at at time zone '${TZ}' >= since) as spent,
   (select coalesce(json_agg(json_build_object('date', to_char(e.created_at at time zone '${TZ}', 'YYYY-MM-DD'), 'what', e.what,
       'cat', e.category, 'amount', e.amount, 'by', u.name) order by e.created_at desc, e.id desc), '[]')
-    from expenses e cross join term left join users u on u.id = e.decided_by
-    where e.status = 'approved' and e.created_at at time zone '${TZ}' >= since) as term_expenses,
+    from (select e.* from expenses e, term where e.status = 'approved' and e.created_at at time zone '${TZ}' >= since
+      order by e.created_at desc, e.id desc limit 100) e left join users u on u.id = e.decided_by) as term_expenses,
+  (select coalesce(json_agg(json_build_object('cat', category, 'amount', amount) order by amount desc), '[]') from (
+    select e.category, sum(e.amount)::int amount from expenses e, term
+    where e.status = 'approved' and e.created_at at time zone '${TZ}' >= since group by 1) x) as term_cats,
   (select json_agg(json_build_object('month', to_char(m, 'YYYY-MM'),
       'in', (select coalesce(sum(amount), 0)::int from payments where status = 'verified' and date_trunc('month', created_at at time zone '${TZ}') = m),
       'out', (select coalesce(sum(amount), 0)::int from expenses where status = 'approved' and date_trunc('month', created_at at time zone '${TZ}') = m)) order by m)
@@ -266,11 +286,92 @@ type Raw = Roster & {
   pending: boolean;
 };
 
-/** Everything `userId` may see, or null when the account is gone or suspended. */
-export async function loadState(db: Db, userId: string): Promise<AppState | null> {
-  await db.query(QUIZ_PICK);
-  const row = (await db.query(MINE, [userId])).rows[0];
+const ROSTER_ALL = `
+select u.role, (select p.roles from post_roles p where p.post = u.post) as post_roles,
+  (select coalesce(json_agg(${ROSTER} order by rating desc, id), '[]') from users) as members
+from users u where u.id = $1 and not u.suspended`;
+
+/**
+ * The club roster as `userId` may see it, or null when the account is gone or suspended. It grows with the club,
+ * so it is its own request (GET /v1/me/roster, revalidated by ETag) instead of part of every state payload.
+ */
+export async function loadRoster(db: Db, userId: string): Promise<Roster[] | null> {
+  const row = (await db.query(ROSTER_ALL, [userId])).rows[0];
   if (!row) return null;
+  const role = row.role as Role,
+    admin = isAdmin([role, ...((row.post_roles as Role[] | null) ?? [])]);
+  // The operator account is listed only for a Super Admin, who is the only one able to act on it.
+  return (
+    (row.members as Raw[])
+      .filter((m) => (admin ? !m.system || role === 'super_admin' : !m.system && !m.suspended))
+      // Emails only for the Super Admin, who appoints the President by email.
+      .map(({ system: _s, roleKey, suspended, pending, email, ...m }) => ({
+        ...m,
+        ...(admin ? { roleKey, suspended, pending } : {}),
+        ...(role === 'super_admin' ? { email } : {}),
+      }))
+  );
+}
+
+// What is the same for every member (the roster, by what a role may see, and the club-wide part of the state) is
+// built once and kept briefly, so a 304, a second member or a page view does not recompute it. Every action and
+// judge sync clears it (forgetShared); other members' changes show within SHARED_TTL_MS.
+// shortcut: per-process cache, so another API instance can serve data up to SHARED_TTL_MS old; keep a version
+// number in the database if the API runs on more than one instance.
+const SHARED_TTL_MS = 10_000;
+let rosterViews: { at: number; views: Map<string, { body: string; tag: string }> } | null = null;
+let club: { at: number; row: Record<string, unknown> } | null = null;
+export const forgetShared = () => void ((rosterViews = null), (club = null));
+
+/** The club-wide columns of the state. Never cached inside a transaction, which may hold uncommitted writes. */
+async function sharedState(db: Db) {
+  const fresh = club && Date.now() - club.at <= SHARED_TTL_MS;
+  if (fresh && db === pool()) return club!.row;
+  const row = (await db.query(SHARED, [CORE_IDS])).rows[0] as Record<string, unknown>;
+  if (db === pool()) club = { at: Date.now(), row };
+  return row;
+}
+
+/** The roster response body and its ETag for `userId`'s view, or null when the account is gone or suspended. */
+export async function rosterJson(db: Db, userId: string) {
+  const who = (
+    await db.query(
+      `select u.role, (select p.roles from post_roles p where p.post = u.post) as post_roles
+       from users u where u.id = $1 and not u.suspended`,
+      [userId],
+    )
+  ).rows[0];
+  if (!who) return null;
+  // loadRoster's filter depends on exactly these two facts.
+  const view =
+    who.role === 'super_admin'
+      ? 'super_admin'
+      : isAdmin([who.role, ...((who.post_roles as Role[] | null) ?? [])])
+        ? 'admin'
+        : 'member';
+  if (!rosterViews || Date.now() - rosterViews.at > SHARED_TTL_MS)
+    rosterViews = { at: Date.now(), views: new Map() };
+  const cached = rosterViews.views.get(view);
+  if (cached) return cached;
+  const body = JSON.stringify({ members: (await loadRoster(db, userId)) ?? [] });
+  const out = { body, tag: `"${createHash('sha1').update(body).digest('base64url')}"` };
+  rosterViews.views.set(view, out);
+  return out;
+}
+
+/**
+ * Everything `userId` may see, or null when the account is gone or suspended. `members` is empty unless
+ * `roster` is set: clients load it from loadRoster.
+ */
+export async function loadState(
+  db: Db,
+  userId: string,
+  { roster = false } = {},
+): Promise<AppState | null> {
+  await db.query(QUIZ_PICK);
+  const mine = (await db.query(MINE, [userId])).rows[0];
+  if (!mine) return null;
+  const row = { ...mine, ...(await sharedState(db)) };
   const postRoles = row.post_roles as AppState['postRoles'],
     raw = row.me as Raw,
     // Permissions come from the member's own role plus what their post grants.
@@ -353,17 +454,7 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
     ),
   };
 
-  // The roster everyone gets: people only, no account-management fields. Officers who manage accounts get those too.
-  const everyone = row.members as Raw[];
-  // The operator account is listed only for a Super Admin, who is the only one able to act on it.
-  const members: Roster[] = everyone
-    .filter((m) => (admin ? !m.system || role === 'super_admin' : !m.system && !m.suspended))
-    // Emails only for the Super Admin, who appoints the President by email.
-    .map(({ system: _s, roleKey, suspended, pending, email, ...m }) => ({
-      ...m,
-      ...(admin ? { roleKey, suspended, pending } : {}),
-      ...(role === 'super_admin' ? { email } : {}),
-    }));
+  const members = roster ? ((await loadRoster(db, userId)) ?? []) : [];
   const { pending: _p, ...me } = raw;
 
   const money = (await db.query(MONEY, [seesMoney(roles), userId, committee])).rows[0];
@@ -414,6 +505,13 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
     ).rows;
   if (caps.suggest) office.suggestions = off.suggestions;
   if (caps.feedback) office.feedback = off.feedback;
+  if (
+    (['application.approve', 'roles.assign', 'audit.view', 'data.export'] as const).some((c) =>
+      can(roles, c),
+    ) ||
+    canFully(roles, 'member.editDetails')
+  )
+    office.people = await peopleSummary(db);
   if (committee)
     office.ops = {
       tasks: money.tasks,
@@ -600,6 +698,8 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
       kudosToday: row.kudos_today ?? 0,
       recentMilestones: (row.recent_milestones ?? []) as MilestoneDTO[],
       alumniCount: Number(row.c_alumni ?? 0),
+      peopleCount: Number(row.c_people ?? 0),
+      topHelpers: row.top_helpers,
       jobsCount: Number(row.c_jobs ?? 0),
       prepTopicsCount: Number(row.c_prep_topics ?? 0),
       blogsCount: Number(row.c_blogs ?? 0),
@@ -613,6 +713,7 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
       incoming: money.incoming,
       spent: money.spent,
       expenses: money.term_expenses,
+      categories: money.term_cats,
       flow: money.flow,
     },
     // The seeded opening balance plus every verified payment, minus every approved expense.
@@ -626,6 +727,56 @@ export async function loadState(db: Db, userId: string): Promise<AppState | null
     courses: row.courses,
     quiz: row.quiz,
     quizBank: canFully(roles, 'learning.curate') ? (await db.query(QUIZ_BANK)).rows[0].bank : null,
+  };
+}
+
+/** The admin dashboard's member counts: people only (no operator account, no alumni). */
+async function peopleSummary(db: Db): Promise<PeopleSummary> {
+  const rows = (
+    await db.query(
+      `select id, name, batch, suspended, pass_hash is null and google_sub is null as pending,
+         nullif(coalesce(nullif(cf_handle, ''), handle), '') is not null as linked,
+         coalesce(cf_rating, nullif(rating, 0)) as rating, greatest(current_streak, streak) > 0 as daily
+       from users where not system and role <> 'alumni' and id <> 'admin'
+       order by coalesce(cf_rating, rating) desc, id`,
+    )
+  ).rows as {
+    id: string;
+    name: string;
+    batch: number;
+    suspended: boolean;
+    pending: boolean;
+    linked: boolean;
+    rating: number | null;
+    daily: boolean;
+  }[];
+  const active = rows.filter((m) => !m.suspended && !m.pending),
+    linked = active.filter((m) => m.linked),
+    rated = linked
+      .map((m) => m.rating ?? 0)
+      .filter((r) => r > 0)
+      .sort((a, b) => a - b);
+  const ranks = new Map<string, [number, string]>();
+  for (const r of rated) {
+    const k = rankFor(r);
+    ranks.set(k.title, [(ranks.get(k.title)?.[0] ?? 0) + 1, k.color]);
+  }
+  const batches = new Map<number, number>();
+  for (const m of active) batches.set(m.batch, (batches.get(m.batch) ?? 0) + 1);
+  return {
+    active: active.length,
+    invited: rows.filter((m) => m.pending).length,
+    suspended: rows.filter((m) => m.suspended).length,
+    linked: linked.length,
+    rated: rated.length,
+    median: rated.length ? rated[Math.floor(rated.length / 2)]! : 0,
+    daily: active.filter((m) => m.daily).length,
+    ranks: [...ranks].map(([t, [n, c]]) => [t, n, c]),
+    batches: [...batches].sort((a, b) => b[0] - a[0]),
+    unlinked: active
+      .filter((m) => !m.linked)
+      .slice(0, 8)
+      .map(({ id, name, batch }) => ({ id, name, batch })),
   };
 }
 

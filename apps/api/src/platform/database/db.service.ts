@@ -20,6 +20,8 @@ export class DbService implements OnModuleInit, OnModuleDestroy {
       query_timeout: this.config.env.DB_STATEMENT_TIMEOUT_MS,
       connectionTimeoutMillis: 5000,
       idleTimeoutMillis: this.config.env.DB_IDLE_TX_TIMEOUT_MS,
+      // JIT compiles the big state query for seconds on every call and never pays off on short OLTP queries.
+      options: '-c jit=off',
     });
 
     this.pool.on('error', (err) => {

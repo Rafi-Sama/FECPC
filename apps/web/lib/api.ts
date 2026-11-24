@@ -8,7 +8,15 @@ export const API = () => process.env.API_INTERNAL_URL ?? 'http://localhost:3001'
 export const SESSION_COOKIES = ['__Host-fecpc_session', 'fecpc_session'];
 
 // The API checks these to tell a same-site request from a cross-site one (CSRF), so they must reach it unchanged.
-const FORWARD = ['cookie', 'content-type', 'origin', 'referer', 'sec-fetch-site', 'user-agent'];
+const FORWARD = [
+  'cookie',
+  'content-type',
+  'origin',
+  'referer',
+  'sec-fetch-site',
+  'user-agent',
+  'if-none-match',
+];
 
 /** The browser's address, when a trusted reverse proxy in front of this app reports it. */
 function clientIp(req: Request): string {
@@ -45,7 +53,7 @@ export async function proxy(req: Request, path: string): Promise<Response> {
   }
 
   const out = new Headers();
-  for (const h of ['content-type', 'content-disposition', 'cache-control', 'retry-after']) {
+  for (const h of ['content-type', 'content-disposition', 'cache-control', 'etag', 'retry-after']) {
     const v = res.headers.get(h);
     if (v) out.set(h, v);
   }
@@ -59,7 +67,7 @@ export async function proxy(req: Request, path: string): Promise<Response> {
       { status: res.status, headers: out },
     );
   }
-  return new Response(res.body, { status: res.status, headers: out });
+  return new Response(res.status === 304 ? null : res.body, { status: res.status, headers: out });
 }
 
 /** The signed-in member's state for a server component, or null when there is no valid session. */
@@ -73,8 +81,30 @@ export async function serverState(): Promise<AppState | null> {
   return ((await res.json()) as { state: AppState | null }).state;
 }
 
-/** Upcoming events for the public site; empty when the API is down. */
+/**
+ * A read from `POST /v1/queries/{area}` for a server component, as the signed-in member; null when it failed.
+ * Pages use it to render their first screen of data with the HTML instead of fetching it after hydration.
+ */
+export async function serverQuery<T>(
+  area: string,
+  body: Record<string, unknown>,
+): Promise<T | null> {
+  const cookie = (await headers()).get('cookie');
+  if (!cookie) return null;
+  const res = await fetch(`${API()}/v1/queries/${area}`, {
+    method: 'POST',
+    headers: { cookie, 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+    cache: 'no-store',
+  }).catch(() => null);
+  return res?.ok ? ((await res.json()) as T) : null;
+}
+
+/**
+ * Upcoming events for the public site; empty when the API is down. Kept for a minute, so the home and events pages
+ * are served from cache instead of rendering per visitor (seat counts may lag by up to a minute there).
+ */
 export async function publicEvents(): Promise<PublicEvent[]> {
-  const res = await fetch(`${API()}/v1/events`, { cache: 'no-store' }).catch(() => null);
+  const res = await fetch(`${API()}/v1/events`, { next: { revalidate: 60 } }).catch(() => null);
   return res?.ok ? ((await res.json()) as PublicEvent[]) : [];
 }

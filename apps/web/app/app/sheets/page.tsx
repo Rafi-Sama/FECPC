@@ -54,9 +54,9 @@ export default function Sheets() {
 
 /** The fixed starter ladder by topic. Ticks here count for sheet XP once Codeforces confirms them. */
 function Core() {
-  const { s, act, counts, members } = useStore();
+  const { s, act, counts } = useStore();
   const rate = (id: string) =>
-    Math.round(((counts.solved[id] ?? 0) / Math.max(1, members.length)) * 100); // share of members who marked it solved
+    Math.round(((counts.solved[id] ?? 0) / Math.max(1, counts.peopleCount)) * 100); // share of members who marked it solved
   const { synced: auto, isSolved: isDone } = useSolved();
   const done = sheet.filter((p) => isDone(p.id)).length;
 

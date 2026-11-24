@@ -1,5 +1,5 @@
 'use client';
-import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Page } from '@/components/app/Shell';
 import { useStore } from '@/components/app/Store';
@@ -260,12 +260,10 @@ function AlumniPageInner() {
   );
 }
 
+// No Suspense boundary: /app pages render per request, where useSearchParams does not suspend. A boundary only
+// streamed the page behind a fallback and React's ~300 ms reveal throttle (docs/performance-audit.md).
 export function AlumniPage() {
-  return (
-    <Suspense fallback={<div style={{ padding: 24 }}>Loading...</div>}>
-      <AlumniPageInner />
-    </Suspense>
-  );
+  return <AlumniPageInner />;
 }
 
 export default AlumniPage;

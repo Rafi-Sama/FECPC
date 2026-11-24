@@ -1,12 +1,23 @@
-import { Body, Controller, Get, Header, HttpCode, Param, Post, Req, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Header,
+  HttpCode,
+  Param,
+  Post,
+  Query,
+  Req,
+  Res,
+} from '@nestjs/common';
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { act, auditQuery, exportMembers, profileRequestPhoto } from './actions.ts';
+import { act, auditQuery, avatar, exportMembers, profileRequestPhoto } from './actions.ts';
 import { applicantPhoto, apply, recruitPublic } from './recruit.ts';
 import { Fail, pool } from './db.ts';
 import * as queries from './queries.ts';
-import { eventsQuery, publicEvents, verifyCertificate } from './events.ts';
+import { eventBanner, eventsQuery, publicEvents, verifyCertificate } from './events.ts';
 import { syncCodeforces, syncVjudge } from './milestones.ts';
-import { loadState } from './state.ts';
+import { forgetShared, loadState, rosterJson } from './state.ts';
 import { drainMail } from './mail.ts';
 import { CurrentUser, type RequestUser } from '../auth/decorators.ts';
 import { Public } from '../auth/decorators.ts';
@@ -36,11 +47,28 @@ export class MemberAreaController {
     return { state: await loadState(pool(), user.id) };
   }
 
+  /**
+   * The roster the member may see. Sent apart from the state because it grows with the club; the ETag lets the
+   * browser revalidate it after every change for the cost of a 304.
+   */
+  @Get('me/roster')
+  async roster(
+    @CurrentUser() user: RequestUser,
+    @Req() req: FastifyRequest,
+    @Res({ passthrough: true }) res: FastifyReply,
+  ) {
+    const r = (await rosterJson(pool(), user.id)) ?? { body: '{"members":[]}', tag: '"none"' };
+    res.header('etag', r.tag).header('cache-control', 'private, no-cache');
+    if (req.headers['if-none-match'] === r.tag) return void res.status(304);
+    res.header('content-type', 'application/json; charset=utf-8');
+    return r.body;
+  }
+
   /** One change `{ type, ...args }`; answers with the member's fresh state and an optional notice. */
   @Post('me/actions')
   @HttpCode(200)
   async act(@CurrentUser() user: RequestUser, @Body() body: unknown) {
-    const info = await act(user.id, object(body));
+    const info = await act(user.id, object(body)); // act() clears the shared cache
     void drainMail().catch(() => {}); // after the commit: mail queued by this action goes out now
     return { state: await loadState(pool(), user.id), info: info ?? null };
   }
@@ -68,6 +96,7 @@ export class MemberAreaController {
       syncCodeforces(pool(), user.id),
       syncVjudge(pool(), user.id),
     ]);
+    if (cf || vj) forgetShared();
     return { synced: !!(cf || vj), milestonesCreated: cf?.milestonesCreated ?? 0 };
   }
 
@@ -89,6 +118,16 @@ export class MemberAreaController {
   ) {
     const p = await applicantPhoto(pool(), user.id, id);
     res.header('content-type', p.type).header('cache-control', 'private, max-age=86400');
+    return p.body;
+  }
+
+  /** A member's photo. The link carries a version (`?v=`), so the browser may keep it for good. */
+  @Get('avatars/:id')
+  async avatar(@Param('id') id: string, @Res({ passthrough: true }) res: FastifyReply) {
+    const p = await avatar(pool(), id);
+    res
+      .header('content-type', p.type)
+      .header('cache-control', 'private, max-age=31536000, immutable');
     return p.body;
   }
 
@@ -118,6 +157,21 @@ export class MemberAreaController {
   @Get('events')
   async events() {
     return publicEvents(pool());
+  }
+
+  /** An event's banner image, linked from event lists. Versioned by `?v=`, so it may be cached for good. */
+  @Public()
+  @Get('events/:id/banner')
+  async banner(
+    @Param('id') id: string,
+    @Query('v') v: string,
+    @Res({ passthrough: true }) res: FastifyReply,
+  ) {
+    const p = await eventBanner(pool(), id, String(v ?? ''));
+    res
+      .header('content-type', p.type)
+      .header('cache-control', 'public, max-age=31536000, immutable');
+    return p.body;
   }
 
   /** One certificate by code, for the public verify page. Codes are 40 random bits, so they cannot be guessed. */

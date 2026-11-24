@@ -1,7 +1,8 @@
 'use client';
-import { rankFor } from '@fecpc/contracts';
+import { rankFor, type ClubRounds } from '@fecpc/contracts';
 import { cfUrl } from '@fecpc/content/member-area';
 import { Page } from '@/components/app/Shell';
+import { useMore } from '@/components/site/More';
 import { useStore } from '@/components/app/Store';
 import { HandleBox, useJudge, useSolved } from '@/components/app/Judge';
 
@@ -39,8 +40,14 @@ const until = (ms: number) => {
 };
 const dur = (h: number) => (h >= 48 ? `${Math.round(h / 24)} days` : `${h}h`);
 
-export default function ContestsClient({ up }: { up: ContestItem[] }) {
-  const { members, me } = useStore();
+export default function ContestsClient({
+  up,
+  members,
+}: {
+  up: ContestItem[];
+  members: ClubRounds[];
+}) {
+  const { me } = useStore();
   const { data } = useJudge();
   const { isSolved } = useSolved();
   // The club report: the three newest rated rounds any member took part in, from each member's synced rounds.
@@ -55,6 +62,7 @@ export default function ContestsClient({ up }: { up: ContestItem[] }) {
         report.reduce((n, r) => n + (row(b, r.id)?.solved ?? 0), 0) -
         report.reduce((n, r) => n + (row(a, r.id)?.solved ?? 0), 0),
     );
+  const [shown, more] = useMore(people, 50);
 
   return (
     <Page title="Contests">
@@ -181,7 +189,7 @@ export default function ContestsClient({ up }: { up: ContestItem[] }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {people.map((m) => (
+                  {shown.map((m) => (
                     <tr key={m.id} className={m.id === me.id ? 'you' : ''}>
                       <td className="hi">
                         <strong>{m.name}</strong>{' '}
@@ -212,6 +220,7 @@ export default function ContestsClient({ up }: { up: ContestItem[] }) {
                   ))}
                 </tbody>
               </table>
+              {more}
             </div>
           )}
         </section>

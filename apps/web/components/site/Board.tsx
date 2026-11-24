@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { Avatar } from '@/components/pixel/Sprites';
+import { useMore } from './More';
 import { cfTitle, members, type Member } from '@fecpc/content/site';
 
 const tabs: { k: keyof Member; label: string; unit: string }[] = [
@@ -18,6 +19,7 @@ export default function Board({ list = members, me }: { list?: Member[]; me?: st
   const rows = list
     .filter((m) => !batch || m.batch === batch)
     .sort((a, b) => (b[k] as number) - (a[k] as number));
+  const [shown, more] = useMore(rows);
   return (
     <div>
       <div className="row between" style={{ marginBottom: 24 }}>
@@ -60,7 +62,7 @@ export default function Board({ list = members, me }: { list?: Member[]; me?: st
         </label>
       </div>
       <ol className="scores big">
-        {rows.map((x, i) => (
+        {shown.map((x, i) => (
           <li
             key={x.id}
             aria-current={x.id === me || undefined}
@@ -81,6 +83,7 @@ export default function Board({ list = members, me }: { list?: Member[]; me?: st
           </li>
         ))}
       </ol>
+      {more}
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { SaveForm } from '@/components/app/SaveBar';
 import { useState } from 'react';
 import { useStore } from '../Store';
 import { MemberFace } from '../shared/MemberFace';
+import { useMore } from '@/components/site/More';
 import {
   can,
   canFully,
@@ -35,6 +36,7 @@ function Accounts() {
       (st === 'All' || status(m) === st) &&
       (m.name + m.handle + (m.email ?? '')).toLowerCase().includes(q.trim().toLowerCase()),
   );
+  const [shown, more] = useMore(rows, 50);
   return (
     <div className="stack">
       <div className="row" style={{ '--g': '8px' } as React.CSSProperties}>
@@ -68,7 +70,7 @@ function Accounts() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((m) => {
+            {shown.map((m) => {
               const role = m.roleKey ?? 'member',
                 top = role === 'president' || role === 'super_admin',
                 self = m.id === me.id,
@@ -195,6 +197,7 @@ function Accounts() {
           </tbody>
         </table>
       </div>
+      {more}
       {rows.length === 0 && <p className="body">Nobody matches.</p>}
     </div>
   );

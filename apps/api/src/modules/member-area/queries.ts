@@ -81,6 +81,7 @@ export async function alumni(db: Db, id: string, b: In): Promise<unknown> {
       type: typeof b.type === 'string' ? b.type : undefined,
       sort: typeof b.sort === 'string' ? b.sort : undefined,
       src: typeof b.src === 'string' ? b.src : typeof b.source === 'string' ? b.source : undefined,
+      offset: typeof b.offset === 'number' ? b.offset : undefined,
     });
   }
 
@@ -298,6 +299,19 @@ export async function members(db: Db, id: string, b: In): Promise<unknown> {
 
   if (action === 'getMemberProfile') {
     return getMemberProfile(db, id, { userId: String(b.userId ?? '') });
+  }
+
+  // Contests page: every member's last rated Codeforces rounds (from the server's sync). Kept out of the roster,
+  // which every page loads, because it is the bulk of a member's record and only this page reads it.
+  if (action === 'clubRounds') {
+    return (
+      await db.query(
+        `select id, name, nullif(coalesce(nullif(cf_handle, ''), handle), '') as handle,
+           coalesce(cf_rating, nullif(rating, 0)) as cf_rating, cf_contests
+         from users where not system and not suspended and cf_contests <> '[]'::jsonb
+         order by rating desc, id`,
+      )
+    ).rows;
   }
 
   if (action === 'fetchAlumniJobs') {

@@ -20,6 +20,7 @@ Start with **Getting started** to run it, then **Architecture** to understand ho
 | [Database](database.md)                           | understand the tables, change the schema, or reseed                  |
 | [Frontend](frontend.md)                           | work on pages, components, the client store or styling               |
 | [Testing](testing.md)                             | run or write tests                                                   |
+| [Performance audit](performance-audit.md)         | check page speed at scale, or reproduce the load and Lighthouse runs |
 | [Deployment](deployment.md)                       | run it in production: environment, proxies, health checks            |
 | [Decisions and history](decisions.md)             | know why things are the way they are, and what is still missing      |
 | [Contributing](contributing.md)                   | follow the conventions and the checklist before you push             |

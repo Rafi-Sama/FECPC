@@ -49,33 +49,40 @@ export function JobsTab({
     }
   }, [searchQuery]);
 
-  const fetchJobs = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/alumni', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          action: 'listAlumniJobs',
-          q: q.trim() || undefined,
-          type: jobType !== 'all' ? jobType : undefined,
-          sort,
-          source: source || undefined,
-        }),
-      });
+  // The server sends 30 jobs at a time; `more` appends the next 30 to the list.
+  const fetchJobs = useCallback(
+    async (offset = 0) => {
+      if (!offset) setLoading(true);
+      try {
+        const res = await fetch('/api/alumni', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            action: 'listAlumniJobs',
+            q: q.trim() || undefined,
+            type: jobType !== 'all' ? jobType : undefined,
+            sort,
+            source: source || undefined,
+            offset,
+          }),
+        });
 
-      if (res.ok) {
-        const data = (await res.json()) as { jobs: AlumniJob[]; total: number };
-        setJobs(data.jobs || []);
-        setTotal(data.total || 0);
-        onCountChangeRef.current?.(data.total || 0);
+        if (res.ok) {
+          const data = (await res.json()) as { jobs: AlumniJob[]; total: number };
+          setJobs((prev) => (offset ? [...prev, ...(data.jobs || [])] : data.jobs || []));
+          if (!offset || data.jobs?.length) {
+            setTotal(data.total || 0);
+            onCountChangeRef.current?.(data.total || 0);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load jobs', err);
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error('Failed to load jobs', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [q, jobType, sort, source]);
+    },
+    [q, jobType, sort, source],
+  );
 
   // Debounced search trigger
   useEffect(() => {
@@ -358,6 +365,16 @@ export function JobsTab({
           {jobs.map((job) => (
             <JobCard key={job.id} job={job} onOpenDetail={handleOpenDetail} highlightQuery={q} />
           ))}
+          {jobs.length < total && (
+            <button
+              type="button"
+              className="btn sm line"
+              style={{ gridColumn: '1 / -1', justifySelf: 'center' }}
+              onClick={() => fetchJobs(jobs.length)}
+            >
+              Show more · {total - jobs.length} left
+            </button>
+          )}
         </div>
       ) : (
         <div

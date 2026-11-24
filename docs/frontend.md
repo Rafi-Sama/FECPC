@@ -36,11 +36,19 @@ const ok = await act('decide', { kind: 'payment', id: q.id, to: 'verified' });
   a verified payment.
 - **`giveKudos(milestoneId)`** updates optimistically, with rollback, and enforces the daily cap on the client
   too.
+- **The roster loads on its own.** It grows with the club, so it is not in the page HTML or in any state answer:
+  the store fetches `/api/roster` after the page has loaded and revalidates it (ETag, usually a `304`) whenever
+  new state arrives. `members` is empty until then, so a first screen must not depend on it: totals come from
+  `counts.peopleCount`, the admin dashboard from `office.people`, top helpers from `counts.topHelpers`.
 - **`who(id)`** looks up a member in the roster, falling back to the id for people who have left.
 - **`toggle(list, id)`** (exported) is a small helper to flip an id in a list.
 
 Paged lists (feed, ideas, members, alumni, jobs, prep, blog) call `fetch('/api/community' | '/api/members' |
 '/api/alumni', { action, … })` directly from their components, because they are not part of `AppState`.
+Pages whose main content is such a list render its first page on the server: `page.tsx` calls
+`serverQuery(area, body)` (`lib/api.ts`) and hands the result to `client.tsx`, which shows it at once and skips
+its first fetch (directory, community feed, events, one event, ICPC team, contests). Long lists render 24–100 rows at a
+time with `useMore` (`components/site/More.tsx`). See [Performance audit](performance-audit.md).
 
 ## Components
 

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { can, eventSlug, type EventDetail } from '@fecpc/contracts';
 import { useStore } from '@/components/app/Store';
 import { SaveForm } from '@/components/app/SaveBar';
@@ -12,12 +12,9 @@ import { useEventsQuery } from '@/lib/events';
 
 const FORM = 'ev-new-form';
 
+// No Suspense boundary: see components/app/alumni/AlumniPage.tsx.
 export default function NewEventPage() {
-  return (
-    <Suspense fallback={<div className="page" aria-busy="true" />}>
-      <NewEvent />
-    </Suspense>
-  );
+  return <NewEvent />;
 }
 
 /** `?copy=<id>` starts from a past event: same details and roles, a new date, the past one unchanged. */
@@ -76,7 +73,7 @@ function Editor({ from }: { from: EventDetail | null }) {
       <SaveForm
         id={FORM}
         hidden
-        label={from ? 'New event from a past one, not saved' : 'Unsaved new event'}
+        label={error ?? (from ? 'New event from a past one, not saved' : 'Unsaved new event')}
         saveLabel={v.status === 'draft' ? 'Save draft' : 'Create event'}
         trackFields={false}
         // a copy counts as changed from the start, so its Discard (back to the past event) is offered
