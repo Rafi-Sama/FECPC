@@ -23,7 +23,7 @@
     "@fastify/rate-limit": "^10.2.2",
     "@fecpc/content": "workspace:*",
     "@fecpc/contracts": "workspace:*",
-    "@nestjs/common": "^11.0.11",
+    "@nestjs/common": "^12.6.0",
     "@nestjs/core": "^11.0.11",
     "@nestjs/platform-fastify": "^11.0.11",
     "@vercel/functions": "^3.11.3",
