@@ -24,7 +24,7 @@
     "@fecpc/content": "workspace:*",
     "@fecpc/contracts": "workspace:*",
     "@nestjs/common": "^11.0.11",
-    "@nestjs/core": "^11.0.11",
+    "@nestjs/core": "^12.6.0",
     "@nestjs/platform-fastify": "^11.0.11",
     "@vercel/functions": "^3.11.3",
     "dotenv": "^16.4.7",
