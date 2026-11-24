@@ -88,6 +88,23 @@ export async function renderCertificate(html: string, type: 'png' | 'jpeg', name
   );
 }
 
+/** Concise status badge for event headers and cards (no ambiguous conflicting dates). */
+export function eventBadgeStatus(e: {
+  status: string;
+  regOpen?: boolean;
+  regOpens?: string | null;
+}): string {
+  if (e.status === 'ongoing') return 'Ongoing';
+  if (e.status === 'completed') return 'Completed';
+  if (e.status === 'cancelled') return 'Cancelled';
+  if (e.status === 'draft') return 'Draft';
+  if (e.regOpen) return 'Registration Open';
+  const now = clubNow();
+  if (e.regOpens && e.regOpens > now) return 'Opens Soon';
+  if (e.status === 'open') return 'Registration Closed';
+  return e.status === 'published' ? 'Published' : e.status;
+}
+
 /** What sign-up looks like right now, rather than the bare status: the window can open or close it. */
 export function liveStatus(e: {
   status: string;

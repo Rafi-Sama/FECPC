@@ -1,5 +1,4 @@
 'use client';
-import { SaveForm } from '../SaveBar';
 import { Fragment, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -9,6 +8,7 @@ import { downloadCsv, renderCertificate } from '@/lib/events';
 import { useConfirm, usePrompt } from '../shared/PromptDialog';
 import { MailEditor, MailStatus } from '../shared/MailEditor';
 import { EventModal } from './EventModal';
+import { CertPreview } from './CertPreview';
 import {
   CERT_VARS,
   certHeadline,
@@ -166,13 +166,7 @@ export function EventAdmin({ e, reload }: { e: EventDetail; reload: () => void }
 
       {/* MODALS */}
       {modal === 'responses' && (
-        <EventModal
-          wide
-          title={`Responses & Place Awards (${totalEntries})`}
-          onClose={() => setModal(null)}
-        >
-          <Responses e={e} reload={reload} />
-        </EventModal>
+        <Responses e={e} reload={reload} onClose={() => setModal(null)} />
       )}
 
       {modal === 'roles' && (
@@ -182,7 +176,7 @@ export function EventAdmin({ e, reload }: { e: EventDetail; reload: () => void }
       )}
 
       {modal === 'certs' && (
-        <EventModal wide title="Certificates Studio" onClose={() => setModal(null)}>
+        <EventModal wide noShadow title="Certificates Studio" onClose={() => setModal(null)}>
           <Certificates
             e={e}
             reload={reload}
@@ -239,38 +233,41 @@ function RoleForm({
     approval: role?.approval ?? 'manual',
   });
   const [fields, setFields] = useState(role?.fields ?? []);
-  const [start] = useState(() => JSON.stringify([v, fields]));
+  const [saving, setSaving] = useState(false);
   const set = (p: Partial<typeof v>) => setV((x) => ({ ...x, ...p }));
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!v.title.trim()) return;
+    setSaving(true);
+    const ok = await act('roleSave', {
+      eventId,
+      id: role?.id,
+      ...v,
+      title: v.title.trim(),
+      about: v.about.trim(),
+      fields: cleanFields(fields),
+    });
+    setSaving(false);
+    if (ok) done();
+  };
+
   return (
-    <SaveForm
+    <form
       className="stack"
       style={{
-        padding: '12px',
+        padding: '16px',
         background: 'var(--bg)',
-        border: '1px solid var(--line)',
+        border: '1px solid var(--line2)',
         marginTop: 8,
+        gap: 14,
       }}
-      label={role ? `Unsaved changes to “${role.title}”` : 'Unsaved new role'}
-      saveLabel={role ? 'Save role' : 'Add role'}
-      extraDirty={JSON.stringify([v, fields]) !== start}
-      onDiscard={done}
-      onSubmit={async () => {
-        const ok = await act('roleSave', {
-          eventId,
-          id: role?.id,
-          ...v,
-          title: v.title.trim(),
-          about: v.about.trim(),
-          fields: cleanFields(fields),
-        });
-        if (ok) done();
-        return ok;
-      }}
+      onSubmit={handleSubmit}
     >
-      <div className="form-group">
-        <label>Role</label>
+      <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <label className="mono" style={{ fontSize: 11, color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Role</label>
         <input
-          className="form-control"
+          className="ctl"
           required
           maxLength={80}
           placeholder="Volunteer, Teaching Assistant…"
@@ -278,20 +275,20 @@ function RoleForm({
           onChange={(x) => set({ title: x.target.value })}
         />
       </div>
-      <div className="form-group">
-        <label>What they do</label>
+      <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <label className="mono" style={{ fontSize: 11, color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>What they do</label>
         <input
-          className="form-control"
+          className="ctl"
           maxLength={1000}
           placeholder="Brief description"
           value={v.about}
           onChange={(x) => set({ about: x.target.value })}
         />
       </div>
-      <div className="form-group">
-        <label>Sign up method</label>
+      <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <label className="mono" style={{ fontSize: 11, color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Sign up method</label>
         <select
-          className="form-control"
+          className="ctl"
           value={v.mode}
           onChange={(x) => set({ mode: x.target.value as any })}
         >
@@ -300,20 +297,20 @@ function RoleForm({
         </select>
       </div>
       {v.mode === 'form' && (
-        <div className="form-group">
-          <label>Google Forms URL</label>
+        <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <label className="mono" style={{ fontSize: 11, color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Google Forms URL</label>
           <input
-            className="form-control"
+            className="ctl"
             placeholder="https://forms.gle/..."
             value={v.formUrl ?? ''}
             onChange={(x) => set({ formUrl: x.target.value })}
           />
         </div>
       )}
-      <div className="form-group">
-        <label>Who gets in?</label>
+      <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <label className="mono" style={{ fontSize: 11, color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Who gets in?</label>
         <select
-          className="form-control"
+          className="ctl"
           value={v.approval}
           onChange={(x) => set({ approval: x.target.value as any })}
         >
@@ -322,7 +319,35 @@ function RoleForm({
         </select>
       </div>
       {v.mode === 'platform' && <FieldsEditor value={fields} onChange={setFields} />}
-    </SaveForm>
+
+      <div className="row" style={{ gap: 8, marginTop: 8 }}>
+        <button
+          className="eb"
+          type="submit"
+          disabled={saving}
+          style={{
+            flex: 1,
+            padding: '10px 16px',
+            background: 'var(--acc)',
+            color: 'white',
+            borderColor: 'var(--acc)',
+            fontWeight: 700,
+            fontSize: 13,
+            cursor: 'pointer',
+          }}
+        >
+          {saving ? 'Saving...' : role ? 'Save role' : 'Add role'}
+        </button>
+        <button
+          className="eb"
+          type="button"
+          onClick={done}
+          style={{ padding: '10px 16px', fontSize: 13, cursor: 'pointer' }}
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }
 
@@ -418,7 +443,15 @@ function Roles({ e, reload }: { e: EventDetail; reload: () => void }) {
 
 const PLACES = ['', '1st', '2nd', '3rd'];
 
-function Responses({ e, reload }: { e: EventDetail; reload: () => void }) {
+function Responses({
+  e,
+  reload,
+  onClose,
+}: {
+  e: EventDetail;
+  reload: () => void;
+  onClose: () => void;
+}) {
   const { act } = useStore();
   const ask = usePrompt();
   const entries = e.admin!.entries;
@@ -465,32 +498,21 @@ function Responses({ e, reload }: { e: EventDetail; reload: () => void }) {
   const questions = [...new Set(rows.flatMap((x) => Object.keys(x.answers)))];
 
   return (
-    <div className="stack" style={{ gap: 14 }}>
-      {e.mode === 'form' && (
-        <p className="mono text-dim" style={{ fontSize: 11 }}>
-          Participants register on Google Forms; their answers are in the form, not here.{' '}
-          {e.formUrl && (
-            <a className="link" href={e.formUrl} target="_blank" rel="noopener noreferrer">
-              Open the form
-            </a>
-          )}
-        </p>
-      )}
-
-      {/* Search Toolbar */}
-      <div style={{ display: 'flex', gap: '0.75rem' }}>
-        <input
-          type="search"
-          className="ctl"
-          style={{ flex: 1, height: 40 }}
-          placeholder="Search name, email, phone, answers..."
-          value={q}
-          onChange={(x) => setQ(x.target.value)}
-        />
+    <EventModal
+      wide
+      title={`Responses & Place Awards (${entries.length})`}
+      onClose={onClose}
+      headerActions={
         <button
           className="eb"
           type="button"
-          style={{ whiteSpace: 'nowrap', height: 40, padding: '0 16px' }}
+          style={{
+            whiteSpace: 'nowrap',
+            height: 34,
+            padding: '0 12px',
+            fontSize: 11,
+            fontWeight: 700,
+          }}
           disabled={!rows.length}
           onClick={() =>
             downloadCsv(`${e.id}-responses.csv`, [
@@ -511,17 +533,54 @@ function Responses({ e, reload }: { e: EventDetail; reload: () => void }) {
         >
           Export CSV
         </button>
-      </div>
+      }
+    >
+      <div className="stack" style={{ gap: 14 }}>
+        {e.mode === 'form' && (
+          <div
+            className="row between"
+            style={{
+              padding: '8px 12px',
+              background: 'var(--bg)',
+              border: '1px solid var(--line)',
+              alignItems: 'center',
+              gap: 8,
+              flexWrap: 'wrap',
+            }}
+          >
+            <span className="mono text-dim" style={{ fontSize: 11 }}>
+              Participants register on Google Forms; their answers are in the form, not here.
+            </span>
+            {e.formUrl && (
+              <a
+                className="eb"
+                style={{ fontSize: 11, padding: '4px 10px', textDecoration: 'none', whiteSpace: 'nowrap' }}
+                href={e.formUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Open Google Form ↗
+              </a>
+            )}
+          </div>
+        )}
 
-      {/* Filters row */}
-      <div className="row between" style={{ gap: '0.75rem', flexWrap: 'wrap' }}>
-        <div className="row" style={{ gap: '0.75rem', flex: '1 1 auto', flexWrap: 'wrap' }}>
+        {/* Search Toolbar & Filters in SAME row */}
+        <div className="row" style={{ gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <input
+            type="search"
+            className="ctl"
+            style={{ flex: '1 1 200px', height: 40 }}
+            placeholder="Search name, email, phone, answers..."
+            value={q}
+            onChange={(x) => setQ(x.target.value)}
+          />
           <select
             className="ctl"
             aria-label="Who"
             value={who}
             onChange={(x) => setWho(x.target.value)}
-            style={{ width: 'auto', height: 38, fontSize: 13, flex: '1 1 120px' }}
+            style={{ width: 'auto', height: 40, fontSize: 13, flex: '0 1 140px' }}
           >
             <option value="all">Everyone</option>
             <option value="participants">Participants</option>
@@ -536,7 +595,7 @@ function Responses({ e, reload }: { e: EventDetail; reload: () => void }) {
             aria-label="Status"
             value={status}
             onChange={(x) => setStatus(x.target.value)}
-            style={{ width: 'auto', height: 38, fontSize: 13, flex: '1 1 120px' }}
+            style={{ width: 'auto', height: 40, fontSize: 13, flex: '0 1 130px' }}
           >
             {['all', 'pending', 'approved', 'rejected', 'cancelled'].map((s) => (
               <option key={s}>{s}</option>
@@ -545,32 +604,72 @@ function Responses({ e, reload }: { e: EventDetail; reload: () => void }) {
         </div>
 
         {picked.length > 0 && (
-          <div className="row" style={{ gap: 6 }}>
-            <button
-              className="eb"
-              style={{ background: 'var(--acc)', color: 'white', borderColor: 'var(--acc)' }}
-              type="button"
-              onClick={() => decide(picked, 'approved')}
-            >
-              Approve ({picked.length})
-            </button>
-            <button
-              className="del"
-              type="button"
-              onClick={() => decide(picked, 'rejected')}
-            >
-              Decline ({picked.length})
-            </button>
+          <div
+            className="row between"
+            style={{
+              background: 'var(--bg)',
+              padding: '8px 14px',
+              border: '1px solid var(--line2)',
+              boxShadow: '2px 2px 0 var(--line2)',
+              alignItems: 'center',
+            }}
+          >
+            <span className="mono" style={{ fontSize: 12, fontWeight: 700 }}>
+              {picked.length} {picked.length === 1 ? 'entry' : 'entries'} selected
+            </span>
+            <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+              <button
+                type="button"
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  fontFamily: 'var(--f-mono, monospace)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.04em',
+                  padding: '5px 12px',
+                  background: '#16a34a',
+                  color: '#ffffff',
+                  border: '1px solid #16a34a',
+                  cursor: 'pointer',
+                }}
+                onClick={() => decide(picked, 'approved')}
+              >
+                Approve ({picked.length})
+              </button>
+              <button
+                type="button"
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  fontFamily: 'var(--f-mono, monospace)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.04em',
+                  padding: '5px 10px',
+                  background: 'transparent',
+                  color: '#dc2626',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.textDecoration = 'underline';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.textDecoration = 'none';
+                }}
+                onClick={() => decide(picked, 'rejected')}
+              >
+                Decline ({picked.length})
+              </button>
+            </div>
           </div>
         )}
-      </div>
 
       {/* Data Table */}
-      <div style={{ overflowX: 'auto', border: '1px solid var(--line2)', background: 'var(--panel)' }}>
+      <div style={{ overflowX: 'auto', border: '1px solid var(--line2)', background: 'var(--panel)', boxShadow: '2px 2px 0 var(--line2)' }}>
         <table className="mini-table">
           <thead>
             <tr>
-              <th style={{ width: 32, paddingLeft: 12 }}>
+              <th style={{ width: 36, paddingLeft: 14 }}>
                 <input
                   type="checkbox"
                   aria-label="Select all"
@@ -580,14 +679,14 @@ function Responses({ e, reload }: { e: EventDetail; reload: () => void }) {
               </th>
               <th>NAME &amp; CONTACT</th>
               <th>STATUS / PLACE</th>
-              <th style={{ textAlign: 'right', paddingRight: 12 }}>ACTIONS</th>
+              <th style={{ textAlign: 'right', paddingRight: 14 }}>ACTIONS</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((x) => (
               <Fragment key={x.id}>
                 <tr>
-                  <td style={{ paddingLeft: 12 }}>
+                  <td style={{ paddingLeft: 14 }}>
                     <input
                       type="checkbox"
                       aria-label={`Select ${x.name}`}
@@ -600,22 +699,73 @@ function Responses({ e, reload }: { e: EventDetail; reload: () => void }) {
                     />
                   </td>
                   <td>
-                    <strong style={{ display: 'block', fontSize: 13, color: 'var(--hi)' }}>
+                    <span style={{ display: 'block', fontSize: 14, fontWeight: 700, color: 'var(--hi)' }}>
                       {x.name}
-                    </strong>
-                    <span className="mono text-dim" style={{ fontSize: 11 }}>
-                      {roleName(x)} {x.batch ? `· b${x.batch}` : ''} · {x.email}
-                      {x.phone ? ` · ${x.phone}` : ''}
                     </span>
+                    <div
+                      className="mono text-dim"
+                      style={{ fontSize: 11, marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}
+                    >
+                      <span
+                        style={{
+                          background: 'var(--bg)',
+                          padding: '1px 6px',
+                          border: '1px solid var(--line)',
+                          color: 'var(--hi)',
+                          fontWeight: 600,
+                        }}
+                      >
+                        {roleName(x)}
+                      </span>
+                      {x.batch && <span>b{x.batch}</span>}
+                      <span>{x.email}</span>
+                      {x.phone && <span>· {x.phone}</span>}
+                    </div>
                   </td>
                   <td>
-                    <div className="row" style={{ gap: 6, alignItems: 'center' }}>
-                      <span
-                        className={`tag xs ${x.status === 'approved' ? 'primary' : x.status === 'rejected' ? 'danger' : 'dark'}`}
-                        style={{ fontSize: 10, padding: '2px 6px' }}
-                      >
-                        {x.status === 'rejected' ? 'declined' : x.status}
-                      </span>
+                    <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+                      {(() => {
+                        const statusConfig: Record<string, { label: string; color: string; border: string; bg: string; dot: string }> = {
+                          approved: { label: 'Approved', color: '#15803d', border: '#86efac', bg: 'rgba(22, 163, 74, 0.08)', dot: '#16a34a' },
+                          pending: { label: 'Pending', color: '#b45309', border: '#fcd34d', bg: 'rgba(245, 158, 11, 0.08)', dot: '#f59e0b' },
+                          rejected: { label: 'Declined', color: '#b91c1c', border: '#fca5a5', bg: 'rgba(220, 38, 38, 0.08)', dot: '#dc2626' },
+                          cancelled: { label: 'Cancelled', color: '#64748b', border: '#cbd5e1', bg: 'rgba(100, 116, 139, 0.08)', dot: '#94a3b8' },
+                        };
+                        const cfg = statusConfig[x.status] ?? {
+                          label: x.status,
+                          color: 'var(--hi)',
+                          border: 'var(--line2)',
+                          bg: 'var(--bg)',
+                          dot: 'var(--hi)',
+                        };
+                        return (
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 6,
+                              padding: '3px 8px',
+                              background: cfg.bg,
+                              border: `1px solid ${cfg.border}`,
+                              borderRadius: 2,
+                            }}
+                          >
+                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: cfg.dot }} />
+                            <span
+                              className="mono"
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 700,
+                                color: cfg.color,
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.04em',
+                              }}
+                            >
+                              {cfg.label}
+                            </span>
+                          </span>
+                        );
+                      })()}
                       {x.roleId === null && x.status === 'approved' && (
                         <select
                           className="ctl"
@@ -623,9 +773,11 @@ function Responses({ e, reload }: { e: EventDetail; reload: () => void }) {
                           value={x.place ?? ''}
                           style={{
                             width: 'auto',
-                            padding: '1px 6px',
+                            padding: '0 8px',
                             fontSize: 11,
-                            height: 24,
+                            height: 26,
+                            fontFamily: 'var(--f-mono, monospace)',
+                            fontWeight: 600,
                           }}
                           onChange={async (c) => {
                             const val = c.target.value ? +c.target.value : null;
@@ -640,13 +792,23 @@ function Responses({ e, reload }: { e: EventDetail; reload: () => void }) {
                       )}
                     </div>
                   </td>
-                  <td style={{ paddingRight: 12 }}>
-                    <div className="row" style={{ gap: 6, justifyContent: 'flex-end' }}>
+                  <td style={{ paddingRight: 14 }}>
+                    <div className="row" style={{ gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
                       {x.status !== 'approved' && x.status !== 'cancelled' && (
                         <button
-                          className="eb"
                           type="button"
-                          style={{ fontSize: 10, padding: '2px 6px' }}
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 700,
+                            fontFamily: 'var(--f-mono, monospace)',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.04em',
+                            padding: '4px 10px',
+                            background: '#16a34a',
+                            color: '#ffffff',
+                            border: '1px solid #16a34a',
+                            cursor: 'pointer',
+                          }}
                           onClick={() => decide([x.id], 'approved')}
                         >
                           Approve
@@ -654,9 +816,25 @@ function Responses({ e, reload }: { e: EventDetail; reload: () => void }) {
                       )}
                       {x.status !== 'rejected' && x.status !== 'cancelled' && (
                         <button
-                          className="del"
                           type="button"
-                          style={{ fontSize: 10 }}
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 700,
+                            fontFamily: 'var(--f-mono, monospace)',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.04em',
+                            padding: '4px 8px',
+                            background: 'transparent',
+                            color: '#dc2626',
+                            border: 'none',
+                            cursor: 'pointer',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.textDecoration = 'underline';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.textDecoration = 'none';
+                          }}
                           onClick={() => decide([x.id], 'rejected')}
                         >
                           Decline
@@ -666,10 +844,21 @@ function Responses({ e, reload }: { e: EventDetail; reload: () => void }) {
                         <button
                           className="eb"
                           type="button"
-                          style={{ fontSize: 10, padding: '2px 6px' }}
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 700,
+                            fontFamily: 'var(--f-mono, monospace)',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.04em',
+                            padding: '4px 10px',
+                            background: shown === x.id ? 'var(--ink)' : 'transparent',
+                            color: shown === x.id ? 'var(--panel)' : 'var(--hi)',
+                            borderColor: 'var(--line2)',
+                            cursor: 'pointer',
+                          }}
                           onClick={() => setShown(shown === x.id ? null : x.id)}
                         >
-                          {shown === x.id ? 'Hide' : `Ans (${Object.keys(x.answers).length})`}
+                          {shown === x.id ? 'Close' : `Ans (${Object.keys(x.answers).length})`}
                         </button>
                       )}
                     </div>
@@ -677,14 +866,14 @@ function Responses({ e, reload }: { e: EventDetail; reload: () => void }) {
                 </tr>
                 {shown === x.id && (
                   <tr>
-                    <td colSpan={4} style={{ background: 'var(--bg)', padding: '12px 16px' }}>
-                      <dl className="stack" style={{ gap: 6, margin: 0 }}>
+                    <td colSpan={4} style={{ background: 'var(--bg)', padding: '14px 18px', borderBottom: '1px solid var(--line2)' }}>
+                      <dl className="stack" style={{ gap: 8, margin: 0 }}>
                         {Object.entries(x.answers).map(([k, v]) => (
-                          <div key={k} style={{ fontSize: 12 }}>
-                            <dt className="mono" style={{ fontSize: 11, fontWeight: 600 }}>
-                              {k}:
+                          <div key={k} style={{ fontSize: 13, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            <dt className="mono text-dim" style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                              {k}
                             </dt>
-                            <dd style={{ margin: '2px 0 0 10px', color: 'var(--hi)' }}>{v}</dd>
+                            <dd style={{ margin: 0, color: 'var(--hi)', fontWeight: 500 }}>{v}</dd>
                           </div>
                         ))}
                       </dl>
@@ -707,6 +896,7 @@ function Responses({ e, reload }: { e: EventDetail; reload: () => void }) {
         </table>
       </div>
     </div>
+    </EventModal>
   );
 }
 
@@ -814,92 +1004,16 @@ function CertificateModal({
   return (
     <EventModal
       wide
+      noShadow
       title={`Certificate Preview · ${sample.headline || 'Participation'}`}
       onClose={onClose}
     >
       <div className="stack" style={{ gap: 16 }}>
-        {/* Brutalist Certificate Preview */}
-        <div className="cert-preview">
-          <div className="mono" style={{ fontSize: 10, letterSpacing: 2, marginBottom: '2rem' }}>
-            FECPC · PROGRAMMING CLUB
-          </div>
-          <h2
-            className="mono"
-            style={{
-              fontSize: 14,
-              color: 'var(--acc)',
-              letterSpacing: 1,
-              marginBottom: '1rem',
-              textTransform: 'uppercase',
-            }}
-          >
-            {sample.headline || 'CERTIFICATE OF PARTICIPATION'}
-          </h2>
-          <div
-            style={{
-              fontFamily: 'serif',
-              fontStyle: 'italic',
-              color: 'var(--dim)',
-              marginBottom: '0.5rem',
-            }}
-          >
-            This is presented to
-          </div>
-          <h1
-            style={{
-              fontFamily: 'serif',
-              fontSize: '3rem',
-              marginBottom: '0.5rem',
-              lineHeight: 1.1,
-            }}
-          >
-            {SAMPLE.name}
-          </h1>
-          <div style={{ fontSize: 12, color: 'var(--mut)', marginBottom: '3rem' }}>
-            for participating in the {e.title} held on {sample.date}.
-          </div>
-
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              marginTop: '3rem',
-              fontSize: 12,
-            }}
-          >
-            <div
-              style={{
-                borderTop: '1px solid var(--ink)',
-                paddingTop: '0.5rem',
-                width: '30%',
-                textAlign: 'left',
-              }}
-            >
-              President
-            </div>
-            <div
-              style={{
-                textAlign: 'center',
-                fontFamily: 'var(--f-label, var(--mono, monospace))',
-                fontSize: 10,
-              }}
-            >
-              Certificate ID
-              <br />
-              <strong style={{ color: 'var(--ink)' }}>{SAMPLE.code}</strong>
-            </div>
-            <div
-              style={{
-                borderTop: '1px solid var(--ink)',
-                paddingTop: '0.5rem',
-                width: '30%',
-                textAlign: 'right',
-              }}
-            >
-              Event lead
-            </div>
-          </div>
-        </div>
+        {/* Certificate Preview (A4 landscape scale) */}
+        <CertPreview
+          html={fillTemplate(html, sample)}
+          title={`Certificate Preview · ${sample.headline || 'Participation'}`}
+        />
 
         {/* HTML/CSS Template Editor */}
         {editHtml && (
@@ -1029,10 +1143,10 @@ function Certificates({
       </div>
 
       {/* Kind Selector & Template Preview */}
-      <div className="panel" style={{ padding: '16px' }}>
+      <div className="panel" style={{ padding: '16px 20px', background: 'var(--bg)' }}>
         <div className="stack" style={{ gap: 12 }}>
           <div>
-            <label className="mono" style={{ display: 'block', marginBottom: 6 }}>
+            <label className="mono" style={{ fontSize: 11, color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>
               Select Certificate Type
             </label>
             <select
@@ -1060,8 +1174,15 @@ function Certificates({
             </button>
             <button
               type="button"
-              className="add"
-              style={{ flex: 1, padding: '10px 14px', justifyContent: 'center' }}
+              className="eb"
+              style={{
+                flex: 1,
+                padding: '10px 14px',
+                textAlign: 'center',
+                background: 'var(--acc)',
+                color: 'white',
+                borderColor: 'var(--acc)',
+              }}
               disabled={!done}
               title={!done ? 'Event must be completed to issue certificates' : ''}
               onClick={async () => {

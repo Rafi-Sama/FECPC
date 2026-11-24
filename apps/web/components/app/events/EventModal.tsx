@@ -14,11 +14,15 @@ export function EventModal({
   title,
   onClose,
   wide,
+  noShadow,
+  headerActions,
   children,
 }: {
   title: string;
   onClose: () => void;
   wide?: boolean;
+  noShadow?: boolean;
+  headerActions?: ReactNode;
   children: ReactNode;
 }) {
   const box = useRef<HTMLDivElement>(null);
@@ -71,8 +75,6 @@ export function EventModal({
 
   if (!mounted) return null;
 
-  const target = document.getElementById('main') || document.body;
-
   return createPortal(
     <div
       className={`cm-backdrop evm-backdrop ${th}`}
@@ -82,22 +84,28 @@ export function EventModal({
       aria-label={title}
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div ref={box} className={`cm-modal evm-modal ev-detail${wide ? ' wide' : ''}`}>
+      <div
+        ref={box}
+        className={`cm-modal evm-modal ev-detail${wide ? ' wide' : ''}${noShadow ? ' no-shadow' : ''}`}
+      >
         <div className="cm-modal-head evm-modal-head">
           <h2 className="h3">{title}</h2>
-          <button
-            ref={close}
-            type="button"
-            className="cm-modal-close"
-            aria-label={`Close ${title}`}
-            onClick={onClose}
-          >
-            ×
-          </button>
+          <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+            {headerActions}
+            <button
+              ref={close}
+              type="button"
+              className="cm-modal-close"
+              aria-label={`Close ${title}`}
+              onClick={onClose}
+            >
+              ×
+            </button>
+          </div>
         </div>
         <div className="evm-modal-body">{children}</div>
       </div>
     </div>,
-    target,
+    document.body,
   );
 }

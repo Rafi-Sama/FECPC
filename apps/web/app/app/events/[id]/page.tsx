@@ -9,8 +9,8 @@ import { SignUp } from '@/components/app/events/SignUp';
 import { CertPreview } from '@/components/app/events/CertPreview';
 import { EventHead } from '@/components/app/events/EventHead';
 import { useStore } from '@/components/app/Store';
-import { EVENT_STATUS_LABEL, type EventDetail } from '@fecpc/contracts';
-import { clubNow, liveStatus, renderCertificate, useEventsQuery } from '@/lib/events';
+import { type EventDetail } from '@fecpc/contracts';
+import { clubNow, fmtWhen, renderCertificate, useEventsQuery } from '@/lib/events';
 
 const CERT_NAME: Record<string, string> = {
   participant: 'Participation',
@@ -35,58 +35,64 @@ export default function EventDetailPage() {
   const renderMemberParticipation = (isOrg = false) => (
     <div className="stack" style={{ gap: '1rem' }}>
       {e.certificates.length ? (
-        <section className="sidebar-panel">
-          <div className="sidebar-header">
-            <span>Your certificates</span>
+        <div className="panel">
+          <div className="ph">
+            <span className="mono" style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              Your certificates
+            </span>
           </div>
-          <div className="sidebar-content stack">
+          <div className="st stack">
             {e.certificates.map((c) => (
               <div key={c.code} className="stack">
                 <span className="mono" style={{ fontSize: 13, fontWeight: 600 }}>
                   {certName(c.kind)} <span className="text-dim">({c.code})</span>
                 </span>
                 <CertPreview html={c.html} title={`${certName(c.kind)} certificate preview`} />
-                <div className="row">
+                <div className="row" style={{ gap: 8, marginTop: 8 }}>
                   <span className="mono text-dim" style={{ fontSize: 11 }}>
                     Download:
                   </span>
                   {(['png', 'jpeg'] as const).map((t) => (
                     <button
                       key={t}
-                      className="btn xs solid"
+                      className="eb"
                       type="button"
                       onClick={() => renderCertificate(c.html, t, `${e.id}-${c.code}`)}
                     >
-                      {t === 'png' ? 'PNG' : 'JPG'}
+                      {t.toUpperCase()}
                     </button>
                   ))}
                 </div>
               </div>
             ))}
           </div>
-        </section>
+        </div>
       ) : e.status === 'completed' && tookPart ? (
-        <section className="sidebar-panel">
-          <div className="sidebar-header">
-            <span>Your certificates</span>
+        <div className="panel">
+          <div className="ph">
+            <span className="mono" style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              Your certificates
+            </span>
           </div>
-          <div className="sidebar-content">
-            <p className="mono text-dim" style={{ fontSize: 12 }}>
+          <div className="st">
+            <p className="mono text-dim" style={{ fontSize: 12, margin: 0 }}>
               Not issued yet. They will appear here to download.
             </p>
           </div>
-        </section>
+        </div>
       ) : (
-        <section className="sidebar-panel">
-          <div className="sidebar-header">
-            <span>Participate</span>
+        <div className="panel">
+          <div className="ph" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span className="mono" style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              Participate
+            </span>
             {e.mode === 'platform' && left !== null && (
               <span className="mono text-dim" style={{ fontSize: 11 }}>
                 {left} of {e.seats} left
               </span>
             )}
           </div>
-          <div className="sidebar-content stack">
+          <div className="st stack">
             <SignUp
               eventId={e.id}
               mode={e.mode}
@@ -100,17 +106,19 @@ export default function EventDetailPage() {
                   ? `This event is ${e.status}.`
                   : left === 0 && e.regOpen
                     ? 'Full.'
-                    : 'Registration is not open.'
+                    : e.regOpens && e.regOpens > clubNow()
+                      ? `Sign-up opens ${fmtWhen(e.regOpens)}.`
+                      : 'Registration is not open.'
               }
               done={reload}
             />
             {e.fee > 0 && entry(null)?.status === 'approved' && (
-              <Link className="btn xs line" href="/app/finance">
+              <Link className="eb" style={{ textAlign: 'center', marginTop: 8 }} href="/app/finance">
                 Pay ৳{e.fee}
               </Link>
             )}
           </div>
-        </section>
+        </div>
       )}
 
       {e.status === 'completed' && tookPart && <FeedbackForm e={e} done={reload} />}
@@ -122,13 +130,15 @@ export default function EventDetailPage() {
       {!over &&
         !isOrg &&
         e.roles.map((r) => (
-          <section key={r.id} className="sidebar-panel">
-            <div className="sidebar-header">
-              <span>{r.title}</span>
+          <div key={r.id} className="panel">
+            <div className="ph">
+              <span className="mono" style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                {r.title}
+              </span>
             </div>
-            <div className="sidebar-content stack">
+            <div className="st stack">
               {r.about && (
-                <span className="mono text-dim" style={{ fontSize: 12 }}>
+                <span className="mono text-dim" style={{ fontSize: 12, marginBottom: 8, display: 'block' }}>
                   {r.about}
                 </span>
               )}
@@ -144,7 +154,7 @@ export default function EventDetailPage() {
                 done={reload}
               />
             </div>
-          </section>
+          </div>
         ))}
     </div>
   );
@@ -181,28 +191,7 @@ export default function EventDetailPage() {
               )}
             </>
           ) : (
-            <>
-              <div className="panel">
-                <div className="ph">
-                  <span className="mono">Status</span>
-                </div>
-                <div className="st">
-                  <span className="state">
-                    <i />
-                    {(liveStatus(e) ?? EVENT_STATUS_LABEL[e.status]).toUpperCase()}
-                  </span>
-                  <div className="mono" style={{ fontSize: 13, marginTop: 12 }}>
-                    {e.regOpen
-                      ? 'Sign-up is currently open.'
-                      : over
-                        ? `Event is ${e.status}.`
-                        : 'Sign-up is currently closed.'}
-                    {left !== null && ` · ${left} of ${e.seats} seats left`}
-                  </div>
-                </div>
-              </div>
-              {renderMemberParticipation(false)}
-            </>
+            renderMemberParticipation(false)
           )}
         </aside>
       </div>
@@ -218,16 +207,18 @@ function CheckIn({ e }: { e: EventDetail }) {
   const approved = e.mine.some((x) => x.roleId === null && x.status === 'approved');
   return (
     <form
-      className="sidebar-panel"
+      className="panel"
       onSubmit={async (x) => {
         x.preventDefault();
         if (await act('attend', { eventId: e.id, code })) setCode('');
       }}
     >
-      <div className="sidebar-header">
-        <span>Check in</span>
+      <div className="ph">
+        <span className="mono" style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+          Check in
+        </span>
       </div>
-      <div className="sidebar-content stack">
+      <div className="st stack">
         {room && (
           <div className="ev-code" style={{ marginBottom: 12 }}>
             <span className="mono text-dim" style={{ fontSize: 11 }}>

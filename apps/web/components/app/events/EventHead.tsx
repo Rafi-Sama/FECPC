@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { EVENT_STATUS_LABEL, EVENT_STATUSES, EVENT_TYPES, type EventDetail } from '@fecpc/contracts';
-import { bannerStyle, clubNow, fmtWhen, liveStatus } from '@/lib/events';
+import { bannerStyle, clubNow, eventBadgeStatus, fmtWhen } from '@/lib/events';
 import { DatePicker } from '../shared/DatePicker';
 import { SaveForm } from '../SaveBar';
 import {
@@ -130,13 +130,7 @@ export function EventHead({
             className={`banner${!e.banner ? ' has-pattern' : ''}`}
             data-type={e.type}
             style={bannerStyle(e.banner)}
-          >
-            {!e.banner && (
-              <span className="mono" style={{ color: '#fff', fontSize: 13, zIndex: 1 }}>
-                {e.title}
-              </span>
-            )}
-          </div>
+          />
           <div className="pad" style={{ paddingBottom: 24 }}>
             <h1 className="title" style={{ cursor: 'default', margin: 0 }}>
               {e.title}
@@ -145,12 +139,52 @@ export function EventHead({
               <span className="on">{e.type}</span>
               <span className="ev-meta-status">
                 <span className="ev-status-dot" data-status={e.status} />
-                {liveStatus(e) ?? EVENT_STATUS_LABEL[e.status]}
+                {eventBadgeStatus(e)}
               </span>
-              <span>{fmtWhen(e.startsAt)}</span>
-              <span>{e.place || 'No venue specified'}</span>
-              <span>{e.seats !== null ? `${e.seats} seats` : 'No seat limit'}</span>
-              <span>{e.fee > 0 ? `৳${e.fee}` : 'Free'}</span>
+              <span title="Event starts at">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="15"
+                  height="15"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                  style={{ flexShrink: 0, opacity: 0.75 }}
+                >
+                  <rect x="3" y="4" width="18" height="18" rx="2" />
+                  <path d="M16 2v4M8 2v4M3 10h18" />
+                </svg>
+                {fmtWhen(e.startsAt)}
+              </span>
+              <span title="Venue">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="15"
+                  height="15"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                  style={{ flexShrink: 0, opacity: 0.75 }}
+                >
+                  <path d="M12 2a8 8 0 0 0-8 8c0 5.25 8 12 8 12s8-6.75 8-12a8 8 0 0 0-8-8z" />
+                  <circle cx="12" cy="10" r="3" />
+                </svg>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {e.place || 'No venue specified'}
+                </span>
+              </span>
+              <span title="Seat capacity">
+                {e.seats !== null ? `${e.seats} seats` : 'No seat limit'}
+              </span>
+              <span title="Fee">
+                {e.fee > 0 ? `৳${e.fee}` : 'Free'}
+              </span>
             </div>
           </div>
 
@@ -238,13 +272,20 @@ export function HeadFields({
   return (
     <main style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
       <div className="post">
-        <button
-          type="button"
+        <div
+          role="button"
+          tabIndex={0}
           className={`banner${!v.banner ? ' has-pattern' : ''}`}
           aria-label="Upload banner image"
           title="Click anywhere to choose or change banner image"
           style={bannerStyle(v.banner ?? null)}
           onClick={() => fileInputRef.current?.click()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              fileInputRef.current?.click();
+            }
+          }}
         >
           <input
             ref={fileInputRef}
@@ -289,7 +330,7 @@ export function HeadFields({
               </button>
             </div>
           )}
-        </button>
+        </div>
 
         <div className="pad" style={{ paddingBottom: 24 }}>
           <input
@@ -431,7 +472,7 @@ export function HeadFields({
       </div>
 
       {/* In-place Sign-up Configuration & Questions on the canvas */}
-      {!creating && isOrganizer && (
+      {isOrganizer && (
         <div className="sec-box">
           <div className="sec" style={{ borderTop: 0 }}>
             <h2>Registration &amp; sign-up</h2>

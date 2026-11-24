@@ -3594,12 +3594,53 @@ kbd {
   overflow-y: auto;
 }
 
+.prompt-backdrop,
 .cm-backdrop[data-prompt] {
-  z-index: 1000;
+  --bg: #ece9e1;
+  --panel: #f6f4ee;
+  --ink: #0d0d0b;
+  --hi: #0d0d0b;
+  --mut: #33312b;
+  --dim: #5e5a50;
+  --line: rgba(13, 13, 11, 0.16);
+  --line2: #0d0d0b;
+  --acc: #1f3bff;
+  --on: #ece9e1;
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 2000000 !important;
+  background: rgba(13, 13, 11, 0.75) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 16px !important;
 }
-
-.cm-backdrop[data-prompt] .cm-modal-close {
-  display: none !important;
+.prompt-backdrop.t-d,
+.cm-backdrop[data-prompt].t-d {
+  --bg: #0c0c0d;
+  --panel: #131314;
+  --ink: #f2efe9;
+  --hi: #f2efe9;
+  --mut: #c9c5bc;
+  --dim: #a29e95;
+  --line: #2a2927;
+  --line2: #55524c;
+  --acc: #ff5a1f;
+  --on: #0c0c0d;
+}
+.prompt-modal,
+.cm-backdrop[data-prompt] .cm-modal {
+  position: relative !important;
+  z-index: 2000001 !important;
+  border: 2px solid var(--line2) !important;
+  box-shadow: 10px 10px 0 var(--line2) !important;
+  background: var(--panel) !important;
+  color: var(--ink) !important;
+  padding: 0 !important;
+  width: 100% !important;
+  max-width: 480px !important;
+  margin: auto !important;
+  overflow: hidden !important;
 }
 
 .cm-modal {
@@ -5667,7 +5708,10 @@ select.member-filter-ctrl {
   position: relative;
   overflow: hidden;
   width: 100%;
-  height: 160px;
+  aspect-ratio: 16 / 9;
+  height: auto;
+  min-height: 0;
+  max-height: 480px;
   padding: 0;
   border: 0;
   border-bottom: 1px solid var(--line2);
@@ -5763,7 +5807,7 @@ select.member-filter-ctrl {
 .ev-detail .title {
   font-family: var(--f-body, sans-serif);
   font-weight: 700;
-  font-size: 38px;
+  font-size: clamp(26px, 5.5vw, 38px);
   line-height: 1.1;
   letter-spacing: -0.035em;
   margin: 0;
@@ -5798,7 +5842,7 @@ select.member-filter-ctrl {
   max-width: 100%;
   background: var(--panel);
   position: relative;
-  z-index: 2;
+  z-index: 1;
   box-sizing: border-box;
 }
 
@@ -5865,10 +5909,16 @@ select.member-filter-ctrl {
   align-items: center;
   gap: 8px;
   font-weight: 600;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   color: var(--hi);
   cursor: pointer;
   width: 100%;
   min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .ev-detail .meta .ev-status-dot {
@@ -5983,7 +6033,7 @@ select.member-filter-ctrl {
 .ev-detail .sec-box {
   border: 1px solid var(--line2);
   background: var(--panel);
-  box-shadow: 6px 6px 0 var(--line2);
+  box-shadow: none;
 }
 .ev-detail .sec {
   padding: 24px 32px;
@@ -6018,15 +6068,20 @@ select.member-filter-ctrl {
   }
 }
 /* Datepicker inside form controls: remove nested inner border box */
+.datepick.ctl,
+.ev-detail .datepick.ctl,
 .ev-detail .f .datepick.ctl,
 .f .datepick.ctl {
   padding: 0 !important;
   display: flex !important;
   align-items: stretch !important;
 }
+.datepick.ctl .datepick__btn,
+.ev-detail .datepick.ctl .datepick__btn,
 .ev-detail .f .datepick.ctl .datepick__btn,
 .f .datepick.ctl .datepick__btn {
   border: 0 !important;
+  outline: none !important;
   box-shadow: none !important;
   background: transparent !important;
   width: 100% !important;
@@ -6098,7 +6153,12 @@ select.member-filter-ctrl {
 .ev-detail .panel {
   border: 1px solid var(--line2);
   background: var(--panel);
-  box-shadow: 4px 4px 0 var(--line2);
+  box-shadow: none;
+  padding: 0;
+}
+.ev-detail .side .panel {
+  box-shadow: none !important;
+  padding: 0 !important;
 }
 .ev-detail .ph {
   display: flex;
@@ -6247,6 +6307,58 @@ select.member-filter-ctrl {
   border-bottom-color: var(--bad);
 }
 
+/* Responsive optimizations for mobile devices (<640px) without desktop layout shift */
+@media (max-width: 640px) {
+  .ev-detail {
+    padding-bottom: 48px;
+  }
+  .ev-detail .top {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .ev-detail .pad {
+    padding: 16px;
+  }
+  .ev-detail .sec {
+    padding: 16px;
+  }
+  .ev-detail .tabs {
+    padding: 0 16px;
+    gap: 16px;
+  }
+  .ev-detail .meta > span,
+  .ev-detail .meta > div {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+  .ev-detail .meta select,
+  .ev-detail .meta input {
+    font-size: 13px;
+  }
+  .ev-detail .side {
+    margin-top: 24px;
+    gap: 16px;
+  }
+  .ev-detail .item {
+    padding: 12px 14px;
+  }
+  .evm-backdrop {
+    padding: 12px 8px !important;
+  }
+  .evm-modal {
+    max-width: 100% !important;
+    box-shadow: 4px 4px 0 rgba(13, 13, 11, 0.35) !important;
+  }
+  .evm-modal-head {
+    padding: 10px 14px !important;
+  }
+  .evm-modal-body {
+    padding: 14px !important;
+  }
+}
+
 /* Accordions */
 .ev-detail .sidebar details {
   border: 2px solid var(--line2);
@@ -6325,19 +6437,22 @@ select.member-filter-ctrl {
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
-  font-family: var(--f-label);
+  font-family: var(--f-body, sans-serif);
 }
 .ev-detail .mini-table th {
   text-align: left;
-  padding: 0.55rem 0.25rem;
+  padding: 10px 14px;
   border-bottom: 2px solid var(--line2);
   color: var(--dim);
+  font-family: var(--f-mono, monospace);
   font-size: 11px;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  background: var(--bg);
 }
 .ev-detail .mini-table td {
-  padding: 0.55rem 0.25rem;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--line);
   vertical-align: middle;
 }
@@ -6345,12 +6460,12 @@ select.member-filter-ctrl {
   border-bottom: none;
 }
 .ev-detail .mini-table tbody tr:hover td {
-  background: color-mix(in srgb, var(--acc) 5%, transparent);
+  background: color-mix(in srgb, var(--acc) 4%, transparent);
 }
 .ev-detail .mini-table input[type='checkbox'] {
   accent-color: var(--acc);
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
   cursor: pointer;
 }
 
@@ -6480,7 +6595,7 @@ select.member-filter-ctrl {
   --on: #ece9e1;
   position: fixed !important;
   inset: 0 !important;
-  z-index: 99999 !important;
+  z-index: 999999 !important;
   background: rgba(13, 13, 11, 0.72) !important;
   display: flex !important;
   align-items: center !important;
@@ -6504,7 +6619,7 @@ select.member-filter-ctrl {
 .evm-modal,
 .ev-detail .evm-modal {
   position: relative;
-  z-index: 100000 !important;
+  z-index: 1000000 !important;
   width: 100%;
   max-width: 720px;
   margin: auto;
@@ -6516,6 +6631,10 @@ select.member-filter-ctrl {
   color: var(--ink);
   box-shadow: 12px 12px 0 rgba(13, 13, 11, 0.35);
   box-sizing: border-box;
+}
+.evm-modal.no-shadow,
+.ev-detail .evm-modal.no-shadow {
+  box-shadow: none !important;
 }
 .evm-modal.wide,
 .ev-detail .evm-modal.wide {
@@ -6578,6 +6697,7 @@ select.member-filter-ctrl {
 /* Modal content & controls: ensure light theme inside modals */
 .evm-modal input[type="search"],
 .evm-modal input[type="text"],
+.evm-modal textarea,
 .evm-modal select,
 .evm-modal .ctl {
   background: var(--bg) !important;
@@ -6587,8 +6707,29 @@ select.member-filter-ctrl {
   font-size: 14px;
 }
 .evm-modal input[type="search"]::placeholder,
-.evm-modal input[type="text"]::placeholder {
+.evm-modal input[type="text"]::placeholder,
+.evm-modal textarea::placeholder {
   color: var(--dim) !important;
+}
+.evm-modal .panel {
+  border: 1px solid var(--line2) !important;
+  box-shadow: none !important;
+}
+.evm-modal .ms.off {
+  border: 1px solid var(--line2) !important;
+  background: var(--bg) !important;
+  box-shadow: 2px 2px 0 var(--line2) !important;
+  color: var(--mut) !important;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 12px 16px;
+}
+.evm-modal .me-frame {
+  height: 420px;
+}
+.evm-modal input[type="checkbox"] {
+  accent-color: var(--acc);
+  cursor: pointer;
 }
 .evm-modal .eb {
   background: var(--panel) !important;
@@ -6603,27 +6744,29 @@ select.member-filter-ctrl {
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
-  font-family: var(--f-label);
+  font-family: var(--f-body, sans-serif);
 }
 .evm-modal .mini-table th {
   text-align: left;
-  padding: 0.65rem 0.5rem;
+  padding: 10px 14px;
   border-bottom: 2px solid var(--line2);
   color: var(--dim);
+  font-family: var(--f-mono, monospace);
   font-size: 11px;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   background: var(--bg);
 }
 .evm-modal .mini-table td {
-  padding: 0.65rem 0.5rem;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--line);
   vertical-align: middle;
   background: var(--panel);
   color: var(--hi);
 }
 .evm-modal .mini-table tbody tr:hover td {
-  background: color-mix(in srgb, var(--acc) 6%, var(--panel));
+  background: color-mix(in srgb, var(--acc) 4%, var(--panel));
 }
 
 /* Certificate preview dialog */
@@ -6633,7 +6776,7 @@ select.member-filter-ctrl {
   padding: 0;
   max-width: 800px;
   width: min(90vw, 800px);
-  box-shadow: 12px 12px 0 rgba(13, 13, 11, 0.28);
+  box-shadow: none !important;
   margin: auto;
   overflow: hidden;
 }
@@ -6680,7 +6823,7 @@ select.member-filter-ctrl {
   background: #fff;
   color: #0d0d0b;
   margin-bottom: 1.5rem;
-  box-shadow: 4px 4px 0 var(--line2);
+  box-shadow: none !important;
 }
 
 .ev-ticket {
@@ -11887,8 +12030,9 @@ button.cm-idea-applicant-name:focus-visible {
 }
 
 .me-inbox {
-  border: 1px solid var(--line);
-  background: #ece9e1;
+  border: 1px solid var(--line2);
+  background: var(--bg);
+  box-shadow: 4px 4px 0 var(--line2);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -11898,7 +12042,7 @@ button.cm-idea-applicant-name:focus-visible {
   align-self: stretch;
   padding: 10px 14px;
   background: var(--panel);
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--line2);
   font-size: 15px;
   overflow-wrap: anywhere;
 }
