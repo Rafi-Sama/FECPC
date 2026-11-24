@@ -3,6 +3,7 @@ import pg from 'pg';
 import { ConfigService } from '../platform/config/config.service.ts';
 import { usePool } from '../modules/member-area/db.ts';
 import { setup } from './seed-data.ts';
+import { seedLearning } from '../modules/learning/db/learning.seed.ts';
 
 const pw = process.env.SEED_PASSWORD ?? '';
 if (pw.length < 10) {
@@ -15,6 +16,7 @@ const pool = new pg.Pool({ connectionString: new ConfigService().env.DATABASE_UR
 usePool(pool);
 try {
   const seeded = await setup(pool, pw);
+  await seedLearning(pool);
   console.log(
     seeded
       ? 'Placeholder club seeded. Sign in as <id>@fecpc.example (tasnim@, anika@, tanvir@, admin@) with SEED_PASSWORD.'

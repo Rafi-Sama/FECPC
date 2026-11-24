@@ -6,6 +6,7 @@ import { HealthModule } from './platform/health/health.module.ts';
 import { AuditModule } from './modules/audit/audit.module.ts';
 import { AuthModule } from './modules/auth/auth.module.ts';
 import { MemberAreaModule } from './modules/member-area/member-area.module.ts';
+import { LearningModule } from './modules/learning/learning.module.ts';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { MemberAreaModule } from './modules/member-area/member-area.module.ts';
     AuditModule,
     AuthModule,
     MemberAreaModule,
+    LearningModule,
   ],
 })
 export class AppModule {}
