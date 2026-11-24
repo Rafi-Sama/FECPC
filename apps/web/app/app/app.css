@@ -6239,15 +6239,21 @@ select.member-filter-ctrl {
 }
 
 /* Sidebar & Command Rail */
-.ev-detail .side {
-  position: sticky;
-  top: 24px;
+.ev-detail .side,
+.ev-detail .ev-rail {
+  position: static;
+  height: auto;
+  min-height: 0;
+  border-right: 0;
+  padding: 0;
+  overflow: visible;
   display: flex;
   flex-direction: column;
   gap: 24px;
 }
 @media (max-width: 980px) {
-  .ev-detail .side {
+  .ev-detail .side,
+  .ev-detail .ev-rail {
     position: static;
   }
 }
@@ -6257,23 +6263,29 @@ select.member-filter-ctrl {
   box-shadow: none;
   padding: 0;
 }
-.ev-detail .side .panel {
+.ev-detail .side .panel,
+.ev-detail .ev-rail .panel {
   box-shadow: none !important;
   padding: 0 !important;
 }
-.ev-detail .side details.panel summary::-webkit-details-marker {
+.ev-detail .side details.panel summary::-webkit-details-marker,
+.ev-detail .ev-rail details.panel summary::-webkit-details-marker {
   display: none;
 }
-.ev-detail .side details.panel summary {
+.ev-detail .side details.panel summary,
+.ev-detail .ev-rail details.panel summary {
   list-style: none;
 }
-.ev-detail .side details.panel:not([open]) .ph {
+.ev-detail .side details.panel:not([open]) .ph,
+.ev-detail .ev-rail details.panel:not([open]) .ph {
   border-bottom: 0;
 }
-.ev-detail .side details.panel[open] .ev-fold-icon {
+.ev-detail .side details.panel[open] .ev-fold-icon,
+.ev-detail .ev-rail details.panel[open] .ev-fold-icon {
   transform: rotate(0deg);
 }
-.ev-detail .side details.panel:not([open]) .ev-fold-icon {
+.ev-detail .side details.panel:not([open]) .ev-fold-icon,
+.ev-detail .ev-rail details.panel:not([open]) .ev-fold-icon {
   transform: rotate(-90deg);
   display: inline-block;
 }

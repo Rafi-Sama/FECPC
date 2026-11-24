@@ -225,7 +225,7 @@ export default function EventDetailPage({ initial }: { initial?: EventDetail }) 
   );
 
   const asideContent = (
-    <aside className="side">
+    <aside className="ev-rail">
       {e.admin ? (
         <>
           <EventAdmin e={e} reload={reload} />
