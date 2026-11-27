@@ -87,7 +87,7 @@ export function JobCard({
 
   return (
     <article
-      className={`job ${job.source === 'fetched' ? 'fetched' : 'manual'} ${isClosed ? 'closed' : ''} ${isSoon ? 'soon' : ''}`}
+      className={`job ${job.source === 'fetched' ? 'fetched' : 'manual'} ${isClosed ? 'closed' : ''} ${isSoon ? 'soon' : ''} relative [background:var(--panel)] [border:2px_solid_var(--line2)] overflow-hidden flex flex-col cursor-pointer [transition:transform_0.14s_ease,_box-shadow_0.14s_ease]`}
       tabIndex={0}
       role="button"
       aria-label={`${job.title || job.role} at ${job.company}, ${job.location || 'Remote'}. ${statusText}. View details.`}
@@ -98,110 +98,35 @@ export function JobCard({
           onOpenDetail(job);
         }
       }}
-      style={{
-        position: 'relative',
-        background: 'var(--panel, #F6F4EE)',
-        border: '2px solid var(--line2, #0B0B0B)',
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-        cursor: 'pointer',
-        transition: 'transform 0.14s ease, box-shadow 0.14s ease',
-      }}
     >
       {/* 76px Header Band matching Alumni-Jobs.html */}
       <div
-        className="band"
-        style={{
-          position: 'relative',
-          height: 76,
-          background: bandBg,
-          overflow: 'hidden',
-          flex: 'none',
-        }}
+        className="band relative h-[76px] overflow-hidden flex-none"
+        style={{ background: bandBg }}
       >
         {/* Source label at top-left */}
-        <span
-          className="m"
-          style={{
-            position: 'absolute',
-            left: 20,
-            top: 16,
-            color: 'var(--on, #FFFFFF)',
-            font: '11px ui-monospace, Menlo, Consolas, monospace',
-            letterSpacing: '.06em',
-            textTransform: 'uppercase',
-            zIndex: 1,
-          }}
-        >
+        <span className="m top-4 left-5 absolute text-on [font:11px_ui-monospace,_Menlo,_Consolas,_monospace] tracking-[.06em] uppercase z-[1]">
           {job.source === 'fetched' ? 'Public board · Job' : 'Alumni · Job'}
         </span>
 
         {/* Ghost vacancy number at top-right */}
         <span
-          className="big"
+          className="big -top-3.5 right-3.5 absolute [font:700_112px/1_Inter,_Arial,_sans-serif] tracking-[-5px] [color:transparent] [user-select:none] pointer-events-none"
           aria-hidden="true"
-          style={{
-            position: 'absolute',
-            right: 14,
-            top: -14,
-            font: '700 112px/1 Inter, Arial, sans-serif',
-            letterSpacing: '-5px',
-            color: 'transparent',
-            WebkitTextStroke: '1.5px rgba(255,255,255,.42)',
-            userSelect: 'none',
-            pointerEvents: 'none',
-          }}
+          style={{ WebkitTextStroke: '1.5px rgba(255,255,255,.42)' }}
         >
           {ghostVacNumber}
         </span>
       </div>
 
       {/* Body with overlapping logo and vacancy badge */}
-      <div
-        className="body"
-        style={{
-          padding: '0 20px 18px',
-          display: 'flex',
-          flexDirection: 'column',
-          flex: 1,
-        }}
-      >
-        <div
-          className="top"
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'flex-end',
-            gap: 8,
-          }}
-        >
+      <div className="body pt-0 px-5 pb-4.5 flex flex-col flex-1">
+        <div className="top flex justify-between items-end gap-2">
           {/* Overlapping logo */}
-          <div
-            className="logo"
-            style={{
-              display: 'inline-block',
-              marginTop: -34,
-              background: 'var(--panel, #F6F4EE)',
-              padding: 4,
-              lineHeight: 0,
-              alignSelf: 'flex-start',
-              position: 'relative',
-              zIndex: 2,
-            }}
-          >
+          <div className="logo p-1 -mt-8.5 inline-block [background:var(--panel)] leading-[0] self-start relative z-[2]">
             <div
-              className="in"
-              style={{
-                width: 60,
-                height: 60,
-                border: `2px solid ${companyColor}`,
-                background: 'var(--bg, #FFFFFF)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                overflow: 'hidden',
-              }}
+              className="in w-[60px] h-[60px] [background:var(--bg)] flex items-center justify-center overflow-hidden"
+              style={{ border: `2px solid ${companyColor}` }}
             >
               {job.company_logo_url ? (
                 <img
@@ -209,20 +134,12 @@ export function JobCard({
                   decoding="async"
                   src={job.company_logo_url}
                   alt={`${job.company} logo`}
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'contain',
-                    display: 'block',
-                  }}
+                  className="w-full h-full object-contain block"
                 />
               ) : (
                 <b
-                  style={{
-                    font: '700 24px Inter, Arial, sans-serif',
-                    letterSpacing: '-1px',
-                    color: companyColor,
-                  }}
+                  className="[font:700_24px_Inter,_Arial,_sans-serif] tracking-[-1px]"
+                  style={{ color: companyColor }}
                 >
                   {companyInitial}
                 </b>
@@ -231,112 +148,35 @@ export function JobCard({
           </div>
 
           {/* Vacancy badge */}
-          <span
-            className="vac"
-            style={{
-              font: '600 11px ui-monospace, Menlo, Consolas, monospace',
-              letterSpacing: '.06em',
-              textTransform: 'uppercase',
-              border: '2px solid var(--line2, #0B0B0B)',
-              padding: '5px 9px',
-              background: 'var(--bg, #FFFFFF)',
-              color: 'var(--ink, #0B0B0B)',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 7,
-              marginBottom: 2,
-            }}
-          >
+          <span className="vac py-[5px] px-[9px] mb-0.5 [font:600_11px_ui-monospace,_Menlo,_Consolas,_monospace] tracking-[.06em] uppercase [border:2px_solid_var(--line2)] [background:var(--bg)] text-ink inline-flex items-center gap-[7px]">
             <i
-              style={{
-                width: 8,
-                height: 8,
-                background: isClosed ? '#8A877D' : 'var(--acc, #1F3BFF)',
-                display: 'inline-block',
-              }}
+              className="w-[8px] h-[8px] inline-block"
+              style={{ background: isClosed ? '#8A877D' : 'var(--acc, #1F3BFF)' }}
             />
             {vacancies} {vacancies === 1 ? 'vacancy' : 'vacancies'}
           </span>
         </div>
 
         {/* Title */}
-        <h3
-          style={{
-            margin: '12px 0 4px',
-            fontSize: 19,
-            lineHeight: 1.25,
-            fontWeight: 600,
-            letterSpacing: '-.2px',
-          }}
-        >
-          <span
-            style={{
-              color: 'var(--ink, #0B0B0B)',
-              textDecoration: 'none',
-            }}
-          >
+        <h3 className="mt-3 mx-0 mb-1 text-[19px] leading-[1.25] font-semibold tracking-[-.2px]">
+          <span className="text-ink [text-decoration:none]">
             <HighlightMatch text={job.title || job.role} query={highlightQuery} />
           </span>
         </h3>
 
         {/* Company in mono */}
-        <div
-          className="co"
-          style={{
-            font: '13px ui-monospace, Menlo, Consolas, monospace',
-            letterSpacing: '.02em',
-            color: 'var(--mut, #3B3A35)',
-            marginBottom: 18,
-          }}
-        >
+        <div className="co mb-4.5 [font:13px_ui-monospace,_Menlo,_Consolas,_monospace] tracking-[.02em] text-mut">
           <HighlightMatch text={job.company} query={highlightQuery} />
         </div>
 
         {/* Foot with status dot and View details affordance */}
-        <div
-          className="foot"
-          style={{
-            marginTop: 'auto',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            borderTop: '1px solid var(--line, #CFCBBF)',
-            paddingTop: 14,
-            gap: 8,
-          }}
-        >
-          <span
-            className="m"
-            style={{
-              color: 'var(--ink, #0B0B0B)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              font: '11px ui-monospace, Menlo, Consolas, monospace',
-              letterSpacing: '.06em',
-              textTransform: 'uppercase',
-            }}
-          >
-            <i
-              style={{
-                width: 9,
-                height: 9,
-                background: statusDotColor,
-                display: 'inline-block',
-              }}
-            />
+        <div className="foot pt-3.5 mt-auto flex justify-between items-center [border-top:1px_solid_var(--line)] gap-2">
+          <span className="m text-ink flex items-center gap-2 [font:11px_ui-monospace,_Menlo,_Consolas,_monospace] tracking-[.06em] uppercase">
+            <i className="w-[9px] h-[9px] inline-block" style={{ background: statusDotColor }} />
             {statusText}
           </span>
 
-          <span
-            className="m"
-            style={{
-              color: 'var(--ink, #0B0B0B)',
-              font: '11px ui-monospace, Menlo, Consolas, monospace',
-              letterSpacing: '.06em',
-              textTransform: 'uppercase',
-            }}
-          >
+          <span className="m text-ink [font:11px_ui-monospace,_Menlo,_Consolas,_monospace] tracking-[.06em] uppercase">
             View details →
           </span>
         </div>

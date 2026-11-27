@@ -5,11 +5,19 @@ import { useStore } from '@/components/app/Store';
 import { MarkdownBody, MarkdownEditor, relTime } from '@/components/app/shared/MarkdownEditor';
 import { TierName } from '@/components/app/shared/SolvedTier';
 import { AvatarRing } from '@/components/app/shared/RatingBadge';
-import { ideaTypeLabel } from '@/components/app/ideas/NewIdeaModal';
+import { ideaTypeLabel } from '@/components/app/ideas/ui';
 import { JoinIdeaModal, type JoinIdeaTarget } from '@/components/app/ideas/JoinIdeaModal';
 import { canFully, rankFor } from '@fecpc/contracts';
 import type { IdeaDetail, IdeaStatus } from '@fecpc/contracts';
 import { useConfirm } from '@/components/app/shared/PromptDialog';
+import {
+  cmIdeaMeta,
+  cmIdeaTags,
+  cmIdeaAcceptedBadge,
+  cmIdeaInterestedLabel,
+  cmIdeaStatusBadge,
+  cmSideBox,
+} from '@/components/app/ideas/ui';
 
 export function IdeaModal({
   ideaId,
@@ -160,16 +168,16 @@ export function IdeaModal({
         aria-label={detail?.title ?? 'Idea'}
         onClick={(e) => e.target === e.currentTarget && onClose()}
       >
-        <div className="cm-modal wide cm-idea-modal">
+        <div className="cm-modal wide cm-idea-modal [.cm-modal&]:max-w-[750px] [box-shadow:8px_8px_0_rgba(13,_13,_11,_0.2)] [.t-d_&]:[box-shadow:8px_8px_0_rgba(0,_0,_0,_0.8)]">
           {loading && !detail ? (
-            <p className="body" style={{ padding: 24 }}>
-              Loading…
-            </p>
+            <p className="body p-6">Loading…</p>
           ) : detail ? (
             <>
-              <header className="cm-modal-head cm-idea-modal-head">
-                <div className="cm-idea-detail-heading">
-                  <div className="cm-idea-meta cm-idea-modal-meta">
+              <header className="cm-modal-head [&_.cm-modal-close]:flex-none py-6 px-7 [background:var(--bg)] [border-bottom:2px_solid_var(--line2)] [display:grid] grid-cols-[minmax(0,_1fr)_auto] [align-items:start] gap-4 [@media(max-width:520px)]:p-4">
+                <div className="flex gap-2.5 min-w-0 flex-col">
+                  <div
+                    className={`cm-idea-meta flex items-center max-[521px]:gap-2 ${cmIdeaMeta} gap-[8px_12px] [&_.avatar-ring]:[background:var(--bg)] [&&]:m-0 [&&]:[color:var(--dim)]`}
+                  >
                     <AvatarRing
                       name={detail.author_name}
                       avatarUrl={detail.author_avatar}
@@ -178,29 +186,51 @@ export function IdeaModal({
                       ringOffset={2}
                       rank={rankFor(detail.author_rating)}
                     />
-                    <span className="cm-idea-author">
+                    <span className="cm-idea-author [&_.avatar-ring]:[background:var(--panel)] inline-flex items-center gap-2 min-w-0 text-ink text-[13px]">
                       <TierName name={detail.author_name} solved={detail.author_solved} />
                     </span>
-                    <span className="cm-idea-time">{relTime(detail.created_at)}</span>
-                    <div className="cm-idea-tags">
-                      <span className="cm-idea-tag">{ideaTypeLabel(detail.type)}</span>
-                      <span className={`cm-idea-tag status-${detail.status}`}>{detail.status}</span>
+                    <span className="[color:var(--dim)] text-[12px]">
+                      {relTime(detail.created_at)}
+                    </span>
+                    <div className={`cm-idea-tags flex items-center gap-1.5 ${cmIdeaTags}`}>
+                      <span className="cm-idea-tag [border:1px_solid_var(--line2)] tracking-[0.05em] py-px px-1.5 text-ink text-[11px] leading-[1.5] uppercase whitespace-nowrap [background:var(--panel)] [&.status-open]:text-acc [&.status-planned]:text-acc2 [&.status-shipped]:[color:var(--mut)] [&&.status-closed]:text-bad">
+                        {ideaTypeLabel(detail.type)}
+                      </span>
+                      <span
+                        className={`cm-idea-tag [border:1px_solid_var(--line2)] tracking-[0.05em] [&.status-open]:border-acc [&.status-planned]:border-acc2 [&.status-shipped]:border-mut [&&&&.status-closed]:border-bad py-px px-1.5 text-ink text-[11px] leading-[1.5] uppercase whitespace-nowrap [background:var(--panel)] [&.status-open]:text-acc [&.status-planned]:text-acc2 [&.status-shipped]:[color:var(--mut)] [&&.status-closed]:text-bad status-${detail.status}`}
+                      >
+                        {detail.status}
+                      </span>
                       {detail.my_interest === 'accepted' && (
-                        <span className="pill ok cm-idea-accepted-badge">✓ Accepted</span>
+                        <span
+                          className={`pill ok cm-idea-accepted-badge tracking-[0.06em] ${cmIdeaAcceptedBadge}`}
+                        >
+                          ✓ Accepted
+                        </span>
                       )}
                       {detail.my_interest === 'declined' && (
-                        <span className="pill bad cm-idea-status-badge">✗ Declined</span>
+                        <span
+                          className={`pill bad cm-idea-status-badge tracking-[0.06em] ${cmIdeaStatusBadge}`}
+                        >
+                          ✗ Declined
+                        </span>
                       )}
                       {detail.my_interest === 'pending' && (
-                        <span className="pill warn cm-idea-status-badge">Interest sent</span>
+                        <span
+                          className={`pill warn cm-idea-status-badge tracking-[0.06em] ${cmIdeaStatusBadge}`}
+                        >
+                          Interest sent
+                        </span>
                       )}
                     </div>
                   </div>
-                  <h2 className="cm-idea-detail-title">{editing ? 'Edit idea' : detail.title}</h2>
+                  <h2 className="m-0 text-hi font-disp [font-size:clamp(22px,_2.6vw,_30px)] font-bold leading-[1.2] [overflow-wrap:anywhere]">
+                    {editing ? 'Edit idea' : detail.title}
+                  </h2>
                 </div>
                 <button
                   type="button"
-                  className="cm-modal-close cm-idea-modal-close"
+                  className="cm-modal-close cm-idea-modal-close m-0 min-w-[32px] min-h-[32px] [background:var(--panel)] text-[18px] hover:[background:var(--acc)]"
                   aria-label="Close"
                   onClick={onClose}
                 >
@@ -208,11 +238,11 @@ export function IdeaModal({
                 </button>
               </header>
 
-              <div className="cm-idea-modal-body">
+              <div className="flex gap-4.5 p-6 max-[521px]:p-4 flex-col">
                 {editing ? (
                   <SaveForm
-                    className="stack"
-                    style={{ '--g': '14px' } as React.CSSProperties}
+                    className="stack [--g:14px]"
+
                     label="Unsaved changes to this idea"
                     onDiscard={() => {
                       setEditTitle(detail.title);
@@ -243,7 +273,7 @@ export function IdeaModal({
                       maxLength={10000}
                       rows={6}
                     />
-                    <label className="field" style={{ maxWidth: 220 }}>
+                    <label className="field max-w-[220px]">
                       <span className="label">Status</span>
                       <select
                         className="input"
@@ -263,20 +293,13 @@ export function IdeaModal({
                       <MarkdownBody markdown={detail.body_md} />
                     </div>
                     {detail.roles.length > 0 && (
-                      <div className="cm-side-box cm-idea-role-box" style={{ gap: 8 }}>
+                      <div
+                        className={`cm-side-box flex ${cmSideBox} p-5 [border:2px_solid_var(--line2)] [&_.label]:mb-3 [&&]:[background:var(--bg)] gap-2`}
+                      >
                         <p className="label">Open roles / applicant questions</p>
-                        <ul
-                          style={{
-                            listStyle: 'disc',
-                            paddingLeft: 18,
-                            margin: 0,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 4,
-                          }}
-                        >
+                        <ul className="[list-style:disc] pl-4.5 m-0 flex flex-col gap-1">
                           {detail.roles.map((r, i) => (
-                            <li key={i} className="body" style={{ fontSize: 14 }}>
+                            <li key={i} className="body text-[14px]">
                               {r}
                             </li>
                           ))}
@@ -287,12 +310,9 @@ export function IdeaModal({
                 )}
 
                 {/* Action bar */}
-                <div
-                  className="row between cm-idea-actionbar"
-                  style={{ '--g': '10px' } as React.CSSProperties}
-                >
-                  <div className="cm-idea-actionbar-left">
-                    <div className="row" style={{ '--g': '8px' } as React.CSSProperties}>
+                <div className="row between cm-idea-actionbar items-center pt-4 [border-top:2px_solid_var(--line2)] [--g:10px]">
+                  <div className="flex items-center min-w-0">
+                    <div className="row [--g:8px]">
                       <button
                         type="button"
                         className={`btn xs ${upvoted ? '' : 'line'}`}
@@ -302,23 +322,22 @@ export function IdeaModal({
                       >
                         ▲ {detail.upvotes}
                       </button>
-                      <span className="cm-idea-interested-label">
+                      <span
+                        className={`cm-idea-interested-label tracking-[0.05em] ${cmIdeaInterestedLabel}`}
+                      >
                         INTERESTED ({detail.interested_count})
                       </span>
                     </div>
                   </div>
 
-                  <div
-                    className="row cm-idea-actionbar-actions"
-                    style={{ '--g': '8px' } as React.CSSProperties}
-                  >
+                  <div className="row ml-auto [--g:8px]">
                     {!detail.my_interest &&
                       !isPoster &&
                       !me.system &&
                       detail.status !== 'closed' && (
                         <button
                           type="button"
-                          className="btn xs cm-idea-apply-btn cm-idea-join-btn"
+                          className="btn xs cm-idea-apply-btn text-on hover:text-bg cm-idea-join-btn min-w-[140px]"
                           disabled={busy}
                           onClick={handleJoinClick}
                         >
@@ -339,7 +358,7 @@ export function IdeaModal({
                     {isPoster && onManage && !editing && (
                       <button
                         type="button"
-                        className="btn xs cm-idea-manage-short"
+                        className="btn xs cm-idea-manage-short text-on hover:text-bg"
                         onClick={onManage}
                       >
                         Manage Interested ({detail.interested_count})
@@ -372,7 +391,7 @@ export function IdeaModal({
               </div>
             </>
           ) : (
-            <div className="stack" style={{ padding: 24 }}>
+            <div className="stack p-6">
               <div className="cm-modal-head">
                 <strong>Idea not found</strong>
                 <button

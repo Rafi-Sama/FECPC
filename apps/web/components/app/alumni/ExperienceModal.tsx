@@ -92,94 +92,38 @@ export function ExperienceModal({
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(11, 11, 11, 0.65)',
-        zIndex: 9999,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 20,
-        overflowY: 'auto',
-      }}
+      className="inset-0 p-5 fixed [background:rgba(11,_11,_11,_0.65)] z-[9999] flex items-center justify-center overflow-y-auto"
     >
       <div
         ref={modalRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="expModalTitle"
-        style={{
-          width: '100%',
-          maxWidth: 680,
-          background: 'var(--panel, #F6F4EE)',
-          border: '2px solid var(--line2, #0B0B0B)',
-          boxShadow: '8px 8px 0 var(--line2, #0B0B0B)',
-          padding: '36px 32px',
-          position: 'relative',
-          maxHeight: '90vh',
-          overflowY: 'auto',
-        }}
+        className="py-9 px-8 w-full max-w-[680px] [background:var(--panel)] [border:2px_solid_var(--line2)] [box-shadow:8px_8px_0_var(--line2)] relative max-h-[90vh] overflow-y-auto"
       >
         <button
           ref={closeBtnRef}
           type="button"
           onClick={onClose}
           aria-label="Close"
-          style={{
-            position: 'absolute',
-            top: 16,
-            right: 16,
-            background: 'none',
-            border: 'none',
-            fontFamily: 'var(--mono)',
-            fontSize: 22,
-            cursor: 'pointer',
-            lineHeight: 1,
-            color: 'var(--ink, #0B0B0B)',
-          }}
+          className="top-4 right-4 absolute [background:none] [border:none] [font-family:var(--mono)] text-[22px] cursor-pointer leading-[1] text-ink"
         >
           ✕
         </button>
 
-        <div
-          style={{
-            fontFamily: 'var(--mono)',
-            fontSize: 11,
-            fontWeight: 700,
-            textTransform: 'uppercase',
-            letterSpacing: '0.08em',
-            color: 'var(--acc, #1F3BFF)',
-            marginBottom: 8,
-          }}
-        >
+        <div className="mb-2 [font-family:var(--mono)] text-[11px] font-bold uppercase tracking-[0.08em] text-acc">
           INTERVIEW EXPERIENCE
         </div>
 
         <h2
           id="expModalTitle"
-          style={{
-            fontSize: 26,
-            fontWeight: 700,
-            lineHeight: 1.25,
-            margin: '0 0 16px',
-            color: 'var(--ink, #0B0B0B)',
-          }}
+          className="mt-0 mx-0 mb-4 text-[26px] font-bold leading-[1.25] text-ink"
         >
           {tip.title}
         </h2>
 
         {/* Author row */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-            paddingBottom: 16,
-            borderBottom: '1px solid var(--line, #CFCCBF)',
-            marginBottom: 24,
-          }}
-        >
+        <div className="pb-4 mb-6 flex items-center gap-3 [border-bottom:1px_solid_var(--line)]">
           <AvatarRing
             name={tip.author_name || 'Alumnus'}
             avatarUrl={tip.author_avatar}
@@ -187,15 +131,8 @@ export function ExperienceModal({
             rank={rankFor(tip.author_rating)}
           />
           <div>
-            <div style={{ fontWeight: 600, fontSize: 14 }}>{tip.author_name || 'Alumnus'}</div>
-            <div
-              style={{
-                fontFamily: 'var(--mono)',
-                fontSize: 11,
-                color: 'var(--dim, #6B6B6B)',
-                marginTop: 2,
-              }}
-            >
+            <div className="font-semibold text-[14px]">{tip.author_name || 'Alumnus'}</div>
+            <div className="mt-0.5 [font-family:var(--mono)] text-[11px] text-dim">
               {tip.created_at ? relTime(tip.created_at) : 'Recently'}
             </div>
           </div>
@@ -203,16 +140,8 @@ export function ExperienceModal({
           {canDelete && (
             <button
               type="button"
-              className="btn line sm"
+              className="btn line sm ml-auto text-acc2 border-acc2 text-[11px] [font-family:var(--mono)] cursor-pointer"
               onClick={handleDelete}
-              style={{
-                marginLeft: 'auto',
-                color: 'var(--acc2)',
-                borderColor: 'var(--acc2)',
-                fontSize: 11,
-                fontFamily: 'var(--mono)',
-                cursor: 'pointer',
-              }}
             >
               Delete
             </button>
@@ -220,7 +149,7 @@ export function ExperienceModal({
         </div>
 
         {/* Markdown content */}
-        <div style={{ fontSize: 15, lineHeight: 1.65, color: 'var(--ink, #1C1C1A)' }}>
+        <div className="text-[15px] leading-[1.65] text-ink">
           <MarkdownBody markdown={tip.body_md} />
         </div>
       </div>

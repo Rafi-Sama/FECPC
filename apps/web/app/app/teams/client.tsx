@@ -7,10 +7,24 @@ import { templates } from '@fecpc/content/training';
 import { rankFor } from '@fecpc/contracts';
 import { MemberFace } from '@/components/app/shared/MemberFace';
 
+import { toastStack } from '@/components/app/shared/ui';
+
+const renameInput =
+  'h-[40px] py-0 px-3 [border:1px_solid_var(--acc)] [outline:none] text-[15px] w-[18ch] bg-bg';
+
+const chartLegend =
+  '[&_span]:inline-flex [&_span]:items-center [&_span]:gap-2 [&_i]:w-[12px] [&_i]:h-[12px] [&_i]:inline-block flex flex-wrap gap-4 [font:14px_var(--mono),monospace]';
+
 // ── Types ────────────────────────────────────────────────────────────────────
 // `other`: a teammate's hand in this change (who edited this page, or whose page this was).
 type HistoryEntry = { action: string; by: string; ago: string; other?: string };
 type Note = { user_id: string; topic: string; code: string; updated_at: string };
+// Repeated across the pick modals below.
+const overlay = 'fixed inset-0 bg-[rgba(0,0,0,.35)] flex items-center justify-center z-100';
+const pickHead = 'row between items-center mb-2.5';
+const pickLabel = 'label text-[0.78rem] uppercase';
+const miniBtn = 'btn xs line min-h-[24px] py-0.5 px-2 text-[0.72rem]';
+
 export type TeamData = {
   team: {
     id: number;
@@ -506,15 +520,11 @@ export default function Teams({ initial }: { initial: TeamData | null }) {
   // ── Page title ──────────────────────────────────────────────────────────
   const title = onTeam ? (
     <>
-      <span
-        className="label"
-        style={{ display: 'block', marginBottom: 2, textTransform: 'uppercase' }}
-      >
-        your team
-      </span>
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+      <span className="label block mb-0.5 uppercase">your team</span>
+      <span className="inline-flex items-center gap-2.5">
         {renaming ? (
           <input
+            className="bg-transparent [outline:none] w-[16ch] text-[inherit] [font-weight:inherit]"
             ref={nameRef}
             value={nameInput}
             onChange={(e) => setNameInput(e.target.value)}
@@ -523,24 +533,15 @@ export default function Teams({ initial }: { initial: TeamData | null }) {
               if (e.key === 'Enter') commitRename();
               if (e.key === 'Escape') setRenaming(false);
             }}
-            style={{
-              fontSize: 'inherit',
-              fontWeight: 'inherit',
-              background: 'transparent',
-              border: 'none',
-              borderBottom: '2px solid var(--acc)',
-              outline: 'none',
-              width: '16ch',
-            }}
+            style={{ border: 'none', borderBottom: '2px solid var(--acc)' }}
           />
         ) : (
           <span>{teamName}.</span>
         )}
         <button
-          className="btn xs line no-print"
+          className="btn xs line no-print py-0.5 px-2 text-[0.75rem]"
           onClick={startRename}
           aria-label="Rename team"
-          style={{ padding: '2px 8px', fontSize: '0.75rem' }}
         >
           ✎
         </button>
@@ -553,14 +554,14 @@ export default function Teams({ initial }: { initial: TeamData | null }) {
   );
 
   const aside = (
-    <div className="row" style={{ gap: 8 }}>
+    <div className="row gap-2">
       <button className="btn sm line no-print" onClick={openPrintModal}>
         print notebook
       </button>
       {onTeam && (
         <button
-          className="btn sm line no-print"
-          style={{ color: 'var(--bad)', borderColor: 'var(--bad)' }}
+          className="btn sm line no-print text-bad border-bad"
+
           onClick={() => setConfirmLeave(true)}
         >
           leave your team
@@ -575,15 +576,7 @@ export default function Teams({ initial }: { initial: TeamData | null }) {
     <Page title={title} aside={aside}>
       <div className="bento">
         {onTeam && (
-          <div
-            role="tablist"
-            style={{
-              gridColumn: '1 / -1',
-              flexDirection: 'row',
-              justifyContent: 'flex-start',
-              gap: 8,
-            }}
-          >
+          <div className="col-span-full flex-row justify-start gap-2" role="tablist">
             {(
               [
                 ['notes', 'Notebook'],
@@ -594,8 +587,8 @@ export default function Teams({ initial }: { initial: TeamData | null }) {
                 key={k}
                 role="tab"
                 aria-selected={view === k}
-                className={`tag tab ${view === k ? 'on' : ''}`}
-                style={{ padding: '10px 18px' }}
+                className={`tag tab ${view === k ? 'on' : ''} py-2.5 px-4.5`}
+
                 onClick={() => setView(k)}
               >
                 {label}
@@ -605,14 +598,14 @@ export default function Teams({ initial }: { initial: TeamData | null }) {
         )}
         {/* ── Notebook panel ────────────────────────────────────────────── */}
         {(view === 'notes' || !onTeam) && (
-          <section className="panel" style={{ gridColumn: '1 / -1' }}>
+          <section className="panel col-span-full">
             {/* Row 1: label left · member tabs + count right */}
-            <div className="row between" style={{ alignItems: 'center', marginBottom: 14 }}>
-              <p className="label" style={{ margin: 0 }}>
+            <div className="row between items-center mb-3.5">
+              <p className="label m-0">
                 {active === me.id ? 'your topics' : `${nameOf(active)}'s topics`}
               </p>
 
-              <div className="row" style={{ gap: 6, alignItems: 'center', position: 'relative' }}>
+              <div className="row gap-1.5 items-center relative">
                 {memberSlots.map((id) => {
                   const label = shortName(id);
                   const isActive = active === id;
@@ -639,10 +632,10 @@ export default function Teams({ initial }: { initial: TeamData | null }) {
                 })}
 
                 {/* + button opens LFT dropdown */}
-                <div style={{ position: 'relative' }} ref={lftRef}>
+                <div className="relative" ref={lftRef}>
                   <button
-                    className="tag tab"
-                    style={{ fontWeight: 700 }}
+                    className="tag tab font-bold"
+
                     title={memberSlots.length >= maxSlots ? 'Your team is full' : 'Find a teammate'}
                     disabled={memberSlots.length >= maxSlots}
                     onClick={() => setShowLFT((v) => !v)}
@@ -660,83 +653,39 @@ export default function Teams({ initial }: { initial: TeamData | null }) {
                           m.handle.toLowerCase().includes(q),
                       );
                       return (
-                        <div
-                          style={{
-                            position: 'absolute',
-                            top: 'calc(100% + 6px)',
-                            right: 0,
-                            background: 'var(--bg, #f5f5f0)',
-                            border: '1px solid var(--line)',
-                            borderRadius: 6,
-                            width: 300,
-                            zIndex: 50,
-                            boxShadow: '0 4px 16px rgba(0,0,0,.12)',
-                          }}
-                        >
+                        <div className="absolute top-[calc(100%_+_6px)] right-0 bg-[var(--bg,#f5f5f0)] [border:1px_solid_var(--line)] rounded-[6px] w-[300px] z-50 [box-shadow:0_4px_16px_rgba(0,0,0,.12)]">
                           {/* header + search */}
-                          <div
-                            style={{
-                              padding: '10px 12px',
-                              borderBottom: '1px solid var(--line)',
-                            }}
-                          >
-                            <p className="label" style={{ margin: '0 0 8px' }}>
-                              add a teammate
-                            </p>
+                          <div className="py-2.5 px-3 [border-bottom:1px_solid_var(--line)]">
+                            <p className="label mt-0 mr-0 mb-2 ml-0">add a teammate</p>
                             <input
+                              className="w-full box-border py-1.5 px-2.5 rounded-[4px] [border:1px_solid_var(--line)] bg-bg text-[0.82rem] [outline:none]"
                               autoFocus
                               type="text"
                               placeholder="search by name or CF handle…"
                               value={lftSearch}
                               onChange={(e) => setLftSearch(e.target.value)}
-                              style={{
-                                width: '100%',
-                                boxSizing: 'border-box',
-                                padding: '6px 10px',
-                                borderRadius: 4,
-                                border: '1px solid var(--line)',
-                                background: 'var(--bg)',
-                                fontSize: '0.82rem',
-                                outline: 'none',
-                              }}
                             />
                           </div>
                           {/* results */}
-                          <div style={{ maxHeight: 260, overflowY: 'auto' }}>
+                          <div className="max-h-[260px] overflow-y-auto">
                             {pool.length === 0 ? (
-                              <p className="label" style={{ padding: '12px 14px', margin: 0 }}>
-                                no members found
-                              </p>
+                              <p className="label py-3 px-3.5 m-0">no members found</p>
                             ) : (
                               pool.map((m) => {
                                 const isSent = d.sent.includes(m.id);
                                 return (
                                   <div
+                                    className="flex items-center gap-2 py-[9px] px-3 [border-bottom:1px_solid_var(--line)]"
                                     key={m.id}
-                                    style={{
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: 8,
-                                      padding: '9px 12px',
-                                      borderBottom: '1px solid var(--line)',
-                                    }}
                                   >
-                                    <span className="grow" style={{ minWidth: 0 }}>
-                                      <strong
-                                        className="hi"
-                                        style={{ display: 'block', fontSize: '0.88rem' }}
-                                      >
-                                        {m.name}
-                                      </strong>
-                                      <span className="label" style={{ fontSize: '0.78rem' }}>
-                                        {m.handle}
-                                      </span>
+                                    <span className="grow min-w-0">
+                                      <strong className="hi block text-[0.88rem]">{m.name}</strong>
+                                      <span className="label text-[0.78rem]">{m.handle}</span>
                                     </span>
                                     <button
-                                      className="btn xs line"
+                                      className="btn xs line shrink-0"
                                       disabled={isSent}
                                       onClick={() => run('teamInvite', { user: m.id })}
-                                      style={{ flexShrink: 0 }}
                                     >
                                       {isSent ? 'asked' : 'invite'}
                                     </button>
@@ -750,18 +699,19 @@ export default function Teams({ initial }: { initial: TeamData | null }) {
                     })()}
                 </div>
 
-                <span className="label" style={{ marginLeft: 2 }}>
+                <span className="label ml-0.5">
                   {memberSlots.length}/{maxSlots}
                 </span>
               </div>
             </div>
 
             {/* Row 2: template tabs left · EDIT / CANCEL+SAVE right */}
-            <div className="row between" style={{ alignItems: 'center', marginBottom: 10 }}>
-              <div className="row" style={{ gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            <div className={pickHead}>
+              <div className="row gap-1.5 flex-wrap items-center">
                 {topicList.map((x) =>
                   renamingTopic === x ? (
                     <input
+                      className={renameInput}
                       key={x}
                       autoFocus
                       aria-label={`Rename ${x}`}
@@ -773,18 +723,9 @@ export default function Teams({ initial }: { initial: TeamData | null }) {
                         if (e.key === 'Enter') e.currentTarget.blur();
                         if (e.key === 'Escape') setRenamingTopic(null);
                       }}
-                      style={{
-                        height: 40,
-                        padding: '0 12px',
-                        border: '1px solid var(--acc)',
-                        outline: 'none',
-                        fontSize: 15,
-                        width: '18ch',
-                        background: 'var(--bg)',
-                      }}
                     />
                   ) : (
-                    <span key={x} style={{ display: 'inline-flex', alignItems: 'center' }}>
+                    <span className="inline-flex items-center" key={x}>
                       <button
                         className="tag tab"
                         aria-pressed={x === tpl}
@@ -820,11 +761,10 @@ export default function Teams({ initial }: { initial: TeamData | null }) {
                           </button>
                           <button
                             type="button"
-                            className="tag tab"
+                            className="tag tab text-bad"
                             onClick={() => setConfirmDeleteTopic({ name: x })}
                             title={`Remove ${x}`}
                             aria-label={`Remove ${x}`}
-                            style={{ color: 'var(--bad)' }}
                           >
                             ×
                           </button>
@@ -836,8 +776,9 @@ export default function Teams({ initial }: { initial: TeamData | null }) {
 
                 {/* inline new-topic input & manage controls: your own topics only */}
                 {!own ? null : manageTopics ? (
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <div className="inline-flex items-center gap-1">
                     <input
+                      className={renameInput}
                       ref={topicInputRef}
                       autoFocus
                       type="text"
@@ -851,44 +792,28 @@ export default function Teams({ initial }: { initial: TeamData | null }) {
                           setTopicInput('');
                         }
                       }}
-                      style={{
-                        height: 40,
-                        padding: '0 12px',
-                        border: '1px solid var(--acc)',
-                        outline: 'none',
-                        fontSize: 15,
-                        width: '18ch',
-                        background: 'var(--bg)',
-                      }}
                     />
                     <button
-                      className="btn xs"
-                      style={{
-                        background: 'var(--acc)',
-                        color: 'var(--on)',
-                        border: 'none',
-                        height: 40,
-                        padding: '0 14px',
-                      }}
+                      className="btn xs bg-acc text-on [border:none] h-[40px] py-0 px-3.5"
+
                       onClick={commitNewTopic}
                     >
                       Add
                     </button>
                     <button
-                      className="btn xs line"
+                      className="btn xs line h-[40px] py-0 px-3.5"
                       onClick={() => {
                         setManageTopics(false);
                         setTopicInput('');
                       }}
-                      style={{ height: 40, padding: '0 14px' }}
                     >
                       Cancel
                     </button>
                   </div>
                 ) : (
                   <button
-                    className="tag tab"
-                    style={{ fontWeight: 700 }}
+                    className="tag tab font-bold"
+
                     title="Add or remove topics"
                     onClick={() => {
                       setManageTopics(true);
@@ -914,9 +839,9 @@ export default function Teams({ initial }: { initial: TeamData | null }) {
             </div>
 
             {/* Code area + history */}
-            <div className="row" style={{ gap: 12, alignItems: 'flex-start' }}>
+            <div className="row gap-3 items-start">
               {/* code / textarea */}
-              <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="flex-1 min-w-0">
                 {editing ? (
                   <SaveForm
                     label={`Unsaved changes to ${tpl}`}
@@ -926,99 +851,41 @@ export default function Teams({ initial }: { initial: TeamData | null }) {
                     onSubmit={saveEdit}
                   >
                     <textarea
+                      className="w-full min-h-[280px] [resize:vertical] [outline:2px_solid_var(--acc)] rounded-[4px] p-4 bg-bg box-border [font-family:var(--mono,monospace)] text-[0.82rem] leading-[1.6]"
                       ref={textRef}
                       value={draft ?? ''}
                       maxLength={100000}
                       onChange={(e) => setDraft(e.target.value)}
-                      style={{
-                        width: '100%',
-                        minHeight: 280,
-                        resize: 'vertical',
-                        outline: '2px solid var(--acc)',
-                        borderRadius: 4,
-                        fontFamily: 'var(--mono, monospace)',
-                        fontSize: '0.82rem',
-                        padding: 16,
-                        background: 'var(--bg)',
-                        boxSizing: 'border-box',
-                        lineHeight: 1.6,
-                      }}
                     />
                   </SaveForm>
                 ) : (
-                  <pre
-                    style={{
-                      margin: 0,
-                      minHeight: 280,
-                      background: 'var(--bg)',
-                      borderRadius: 4,
-                      padding: 16,
-                      overflowX: 'auto',
-                      fontFamily: 'var(--mono, monospace)',
-                      fontSize: '0.82rem',
-                      lineHeight: 1.6,
-                    }}
-                  >
+                  <pre className="m-0 min-h-[280px] bg-bg rounded-[4px] p-4 overflow-x-auto [font-family:var(--mono,monospace)] text-[0.82rem] leading-[1.6]">
                     {currentCode}
                   </pre>
                 )}
               </div>
 
               {/* edit history */}
-              <div
-                style={{
-                  width: 220,
-                  flexShrink: 0,
-                  border: '1px solid var(--line)',
-                  borderRadius: 4,
-                  overflow: 'hidden',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  height: 280,
-                }}
-              >
-                <p
-                  className="label"
-                  style={{
-                    padding: '10px 14px',
-                    margin: 0,
-                    borderBottom: '1px solid var(--line)',
-                    flexShrink: 0,
-                    background: 'var(--bg, #f5f5f0)',
-                  }}
-                >
+              <div className="w-[220px] shrink-0 [border:1px_solid_var(--line)] rounded-[4px] overflow-hidden flex flex-col h-[280px]">
+                <p className="label py-2.5 px-3.5 m-0 [border-bottom:1px_solid_var(--line)] shrink-0 bg-[var(--bg,#f5f5f0)]">
                   HISTORY · {activeName}
                 </p>
-                <div
-                  style={{
-                    flex: 1,
-                    overflowY: 'auto',
-                    scrollbarWidth: 'thin',
-                  }}
-                >
+                <div className="flex-1 overflow-y-auto [scrollbar-width:thin]">
                   {displayHistory.length === 0 && (
-                    <p className="label" style={{ padding: '10px 14px', margin: 0 }}>
-                      no changes yet
-                    </p>
+                    <p className="label py-2.5 px-3.5 m-0">no changes yet</p>
                   )}
                   {displayHistory.map((h, i) => (
                     <div
+                      className="py-2.5 px-3.5"
                       key={i}
                       style={{
-                        padding: '10px 14px',
                         borderBottom:
                           i < displayHistory.length - 1 ? '1px solid var(--line)' : 'none',
                         background: i === 0 && editing ? 'var(--bg)' : undefined,
                       }}
                     >
-                      <strong className="hi" style={{ display: 'block', fontSize: '0.85rem' }}>
-                        {h.action}
-                      </strong>
-                      {h.other && (
-                        <span className="acc" style={{ display: 'block', fontSize: '0.85rem' }}>
-                          {h.other}
-                        </span>
-                      )}
+                      <strong className="hi block text-[0.85rem]">{h.action}</strong>
+                      {h.other && <span className="acc block text-[0.85rem]">{h.other}</span>}
                       <span className="label">
                         <span className="acc">{h.by}</span>
                         {h.ago === 'editing now' ? (
@@ -1037,7 +904,7 @@ export default function Teams({ initial }: { initial: TeamData | null }) {
             </div>
 
             {/* footer */}
-            <p className="label" style={{ marginTop: 10, marginBottom: 0 }}>
+            <p className="label mt-2.5 mb-0">
               {editing ? (
                 active === me.id ? (
                   <>Editing your page · topic: {tpl} · saving adds a line to your history</>
@@ -1062,40 +929,19 @@ export default function Teams({ initial }: { initial: TeamData | null }) {
 
       {/* ── Leave team confirmation modal ─────────────────────────────── */}
       {confirmLeave && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,.35)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 100,
-          }}
-        >
-          <div
-            style={{
-              background: 'var(--bg, #f5f5f0)',
-              border: '1px solid var(--line)',
-              borderRadius: 8,
-              padding: 28,
-              maxWidth: 360,
-              width: '90%',
-            }}
-          >
-            <p className="h3" style={{ margin: '0 0 8px' }}>
-              Leave {teamName}?
-            </p>
-            <p className="body" style={{ margin: '0 0 20px' }}>
+        <div className={overlay}>
+          <div className="bg-[var(--bg,#f5f5f0)] [border:1px_solid_var(--line)] rounded-[8px] p-7 max-w-[360px] w-[90%]">
+            <p className="h3 mt-0 mr-0 mb-2 ml-0">Leave {teamName}?</p>
+            <p className="body mt-0 mr-0 mb-5 ml-0">
               Your topics stay with you. You lose access to your teammates' notebooks.
             </p>
-            <div className="row" style={{ gap: 10, justifyContent: 'flex-end' }}>
+            <div className="row gap-2.5 justify-end">
               <button className="btn sm line" onClick={() => setConfirmLeave(false)}>
                 Cancel
               </button>
               <button
-                className="btn sm"
-                style={{ background: 'var(--bad)', color: '#fff', border: 'none' }}
+                className="btn sm bg-bad text-[#fff] [border:none]"
+
                 onClick={() => {
                   setConfirmLeave(false);
                   void run('teamLeave');
@@ -1110,42 +956,20 @@ export default function Teams({ initial }: { initial: TeamData | null }) {
 
       {/* ── Remove topic confirmation modal ───────────────────────────── */}
       {confirmDeleteTopic && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,.35)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 100,
-          }}
-        >
-          <div
-            style={{
-              background: 'var(--bg, #f5f5f0)',
-              border: '1px solid var(--line)',
-              borderRadius: 8,
-              padding: 28,
-              maxWidth: 380,
-              width: '90%',
-              boxShadow: '0 8px 30px rgba(0,0,0,.15)',
-            }}
-          >
-            <p className="h3" style={{ margin: '0 0 8px' }}>
-              {`Remove "${confirmDeleteTopic.name}"?`}
-            </p>
-            <p className="body" style={{ margin: '0 0 20px' }}>
+        <div className={overlay}>
+          <div className="bg-[var(--bg,#f5f5f0)] [border:1px_solid_var(--line)] rounded-[8px] p-7 max-w-[380px] w-[90%] [box-shadow:0_8px_30px_rgba(0,0,0,.15)]">
+            <p className="h3 mt-0 mr-0 mb-2 ml-0">{`Remove "${confirmDeleteTopic.name}"?`}</p>
+            <p className="body mt-0 mr-0 mb-5 ml-0">
               {`Your page on "${confirmDeleteTopic.name}" is deleted. Teammates' topics are not touched.`}
             </p>
-            <div className="row" style={{ gap: 10, justifyContent: 'flex-end' }}>
+            <div className="row gap-2.5 justify-end">
               <button className="btn sm line" onClick={() => setConfirmDeleteTopic(null)}>
                 Cancel
               </button>
               {
                 <button
-                  className="btn sm"
-                  style={{ background: 'var(--bad)', color: '#fff', border: 'none' }}
+                  className="btn sm bg-bad text-[#fff] [border:none]"
+
                   onClick={() => {
                     void removeTopic(confirmDeleteTopic.name);
                     setConfirmDeleteTopic(null);
@@ -1161,95 +985,54 @@ export default function Teams({ initial }: { initial: TeamData | null }) {
 
       {/* ── Print notebook modal ────────────────────────────────────────── */}
       {showPrintModal && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,.35)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 100,
-          }}
-        >
-          <div
-            style={{
-              background: 'var(--bg, #f5f5f0)',
-              border: '1px solid var(--line)',
-              borderRadius: 8,
-              padding: 24,
-              maxWidth: 480,
-              width: '92%',
-              boxShadow: '0 8px 30px rgba(0,0,0,.15)',
-              maxHeight: '90vh',
-              overflowY: 'auto',
-            }}
-          >
-            <p className="h3" style={{ margin: '0 0 4px' }}>
-              Print team notebook
-            </p>
-            <p className="body" style={{ margin: '0 0 16px', fontSize: '0.88rem' }}>
+        <div className={overlay}>
+          <div className="bg-[var(--bg,#f5f5f0)] [border:1px_solid_var(--line)] rounded-[8px] p-6 max-w-[480px] w-[92%] [box-shadow:0_8px_30px_rgba(0,0,0,.15)] max-h-[90vh] overflow-y-auto">
+            <p className="h3 mt-0 mr-0 mb-1 ml-0">Print team notebook</p>
+            <p className="body mt-0 mr-0 mb-4 ml-0 text-[0.88rem]">
               Select which members and topics to include. The notebook will be printed with
               categories of which user and their topics.
             </p>
 
             {/* Member Selection Section */}
-            <div
-              style={{
-                marginBottom: 16,
-                border: '1px solid var(--line)',
-                borderRadius: 6,
-                padding: 14,
-              }}
-            >
-              <div className="row between" style={{ alignItems: 'center', marginBottom: 10 }}>
-                <strong
-                  className="label"
-                  style={{ fontSize: '0.78rem', textTransform: 'uppercase' }}
-                >
+            <div className="mb-4 [border:1px_solid_var(--line)] rounded-[6px] p-3.5">
+              <div className={pickHead}>
+                <strong className={pickLabel}>
                   Members ({selectedPrintMembers.length}/{memberSlots.length})
                 </strong>
-                <div className="row" style={{ gap: 6 }}>
+                <div className="row gap-1.5">
                   <button
                     type="button"
-                    className="btn xs line"
-                    style={{ minHeight: 24, padding: '2px 8px', fontSize: '0.72rem' }}
+                    className={miniBtn}
+
                     onClick={selectAllMembers}
                   >
                     Select all
                   </button>
                   <button
                     type="button"
-                    className="btn xs line"
-                    style={{ minHeight: 24, padding: '2px 8px', fontSize: '0.72rem' }}
+                    className={miniBtn}
+
                     onClick={clearAllMembers}
                   >
                     Clear
                   </button>
                 </div>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div className="flex flex-col gap-1.5">
                 {memberSlots.map((id) => {
                   const isChecked = selectedPrintMembers.includes(id);
                   const label =
                     id === me.id ? `YOU (${me.name})` : `${shortName(id)} (${nameOf(id)})`;
                   return (
                     <label
+                      className="flex items-center gap-2.5 cursor-pointer text-[0.85rem] py-1 px-0"
                       key={id}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 10,
-                        cursor: 'pointer',
-                        fontSize: '0.85rem',
-                        padding: '4px 0',
-                      }}
                     >
                       <input
+                        className="cursor-pointer w-[16px] h-[16px]"
                         type="checkbox"
                         checked={isChecked}
                         onChange={() => togglePrintMember(id)}
-                        style={{ cursor: 'pointer', width: 16, height: 16 }}
                       />
                       <span>{label}</span>
                     </label>
@@ -1259,72 +1042,47 @@ export default function Teams({ initial }: { initial: TeamData | null }) {
             </div>
 
             {/* Topic Selection Section */}
-            <div
-              style={{
-                marginBottom: 20,
-                border: '1px solid var(--line)',
-                borderRadius: 6,
-                padding: 14,
-              }}
-            >
+            <div className="mb-5 [border:1px_solid_var(--line)] rounded-[6px] p-3.5">
               {memberSlots.length === 1 ? (
                 // Single member layout (matches exact screenshot layout)
                 <>
-                  <div className="row between" style={{ alignItems: 'center', marginBottom: 10 }}>
-                    <strong
-                      className="label"
-                      style={{ fontSize: '0.78rem', textTransform: 'uppercase' }}
-                    >
+                  <div className={pickHead}>
+                    <strong className={pickLabel}>
                       Topics ({(selectedMemberTopics[memberSlots[0]] || []).length}/
                       {topicsOf(memberSlots[0]).length})
                     </strong>
-                    <div className="row" style={{ gap: 6 }}>
+                    <div className="row gap-1.5">
                       <button
                         type="button"
-                        className="btn xs line"
-                        style={{ minHeight: 24, padding: '2px 8px', fontSize: '0.72rem' }}
+                        className={miniBtn}
+
                         onClick={() => selectAllTopicsForMember(memberSlots[0])}
                       >
                         Select all
                       </button>
                       <button
                         type="button"
-                        className="btn xs line"
-                        style={{ minHeight: 24, padding: '2px 8px', fontSize: '0.72rem' }}
+                        className={miniBtn}
+
                         onClick={() => clearAllTopicsForMember(memberSlots[0])}
                       >
                         Clear
                       </button>
                     </div>
                   </div>
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 6,
-                      maxHeight: 180,
-                      overflowY: 'auto',
-                    }}
-                  >
+                  <div className="flex flex-col gap-1.5 max-h-[180px] overflow-y-auto">
                     {topicsOf(memberSlots[0]).map((tp) => {
                       const isChecked = (selectedMemberTopics[memberSlots[0]] || []).includes(tp);
                       return (
                         <label
+                          className="flex items-center gap-2.5 cursor-pointer text-[0.85rem] py-1 px-0"
                           key={tp}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 10,
-                            cursor: 'pointer',
-                            fontSize: '0.85rem',
-                            padding: '4px 0',
-                          }}
                         >
                           <input
+                            className="cursor-pointer w-[16px] h-[16px]"
                             type="checkbox"
                             checked={isChecked}
                             onChange={() => toggleTopicForMember(memberSlots[0], tp)}
-                            style={{ cursor: 'pointer', width: 16, height: 16 }}
                           />
                           <span>{tp}</span>
                         </label>
@@ -1335,107 +1093,73 @@ export default function Teams({ initial }: { initial: TeamData | null }) {
               ) : (
                 // Multi-member layout: categorized by each member
                 <>
-                  <div className="row between" style={{ alignItems: 'center', marginBottom: 10 }}>
-                    <strong
-                      className="label"
-                      style={{ fontSize: '0.78rem', textTransform: 'uppercase' }}
-                    >
+                  <div className={pickHead}>
+                    <strong className={pickLabel}>
                       Topics by Member (
                       {Object.values(selectedMemberTopics).reduce((s, a) => s + a.length, 0)}/
                       {memberSlots.reduce((n, id) => n + topicsOf(id).length, 0)})
                     </strong>
-                    <div className="row" style={{ gap: 6 }}>
+                    <div className="row gap-1.5">
                       <button
                         type="button"
-                        className="btn xs line"
-                        style={{ minHeight: 24, padding: '2px 8px', fontSize: '0.72rem' }}
+                        className={miniBtn}
+
                         onClick={selectAllMembers}
                       >
                         Select all
                       </button>
                       <button
                         type="button"
-                        className="btn xs line"
-                        style={{ minHeight: 24, padding: '2px 8px', fontSize: '0.72rem' }}
+                        className={miniBtn}
+
                         onClick={clearAllMembers}
                       >
                         Clear
                       </button>
                     </div>
                   </div>
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 12,
-                      maxHeight: 240,
-                      overflowY: 'auto',
-                    }}
-                  >
+                  <div className="flex flex-col gap-3 max-h-[240px] overflow-y-auto">
                     {memberSlots.map((id) => {
                       const mTopics = selectedMemberTopics[id] || [];
                       const label =
                         id === me.id ? `YOU (${me.name})` : `${shortName(id)} (${nameOf(id)})`;
                       return (
-                        <div
-                          key={id}
-                          style={{
-                            borderBottom: '1px solid var(--line)',
-                            paddingBottom: 10,
-                          }}
-                        >
-                          <div
-                            className="row between"
-                            style={{ alignItems: 'center', marginBottom: 6 }}
-                          >
-                            <span style={{ fontSize: '0.82rem', fontWeight: 600 }}>{label}</span>
-                            <div className="row" style={{ gap: 4, alignItems: 'center' }}>
-                              <span className="label" style={{ fontSize: '0.72rem' }}>
+                        <div className="[border-bottom:1px_solid_var(--line)] pb-2.5" key={id}>
+                          <div className="row between items-center mb-1.5">
+                            <span className="text-[0.82rem] font-semibold">{label}</span>
+                            <div className="row gap-1 items-center">
+                              <span className="label text-[0.72rem]">
                                 ({mTopics.length}/{topicsOf(id).length})
                               </span>
                               <button
                                 type="button"
-                                className="btn xs line"
-                                style={{ minHeight: 20, padding: '1px 5px', fontSize: '0.68rem' }}
+                                className="btn xs line min-h-[20px] py-[1px] px-[5px] text-[0.68rem]"
+
                                 onClick={() => selectAllTopicsForMember(id)}
                               >
                                 All
                               </button>
                               <button
                                 type="button"
-                                className="btn xs line"
-                                style={{ minHeight: 20, padding: '1px 5px', fontSize: '0.68rem' }}
+                                className="btn xs line min-h-[20px] py-[1px] px-[5px] text-[0.68rem]"
+
                                 onClick={() => clearAllTopicsForMember(id)}
                               >
                                 None
                               </button>
                             </div>
                           </div>
-                          <div
-                            style={{
-                              display: 'flex',
-                              flexDirection: 'column',
-                              gap: 4,
-                              paddingLeft: 8,
-                            }}
-                          >
+                          <div className="flex flex-col gap-1 pl-2">
                             {topicsOf(id).map((tp) => (
                               <label
+                                className="flex items-center gap-2.5 cursor-pointer text-[0.82rem] py-0.5 px-0"
                                 key={tp}
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 10,
-                                  cursor: 'pointer',
-                                  fontSize: '0.82rem',
-                                  padding: '2px 0',
-                                }}
                               >
                                 <input
+                                  className="cursor-pointer w-[15px] h-[15px]"
                                   type="checkbox"
                                   checked={mTopics.includes(tp)}
                                   onChange={() => toggleTopicForMember(id, tp)}
-                                  style={{ cursor: 'pointer', width: 15, height: 15 }}
                                 />
                                 <span>{tp}</span>
                               </label>
@@ -1450,13 +1174,13 @@ export default function Teams({ initial }: { initial: TeamData | null }) {
             </div>
 
             {/* Modal Actions */}
-            <div className="row between" style={{ alignItems: 'center' }}>
-              <span className="label" style={{ fontSize: '0.78rem' }}>
+            <div className="row between items-center">
+              <span className="label text-[0.78rem]">
                 {Object.values(selectedMemberTopics).reduce((s, a) => s + a.length, 0) === 0
                   ? 'SELECT AT LEAST 1 MEMBER AND 1 TOPIC'
                   : `Selected ${memberSlots.filter((id) => (selectedMemberTopics[id] || []).length > 0).length} member(s) · ${Object.values(selectedMemberTopics).reduce((s, a) => s + a.length, 0)} topic(s)`}
               </span>
-              <div className="row" style={{ gap: 10 }}>
+              <div className="row gap-2.5">
                 <button
                   type="button"
                   className="btn sm line"
@@ -1466,8 +1190,8 @@ export default function Teams({ initial }: { initial: TeamData | null }) {
                 </button>
                 <button
                   type="button"
-                  className="btn sm"
-                  style={{ background: 'var(--acc)', color: 'var(--on)', border: 'none' }}
+                  className="btn sm bg-acc text-on [border:none]"
+
                   disabled={
                     Object.values(selectedMemberTopics).reduce((s, a) => s + a.length, 0) === 0
                   }
@@ -1483,19 +1207,9 @@ export default function Teams({ initial }: { initial: TeamData | null }) {
 
       {/* ── Toast notification ────────────────────────────────────────── */}
       {toast && (
-        <div className="toasts">
-          <div
-            className="toast"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              fontFamily: 'var(--mono, monospace)',
-              fontWeight: 600,
-              fontSize: '0.85rem',
-            }}
-          >
-            <span style={{ fontSize: '1rem' }}>⚠</span>
+        <div className={toastStack}>
+          <div className="toast flex items-center gap-2 [font-family:var(--mono,monospace)] font-semibold text-[0.85rem]">
+            <span className="text-[1rem]">⚠</span>
             <span>{toast}</span>
           </div>
         </div>
@@ -1539,11 +1253,11 @@ function TeamOverview({
   return (
     <>
       {/* Scoreboard: the four numbers, then who carries how much of the solving. */}
-      <section className="tov-board" style={{ gridColumn: '1 / -1' }}>
-        <div className="tov-board-head">
+      <section className="[background:var(--ink)] text-bg p-[clamp(20px,2.6vw,32px)] flex flex-col gap-4.5 col-span-full">
+        <div className="flex justify-between gap-3 flex-wrap [font:14px_var(--mono),monospace] tracking-[0.08em] uppercase opacity-[0.7]">
           <span>team overview</span>
         </div>
-        <div className="tov-kpis">
+        <div className="[&>div]:flex [&>div]:flex-col [&>div]:gap-[4px] [&>div]:pl-3.5 [&>div]:[border-left:2px_solid_color-mix(in_srgb,var(--bg)_25%,transparent)] [&_b]:[font:600_clamp(34px,4.4vw,52px)_/_1_var(--mono),monospace] [&_b]:[letter-spacing:-0.03em] [&_span]:[font:14px_var(--mono),monospace] [&_span]:opacity-[0.7] [display:grid] grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-5">
           {kpis.map(([k, v, c]) => (
             <div key={k}>
               <b style={c ? { color: `color-mix(in srgb, ${c} 65%, white)` } : undefined}>{v}</b>
@@ -1553,7 +1267,10 @@ function TeamOverview({
         </div>
         {totalSolved > 0 && (
           <>
-            <div className="tov-share" aria-label="Share of Codeforces solves per member">
+            <div
+              className="[&_i]:min-w-[3px] flex h-[10px] gap-0.75"
+              aria-label="Share of Codeforces solves per member"
+            >
               {stats.members.map((m) => (
                 <i
                   key={m.id}
@@ -1562,7 +1279,7 @@ function TeamOverview({
                 />
               ))}
             </div>
-            <div className="tov-legend">
+            <div className={chartLegend}>
               {stats.members.map((m) => (
                 <span key={m.id}>
                   <i style={{ background: color(m.id) }} />
@@ -1589,10 +1306,10 @@ function TeamOverview({
         return (
           <section
             key={m.id}
-            className={`panel ${stats.members.length === 2 ? 'c6' : 'c4'} tov-card`}
+            className={`panel ${stats.members.length === 2 ? 'c6' : 'c4'} [border-top:6px_solid_var(--rk)]! gap-4!`}
             style={{ '--rk': rank.color, '--mc': color(m.id) } as React.CSSProperties}
           >
-            <div className="tov-who">
+            <div className="[&>span]:flex [&>span]:flex-col [&>span]:min-w-0 [&_strong]:text-[17px] flex items-center gap-3">
               <MemberFace id={m.id} name={names(m.id)} size={44} fg={color(m.id)} />
               <span>
                 <strong>{names(m.id)}</strong>
@@ -1602,11 +1319,13 @@ function TeamOverview({
                 </span>
               </span>
             </div>
-            <div className="tov-rating">
+            <div className="[&_b]:[font:600_56px_/_1_var(--mono),monospace] [&_b]:[color:var(--rk)] [&_b]:[letter-spacing:-0.04em] flex items-baseline gap-3 flex-wrap">
               <b>{m.cf_rating ?? '—'}</b>
-              <span className="tov-rank">{rank.title}</span>
+              <span className="p-[3px_10px] [border:1px_solid_var(--rk)] [color:var(--rk)] [font:14px_var(--mono),monospace] uppercase tracking-[0.06em]">
+                {rank.title}
+              </span>
             </div>
-            <div className="tov-next">
+            <div className="[&>div]:h-[6px] [&>div]:[background:color-mix(in_srgb,var(--ink)_12%,transparent)] [&_i]:block [&_i]:h-full [&_i]:[background:var(--rk)] flex flex-col gap-1.5">
               <div>
                 <i style={{ width: `${toNext}%` }} />
               </div>
@@ -1616,7 +1335,7 @@ function TeamOverview({
                   : `peak ${m.peak || '—'}`}
               </span>
             </div>
-            <dl className="tov-mini">
+            <dl className="[&>div]:p-[10px_0_0] [&_dt]:[font:14px_var(--mono),monospace] [&_dt]:[color:var(--mut)] [&_dd]:m-[2px_0_0] [&_dd]:[font:600_22px_var(--mono),monospace] [display:grid] grid-cols-[repeat(3,1fr)] m-0 [border-top:1px_solid_var(--line)]">
               {(
                 [
                   ['CF solved', m.problems_solved],
@@ -1639,9 +1358,9 @@ function TeamOverview({
 
       {/* Solve map: bar length = distinct team solves; segments = each member's solves on that tag. */}
       <section className="panel c8">
-        <div className="row between" style={{ alignItems: 'baseline' }}>
+        <div className="row between items-baseline">
           <p className="label">solve map · top tags</p>
-          <div className="tov-legend">
+          <div className={chartLegend}>
             {stats.members.map((m) => (
               <span key={m.id}>
                 <i style={{ background: color(m.id) }} />
@@ -1655,7 +1374,7 @@ function TeamOverview({
             No tagged solves yet. Each member syncs Codeforces once to fill this in.
           </p>
         ) : (
-          <div className="tov-tags">
+          <div className="flex flex-col gap-3">
             {unsynced.length > 0 && (
               <p className="label">
                 {unsynced.map((m) => first(m.id)).join(', ')}: sync Codeforces once to add tags
@@ -1667,9 +1386,12 @@ function TeamOverview({
                 .filter((m) => tagged.has(m.id) && !x.per[m.id])
                 .map((m) => first(m.id));
               return (
-                <div key={x.tag} className="tov-tag">
-                  <span className="tov-tag-name">{x.tag}</span>
-                  <div className="tov-tag-track">
+                <div
+                  key={x.tag}
+                  className="[display:grid] grid-cols-[minmax(110px,180px)_1fr_48px] [grid-template-areas:'name_track_n'_'._gap_gap'] items-center gap-x-3.5 max-[561px]:grid-cols-[1fr_48px] max-[561px]:[grid-template-areas:'name_n'_'track_track'_'gap_gap'] max-[561px]:gap-y-1.5"
+                >
+                  <span className="[grid-area:name] text-[15px]">{x.tag}</span>
+                  <div className="[&>div]:flex [&>div]:gap-0.5 [&>div]:h-full [&_i]:min-w-[3px] [grid-area:track] h-[18px] [background:color-mix(in_srgb,var(--ink)_7%,transparent)]">
                     <div style={{ width: `${(x.team / topTag) * 100}%` }}>
                       {stats.members.map((m) =>
                         x.per[m.id] ? (
@@ -1682,8 +1404,12 @@ function TeamOverview({
                       )}
                     </div>
                   </div>
-                  <b className="tov-tag-n">{x.team}</b>
-                  <span className="tov-gap">{gaps.length ? `gap: ${gaps.join(', ')}` : ''}</span>
+                  <b className="[grid-area:n] text-right [font:600_18px_var(--mono),monospace]">
+                    {x.team}
+                  </b>
+                  <span className="[&:empty]:hidden [grid-area:gap] [font:14px_var(--mono),monospace] [color:var(--bad,#d1392b)]">
+                    {gaps.length ? `gap: ${gaps.join(', ')}` : ''}
+                  </span>
                 </div>
               );
             })}
@@ -1697,17 +1423,19 @@ function TeamOverview({
         {stats.spread.length === 0 ? (
           <p className="body">No rated problems yet. Sync Codeforces from your profile.</p>
         ) : (
-          <div className="tov-hist">
+          <div className="[&>div]:flex-1 [&>div]:h-full [&>div]:flex [&>div]:flex-col [&>div]:justify-end [&>div]:items-stretch [&>div]:gap-1.5 [&>div]:text-center [&_i]:block flex items-end gap-2 h-[220px] pt-2">
             {stats.spread.map((b) => (
               <div key={b.band} title={`${b.n} problems rated ${b.band}–${b.band + 399}`}>
-                <span className="tov-hist-n">{b.n}</span>
+                <span className="[font:600_16px_var(--mono),monospace]">{b.n}</span>
                 <i
                   style={{
                     height: `${Math.max(4, (b.n / topBand) * 100)}%`,
                     background: rankFor(b.band).color,
                   }}
                 />
-                <span className="tov-hist-k">{b.band === 2800 ? '2800+' : b.band}</span>
+                <span className="[font:14px_var(--mono),monospace] [color:var(--mut)]">
+                  {b.band === 2800 ? '2800+' : b.band}
+                </span>
               </div>
             ))}
           </div>

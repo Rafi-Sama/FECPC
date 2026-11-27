@@ -4,6 +4,11 @@ import { AlumniCard } from './AlumniCard';
 import type { AlumniSummary } from '@fecpc/contracts';
 import { useStore } from '@/components/app/Store';
 
+import { filterChip, emptyPanel, listKicker } from '@/components/app/alumni/ui';
+
+const searchInput =
+  'py-3 px-3.5 [border:2px_solid_var(--line2)] [background:var(--bg)] [font:14px_Inter,_Arial,_sans-serif] min-h-[44px] text-ink w-full cursor-pointer';
+
 export function AlumniTab({
   searchQuery,
   onOpenProfile,
@@ -134,69 +139,31 @@ export function AlumniTab({
   return (
     <div className="alumni-tab-view">
       {/* Subtitle matching mockup 30d77ff9 */}
-      <p
-        className="t"
-        style={{
-          maxWidth: 560,
-          margin: '-8px 0 24px',
-          fontSize: 14,
-          lineHeight: 1.55,
-          color: 'var(--mut, #3B3A35)',
-        }}
-      >
+      <p className="t -mt-2 mx-0 mb-6 max-w-[560px] text-[14px] leading-[1.55] text-mut">
         Ask about interviews, careers and life after graduation.
       </p>
 
       {/* Filter Row (.pn) matching mockup 30d77ff9 */}
-      <div
-        className="pn"
-        style={{
-          display: 'flex',
-          gap: 16,
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          padding: 16,
-          background: 'var(--panel, #F6F4EE)',
-          border: '2px solid var(--line2, #0B0B0B)',
-          marginBottom: 24,
-        }}
-      >
+      <div className="pn p-4 mb-6 flex gap-4 flex-wrap items-center [background:var(--panel)] [border:2px_solid_var(--line2)]">
         {/* Search input */}
-        <div style={{ flex: '1 1 280px' }}>
+        <div className="flex-[1_1_280px]">
           <input
             type="search"
             aria-label="Search"
             placeholder="Search name, batch, location, role or company"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            style={{
-              border: '2px solid var(--line2, #0B0B0B)',
-              background: 'var(--bg, #F6F4EE)',
-              padding: '12px 14px',
-              font: '14px Inter, Arial, sans-serif',
-              minHeight: 44,
-              color: 'var(--ink, #0B0B0B)',
-              width: '100%',
-            }}
+            className="py-3 px-3.5 [border:2px_solid_var(--line2)] [background:var(--bg)] [font:14px_Inter,_Arial,_sans-serif] min-h-[44px] text-ink w-full"
           />
         </div>
 
         {/* Batch select */}
-        <div style={{ flex: '0 0 170px' }}>
+        <div className="flex-[0_0_170px]">
           <select
             aria-label="Batch"
             value={batch}
             onChange={(e) => setBatch(e.target.value)}
-            style={{
-              border: '2px solid var(--line2, #0B0B0B)',
-              background: 'var(--bg, #F6F4EE)',
-              padding: '12px 14px',
-              font: '14px Inter, Arial, sans-serif',
-              minHeight: 44,
-              color: 'var(--ink, #0B0B0B)',
-              width: '100%',
-              cursor: 'pointer',
-            }}
+            className={searchInput}
           >
             <option value="all">All batches</option>
             {batchOptions.map((b) => (
@@ -208,21 +175,12 @@ export function AlumniTab({
         </div>
 
         {/* Location select */}
-        <div style={{ flex: '0 0 170px' }}>
+        <div className="flex-[0_0_170px]">
           <select
             aria-label="Location"
             value={location}
             onChange={(e) => setLocation(e.target.value)}
-            style={{
-              border: '2px solid var(--line2, #0B0B0B)',
-              background: 'var(--bg, #F6F4EE)',
-              padding: '12px 14px',
-              font: '14px Inter, Arial, sans-serif',
-              minHeight: 44,
-              color: 'var(--ink, #0B0B0B)',
-              width: '100%',
-              cursor: 'pointer',
-            }}
+            className={searchInput}
           >
             <option value="all">All locations</option>
             {locationOptions.map((loc) => (
@@ -234,39 +192,25 @@ export function AlumniTab({
         </div>
 
         {/* Segmented availability filter */}
-        <div className="ty" style={{ display: 'flex', gap: 8, marginLeft: 0 }}>
+        <div className="ty ml-0 flex gap-2">
           <button
             type="button"
-            className={`ch ${!availableOnly ? 'on' : ''}`}
+            className={`${!availableOnly ? 'on' : ''} ${filterChip}`}
             onClick={() => setAvailableOnly(false)}
             style={{
-              font: '12px ui-monospace, Menlo, monospace',
-              textTransform: 'uppercase',
-              letterSpacing: 1,
-              border: '2px solid var(--line2, #0B0B0B)',
-              padding: '10px 14px',
               background: !availableOnly ? 'var(--acc, #1F3BFF)' : 'var(--panel, #F6F4EE)',
               color: !availableOnly ? 'var(--on, #FFFFFF)' : 'var(--ink, #0B0B0B)',
-              minHeight: 44,
-              cursor: 'pointer',
             }}
           >
             All
           </button>
           <button
             type="button"
-            className={`ch ${availableOnly ? 'on' : ''}`}
+            className={`${availableOnly ? 'on' : ''} ${filterChip}`}
             onClick={() => setAvailableOnly(true)}
             style={{
-              font: '12px ui-monospace, Menlo, monospace',
-              textTransform: 'uppercase',
-              letterSpacing: 1,
-              border: '2px solid var(--line2, #0B0B0B)',
-              padding: '10px 14px',
               background: availableOnly ? 'var(--acc, #1F3BFF)' : 'var(--panel, #F6F4EE)',
               color: availableOnly ? 'var(--on, #FFFFFF)' : 'var(--ink, #0B0B0B)',
-              minHeight: 44,
-              cursor: 'pointer',
             }}
           >
             Available only
@@ -276,63 +220,24 @@ export function AlumniTab({
 
       {/* Grid (.gr) */}
       {loading && alumni.length === 0 ? (
-        <div
-          className="gr"
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-            gap: 24,
-          }}
-        >
+        <div className="gr [display:grid] grid-cols-[repeat(auto-fill,_minmax(320px,_1fr))] gap-6">
           {[1, 2, 3, 4, 5, 6].map((idx) => (
             <div
               key={idx}
-              style={{
-                height: 320,
-                background: 'var(--panel, #F6F4EE)',
-                border: '2px solid var(--line2, #0B0B0B)',
-                opacity: 0.6,
-              }}
+              className="h-[320px] [background:var(--panel)] [border:2px_solid_var(--line2)] opacity-[0.6]"
             />
           ))}
         </div>
       ) : alumni.length === 0 ? (
-        <div
-          className="pn"
-          style={{
-            padding: '48px 24px',
-            textAlign: 'center',
-            background: 'var(--panel, #F6F4EE)',
-            border: '2px solid var(--line2, #0B0B0B)',
-          }}
-        >
-          <p
-            className="m"
-            style={{
-              font: '11px ui-monospace, Menlo, monospace',
-              letterSpacing: '.08em',
-              textTransform: 'uppercase',
-              color: 'var(--dim, #5F5F5F)',
-              marginBottom: 16,
-              fontSize: 13,
-              fontWeight: 600,
-            }}
-          >
+        <div className={emptyPanel}>
+          <p className={listKicker}>
             {isFiltered ? 'NO ALUMNI MATCH THESE FILTERS.' : 'NO ALUMNI REGISTERED YET.'}
           </p>
           {isFiltered && (
             <button
               type="button"
-              className="btn sm"
+              className="btn sm py-0 px-4 [font:500_13px_Inter,_Arial,_sans-serif] [border:2px_solid_var(--line2)] [background:var(--panel)] min-h-[36px] cursor-pointer"
               onClick={handleResetFilters}
-              style={{
-                font: '500 13px Inter, Arial, sans-serif',
-                border: '2px solid var(--line2, #0B0B0B)',
-                padding: '0 16px',
-                background: 'var(--panel, #F6F4EE)',
-                minHeight: 36,
-                cursor: 'pointer',
-              }}
             >
               Reset filters
             </button>
@@ -340,14 +245,7 @@ export function AlumniTab({
         </div>
       ) : (
         <>
-          <div
-            className="gr"
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-              gap: 24,
-            }}
-          >
+          <div className="gr [display:grid] grid-cols-[repeat(auto-fill,_minmax(320px,_1fr))] gap-6">
             {alumni.map((a) => (
               <AlumniCard
                 key={a.id}
@@ -361,17 +259,8 @@ export function AlumniTab({
           </div>
 
           {/* Footer showing count + Load more button */}
-          <div style={{ textAlign: 'center', marginTop: 40, marginBottom: 24 }}>
-            <div
-              className="m"
-              style={{
-                marginBottom: 12,
-                font: '11px ui-monospace, Menlo, monospace',
-                letterSpacing: '.06em',
-                textTransform: 'uppercase',
-                color: 'var(--dim, #5F5F5F)',
-              }}
-            >
+          <div className="mt-10 mb-6 text-center">
+            <div className="m mb-3 [font:11px_ui-monospace,_Menlo,_monospace] tracking-[.06em] uppercase text-dim">
               Showing {alumni.length} of {total}
             </div>
             {hasMore && (
@@ -379,17 +268,7 @@ export function AlumniTab({
                 type="button"
                 disabled={loadingMore}
                 onClick={() => void fetchAlumni(page + 1, true)}
-                style={{
-                  font: '500 13px Inter, Arial, sans-serif',
-                  border: '2px solid var(--line2, #0B0B0B)',
-                  padding: '0 24px',
-                  background: 'var(--panel, #F6F4EE)',
-                  minHeight: 44,
-                  color: 'var(--ink, #0B0B0B)',
-                  cursor: 'pointer',
-                  letterSpacing: '.04em',
-                  textTransform: 'uppercase',
-                }}
+                className="py-0 px-6 [font:500_13px_Inter,_Arial,_sans-serif] [border:2px_solid_var(--line2)] [background:var(--panel)] min-h-[44px] text-ink cursor-pointer tracking-[.04em] uppercase"
               >
                 {loadingMore ? 'Loading more…' : 'Load more'}
               </button>

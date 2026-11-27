@@ -7,8 +7,8 @@ export function useMore<T>(list: T[], step = 100) {
   const more = list.length > n && (
     <button
       type="button"
-      className="btn sm line"
-      style={{ alignSelf: 'center', marginTop: 16 }}
+      className="btn sm line self-center mt-4"
+
       onClick={() => setN(n + step)}
     >
       Show more · {list.length - n} left

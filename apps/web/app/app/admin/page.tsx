@@ -9,6 +9,8 @@ import { ProfileRequests } from '@/components/app/admin/ProfileRequests';
 import { AuditLog } from '@/components/app/admin/AuditLog';
 import { Dashboard } from '@/components/app/admin/Dashboard';
 
+import { permissionMatrix } from '@/components/app/admin/ui';
+
 const cell = (v: unknown) => (v === true ? '✓' : v ? String(v) : '–');
 
 export default function Admin() {
@@ -48,7 +50,7 @@ export default function Admin() {
       <Tabs tabs={tabs} value={cur} onChange={setTab} />
       {cur === 'Dashboard' && <Dashboard go={setTab} exp={!!caps.exp} />}
       {cur === 'Dashboard' && office.suggestions && (
-        <section className="panel" style={{ marginTop: 16 }}>
+        <section className="panel mt-4">
           <p className="label">Anonymous suggestions · {office.suggestions.length}</p>
           {office.suggestions.length === 0 ? (
             <p className="body">None yet.</p>
@@ -70,12 +72,12 @@ export default function Admin() {
       {cur === 'Requests' && <ProfileRequests />}
       {cur === 'Permissions' && (
         <div className="stack">
-          <p className="body" style={{ maxWidth: '70ch' }}>
+          <p className="body max-w-[70ch]">
             ✓ full · scope: only their own items · view: read only · propose: starts a decision that
             a second officer finishes. Posts are assigned from a member's ⋯ menu.
           </p>
           <div className="scroll-x">
-            <table className="tbl matrix">
+            <table className={permissionMatrix}>
               <thead>
                 <tr>
                   <th>Capability</th>

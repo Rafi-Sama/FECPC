@@ -4,6 +4,8 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { createPortal } from 'react-dom';
 import { useStore } from '@/components/app/Store';
 
+import { modalHead } from '@/components/app/shared/ui';
+
 type Ask = {
   title: string;
   /** What the text is for; shown above the field. */
@@ -111,87 +113,34 @@ function PromptDialog({
       onClick={(e) => e.target === e.currentTarget && onDone(null)}
     >
       <form
-        className="cm-modal evm-modal prompt-modal"
+        className="cm-modal evm-modal relative! z-2000001! [border:2px_solid_var(--line2)]! [box-shadow:10px_10px_0_var(--line2)]! [background:var(--panel)]! text-ink! p-0! w-full! max-w-[480px]! m-auto! overflow-hidden!"
         onSubmit={(e) => {
           e.preventDefault();
           onDone(v.trim());
         }}
       >
-        <div className="cm-modal-head evm-modal-head">
-          <h2
-            className="h3"
-            style={{
-              margin: 0,
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
-              fontSize: 14,
-              fontWeight: 700,
-            }}
-          >
-            {title}
-          </h2>
+        <div className={modalHead}>
+          <h2 className="h3 m-0 uppercase tracking-[0.08em] text-[14px] font-bold">{title}</h2>
           <button
             type="button"
-            className="cm-modal-close"
+            className="cm-modal-close inline-flex items-center justify-center w-[32px] h-[32px] [border:2px_solid_var(--line2)] bg-panel text-ink text-[20px] font-bold cursor-pointer leading-[1]"
             aria-label="Close dialog"
             onClick={() => onDone(null)}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: 32,
-              height: 32,
-              border: '2px solid var(--line2)',
-              background: 'var(--panel)',
-              color: 'var(--ink)',
-              fontSize: 20,
-              fontWeight: 700,
-              cursor: 'pointer',
-              lineHeight: 1,
-            }}
           >
             ×
           </button>
         </div>
-        <div
-          className="evm-modal-body"
-          style={{
-            padding: '20px 22px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 16,
-          }}
-        >
+        <div className="min-h-0 max-[641px]:p-3.5! [background:var(--panel)] text-ink max-h-[calc(85vh_-_70px)] overflow-y-auto box-border [.ev-detail_&]:[background:var(--panel)] [.ev-detail_&]:text-ink [.ev-detail_&]:max-h-[calc(85vh_-_70px)] [.ev-detail_&]:overflow-y-auto [.ev-detail_&]:box-border py-5 px-5.5 flex flex-col gap-4">
           {confirmOnly ? (
-            label && (
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: 14,
-                  lineHeight: 1.5,
-                  color: 'var(--hi)',
-                }}
-              >
-                {label}
-              </p>
-            )
+            label && <p className="m-0 text-[14px] leading-[1.5] text-hi">{label}</p>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <label
-                className="mono"
-                style={{
-                  fontSize: 14,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.08em',
-                  color: 'var(--dim)',
-                  fontWeight: 600,
-                }}
-              >
+            <div className="flex flex-col gap-2">
+              <label className="mono text-[14px] uppercase tracking-[0.08em] text-dim font-semibold">
                 {label}
               </label>
               {numeric ? (
                 <input
-                  className="ctl"
+                  className="ctl w-full py-2.5 px-3 text-[14px] bg-bg [border:2px_solid_var(--line2)] text-ink"
                   type="number"
                   min={1}
                   step={1}
@@ -199,56 +148,28 @@ function PromptDialog({
                   autoFocus
                   value={v}
                   onChange={(e) => setV(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    fontSize: 14,
-                    background: 'var(--bg)',
-                    border: '2px solid var(--line2)',
-                    color: 'var(--ink)',
-                  }}
                 />
               ) : (
                 <textarea
-                  className="ctl"
+                  className="ctl w-full h-auto min-h-[90px] py-2.5 px-3 text-[14px] [resize:vertical] leading-[1.5] box-border bg-bg [border:2px_solid_var(--line2)] text-ink"
                   rows={4}
                   autoFocus
                   required={minLength > 0}
                   minLength={minLength || undefined}
                   maxLength={maxLength}
                   placeholder={placeholder}
-                  style={{
-                    width: '100%',
-                    height: 'auto',
-                    minHeight: 90,
-                    padding: '10px 12px',
-                    fontSize: 14,
-                    resize: 'vertical',
-                    lineHeight: 1.5,
-                    boxSizing: 'border-box',
-                    background: 'var(--bg)',
-                    border: '2px solid var(--line2)',
-                    color: 'var(--ink)',
-                  }}
+
                   value={v}
                   onChange={(e) => setV(e.target.value)}
                 />
               )}
             </div>
           )}
-          <div className="row" style={{ justifyContent: 'flex-end', gap: 10, marginTop: 4 }}>
+          <div className="row justify-end gap-2.5 mt-1">
             <button
               type="button"
-              className="eb"
-              style={{
-                padding: '8px 16px',
-                fontSize: 14,
-                cursor: 'pointer',
-                background: 'var(--panel)',
-                color: 'var(--ink)',
-                border: '2px solid var(--line2)',
-                fontWeight: 600,
-              }}
+              className="eb py-2 px-4 text-[14px] cursor-pointer bg-panel text-ink [border:2px_solid_var(--line2)] font-semibold"
+
               onClick={() => onDone(null)}
               autoFocus={confirmOnly}
             >
@@ -256,15 +177,10 @@ function PromptDialog({
             </button>
             <button
               type="submit"
-              className="eb"
+              className="eb py-2 px-4.5 text-[14px] font-bold text-[#ffffff] cursor-pointer"
               style={{
-                padding: '8px 18px',
-                fontSize: 14,
-                fontWeight: 700,
                 background: danger ? '#dc2626' : 'var(--acc)',
-                color: '#ffffff',
                 border: danger ? '2px solid #b91c1c' : '2px solid var(--acc)',
-                cursor: 'pointer',
               }}
             >
               {confirmLabel}

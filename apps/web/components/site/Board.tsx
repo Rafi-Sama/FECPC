@@ -22,13 +22,8 @@ export default function Board({ list = members, me }: { list?: Member[]; me?: st
   const [shown, more] = useMore(rows);
   return (
     <div>
-      <div className="row between" style={{ marginBottom: 24 }}>
-        <div
-          className="row"
-          role="tablist"
-          aria-label="Category"
-          style={{ '--g': '10px' } as React.CSSProperties}
-        >
+      <div className="row between mb-6">
+        <div className="row [--g:10px]" role="tablist" aria-label="Category">
           {tabs.map((t) => (
             <button
               key={t.k}
@@ -41,11 +36,11 @@ export default function Board({ list = members, me }: { list?: Member[]; me?: st
             </button>
           ))}
         </div>
-        <label className="row label" style={{ '--g': '10px' } as React.CSSProperties}>
+        <label className="row label [--g:10px]">
           BATCH
           <select
-            className="input"
-            style={{ width: 'auto', minHeight: 40 }}
+            className="input w-auto min-h-[40px]"
+
             value={batch}
             onChange={(e) => setBatch(+e.target.value)}
           >
@@ -61,14 +56,16 @@ export default function Board({ list = members, me }: { list?: Member[]; me?: st
           </select>
         </label>
       </div>
-      <ol className="scores big">
+      <ol className="scores [&_.sc]:[font-size:clamp(14px,1.6vw,18px)] [&_li]:[display:grid] [&_li]:gap-3.5 [&_li]:items-center [&_li]:p-[14px_0] [&_li]:[border-bottom:4px_dotted_var(--line)] [&_small]:[font:14px_var(--mono),monospace] [&_small]:normal-case [&_small]:[color:var(--mut)] [&_li:nth-child(1)]:text-acc [&_li:nth-child(2)]:text-acc3 [&_li:nth-child(3)]:text-acc2 [&_li]:grid-cols-[44px_36px_minmax(0,1fr)_auto] big">
         {shown.map((x, i) => (
           <li
             key={x.id}
             aria-current={x.id === me || undefined}
             style={x.id === me ? { outline: '2px solid var(--acc)' } : undefined}
           >
-            <span className="rk arcade">{String(i + 1).padStart(2, '0')}</span>
+            <span className="text-[14px] [color:var(--mut)] arcade">
+              {String(i + 1).padStart(2, '0')}
+            </span>
             <Avatar name={x.name} size={36} fg={medal[i] ?? '#8E84C9'} bg="#1D1145" />
             <span className="nm">
               {x.name}

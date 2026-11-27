@@ -74,9 +74,8 @@ export function FieldsEditor({
       ))}
       {!hideAddButton && (
         <button
-          className="add"
+          className="add self-start"
           type="button"
-          style={{ alignSelf: 'flex-start' }}
           onClick={() => onChange([...value, { label: '', required: false }])}
         >
           + Add a question
@@ -140,9 +139,7 @@ export function Method({
 }
 
 const Hint = ({ children }: { children: ReactNode }) => (
-  <span className="dim" style={{ fontSize: 14 }}>
-    {children}
-  </span>
+  <span className="dim text-[14px]">{children}</span>
 );
 const Unset = ({ children = 'Not set' }: { children?: ReactNode }) => (
   <span className="dim">{children}</span>
@@ -227,7 +224,7 @@ const SECTIONS: {
   {
     title: 'Sign-up',
     view: (v) => (
-      <dl className="ev-facts">
+      <dl className="[&_dd]:m-0 [display:grid] grid-cols-[max-content_1fr] gap-[8px_20px] m-0">
         <dt className="label">Method</dt>
         <dd>
           {v.mode === 'form' ? (
@@ -256,7 +253,7 @@ const SECTIONS: {
             <dd>
               {v.fields?.length ? (
                 v.fields.map((f) => (
-                  <span key={f.label} style={{ display: 'block' }}>
+                  <span key={f.label} className="block">
                     {f.label}
                     {f.required && ' *'}
                     {f.options && <span className="dim"> ({f.options.join(', ')})</span>}
@@ -280,7 +277,7 @@ const SECTIONS: {
           }}
           set={set}
         />
-        <div className="row ev-pair">
+        <div className="row items-start">
           <label className="field grow">
             <span className="label">Sign-up opens (optional)</span>
             <DatePicker
@@ -318,9 +315,7 @@ const SECTIONS: {
     title: 'Status',
     view: (v) => (
       <>
-        <span className="tag k" style={{ alignSelf: 'flex-start' }}>
-          {EVENT_STATUS_LABEL[v.status ?? 'draft']}
-        </span>
+        <span className="tag k self-start">{EVENT_STATUS_LABEL[v.status ?? 'draft']}</span>
         <p className="body">{windowSummary(v)}</p>
       </>
     ),
@@ -425,7 +420,11 @@ export function EventSections({
   const card = (i: number) => {
     const s = SECTIONS[i]!;
     return (
-      <section key={s.title} className="ev-sec" data-open={open === i || undefined}>
+      <section
+        key={s.title}
+        className="flex flex-col gap-4 p-5 [border:1px_solid_var(--line)] [&&]:[border-left:4px_solid_var(--line)] [background:var(--panel)] [&[data-open]]:[border-left-color:var(--acc)]"
+        data-open={open === i || undefined}
+      >
         <div className="row between">
           <h3 className="h3">{s.title}</h3>
           {!readOnly && open !== i && (
@@ -452,11 +451,14 @@ export function EventSections({
     );
   };
   return (
-    <div className="ev-form">
+    <div className="[display:grid] grid-cols-[minmax(0,1fr)_280px] gap-8 [align-items:start] max-[1101px]:grid-cols-[minmax(0,1fr)]">
       {/* Title, type, date, place, description and banner are edited in place at the top of the page. */}
       {card(SIGNUP_SECTION)}
       {includeStatus && (
-        <aside className="ev-form-side" aria-label="Publishing">
+        <aside
+          className="top-20 [position:sticky] [@media(max-width:1100px)]:static [@media(max-width:1100px)]:order-[-1]"
+          aria-label="Publishing"
+        >
           {card(STATUS_SECTION)}
         </aside>
       )}
@@ -510,7 +512,7 @@ function SectionEditor({
         {s.edit({ v, set, setError })}
       </div>
       {error && (
-        <p className="bad" role="alert" style={{ fontSize: 14 }}>
+        <p className="bad text-[14px]" role="alert">
           {error}
         </p>
       )}

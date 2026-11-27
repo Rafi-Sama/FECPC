@@ -24,7 +24,7 @@ A pnpm workspace orchestrated by Turborepo: two apps, two shared packages, three
 │       │   │   ├── admin/, ops/    layouts gate these by role (hide only; the API enforces)
 │       │   │   └── …               one folder per page
 │       │   ├── api/                route handlers: one-line proxies to the API, plus /api/cf and /api/vjudge
-│       │   ├── layout.tsx, globals.css, manifest.ts, icon.svg
+│       │   ├── layout.tsx, globals.css (layer order + base), _styles/ (base CSS, shared Tailwind setup), manifest.ts, icon.svg
 │       ├── components/
 │       │   ├── site/               public-site components (Nav, Footer, ApplyForm, LoginForm, Board, …)
 │       │   ├── app/                member-area components

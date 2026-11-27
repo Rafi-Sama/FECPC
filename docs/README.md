@@ -19,6 +19,7 @@ Start with **Getting started** to run it, then **Architecture** to understand ho
 | [Security](security.md)                           | understand sign-in, sessions, CSRF, rate limits and the threat model |
 | [Database](database.md)                           | understand the tables, change the schema, or reseed                  |
 | [Frontend](frontend.md)                           | work on pages, components, the client store or styling               |
+| [Tailwind migration](tailwind-migration.md)       | convert styles to Tailwind, or check how the switch was verified     |
 | [Testing](testing.md)                             | run or write tests                                                   |
 | [Performance audit](performance-audit.md)         | check page speed at scale, or reproduce the load and Lighthouse runs |
 | [Backend audit](backend-audit.md)                 | see what the API review checked, fixed, and left for a decision      |

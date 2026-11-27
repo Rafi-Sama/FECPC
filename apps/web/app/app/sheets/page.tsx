@@ -25,21 +25,15 @@ export default function Sheets() {
         <div
           role="tablist"
           aria-label="Sheet kinds"
-          className="row"
-          style={{
-            gridColumn: '1 / -1',
-            gap: 8,
-            flexDirection: 'row',
-            justifyContent: 'flex-start',
-          }}
+          className="row col-span-full gap-2 flex-row justify-start"
         >
           {tabs.map(([k, label]) => (
             <button
               key={k}
               role="tab"
               aria-selected={tab === k}
-              className={`tag tab ${tab === k ? 'on' : ''}`}
-              style={{ padding: '10px 18px', fontSize: 14 }}
+              className={`tag tab ${tab === k ? 'on' : ''} py-2.5 px-4.5 text-[14px]`}
+
               onClick={() => setTab(k)}
             >
               {label}
@@ -77,8 +71,8 @@ function Core() {
 
   return (
     <>
-      <section className="panel" style={{ gridColumn: '1 / -1' }}>
-        <div className="row between" style={{ alignItems: 'flex-end' }}>
+      <section className="panel col-span-full">
+        <div className="row between items-end">
           <div>
             <p className="label">overall</p>
             <p className="big">
@@ -87,29 +81,16 @@ function Core() {
           </div>
         </div>
         <div
-          className="meter"
-          style={{ '--v': `${(done / sheet.length) * 100}%`, height: 20 } as React.CSSProperties}
+          className="meter h-[20px]"
+          style={{ '--v': `${(done / sheet.length) * 100}%` } as React.CSSProperties}
         >
           <i />
         </div>
         {nextUp.length > 0 && (
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'row',
-              flexWrap: 'nowrap',
-              alignItems: 'center',
-              gap: '0.5rem',
-              marginTop: '0.5rem',
-              overflowX: 'auto',
-              fontSize: 'inherit',
-            }}
-          >
-            <span className="dim" style={{ whiteSpace: 'nowrap' }}>
-              next up:
-            </span>
+          <div className="flex flex-row flex-nowrap items-center gap-[0.5rem] mt-[0.5rem] overflow-x-auto text-[inherit]">
+            <span className="dim whitespace-nowrap">next up:</span>
             {nextUp.map((p, i) => (
-              <span key={p.id} style={{ whiteSpace: 'nowrap' }}>
+              <span className="whitespace-nowrap" key={p.id}>
                 <a className="link acc" href={cfUrl(p.id)} target="_blank" rel="noreferrer">
                   {p.id} {p.name}
                 </a>
@@ -138,7 +119,10 @@ function Core() {
             </div>
             <div>
               {ps.map((p) => (
-                <div key={p.id} className={`prob ${isDone(p.id) ? 'done' : ''}`}>
+                <div
+                  key={p.id}
+                  className={`[&_a]:[text-decoration:none] [&_a]:text-hi [&_a:hover]:text-acc [&.done_a]:[color:var(--dim)] [&.done_a]:[text-decoration:line-through] [display:grid] grid-cols-[28px_minmax(0,1fr)_auto_auto] gap-3 items-center p-[9px_0] text-[15px] ${isDone(p.id) ? 'done' : ''}`}
+                >
                   <input
                     type="checkbox"
                     className="check"
@@ -150,10 +134,7 @@ function Core() {
                   <a href={cfUrl(p.id)} target="_blank" rel="noreferrer">
                     <span className="dim">{p.id}</span> {p.name}
                   </a>
-                  <span
-                    className={`label ${p.must ? '' : 'dim'}`}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                  >
+                  <span className={`label ${p.must ? '' : 'dim'} inline-flex items-center gap-1.5`}>
                     {(s.solved.includes(p.id) || auto.has(p.id)) && (
                       <Verified on={auto.has(p.id) || s.verified.includes(p.id)} />
                     )}
@@ -167,7 +148,7 @@ function Core() {
         );
       })}
       {can(s.roles, 'sheet.stats') ? (
-        <section className="panel c8" style={{ gridColumn: '1 / -1' }}>
+        <section className="panel c8 col-span-full">
           <p className="label">where members get stuck · least-solved problems on the sheet</p>
           <div className="scroll-x">
             <table className="tbl">

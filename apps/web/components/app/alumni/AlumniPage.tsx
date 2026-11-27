@@ -1,4 +1,5 @@
 'use client';
+import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Page } from '@/components/app/Shell';
@@ -6,7 +7,11 @@ import { useStore } from '@/components/app/Store';
 import { AlumniTab } from './AlumniTab';
 import { JobsTab } from './JobsTab';
 import { BlogsTab } from './BlogsTab';
-import { AlumniProfileModal } from './AlumniProfileModal';
+
+// Opened on demand: the dialog's code loads when it is first shown.
+const AlumniProfileModal = dynamic(() =>
+  import('./AlumniProfileModal').then((m) => m.AlumniProfileModal),
+);
 
 export type AlumniSubTab = 'alumni' | 'jobs' | 'blogs';
 
@@ -154,13 +159,7 @@ function AlumniPageInner() {
       <div
         role="tablist"
         aria-label="Alumni sub-tabs"
-        style={{
-          display: 'flex',
-          gap: 8,
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          marginBottom: 24,
-        }}
+        className="mb-6 flex gap-2 flex-wrap items-center"
       >
         {SUB_TABS.map((t) => {
           const isActive = activeTab === t.key;
@@ -170,19 +169,11 @@ function AlumniPageInner() {
               role="tab"
               aria-selected={isActive}
               type="button"
-              className={`tag tab ${isActive ? 'on' : ''}`}
+              className={`tag tab ${isActive ? 'on' : ''} py-2.5 px-4 [font-family:var(--mono)] text-[12px] font-bold uppercase tracking-[0.08em] [border:2px_solid_var(--line2)] cursor-pointer`}
               onClick={() => handleTabChange(t.key)}
               style={{
-                fontFamily: 'var(--mono)',
-                fontSize: 12,
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: '0.08em',
-                padding: '10px 16px',
-                border: '2px solid var(--line2, #0B0B0B)',
                 background: isActive ? 'var(--acc, #1F3BFF)' : 'var(--panel, #F6F4EE)',
                 color: isActive ? 'var(--on, #FFFFFF)' : 'var(--ink, #0B0B0B)',
-                cursor: 'pointer',
               }}
             >
               {t.label}
@@ -235,23 +226,7 @@ function AlumniPageInner() {
         <div
           role="status"
           aria-live="polite"
-          style={{
-            position: 'fixed',
-            bottom: 24,
-            right: 24,
-            background: 'var(--ink, #0B0B0B)',
-            color: 'var(--on, #ECE9E1)',
-            borderLeft: '4px solid var(--acc, #1F3BFF)',
-            padding: '12px 20px',
-            boxShadow: '4px 4px 0 rgba(0, 0, 0, 0.3)',
-            fontFamily: 'var(--mono)',
-            fontSize: 12,
-            fontWeight: 700,
-            textTransform: 'uppercase',
-            letterSpacing: '0.06em',
-            zIndex: 10000,
-            animation: 'slideIn 0.2s ease-out',
-          }}
+          className="right-6 bottom-6 py-3 px-5 fixed [background:var(--ink)] text-on [border-left:4px_solid_var(--acc)] [box-shadow:4px_4px_0_rgba(0,_0,_0,_0.3)] [font-family:var(--mono)] text-[12px] font-bold uppercase tracking-[0.06em] z-[10000] [animation:slideIn_0.2s_ease-out]"
         >
           {toastMessage}
         </div>

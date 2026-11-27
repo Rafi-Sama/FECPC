@@ -3,7 +3,7 @@ export function Verified({ on }: { on: boolean }) {
   const label = on ? 'Confirmed by Codeforces' : 'Not confirmed by Codeforces yet';
   return (
     <svg
-      className={`vf ${on ? 'on' : ''}`}
+      className={`[&.on_circle]:fill-[#12a150] [&.on_circle]:stroke-[#12a150] [&.on_path]:stroke-white [&.on_path]:[stroke-width:2] [&.on]:[animation:tick-pop_0.3s_ease-out] flex-none inline-block [vertical-align:-3px] ml-1.5 [fill:none] stroke-dim [stroke-width:1.6] [stroke-linecap:round] [stroke-linejoin:round] ${on ? 'on' : ''}`}
       viewBox="0 0 16 16"
       width="16"
       height="16"

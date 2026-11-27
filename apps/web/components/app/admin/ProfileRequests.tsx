@@ -35,7 +35,12 @@ export function ProfileRequests() {
     ask = usePrompt();
   const [busy, setBusy] = useState('');
   const list = office.profileRequests ?? [];
-  if (!list.length) return <p className="rc-none">No change requests waiting.</p>;
+  if (!list.length)
+    return (
+      <p className="p-8 text-center [color:var(--dim)] [border:1px_dashed_var(--line)]">
+        No change requests waiting.
+      </p>
+    );
 
   const decide = async (r: ProfileRequestReview, to: 'approved' | 'rejected') => {
     let reason: string | null = null;
@@ -68,16 +73,16 @@ export function ProfileRequests() {
         ])[];
         const face = members.find((m) => m.id === r.user)?.avatar_url;
         return (
-          <li key={r.id} className="panel preq-card">
-            <header className="preq-head">
+          <li key={r.id} className="panel flex flex-col gap-3.5">
+            <header className="[&>div]:flex [&>div]:flex-col flex items-center gap-3">
               <MemberFace url={face} name={r.name} size={44} />
               <div>
                 <strong>{r.name}</strong>
-                <span className="rc-when">asked {ago(r.at)}</span>
+                <span className="[color:var(--dim)] text-[14px]">asked {ago(r.at)}</span>
               </div>
             </header>
-            {r.note && <p className="preq-note">“{r.note}”</p>}
-            <table className="tbl preq-tbl">
+            {r.note && <p className="italic [color:var(--mut)]">“{r.note}”</p>}
+            <table className="tbl [&_td]:align-middle [&_td]:wrap-anywhere">
               <thead>
                 <tr>
                   <th>Field</th>

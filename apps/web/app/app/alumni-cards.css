@@ -100,372 +100,6 @@ body.t-d {
   animation: miniCardIn 0.6s var(--ease) both;
 }
 
-/* Lists show many cards at once, so a card enters as one piece (transform and opacity, which the compositor runs)
-   and loops run only on hover. Staggered per-element, per-pixel, per-letter and clip-path entrances, and two
-   endless loops per card, cost ~0.5–1.5 s of style recalculation on a phone (docs/performance-audit.md). */
-@keyframes miniCardIn {
-  from {
-    opacity: 0;
-    transform: translateY(24px);
-  }
-
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-/* Banner */
-.alumni-mini .mini-banner {
-  background: var(--hero);
-  color: var(--hero-ink);
-  height: 104px;
-  position: relative;
-  overflow: hidden;
-  border-bottom: 2px solid var(--line2);
-  display: flex;
-  align-items: flex-start;
-  padding: 16px 20px;
-}
-
-.alumni-mini .mini-banner-grid {
-  position: absolute;
-  inset: 0;
-  opacity: 0.14;
-  background-image:
-    linear-gradient(currentColor 1px, transparent 1px),
-    linear-gradient(90deg, currentColor 1px, transparent 1px);
-  background-size: 20px 20px;
-  -webkit-mask-image: linear-gradient(90deg, transparent 35%, #000);
-  mask-image: linear-gradient(90deg, transparent 35%, #000);
-  pointer-events: none;
-}
-
-.alumni-mini .mini-banner::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(
-    100deg,
-    transparent 40%,
-    rgba(255, 255, 255, 0.28) 50%,
-    transparent 60%
-  );
-  transform: translateX(-120%);
-}
-
-.alumni-mini .mini-tagline {
-  position: relative;
-  z-index: 1;
-  font-family: var(--mono, 'JetBrains Mono', monospace);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  background: #111;
-  color: #fff;
-  padding: 4px 8px;
-  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.35);
-}
-
-.alumni-mini .mini-wm {
-  position: absolute;
-  right: -6px;
-  top: -22px;
-  font-weight: 900;
-  font-size: 170px;
-  line-height: 0.85;
-  letter-spacing: -9px;
-  color: color-mix(in srgb, var(--hero-ink) 7%, transparent);
-  -webkit-text-stroke: 2px var(--hero-ink);
-  opacity: 0.5;
-  pointer-events: none;
-  user-select: none;
-  transform: translate(var(--mx, 0px), var(--my, 0px));
-  transition: transform 0.25s var(--ease);
-}
-
-/* Avatar overlapping banner */
-.alumni-mini .mini-avatar {
-  position: absolute;
-  left: 20px;
-  top: 64px;
-  width: 84px;
-  height: 84px;
-  background: var(--bg);
-  border: 2px solid var(--line2);
-  box-shadow: 4px 4px 0 var(--line2);
-  display: grid;
-  place-items: center;
-  z-index: 2;
-  cursor: crosshair;
-  transition:
-    transform 0.15s var(--snap),
-    box-shadow 0.15s;
-}
-
-.alumni-mini .mini-avatar:hover {
-  transform: translate(-2px, -2px);
-  box-shadow: 7px 7px 0 var(--line2);
-}
-
-.alumni-mini .mini-avatar svg {
-  width: 66%;
-  height: 66%;
-  shape-rendering: crispEdges;
-}
-
-.alumni-mini .mini-avatar rect {
-  fill: var(--hi);
-  transform-box: fill-box;
-  transform-origin: center;
-}
-
-.alumni-mini .mini-avatar:hover rect {
-  animation: miniWiggle 0.45s var(--snap) both;
-  animation-delay: calc(var(--p) * 22ms);
-}
-
-@keyframes miniWiggle {
-  50% {
-    transform: scale(0.55);
-  }
-}
-
-.alumni-mini .mini-live {
-  position: absolute;
-  right: -6px;
-  bottom: -6px;
-  width: 14px;
-  height: 14px;
-  background: #22c55e;
-  border: 2px solid var(--line2);
-}
-
-.alumni-mini .mini-live::after {
-  content: '';
-  position: absolute;
-  inset: -5px;
-  border: 2px solid #22c55e;
-}
-
-.alumni-mini:hover .mini-live::after {
-  animation: miniPing 1.8s var(--snap) infinite;
-}
-
-@keyframes miniPing {
-  from {
-    opacity: 0.9;
-    transform: scale(0.6);
-  }
-
-  to {
-    opacity: 0;
-    transform: scale(1.6);
-  }
-}
-
-/* Mini Content */
-.alumni-mini .mini-content {
-  padding: 60px 22px 20px;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-.alumni-mini .mini-name {
-  font-size: 2rem;
-  font-weight: 900;
-  letter-spacing: -1px;
-  line-height: 1.05;
-  color: var(--acc);
-  margin-bottom: 6px;
-}
-
-.alumni-mini .mini-name span {
-  display: inline-block;
-}
-
-.alumni-mini .mini-role {
-  font-size: 17px;
-  font-weight: 500;
-  margin-bottom: 6px;
-  color: var(--hi);
-}
-
-.alumni-mini .mini-company {
-  font-family: var(--mono, 'JetBrains Mono', monospace);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--mut);
-  margin-bottom: 14px;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.alumni-mini .mini-company::before {
-  content: '';
-  width: 8px;
-  height: 8px;
-  background: var(--acc);
-  border: 1px solid var(--line2);
-  flex: none;
-}
-
-.alumni-mini .mini-loc {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-family: var(--mono, 'JetBrains Mono', monospace);
-  font-size: 12px;
-  color: var(--dim);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin-bottom: 16px;
-}
-
-.alumni-mini .mini-loc svg {
-  width: 14px;
-  height: 14px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  transition: transform 0.2s var(--snap);
-}
-
-.alumni-mini:hover .mini-loc svg {
-  transform: translateY(-3px);
-}
-
-.alumni-mini .mini-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 18px;
-}
-
-.alumni-mini .mini-tag {
-  font-family: var(--mono, 'JetBrains Mono', monospace);
-  font-size: 0.74rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  padding: 6px 11px;
-  background: var(--bg);
-  border: 1px solid var(--line2);
-  cursor: pointer;
-  transition: all 0.1s var(--snap);
-}
-
-.alumni-mini .mini-tag:hover {
-  background: var(--hi);
-  color: var(--bg);
-  transform: translate(-2px, -2px);
-  box-shadow: 3px 3px 0 var(--acc);
-}
-
-.alumni-mini .mini-tag:active {
-  transform: translate(1px, 1px);
-  box-shadow: none;
-}
-
-/* Mini Foot */
-.alumni-mini .mini-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  border-top: 1px solid var(--line);
-  padding-top: 14px;
-  margin-top: auto;
-}
-
-.alumni-mini .mini-open {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-family: var(--mono, 'JetBrains Mono', monospace);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--hi);
-}
-
-.alumni-mini .mini-open.closed {
-  color: var(--dim);
-}
-
-.alumni-mini .mini-open i {
-  width: 10px;
-  height: 10px;
-  background: var(--acc);
-  display: inline-block;
-  flex: none;
-}
-
-.alumni-mini:hover .mini-open i {
-  animation: miniBlink 1.2s step-end infinite;
-}
-
-.alumni-mini .mini-open.closed i {
-  background: var(--dim);
-  animation: none;
-}
-
-@keyframes miniBlink {
-  50% {
-    opacity: 0.25;
-  }
-}
-
-.alumni-mini .mini-acts {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.alumni-mini .mini-btn {
-  font-family: var(--mono, 'JetBrains Mono', monospace);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  padding: 7px 12px;
-  cursor: pointer;
-  border: 2px solid var(--line2);
-  background: transparent;
-  color: var(--hi);
-  transition: all 0.1s var(--snap);
-  position: relative;
-}
-
-.alumni-mini .mini-btn:hover {
-  background: var(--bg);
-  border-color: var(--acc);
-  transform: translate(-2px, -2px);
-  box-shadow: var(--shadow-hard);
-}
-
-.alumni-mini .mini-btn:active {
-  transform: translate(1px, 1px);
-  box-shadow: none;
-}
-
-.alumni-mini .mini-btn.saved {
-  background: var(--hi);
-  color: var(--bg);
-  animation: miniStamp 0.3s var(--snap);
-}
-
-@keyframes miniStamp {
-  50% {
-    transform: scale(1.15) rotate(-3deg);
-  }
-}
-
 .alumni-mini .mini-view {
   font-family: var(--mono, 'JetBrains Mono', monospace);
   font-size: 11px;
@@ -532,10 +166,56 @@ body.t-d {
   transform: translateX(4px);
 }
 
-@media (max-width: 420px) {
-  .alumni-mini .mini-foot {
-    flex-direction: column;
-    align-items: flex-start;
+/* Lists show many cards at once, so a card enters as one piece (transform and opacity, which the compositor runs)
+   and loops run only on hover. Staggered per-element, per-pixel, per-letter and clip-path entrances, and two
+   endless loops per card, cost ~0.5–1.5 s of style recalculation on a phone (docs/performance-audit.md). */
+@keyframes miniCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Banner */
+
+/* Avatar overlapping banner */
+
+@keyframes miniWiggle {
+  50% {
+    transform: scale(0.55);
+  }
+}
+
+@keyframes miniPing {
+  from {
+    opacity: 0.9;
+    transform: scale(0.6);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(1.6);
+  }
+}
+
+/* Mini Content */
+
+/* Mini Foot */
+
+@keyframes miniBlink {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@keyframes miniStamp {
+  50% {
+    transform: scale(1.15) rotate(-3deg);
   }
 }
 
@@ -686,19 +366,6 @@ body.t-d {
   }
 }
 
-.alumni-card-full .hero-grid {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  opacity: 0.14;
-  background-image:
-    linear-gradient(currentColor 1px, transparent 1px),
-    linear-gradient(90deg, currentColor 1px, transparent 1px);
-  background-size: 24px 24px;
-  -webkit-mask-image: linear-gradient(90deg, transparent 30%, #000);
-  mask-image: linear-gradient(90deg, transparent 30%, #000);
-}
-
 .alumni-card-full .watermark {
   position: absolute;
   right: -6px;
@@ -749,15 +416,6 @@ body.t-d .alumni-card-full .watermark::before {
     opacity: 0.5;
     transform: translate(0, 0);
   }
-}
-
-.alumni-card-full .hero-top {
-  display: flex;
-  gap: 28px;
-  align-items: center;
-  position: relative;
-  z-index: 1;
-  flex-wrap: wrap;
 }
 
 .alumni-card-full .avatar {
@@ -853,20 +511,6 @@ body.t-d .alumni-card-full .watermark::before {
   }
 }
 
-.alumni-card-full .badge {
-  display: inline-block;
-  font-family: var(--mono, 'JetBrains Mono', monospace);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  background: #111;
-  color: #fff;
-  padding: 4px 8px;
-  margin-bottom: 12px;
-  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.35);
-}
-
 .alumni-card-full .name {
   font-size: clamp(2rem, 5.2vw, 3.4rem);
   font-weight: 900;
@@ -925,7 +569,6 @@ body.t-d .alumni-card-full .watermark::before {
   content: '';
   position: absolute;
   left: 6px;
-  right: calc(100% / 3 - 6px);
   top: 6px;
   height: 2px;
 }
@@ -1014,12 +657,6 @@ body.t-d .alumni-card-full .tl.now i {
 }
 
 /* STATS */
-.alumni-card-full .stats {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  border-bottom: 2px solid var(--line2);
-  background: var(--panel);
-}
 
 .alumni-card-full .stat {
   padding: 22px 20px;
@@ -1053,29 +690,6 @@ body.t-d .alumni-card-full .tl.now i {
 
 .alumni-card-full .stat > * {
   position: relative;
-}
-
-.alumni-card-full .stat-val {
-  font-family: var(--mono, 'JetBrains Mono', monospace);
-  font-size: 2.2rem;
-  font-weight: 700;
-  color: var(--acc);
-  line-height: 1;
-  margin-bottom: 8px;
-  font-variant-numeric: tabular-nums;
-  transition: color 0.15s;
-}
-
-.alumni-card-full .stat:hover .stat-val {
-  color: var(--bg);
-}
-
-.alumni-card-full .stat-label {
-  font-family: var(--mono, 'JetBrains Mono', monospace);
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  opacity: 0.75;
 }
 
 .alumni-card-full .stat-bar {
@@ -1167,24 +781,6 @@ body.t-d .alumni-card-full .tl.now i {
   opacity: 0.7;
 }
 
-.alumni-card-full .tab-ink {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  background: var(--acc);
-  width: var(--w, 33.33%);
-  transform: translateX(var(--x, 0));
-  transition:
-    transform 0.35s var(--ease),
-    width 0.35s var(--ease);
-}
-
-.alumni-card-full .panels {
-  padding: 30px 32px 34px;
-  position: relative;
-}
-
 .alumni-card-full .panel {
   display: none;
 }
@@ -1211,28 +807,6 @@ body.t-d .alumni-card-full .tl.now i {
   animation-delay: calc(var(--k, 0) * 60ms);
 }
 
-.alumni-card-full .section-title {
-  font-family: var(--mono, 'JetBrains Mono', monospace);
-  font-size: 0.8rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 14px;
-  letter-spacing: 0.05em;
-  color: var(--hi);
-}
-
-.alumni-card-full .section-title::before {
-  content: '';
-  width: 8px;
-  height: 8px;
-  background: var(--acc);
-  border: 1px solid var(--line2);
-  flex: none;
-}
-
 .alumni-card-full .about {
   font-size: 16px;
   line-height: 1.65;
@@ -1245,12 +819,6 @@ body.t-d .alumni-card-full .tl.now i {
   color: var(--hi);
   padding: 0 3px;
   font-weight: 700;
-}
-
-.alumni-card-full .tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
 }
 
 .alumni-card-full .tag {
@@ -1279,26 +847,6 @@ body.t-d .alumni-card-full .tl.now i {
 }
 
 /* CAREER PATH */
-.alumni-card-full .path {
-  position: relative;
-  padding-left: 26px;
-}
-
-.alumni-card-full .path::before {
-  content: '';
-  position: absolute;
-  left: 5px;
-  top: 6px;
-  bottom: 6px;
-  width: 2px;
-  background: var(--line2);
-  transform-origin: top;
-  transform: scaleY(0);
-}
-
-.alumni-card-full .panel.on .path::before {
-  animation: fullGrowY 0.9s 0.1s var(--ease) forwards;
-}
 
 @keyframes fullGrowY {
   to {
@@ -1306,78 +854,7 @@ body.t-d .alumni-card-full .tl.now i {
   }
 }
 
-.alumni-card-full .step {
-  position: relative;
-  margin-bottom: 26px;
-  padding: 10px 14px;
-  border: 1px solid transparent;
-  transition: all 0.15s var(--snap);
-  cursor: default;
-}
-
-.alumni-card-full .step:last-child {
-  margin-bottom: 0;
-}
-
-.alumni-card-full .step::before {
-  content: '';
-  position: absolute;
-  left: -26px;
-  top: 16px;
-  width: 12px;
-  height: 12px;
-  background: var(--panel);
-  border: 2px solid var(--line2);
-  transition: all 0.15s;
-}
-
-.alumni-card-full .step.now::before {
-  background: var(--acc);
-  border-color: var(--acc);
-}
-
-.alumni-card-full .step:hover {
-  border-color: var(--line2);
-  background: var(--panel);
-  box-shadow: var(--shadow-hard);
-  transform: translate(-2px, -2px);
-}
-
-.alumni-card-full .step:hover::before {
-  background: var(--acc);
-  border-color: var(--line2);
-  transform: rotate(45deg);
-}
-
-.alumni-card-full .step small {
-  font-family: var(--mono, 'JetBrains Mono', monospace);
-  font-size: 11px;
-  color: var(--acc);
-  font-weight: 700;
-  display: block;
-  margin-bottom: 3px;
-}
-
-.alumni-card-full .step h4 {
-  font-size: 15px;
-  font-weight: 700;
-  margin-bottom: 3px;
-  color: var(--hi);
-}
-
-.alumni-card-full .step p {
-  font-size: 13px;
-  color: var(--mut);
-  line-height: 1.5;
-}
-
 /* JOBS */
-.alumni-card-full .jobs-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 6px;
-}
 
 .alumni-card-full .job {
   display: grid;
@@ -1442,11 +919,6 @@ body.t-d .alumni-card-full .tl.now i {
   color: var(--hi);
 }
 
-.alumni-card-full .job-actions {
-  display: flex;
-  gap: 6px;
-}
-
 .alumni-card-full .job.removing {
   animation: fullOut 0.35s var(--snap) forwards;
 }
@@ -1479,25 +951,6 @@ body.t-d .alumni-card-full .tl.now i {
   justify-content: center;
 }
 
-.alumni-card-full .btn.primary {
-  background: var(--hi);
-  color: var(--bg);
-  box-shadow: var(--shadow-hard);
-}
-
-.alumni-card-full .btn.primary:hover {
-  background: var(--acc);
-  border-color: var(--acc);
-  color: var(--on);
-  transform: translate(-2px, -2px);
-  box-shadow: var(--shadow-hover);
-}
-
-.alumni-card-full .btn.primary:active {
-  transform: translate(2px, 2px);
-  box-shadow: none;
-}
-
 .alumni-card-full .btn.line:hover {
   background: var(--bg);
   border-color: var(--acc);
@@ -1517,8 +970,7 @@ body.t-d .alumni-card-full .tl.now i {
 }
 
 /* RIGHT PANE (Pass & Viz) */
-.alumni-card-full .pass,
-.alumni-card-full .viz {
+.alumni-card-full .pass {
   border: 2px solid var(--line2);
   background: var(--panel);
   box-shadow: var(--shadow-hard);
@@ -1527,24 +979,9 @@ body.t-d .alumni-card-full .tl.now i {
     box-shadow 0.15s;
 }
 
-.alumni-card-full .pass:hover,
-.alumni-card-full .viz:hover {
+.alumni-card-full .pass:hover {
   transform: translate(-2px, -2px);
   box-shadow: var(--shadow-hover);
-}
-
-.alumni-card-full .pass-h {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  background: var(--hi);
-  color: var(--bg);
-  font-family: var(--mono, 'JetBrains Mono', monospace);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
 }
 
 .alumni-card-full .pill {
@@ -1575,22 +1012,11 @@ body.t-d .alumni-card-full .tl.now i {
   }
 }
 
-.alumni-card-full .pass-b {
-  padding: 16px;
-}
-
 .alumni-card-full .hint {
   font-family: var(--mono, 'JetBrains Mono', monospace);
   font-size: 11px;
   color: var(--dim);
   margin: 10px 0 14px;
-}
-
-.alumni-card-full .btns {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-bottom: 14px;
 }
 
 .alumni-card-full .kudos-count {
@@ -1633,32 +1059,6 @@ body.t-d .alumni-card-full .tl.now i {
   transform: translate(3px, -3px);
 }
 
-.alumni-card-full .switch {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 14px;
-  font-family: var(--mono, 'JetBrains Mono', monospace);
-  font-size: 10px;
-  text-transform: uppercase;
-  cursor: pointer;
-  user-select: none;
-  letter-spacing: 0.05em;
-  color: var(--dim);
-}
-
-.alumni-card-full .switch input {
-  position: absolute;
-  opacity: 0;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  padding: 0;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  border: 0;
-}
-
 .alumni-card-full .track {
   width: 38px;
   height: 20px;
@@ -1678,33 +1078,6 @@ body.t-d .alumni-card-full .tl.now i {
   height: 12px;
   background: var(--hi);
   transition: transform 0.25s var(--ease);
-}
-
-.alumni-card-full .switch input:checked + .track {
-  background: var(--acc);
-}
-
-.alumni-card-full .switch input:checked + .track::after {
-  transform: translateX(18px);
-  background: var(--on);
-}
-
-/* CHART VIZ */
-.alumni-card-full .viz {
-  padding: 18px;
-}
-
-.alumni-card-full .viz-t {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-family: var(--mono, 'JetBrains Mono', monospace);
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--dim);
-  text-transform: uppercase;
-  margin-bottom: 14px;
-  letter-spacing: 0.05em;
 }
 
 .alumni-card-full .seg {
@@ -1741,40 +1114,7 @@ body.t-d .alumni-card-full .tl.now i {
   color: var(--on);
 }
 
-.alumni-card-full .viz-big {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.alumni-card-full .viz-big b {
-  font-family: var(--mono, 'JetBrains Mono', monospace);
-  font-size: 2.4rem;
-  line-height: 1;
-  color: var(--acc);
-  font-variant-numeric: tabular-nums;
-}
-
-.alumni-card-full .delta {
-  font-family: var(--mono, 'JetBrains Mono', monospace);
-  font-size: 10px;
-  font-weight: 700;
-  background: var(--hi);
-  color: var(--bg);
-  padding: 3px 7px;
-  text-transform: uppercase;
-}
-
-.alumni-card-full .viz-cap {
-  display: block;
-  font-family: var(--mono, 'JetBrains Mono', monospace);
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--dim);
-  margin: 6px 0 10px;
-}
+/* CHART VIZ */
 
 .alumni-card-full .chart {
   position: relative;
@@ -1786,35 +1126,6 @@ body.t-d .alumni-card-full .tl.now i {
   display: block;
   overflow: visible;
   touch-action: none;
-}
-
-.alumni-card-full .gridl {
-  stroke: var(--line);
-  stroke-width: 1;
-  stroke-dasharray: 3 3;
-}
-
-.alumni-card-full .ylab,
-.alumni-card-full .xlab {
-  font: 400 8px var(--mono, 'JetBrains Mono', monospace);
-  fill: var(--dim);
-}
-
-.alumni-card-full .xlab.last {
-  fill: var(--acc);
-  font-weight: 700;
-}
-
-.alumni-card-full .cross {
-  stroke: var(--hi);
-  stroke-width: 1;
-  stroke-dasharray: 2 2;
-  opacity: 0;
-  transition: opacity 0.12s;
-}
-
-.alumni-card-full .cross.on {
-  opacity: 1;
 }
 
 .alumni-card-full .area {
@@ -1870,49 +1181,10 @@ body.t-d .alumni-card-full .tl.now i {
   clip-path: none;
 }
 
-.alumni-card-full .pt {
-  fill: var(--panel);
-  stroke: var(--hi);
-  stroke-width: 2;
-  cursor: crosshair;
-  opacity: 0;
-  transform-box: fill-box;
-  transform-origin: center;
-  transition:
-    transform 0.12s var(--snap),
-    fill 0.12s;
-}
-
-.alumni-card-full.go .pt {
-  animation: fullFade1 0.3s calc(1s + var(--n) * 240ms) forwards;
-}
-
 @keyframes fullFade1 {
   to {
     opacity: 1;
   }
-}
-
-.alumni-card-full .pt.peak,
-.alumni-card-full .pt.hot {
-  fill: var(--acc);
-}
-
-.alumni-card-full .pt.hot {
-  transform: scale(1.6);
-}
-
-.alumni-card-full .ring {
-  fill: none;
-  stroke: var(--acc);
-  stroke-width: 2;
-  opacity: 0;
-  transform-box: fill-box;
-  transform-origin: center;
-}
-
-.alumni-card-full.go .ring {
-  animation: fullRingp 1.8s 2.3s var(--snap) infinite;
 }
 
 @keyframes fullRingp {
@@ -1925,17 +1197,6 @@ body.t-d .alumni-card-full .tl.now i {
     opacity: 0;
     transform: scale(2.6);
   }
-}
-
-.alumni-card-full .peakl {
-  font: 700 8px var(--mono, 'JetBrains Mono', monospace);
-  fill: var(--acc);
-  opacity: 0;
-  letter-spacing: 0.06em;
-}
-
-.alumni-card-full.go .peakl {
-  animation: fullFade1 0.4s 2.1s forwards;
 }
 
 .alumni-card-full .tip {
@@ -1969,10 +1230,6 @@ body.t-d .alumni-card-full .tl.now i {
     border-bottom: 2px solid var(--line2);
   }
 
-  .alumni-card-full .stats {
-    grid-template-columns: 1fr 1fr;
-  }
-
   .alumni-card-full .stat:nth-child(2) {
     border-right: none;
   }
@@ -1988,10 +1245,6 @@ body.t-d .alumni-card-full .tl.now i {
 
   .alumni-card-full .hero {
     padding: 28px 22px;
-  }
-
-  .alumni-card-full .panels {
-    padding: 24px 20px;
   }
 }
 

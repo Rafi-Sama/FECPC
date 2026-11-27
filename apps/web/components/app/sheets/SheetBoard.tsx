@@ -39,8 +39,8 @@ function SheetView({ sh, actions }: { sh: Sheet; actions?: React.ReactNode }) {
   const done = sh.problems.filter((p) => isSolved(p.id)).length,
     total = Math.max(1, counts.peopleCount);
   return (
-    <section className="panel" style={{ gridColumn: '1 / -1' }}>
-      <div className="sheet-head">
+    <section className="panel col-span-full">
+      <div className="flex justify-between items-end gap-4 flex-wrap mb-3">
         <div>
           <p className="label">
             {sh.kind === 'weekly' ? 'refreshes every monday' : `by ${sh.by ?? 'the club'}`}
@@ -49,7 +49,7 @@ function SheetView({ sh, actions }: { sh: Sheet; actions?: React.ReactNode }) {
           {sh.note && <p className="body dim">{sh.note}</p>}
           {actions}
         </div>
-        <div className="sheet-score">
+        <div className="text-right">
           <p className="label">you solved</p>
           <p className="big num">
             {done}
@@ -57,7 +57,10 @@ function SheetView({ sh, actions }: { sh: Sheet; actions?: React.ReactNode }) {
           </p>
         </div>
       </div>
-      <div className="sheet-mix" aria-hidden>
+      <div
+        className="[&_i]:flex-1 [&_i]:[background:color-mix(in_srgb,var(--r)_22%,transparent)] [&_i.on]:[background:var(--r)] flex gap-0.75 h-[12px]"
+        aria-hidden
+      >
         {sh.problems.map((p) => (
           <i
             key={p.id}
@@ -67,16 +70,19 @@ function SheetView({ sh, actions }: { sh: Sheet; actions?: React.ReactNode }) {
         ))}
       </div>
       {!s.handle && (
-        <div style={{ marginTop: 12 }}>
+        <div className="mt-3">
           <HandleBox />
         </div>
       )}
-      <div className="sheet-list" role="table" aria-label={sh.title}>
-        <div className="sh-row sh-th label" role="row">
+      <div className="mt-5" role="table" aria-label={sh.title}>
+        <div
+          className="sh-row sh-th max-[641px]:[&_span:nth-child(3)]:hidden pt-0 pb-2 label"
+          role="row"
+        >
           <span role="columnheader">#</span>
           <span role="columnheader">problem</span>
           <span role="columnheader">club solved</span>
-          <span role="columnheader" style={{ textAlign: 'right' }}>
+          <span className="text-right" role="columnheader">
             difficulty
           </span>
         </div>
@@ -90,14 +96,21 @@ function SheetView({ sh, actions }: { sh: Sheet; actions?: React.ReactNode }) {
               className={`sh-row ${ok ? 'done' : ''}`}
               style={css({ '--r': c })}
             >
-              <span role="cell" className="sheet-mark" aria-label={ok ? 'solved' : 'not solved'}>
+              <span
+                role="cell"
+                className="[.done_&]:[background:#12a150] [.done_&]:border-[#12a150] w-[28px] h-[28px] [display:grid] [place-items:center] [border:1.5px_solid_var(--line2,var(--dim))] rounded-[50%] text-[14px] [color:var(--dim)] [.done_&]:text-white"
+                aria-label={ok ? 'solved' : 'not solved'}
+              >
                 {ok ? '✓' : i + 1}
               </span>
-              <span role="cell" className="sheet-name">
+              <span
+                role="cell"
+                className="[&_a]:text-hi [&_a]:[text-decoration:none] [&_a]:[font-weight:600] [&_a:hover]:text-acc min-w-0"
+              >
                 <a href={cfUrl(p.id)} target="_blank" rel="noreferrer">
                   {p.name} <span className="dim">{p.id} ↗</span>
                 </a>
-                <span className="sheet-tags">
+                <span className="[&_span]:text-[14px] [&_span]:[color:color-mix(in_oklab,var(--t,var(--dim)),var(--ink)_30%)] [&_span]:[border:1px_solid_color-mix(in_srgb,var(--t,var(--line))_55%,transparent)] [&_span]:[background:color-mix(in_srgb,var(--t,transparent)_10%,transparent)] [&_span]:p-[1px_8px] flex flex-wrap gap-1.5 mt-1.5">
                   {p.tags.slice(0, 3).map((t) => (
                     <span key={t} style={css({ '--t': hue(t) })}>
                       {t}
@@ -105,7 +118,10 @@ function SheetView({ sh, actions }: { sh: Sheet; actions?: React.ReactNode }) {
                   ))}
                 </span>
               </span>
-              <span role="cell" className="sheet-club">
+              <span
+                role="cell"
+                className="[&_.meter]:h-[4px] [display:grid] gap-1.5 max-[641px]:hidden"
+              >
                 <span className="num">
                   {p.club} <span className="dim">of {counts.peopleCount}</span>
                 </span>
@@ -113,7 +129,10 @@ function SheetView({ sh, actions }: { sh: Sheet; actions?: React.ReactNode }) {
                   <i />
                 </span>
               </span>
-              <span role="cell" className="sheet-r num">
+              <span
+                role="cell"
+                className="[justify-self:end] [color:color-mix(in_oklab,var(--r),var(--ink)_20%)] [background:color-mix(in_srgb,var(--r)_14%,transparent)] [font-weight:600] [border:1.5px_solid_var(--r)] p-[2px_10px] text-[14px] num"
+              >
                 {p.rating ?? 'unrated'}
               </span>
             </div>
@@ -129,7 +148,7 @@ export function WeeklyTab() {
   const week = sheets.find((x) => x.kind === 'weekly');
   if (!week)
     return (
-      <section className="panel" style={{ gridColumn: '1 / -1' }}>
+      <section className="panel col-span-full">
         <p className="body">This week&apos;s sheet is being built. Check back soon.</p>
       </section>
     );
@@ -150,8 +169,8 @@ function CurateForm({ edit, done }: { edit?: Sheet; done: () => void }) {
     );
   return (
     <form
-      className="panel"
-      style={{ gridColumn: '1 / -1', display: 'grid', gap: 12 }}
+      className="panel col-span-full [display:grid] gap-3"
+
       onSubmit={async (e) => {
         e.preventDefault();
         if (await act('sheetSave', { id: edit?.id, title, note, links })) done();
@@ -207,7 +226,11 @@ export function CuratedTab() {
   const cur = list.find((x) => x.id === pick) ?? list[0];
   return (
     <>
-      <div className="sheet-cards" role="tablist" aria-label="Curated sheets">
+      <div
+        className="[grid-column:1_/_-1] [display:grid] grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3"
+        role="tablist"
+        aria-label="Curated sheets"
+      >
         {list.map((x) => {
           const d = x.problems.filter((p) => isSolved(p.id)).length;
           return (
@@ -282,7 +305,7 @@ export function CuratedTab() {
         />
       ) : (
         !form && (
-          <section className="panel" style={{ gridColumn: '1 / -1' }}>
+          <section className="panel col-span-full">
             <p className="body">No curated sheets yet.</p>
           </section>
         )

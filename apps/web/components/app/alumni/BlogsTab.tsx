@@ -8,6 +8,11 @@ import type { BlogPost } from '@fecpc/contracts';
 import { useStore } from '@/components/app/Store';
 import { can } from '@fecpc/contracts';
 
+import { filterChip, emptyPanel, listKicker } from '@/components/app/alumni/ui';
+
+const blogAction =
+  'btn py-0 px-4.5 [font:600_13px_Inter,_Arial,_sans-serif] [border:2px_solid_var(--line2)] [background:var(--panel)] text-ink min-h-[44px] cursor-pointer w-full';
+
 const TOPICS = [
   'All',
   'Career',
@@ -189,97 +194,39 @@ export function BlogsTab({
   return (
     <div className="blogs-tab-view">
       {/* Two Column Layout matching mockup 41f59af4 */}
-      <div
-        style={{
-          display: 'flex',
-          gap: 32,
-          alignItems: 'flex-start',
-          flexWrap: 'wrap',
-        }}
-      >
+      <div className="flex gap-8 items-start flex-wrap">
         {/* Left Column: Posts List */}
-        <div style={{ flex: '1 1 560px', minWidth: 0 }}>
+        <div className="flex-[1_1_560px] min-w-0">
           {/* Controls Bar */}
-          <div
-            style={{
-              display: 'flex',
-              gap: 12,
-              flexWrap: 'wrap',
-              alignItems: 'center',
-              marginBottom: 24,
-            }}
-          >
+          <div className="mb-6 flex gap-3 flex-wrap items-center">
             {/* Search Input */}
-            <div style={{ flex: '0 1 300px' }}>
+            <div className="flex-[0_1_300px]">
               <input
                 type="search"
                 aria-label="Search posts"
                 placeholder="Search posts"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                style={{
-                  border: '2px solid var(--line2, #0B0B0B)',
-                  background: 'var(--panel, #F6F4EE)',
-                  color: 'var(--ink, #0B0B0B)',
-                  padding: '12px 14px',
-                  fontSize: 14,
-                  minHeight: 44,
-                  width: '100%',
-                }}
+                className="py-3 px-3.5 [border:2px_solid_var(--line2)] [background:var(--panel)] text-ink text-[14px] min-h-[44px] w-full"
               />
             </div>
 
             {/* Filters Dropdown */}
-            <div style={{ position: 'relative' }}>
+            <div className="relative">
               <button
                 type="button"
-                className="ch"
+                className="py-2.5 px-3.5 [font:12px_ui-monospace,_Menlo,_monospace] uppercase tracking-[1px] [border:2px_solid_var(--line2)] [background:var(--panel)] text-ink min-h-[44px] flex items-center cursor-pointer"
                 onClick={() => setFiltersOpen((o) => !o)}
-                style={{
-                  font: '12px ui-monospace, Menlo, monospace',
-                  textTransform: 'uppercase',
-                  letterSpacing: 1,
-                  border: '2px solid var(--line2, #0B0B0B)',
-                  padding: '10px 14px',
-                  background: 'var(--panel, #F6F4EE)',
-                  color: 'var(--ink, #0B0B0B)',
-                  minHeight: 44,
-                  display: 'flex',
-                  alignItems: 'center',
-                  cursor: 'pointer',
-                }}
               >
                 Filters ▾
               </button>
 
               {filtersOpen && (
-                <div
-                  className="pn"
-                  style={{
-                    position: 'absolute',
-                    top: 52,
-                    left: 0,
-                    width: 360,
-                    zIndex: 10,
-                    margin: 0,
-                    background: 'var(--panel, #F6F4EE)',
-                    border: '2px solid var(--line2, #0B0B0B)',
-                    padding: 20,
-                    boxShadow: '6px 6px 0 var(--line2, #0B0B0B)',
-                  }}
-                >
-                  <div
-                    className="m"
-                    style={{
-                      marginBottom: 12,
-                      font: '11px ui-monospace, Menlo, monospace',
-                      textTransform: 'uppercase',
-                      color: 'var(--dim, #5F5F5F)',
-                    }}
-                  >
+                <div className="pn top-13 left-0 p-5 m-0 absolute w-[360px] z-[10] [background:var(--panel)] [border:2px_solid_var(--line2)] [box-shadow:6px_6px_0_var(--line2)]">
+                  <div className="m mb-3 [font:11px_ui-monospace,_Menlo,_monospace] uppercase text-dim">
                     Topic
                   </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
+                  <div className="mb-4 flex flex-wrap gap-1.5">
                     {TOPICS.slice(0, 5).map((topic) => (
                       <button
                         key={topic}
@@ -288,19 +235,14 @@ export function BlogsTab({
                           setSelectedTopic(topic);
                           setFiltersOpen(false);
                         }}
+                        className="py-1.5 px-2.5 [font:12px_ui-monospace,_Menlo,_monospace] uppercase tracking-[1px] [border:2px_solid_var(--line2)] cursor-pointer"
                         style={{
-                          font: '12px ui-monospace, Menlo, monospace',
-                          textTransform: 'uppercase',
-                          letterSpacing: 1,
-                          border: '2px solid var(--line2, #0B0B0B)',
-                          padding: '6px 10px',
                           background:
                             selectedTopic === topic
                               ? 'var(--acc, #1F3BFF)'
                               : 'var(--panel, #F6F4EE)',
                           color:
                             selectedTopic === topic ? 'var(--on, #FFFFFF)' : 'var(--ink, #0B0B0B)',
-                          cursor: 'pointer',
                         }}
                       >
                         {topic}
@@ -308,31 +250,16 @@ export function BlogsTab({
                     ))}
                   </div>
 
-                  <div className="f" style={{ margin: 0 }}>
+                  <div className="f m-0">
                     <label
-                      className="m"
+                      className="m mb-1.5 block [font:11px_ui-monospace,_Menlo,_monospace] uppercase text-dim"
                       htmlFor="bt"
-                      style={{
-                        display: 'block',
-                        marginBottom: 6,
-                        font: '11px ui-monospace, Menlo, monospace',
-                        textTransform: 'uppercase',
-                        color: 'var(--dim, #5F5F5F)',
-                      }}
                     >
                       Batch
                     </label>
                     <select
                       id="bt"
-                      style={{
-                        border: '2px solid var(--line2, #0B0B0B)',
-                        background: 'var(--panel, #F6F4EE)',
-                        color: 'var(--ink, #0B0B0B)',
-                        padding: '10px 12px',
-                        fontSize: 14,
-                        width: '100%',
-                        cursor: 'pointer',
-                      }}
+                      className="py-2.5 px-3 [border:2px_solid_var(--line2)] [background:var(--panel)] text-ink text-[14px] w-full cursor-pointer"
                     >
                       <option>All batches</option>
                       <option>Batch 16</option>
@@ -346,40 +273,26 @@ export function BlogsTab({
             </div>
 
             {/* Latest vs Top Segmented Toggle */}
-            <div className="ty" style={{ display: 'flex', gap: 8 }}>
+            <div className="ty flex gap-2">
               <button
                 type="button"
-                className={`ch ${sortOrder === 'latest' ? 'on' : ''}`}
+                className={`${sortOrder === 'latest' ? 'on' : ''} ${filterChip}`}
                 onClick={() => setSortOrder('latest')}
                 style={{
-                  font: '12px ui-monospace, Menlo, monospace',
-                  textTransform: 'uppercase',
-                  letterSpacing: 1,
-                  border: '2px solid var(--line2, #0B0B0B)',
-                  padding: '10px 14px',
                   background:
                     sortOrder === 'latest' ? 'var(--acc, #1F3BFF)' : 'var(--panel, #F6F4EE)',
                   color: sortOrder === 'latest' ? 'var(--on, #FFFFFF)' : 'var(--ink, #0B0B0B)',
-                  minHeight: 44,
-                  cursor: 'pointer',
                 }}
               >
                 Latest
               </button>
               <button
                 type="button"
-                className={`ch ${sortOrder === 'top' ? 'on' : ''}`}
+                className={`${sortOrder === 'top' ? 'on' : ''} ${filterChip}`}
                 onClick={() => setSortOrder('top')}
                 style={{
-                  font: '12px ui-monospace, Menlo, monospace',
-                  textTransform: 'uppercase',
-                  letterSpacing: 1,
-                  border: '2px solid var(--line2, #0B0B0B)',
-                  padding: '10px 14px',
                   background: sortOrder === 'top' ? 'var(--acc, #1F3BFF)' : 'var(--panel, #F6F4EE)',
                   color: sortOrder === 'top' ? 'var(--on, #FFFFFF)' : 'var(--ink, #0B0B0B)',
-                  minHeight: 44,
-                  cursor: 'pointer',
                 }}
               >
                 Top
@@ -388,7 +301,7 @@ export function BlogsTab({
 
             {/* Write post button CTA on top right */}
             {canWrite && (
-              <div style={{ marginLeft: 'auto', flex: 'none' }}>
+              <div className="ml-auto flex-none">
                 <button
                   type="button"
                   className="btn sm"
@@ -409,67 +322,23 @@ export function BlogsTab({
               {[1, 2, 3].map((idx) => (
                 <div
                   key={idx}
-                  className="pn"
-                  style={{
-                    padding: 24,
-                    background: 'var(--panel, #F6F4EE)',
-                    border: '2px solid var(--line2, #0B0B0B)',
-                    marginBottom: 24,
-                    opacity: 0.6,
-                  }}
+                  className="pn p-6 mb-6 [background:var(--panel)] [border:2px_solid_var(--line2)] opacity-[0.6]"
                 >
-                  <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
-                    <div style={{ width: 40, height: 40, background: 'var(--line, #DAD6CB)' }} />
-                    <div style={{ flex: 1 }}>
-                      <div
-                        style={{
-                          height: 12,
-                          background: 'var(--line, #DAD6CB)',
-                          marginBottom: 12,
-                          width: '40%',
-                        }}
-                      />
-                      <div
-                        style={{ height: 12, background: 'var(--line, #DAD6CB)', width: '25%' }}
-                      />
+                  <div className="mb-4 flex gap-3">
+                    <div className="w-[40px] h-[40px] [background:var(--line)]" />
+                    <div className="flex-1">
+                      <div className="mb-3 h-[12px] [background:var(--line)] w-[40%]" />
+                      <div className="h-[12px] [background:var(--line)] w-[25%]" />
                     </div>
                   </div>
-                  <div
-                    style={{
-                      height: 16,
-                      background: 'var(--line, #DAD6CB)',
-                      marginBottom: 12,
-                      width: '80%',
-                    }}
-                  />
-                  <div style={{ height: 14, background: 'var(--line, #DAD6CB)', width: '60%' }} />
+                  <div className="mb-3 h-[16px] [background:var(--line)] w-[80%]" />
+                  <div className="h-[14px] [background:var(--line)] w-[60%]" />
                 </div>
               ))}
             </div>
           ) : posts.length === 0 ? (
-            <div
-              className="pn"
-              style={{
-                padding: '48px 24px',
-                textAlign: 'center',
-                background: 'var(--panel, #F6F4EE)',
-                border: '2px solid var(--line2, #0B0B0B)',
-              }}
-            >
-              <p
-                className="m"
-                style={{
-                  font: '11px ui-monospace, Menlo, monospace',
-                  letterSpacing: '.08em',
-                  textTransform: 'uppercase',
-                  color: 'var(--dim, #5F5F5F)',
-                  marginBottom: 16,
-                  fontSize: 13,
-                  fontWeight: 600,
-                }}
-              >
-                No blog posts found matching your search.
-              </p>
+            <div className={emptyPanel}>
+              <p className={listKicker}>No blog posts found matching your search.</p>
               {canWrite && (
                 <button
                   type="button"
@@ -491,41 +360,15 @@ export function BlogsTab({
         </div>
 
         {/* Right Sticky Sidebar matching mockup 41f59af4 */}
-        <aside style={{ flex: '0 0 300px', position: 'sticky', top: 24 }}>
+        <aside className="top-6 flex-[0_0_300px] [position:sticky]">
           {/* Top Contributors Box */}
-          <div
-            style={{
-              border: '2px solid var(--line2, #0B0B0B)',
-              background: 'var(--panel, #F6F4EE)',
-              marginBottom: 24,
-            }}
-          >
-            <div style={{ background: 'var(--ink, #0B0B0B)', padding: '10px 16px' }}>
-              <span
-                className="m"
-                style={{
-                  color: 'var(--on, #FFFFFF)',
-                  fontSize: 11,
-                  fontWeight: 700,
-                  textTransform: 'uppercase',
-                }}
-              >
-                Top contributors
-              </span>
+          <div className="mb-6 [border:2px_solid_var(--line2)] [background:var(--panel)]">
+            <div className="py-2.5 px-4 [background:var(--ink)]">
+              <span className="m text-on text-[11px] font-bold uppercase">Top contributors</span>
             </div>
 
-            <div style={{ padding: '8px 16px 16px' }}>
-              <div
-                className="m"
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  padding: '8px 0 0',
-                  font: '11px ui-monospace, Menlo, monospace',
-                  textTransform: 'uppercase',
-                  color: 'var(--dim, #5F5F5F)',
-                }}
-              >
+            <div className="pt-2 px-4 pb-4">
+              <div className="m pt-2 px-0 pb-0 flex justify-between [font:11px_ui-monospace,_Menlo,_monospace] uppercase text-dim">
                 <span>Alumni</span>
                 <span>Votes</span>
               </div>
@@ -533,46 +376,18 @@ export function BlogsTab({
               {TOP_CONTRIBUTORS.map((c) => (
                 <div
                   key={c.rank}
-                  className="r"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 12,
-                    padding: '10px 0',
-                    borderTop: '1px solid var(--line, #cfcbbf)',
-                  }}
+                  className="r py-2.5 px-0 flex items-center gap-3 [border-top:1px_solid_var(--line)]"
                 >
-                  <span
-                    className="m"
-                    style={{
-                      width: 16,
-                      font: '11px ui-monospace, Menlo, monospace',
-                      color: 'var(--dim, #5F5F5F)',
-                    }}
-                  >
+                  <span className="m w-[16px] [font:11px_ui-monospace,_Menlo,_monospace] text-dim">
                     {c.rank}
                   </span>
                   <span
-                    style={{
-                      flex: 1,
-                      fontWeight: 600,
-                      fontSize: 14,
-                      color: c.color,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
+                    className="flex-1 font-semibold text-[14px] overflow-hidden text-ellipsis whitespace-nowrap"
+                    style={{ color: c.color }}
                   >
                     {c.name}
                   </span>
-                  <span
-                    className="mo"
-                    style={{
-                      font: '13px ui-monospace, Menlo, monospace',
-                      fontWeight: 700,
-                      color: 'var(--ink, #0B0B0B)',
-                    }}
-                  >
+                  <span className="mo [font:700_13px_ui-monospace,_Menlo,_monospace] text-ink">
                     {c.votes}
                   </span>
                 </div>
@@ -581,128 +396,56 @@ export function BlogsTab({
           </div>
 
           {/* Top This Week Box */}
-          <div
-            style={{
-              border: '2px solid var(--line2, #0B0B0B)',
-              background: 'var(--panel, #F6F4EE)',
-              marginBottom: 24,
-            }}
-          >
-            <div style={{ background: 'var(--ink, #0B0B0B)', padding: '10px 16px' }}>
-              <span
-                className="m"
-                style={{
-                  color: 'var(--on, #FFFFFF)',
-                  fontSize: 11,
-                  fontWeight: 700,
-                  textTransform: 'uppercase',
-                }}
-              >
-                Top this week
-              </span>
+          <div className="mb-6 [border:2px_solid_var(--line2)] [background:var(--panel)]">
+            <div className="py-2.5 px-4 [background:var(--ink)]">
+              <span className="m text-on text-[11px] font-bold uppercase">Top this week</span>
             </div>
 
-            <div style={{ padding: '8px 16px 16px' }}>
+            <div className="pt-2 px-4 pb-4">
               {topWeekPosts.length > 0 ? (
                 topWeekPosts.map((p, idx) => (
                   <div
                     key={p.id}
-                    className="r"
+                    className="r py-2.5 px-0 flex items-start gap-3 cursor-pointer"
                     onClick={() => handleOpenPost(p)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      gap: 12,
-                      padding: '10px 0',
-                      borderTop: idx > 0 ? '1px solid var(--line, #cfcbbf)' : 0,
-                      cursor: 'pointer',
-                    }}
+                    style={{ borderTop: idx > 0 ? '1px solid var(--line, #cfcbbf)' : 0 }}
                   >
-                    <span
-                      className="mo"
-                      style={{
-                        color: 'var(--acc, #1F3BFF)',
-                        width: 44,
-                        flex: 'none',
-                        font: '13px ui-monospace, Menlo, monospace',
-                        fontWeight: 700,
-                      }}
-                    >
+                    <span className="mo text-acc w-[44px] flex-none [font:700_13px_ui-monospace,_Menlo,_monospace]">
                       ▲ {p.upvotes || 31}
                     </span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div
-                        style={{
-                          font: '600 12px ui-monospace, Menlo, monospace',
-                          color: 'var(--acc, #1F3BFF)',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
+                    <div className="flex-1 min-w-0">
+                      <div className="[font:600_12px_ui-monospace,_Menlo,_monospace] text-acc overflow-hidden text-ellipsis whitespace-nowrap">
                         {p.author_name || 'Alumnus'}
                       </div>
-                      <b
-                        style={{
-                          fontSize: 14,
-                          display: 'block',
-                          marginTop: 2,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
+                      <b className="mt-0.5 text-[14px] block overflow-hidden text-ellipsis whitespace-nowrap">
                         {p.title}
                       </b>
                     </div>
                   </div>
                 ))
               ) : (
-                <div className="m" style={{ padding: '12px 0', color: 'var(--dim, #5F5F5F)' }}>
-                  No top posts yet this week.
-                </div>
+                <div className="m py-3 px-0 text-dim">No top posts yet this week.</div>
               )}
             </div>
           </div>
 
           {/* Topics Tag Chips Box */}
-          <div
-            style={{
-              border: '2px solid var(--line2, #0B0B0B)',
-              background: 'var(--panel, #F6F4EE)',
-              marginBottom: 24,
-            }}
-          >
-            <div style={{ background: 'var(--ink, #0B0B0B)', padding: '10px 16px' }}>
-              <span
-                className="m"
-                style={{
-                  color: 'var(--on, #FFFFFF)',
-                  fontSize: 11,
-                  fontWeight: 700,
-                  textTransform: 'uppercase',
-                }}
-              >
-                Topics
-              </span>
+          <div className="mb-6 [border:2px_solid_var(--line2)] [background:var(--panel)]">
+            <div className="py-2.5 px-4 [background:var(--ink)]">
+              <span className="m text-on text-[11px] font-bold uppercase">Topics</span>
             </div>
-            <div style={{ padding: '16px' }}>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            <div className="p-4">
+              <div className="flex flex-wrap gap-1.5">
                 {TOPICS.slice(1).map((t) => (
                   <button
                     key={t}
                     type="button"
                     onClick={() => setSelectedTopic(t)}
+                    className="py-1 px-2 [font:11px_ui-monospace,_Menlo,_monospace] uppercase tracking-[.06em] [border:1px_solid_var(--line2)] cursor-pointer"
                     style={{
-                      font: '11px ui-monospace, Menlo, monospace',
-                      textTransform: 'uppercase',
-                      letterSpacing: '.06em',
-                      border: '1px solid var(--line2, #0B0B0B)',
-                      padding: '4px 8px',
                       background:
                         selectedTopic === t ? 'var(--acc, #1F3BFF)' : 'var(--panel, #FFFFFF)',
                       color: selectedTopic === t ? 'var(--on, #FFFFFF)' : 'var(--ink, #0B0B0B)',
-                      cursor: 'pointer',
                     }}
                   >
                     {t}
@@ -713,72 +456,29 @@ export function BlogsTab({
           </div>
 
           {/* Blue Callout Card */}
-          <div
-            style={{
-              background: 'var(--acc, #1F3BFF)',
-              color: 'var(--on, #FFFFFF)',
-              border: '2px solid var(--line2, #0B0B0B)',
-              padding: 24,
-            }}
-          >
-            <h3
-              style={{
-                color: 'var(--on, #FFFFFF)',
-                fontSize: 20,
-                fontWeight: 700,
-                margin: '0 0 8px',
-              }}
-            >
+          <div className="p-6 [background:var(--acc)] text-on [border:2px_solid_var(--line2)]">
+            <h3 className="mt-0 mx-0 mb-2 text-on text-[20px] font-bold">
               Share what you’ve learned
             </h3>
-            <p
-              className="t"
-              style={{
-                color: 'var(--on, #DCE1FF)',
-                opacity: 0.9,
-                marginBottom: 16,
-                fontSize: 14,
-                lineHeight: 1.5,
-              }}
-            >
+            <p className="t mb-4 text-on opacity-[0.9] text-[14px] leading-[1.5]">
               Alumni and admins can publish posts.
             </p>
             {canWrite ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div className="flex flex-col gap-2">
                 <button
                   type="button"
-                  className="btn"
+                  className={blogAction}
                   onClick={() => {
                     setEditingPost(null);
                     setEditorOpen(true);
-                  }}
-                  style={{
-                    font: '600 13px Inter, Arial, sans-serif',
-                    border: '2px solid var(--line2, #0B0B0B)',
-                    padding: '0 18px',
-                    background: 'var(--panel, #F6F4EE)',
-                    color: 'var(--ink, #0B0B0B)',
-                    minHeight: 44,
-                    cursor: 'pointer',
-                    width: '100%',
                   }}
                 >
                   Write a post
                 </button>
                 <button
                   type="button"
-                  className="btn"
+                  className="btn py-0 px-4.5 [font:600_13px_Inter,_Arial,_sans-serif] [border:2px_solid_var(--line2)] [background:var(--ink)] text-on min-h-[44px] cursor-pointer w-full"
                   onClick={() => router.push('/app/community?tab=feed')}
-                  style={{
-                    font: '600 13px Inter, Arial, sans-serif',
-                    border: '2px solid var(--line2, #0B0B0B)',
-                    padding: '0 18px',
-                    background: 'var(--ink, #0B0B0B)',
-                    color: 'var(--on, #FFFFFF)',
-                    minHeight: 44,
-                    cursor: 'pointer',
-                    width: '100%',
-                  }}
                 >
                   Write in community feed →
                 </button>
@@ -786,18 +486,8 @@ export function BlogsTab({
             ) : (
               <button
                 type="button"
-                className="btn"
+                className={blogAction}
                 onClick={() => router.push('/app/community?tab=feed')}
-                style={{
-                  font: '600 13px Inter, Arial, sans-serif',
-                  border: '2px solid var(--line2, #0B0B0B)',
-                  padding: '0 18px',
-                  background: 'var(--panel, #F6F4EE)',
-                  color: 'var(--ink, #0B0B0B)',
-                  minHeight: 44,
-                  cursor: 'pointer',
-                  width: '100%',
-                }}
               >
                 Write a post →
               </button>

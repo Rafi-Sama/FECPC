@@ -3,6 +3,8 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useStore } from '../Store';
 
+import { modalHead } from '@/components/app/shared/ui';
+
 const FOCUSABLE =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -88,9 +90,9 @@ export function EventModal({
         ref={box}
         className={`cm-modal evm-modal ev-detail${wide ? ' wide' : ''}${noShadow ? ' no-shadow' : ''}`}
       >
-        <div className="cm-modal-head evm-modal-head">
+        <div className={modalHead}>
           <h2 className="h3">{title}</h2>
-          <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+          <div className="row gap-2 items-center">
             {headerActions}
             <button
               ref={close}
@@ -103,7 +105,9 @@ export function EventModal({
             </button>
           </div>
         </div>
-        <div className="evm-modal-body">{children}</div>
+        <div className="min-h-0 max-[641px]:p-3.5! flex flex-col gap-[1rem] p-6 [background:var(--panel)] text-ink max-h-[calc(85vh_-_70px)] overflow-y-auto box-border [.ev-detail_&]:flex [.ev-detail_&]:flex-col [.ev-detail_&]:gap-[1rem] [.ev-detail_&]:p-6 [.ev-detail_&]:[background:var(--panel)] [.ev-detail_&]:text-ink [.ev-detail_&]:max-h-[calc(85vh_-_70px)] [.ev-detail_&]:overflow-y-auto [.ev-detail_&]:box-border">
+          {children}
+        </div>
       </div>
     </div>,
     document.body,

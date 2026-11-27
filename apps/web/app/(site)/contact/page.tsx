@@ -15,18 +15,21 @@ export default function Contact() {
   return (
     <>
       <section className="page-head t-b paper" data-t="b">
-        <div className="wrap split flip" style={{ alignItems: 'end' }}>
-          <div className="head" style={{ marginBottom: 0 }}>
-            <h1 className="disp" style={{ fontSize: 'clamp(48px,6.4vw,92px)' }}>
+        <div className="wrap split flip [align-items:end]">
+          <div className="head mb-0">
+            <h1 className="disp text-[clamp(48px,6.4vw,92px)]">
               Put your name on the <span className="acc">scoreboard.</span>
             </h1>
             <p className="lede">
               We write down what was promised, and report back on what was delivered.
             </p>
           </div>
-          <div className="stack" style={{ '--g': '10px' } as React.CSSProperties}>
+          <div className="stack [--g:10px]">
             <p className="label">One inbox, answered in two working days</p>
-            <a className="mail" style={{ color: 'var(--ink)' }} href={`mailto:${site.email}`}>
+            <a
+              className="[font-size:clamp(22px,3.4vw,44px)] [font-weight:500] [letter-spacing:-0.03em] [text-underline-offset:8px] break-all text-ink"
+              href={`mailto:${site.email}`}
+            >
               {site.email}
             </a>
           </div>
@@ -38,18 +41,15 @@ export default function Contact() {
           <div className="head">
             <h2 className="h2">Three ways in.</h2>
           </div>
-          <div
-            className="grid"
-            style={{ '--min': '280px', '--g': '0px 24px' } as React.CSSProperties}
-          >
+          <div className="grid [--min:280px] [--g:0px_24px]">
             {sponsorTiers.map((t, i) => (
               <article key={t.tier} className="panel tier">
                 <p className="silk acc">0{i + 1}</p>
-                <h3 className="tier-name">{t.tier}</h3>
-                <p className="stat" style={{ fontSize: 32 }}>
-                  {t.ask}
-                </p>
-                <ul className="stack" style={{ '--g': '10px' } as React.CSSProperties}>
+                <h3 className="text-[clamp(36px,4vw,52px)] font-medium tracking-[-0.04em] leading-[1]">
+                  {t.tier}
+                </h3>
+                <p className="stat text-[32px]">{t.ask}</p>
+                <ul className="stack [--g:10px]">
                   {t.gets.map((g) => (
                     <li key={g} className="body">
                       <span className="acc" aria-hidden>
@@ -74,11 +74,11 @@ export default function Contact() {
               never an individual&apos;s payments.
             </p>
           </div>
-          <ul className="spend">
+          <ul className="spend [&_.silk]:text-right [&_li]:[display:grid] [&_li]:grid-cols-[minmax(110px,170px)_minmax(0,1fr)_48px] [&_li]:gap-4 [&_li]:items-center [&_li]:p-[16px_0] [&_li]:[border-top:2px_solid_var(--ink)] [&_li]:text-[17px]">
             {spend.map(([k, v]) => (
               <li key={k}>
                 <span>{k}</span>
-                <div className="spend-bar">
+                <div className="h-7 [&_i]:block [&_i]:h-full [&_i]:text-ink [&_i]:min-w-2 [.spend_li:first-child_&_i]:text-acc">
                   <i className="dither" style={{ width: `${v * 2.6}%` }} />
                 </div>
                 <span className="silk">{v}%</span>
@@ -88,25 +88,23 @@ export default function Contact() {
         </div>
       </section>
 
-      <section
-        className="sec t-b"
-        data-t="b"
-        id="contact"
-        style={{ background: '#0D0D0B', color: '#ECE9E1' }}
-      >
-        <div className="wrap split even" style={{ alignItems: 'end' }}>
-          <div className="head" style={{ marginBottom: 0 }}>
+      <section className="sec t-b bg-[#0D0D0B] text-[#ECE9E1]" data-t="b" id="contact">
+        <div className="wrap split even [align-items:end]">
+          <div className="head mb-0">
             <h2 className="h2">Write to a person, not a form.</h2>
-            <p className="lede" style={{ color: '#C9C5BC' }}>
+            <p className="lede text-[#C9C5BC]">
               Sponsorship, a guest talk, a joint contest or a question about joining: one inbox,
               answered by the General Secretary within two working days.
             </p>
           </div>
-          <div className="stack" style={{ '--g': '20px' } as React.CSSProperties}>
-            <a className="mail" href={`mailto:${site.email}`}>
+          <div className="stack [--g:20px]">
+            <a
+              className="[font-size:clamp(22px,3.4vw,44px)] [font-weight:500] [letter-spacing:-0.03em] text-[#ece9e1] [text-underline-offset:8px] break-all hover:text-[#8fa0ff]"
+              href={`mailto:${site.email}`}
+            >
               {site.email}
             </a>
-            <p className="body" style={{ color: '#C9C5BC' }}>
+            <p className="body text-[#C9C5BC]">
               {site.name}
               <br />
               Department of CSE, {site.university}

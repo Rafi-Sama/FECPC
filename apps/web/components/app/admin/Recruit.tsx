@@ -19,6 +19,18 @@ import { MailEditor, MailStatus } from '@/components/app/shared/MailEditor';
 import { site } from '@/lib/site';
 import { poster } from './poster';
 
+const applicantPane =
+  'max-[861px]:[.job-detail-modal_&]:[flex-basis:100%] max-[861px]:[.job-detail-modal_&]:p-[24px_20px] flex flex-col gap-5';
+
+const applicantHead =
+  '[&_.label]:mt-[4px] [&_.label]:normal-case [&_.label]:tracking-[0.02em] flex items-end justify-between gap-[12px_20px] flex-wrap';
+
+const checkLabel =
+  '[&_input]:w-[18px] [&_input]:h-[18px] [&_input]:[accent-color:var(--acc)] [&_input]:cursor-pointer flex items-center gap-2.5 min-h-[40px] cursor-pointer';
+
+const rcBadgeCls =
+  'py-1.5 px-3 inline-flex items-baseline gap-1.5 [border:0] rounded-[999px] [background:color-mix(in_srgb,#d4a72c_22%,transparent)] text-hi font-label text-[14px] cursor-pointer [&_b]:text-[16px]';
+
 const urlOf = (l: RecruitLink) => `${location.origin}/apply/${l.token}`;
 const when = (iso: string) =>
   new Date(iso).toLocaleString('en-GB', {
@@ -108,8 +120,8 @@ export function Recruit() {
     );
 
   return (
-    <div className="rc">
-      <div className="rc-head">
+    <div className={applicantPane}>
+      <div className={applicantHead}>
         <div>
           <h2 className="h3">Recruitments</h2>
           <p className="label">One link per intake. Open one to share it and review applicants.</p>
@@ -122,15 +134,17 @@ export function Recruit() {
       <MailStatus />
 
       {links.length === 0 && (
-        <div className="rc-empty">
-          <ol className="rc-steps">
+        <div className="[display:grid] gap-6 [justify-items:start] p-[clamp(20px,3vw,32px)] [background:var(--panel)] [border:1px_dashed_var(--line2)]">
+          <ol className="[&_li]:[display:grid] [&_li]:gap-1.5 [&_li]:[color:var(--mut)] [&_strong]:text-hi [display:grid] grid-cols-[repeat(auto-fit,minmax(min(100%,200px),1fr))] gap-5 w-full">
             {[
               ['Create a link', 'Pick the batch and how long it stays open.'],
               ['Share it', 'Copy the link or print the QR poster.'],
               ['Review', 'Accept or reject applicants; accepted ones get an email.'],
             ].map(([t, d], n) => (
               <li key={t}>
-                <span className="rc-step-n">{n + 1}</span>
+                <span className="[display:grid] [place-items:center] w-[32px] h-[32px] rounded-[50%] [background:var(--acc)] text-on font-label text-[15px]">
+                  {n + 1}
+                </span>
                 <strong>{t}</strong>
                 <span>{d}</span>
               </li>
@@ -142,11 +156,14 @@ export function Recruit() {
         </div>
       )}
 
-      <ul className="rc-list">
+      <ul className="[display:grid] gap-3">
         {links.map((l) => {
           const total = l.pending + l.accepted + l.declined;
           return (
-            <li key={l.id} className={`rc-row${l.open ? ' is-open' : ''}`}>
+            <li
+              key={l.id}
+              className={`rc-row${l.open ? ' is-open [&_.rc-row-status]:text-[#1a7f37]' : ''}`}
+            >
               <button className="rc-row-main" onClick={() => setOpen(l.id)}>
                 <span className="rc-row-status">
                   <i aria-hidden />
@@ -157,7 +174,10 @@ export function Recruit() {
                   Batch {l.batch} · {plural(total, 'applicant')} · by {l.by}
                 </span>
                 {total > 0 && (
-                  <span className="rc-bar" aria-hidden>
+                  <span
+                    className="flex h-1.5 max-w-80 mt-1 rounded-[3px] overflow-hidden bg-line [&_.p]:bg-[#d4a72c] [&_.a]:bg-[#2da44e] [&_.d]:bg-bad"
+                    aria-hidden
+                  >
                     <i className="p" style={{ flex: l.pending }} />
                     <i className="a" style={{ flex: l.accepted }} />
                     <i className="d" style={{ flex: l.declined }} />
@@ -166,7 +186,7 @@ export function Recruit() {
               </button>
               <div className="rc-row-side">
                 {l.pending > 0 ? (
-                  <button className="rc-badge" onClick={() => setOpen(l.id)}>
+                  <button className={rcBadgeCls} onClick={() => setOpen(l.id)}>
                     <b>{l.pending}</b> to review
                   </button>
                 ) : (
@@ -181,7 +201,10 @@ export function Recruit() {
                       Close
                     </button>
                   )}
-                  <button className="btn xs line rc-danger" onClick={() => remove(l)}>
+                  <button
+                    className="btn xs line hover:text-bad hover:border-bad"
+                    onClick={() => remove(l)}
+                  >
                     Delete
                   </button>
                 </div>
@@ -198,7 +221,7 @@ export function Recruit() {
             </button>
             <div className="rc-row-side">
               {earlier.some((a) => a.status === 'pending') && (
-                <button className="rc-badge" onClick={() => setOpen(EARLIER)}>
+                <button className={rcBadgeCls} onClick={() => setOpen(EARLIER)}>
                   <b>{earlier.filter((a) => a.status === 'pending').length}</b> to review
                 </button>
               )}
@@ -269,11 +292,14 @@ function Detail({
   };
 
   return (
-    <div className="rc">
-      <button className="rc-back" onClick={back}>
+    <div className={applicantPane}>
+      <button
+        className="self-start [background:none] [border:0] p-[6px_0] [color:var(--mut)] font-label text-[14px] cursor-pointer hover:text-acc focus-visible:text-acc"
+        onClick={back}
+      >
         ← All recruitments
       </button>
-      <div className="rc-head">
+      <div className={applicantHead}>
         <div>
           {link && (
             <span className={`rc-row-status${link.open ? ' on' : ''}`}>
@@ -281,7 +307,7 @@ function Detail({
               {link.open ? `Open until ${when(link.closes)}` : `Closed ${when(link.closes)}`}
             </span>
           )}
-          <h2 className="h2 rc-title">{link?.title ?? 'Earlier applications'}</h2>
+          <h2 className="h2 mt-1.5 wrap-anywhere">{link?.title ?? 'Earlier applications'}</h2>
           <p className="label">
             {link
               ? `Batch ${link.batch} · created by ${link.by} on ${day(link.at)}`
@@ -301,7 +327,7 @@ function Detail({
                 Close now
               </button>
             )}
-            <button className="btn xs line rc-danger" onClick={onDelete}>
+            <button className="btn xs line hover:text-bad hover:border-bad" onClick={onDelete}>
               Delete
             </button>
           </div>
@@ -310,14 +336,14 @@ function Detail({
 
       {link &&
         (link.open ? (
-          <section className="rc-share">
-            <div className="rc-qr">
+          <section className="flex gap-6 items-center p-5 [background:var(--panel)] [border:1px_solid_var(--line)] max-[721px]:flex-col max-[721px]:items-start">
+            <div className="p-2 [background:#fff] [border:1px_solid_var(--line)] flex-none leading-[0]">
               <QR text={urlOf(link)} size={136} />
             </div>
-            <div className="rc-share-body">
+            <div className="[&_.label]:normal-case [&_.label]:tracking-[0.02em] flex flex-col gap-2.5 min-w-0 flex-1">
               <p className="h3">Share this link</p>
               <p className="label">Applicants can scan the QR or open the link on any phone.</p>
-              <div className="rc-url">
+              <div className="[&_.input]:font-label [&_.input]:text-[14px] [&_.input]:min-w-0 flex gap-2 max-w-[560px]">
                 <input
                   className="input sm"
                   readOnly
@@ -343,7 +369,7 @@ function Detail({
             </div>
           </section>
         ) : (
-          <section className="rc-share closed">
+          <section className="flex gap-6 items-center p-5 [background:var(--panel)] [border:1px_solid_var(--line)] justify-between flex-wrap [&&]:border-dashed max-[721px]:flex-col max-[721px]:items-start closed">
             <p className="body">This link is closed, so nobody can apply.</p>
             <button className="btn sm" onClick={onEdit}>
               Reopen
@@ -351,7 +377,7 @@ function Detail({
           </section>
         ))}
 
-      <div className="rc-head">
+      <div className={applicantHead}>
         <h3 className="h3">Applicants</h3>
         {link && (
           <button className="btn xs line" onClick={() => setImporting(true)}>
@@ -446,7 +472,7 @@ function Applicants({ list }: { list: Applicant[] }) {
   const count = (st: Applicant['status']) => list.filter((a) => a.status === st).length;
   return (
     <div className="rc-apps-wrap">
-      <div className="rc-tools">
+      <div className="flex justify-between gap-3 flex-wrap">
         <div className="rc-seg" role="tablist">
           {STATUS.map(([k, label]) => (
             <button
@@ -475,7 +501,7 @@ function Applicants({ list }: { list: Applicant[] }) {
 
       {status === 'pending' && shown.length > 0 && (
         <div className={`rc-bulk${sel.length ? ' on' : ''}`}>
-          <label className="rc-check">
+          <label className="inline-flex items-center gap-2.5 font-label text-[14px] cursor-pointer [&_input]:w-[18px] [&_input]:h-[18px] [&_input]:[accent-color:var(--acc)] [&_input]:cursor-pointer">
             <input
               type="checkbox"
               checked={all}
@@ -507,7 +533,7 @@ function Applicants({ list }: { list: Applicant[] }) {
       )}
 
       {shown.length === 0 ? (
-        <p className="rc-none">
+        <p className="p-8 text-center [color:var(--dim)] [border:1px_dashed_var(--line)]">
           {needle
             ? 'Nobody matches that search.'
             : status === 'pending'
@@ -521,16 +547,24 @@ function Applicants({ list }: { list: Applicant[] }) {
               {a.status === 'pending' && (
                 <input
                   type="checkbox"
-                  className="rc-pick"
+                  className="rc-pick w-[18px] h-[18px] [accent-color:var(--acc)] cursor-pointer mt-5.5 max-[721px]:mt-3.5"
                   checked={picked.has(a.id)}
                   onChange={() => toggle(a.id)}
                   aria-label={`Select ${a.name}`}
                 />
               )}
               {a.photo ? (
-                <img className="rc-face" src={`/api/recruit/photo/${a.id}`} alt="" loading="lazy" />
+                <img
+                  className="w-[64px] h-[64px] rounded-[50%] object-cover [background:var(--line)] max-[721px]:w-[48px] max-[721px]:h-[48px]"
+                  src={`/api/recruit/photo/${a.id}`}
+                  alt=""
+                  loading="lazy"
+                />
               ) : (
-                <span className="rc-face rc-initials" title="No photo (imported from a CSV)">
+                <span
+                  className="w-[64px] h-[64px] rounded-[50%] object-cover [background:var(--line)] max-[721px]:w-[48px] max-[721px]:h-[48px] [display:grid] [place-items:center] font-label text-[20px] [color:var(--mut)]"
+                  title="No photo (imported from a CSV)"
+                >
                   {a.name
                     .split(' ')
                     .map((w) => w[0])
@@ -538,9 +572,9 @@ function Applicants({ list }: { list: Applicant[] }) {
                     .join('')}
                 </span>
               )}
-              <div className="rc-who">
+              <div className="flex flex-col gap-[4px] min-w-0 [&_strong]:text-[17px] [&_strong]:text-hi">
                 <strong>{a.name}</strong>
-                <span className="rc-sub">
+                <span className="[color:var(--dim)] text-[14px] font-label">
                   {a.sid} · {a.dept} · Batch {a.batch}
                 </span>
                 <span className="rc-contact">
@@ -575,11 +609,11 @@ function Applicants({ list }: { list: Applicant[] }) {
                     </dl>
                   </details>
                 )}
-                <span className="rc-when">
+                <span className="[color:var(--dim)] text-[14px]">
                   {a.src === 'CSV import' ? 'Imported from CSV' : 'Applied'} {when(a.at)}
                 </span>
               </div>
-              <div className="rc-decide">
+              <div className="flex flex-col items-stretch gap-2 min-w-[96px] text-right max-[721px]:[grid-column:1_/_-1] max-[721px]:flex-row max-[721px]:flex-wrap max-[721px]:items-center max-[721px]:text-left">
                 {a.status === 'pending' ? (
                   <>
                     <button
@@ -602,8 +636,14 @@ function Applicants({ list }: { list: Applicant[] }) {
                     <span className={`rc-verdict ${a.status}`}>
                       {a.status === 'accepted' ? '✓ Accepted' : '✕ Rejected'}
                     </span>
-                    {a.decidedBy && <span className="rc-when">by {a.decidedBy}</span>}
-                    {a.reason && <span className="rc-reason">“{a.reason}”</span>}
+                    {a.decidedBy && (
+                      <span className="[color:var(--dim)] text-[14px]">by {a.decidedBy}</span>
+                    )}
+                    {a.reason && (
+                      <span className="max-w-[28ch] text-[14px] [color:var(--mut)] italic">
+                        “{a.reason}”
+                      </span>
+                    )}
                   </>
                 )}
               </div>
@@ -729,8 +769,8 @@ function LinkEditor({
       title={link ? (link.open ? 'Edit recruitment' : 'Reopen recruitment') : 'New recruitment'}
       onClose={() => onClose(false)}
     >
-      <form className="stack" style={{ '--g': '20px' } as React.CSSProperties} onSubmit={save}>
-        <div className="rc-two">
+      <form className="stack [--g:20px]" onSubmit={save}>
+        <div className="[display:grid] grid-cols-[180px_1fr] gap-4 max-[721px]:grid-cols-[1fr]">
           <label className="field">
             <span className="label">Batch</span>
             <input
@@ -760,7 +800,7 @@ function LinkEditor({
         </div>
         <div className="field">
           <span className="label">Open until</span>
-          <div className="row" style={{ '--g': '8px' } as React.CSSProperties}>
+          <div className="row [--g:8px]">
             {PRESETS.map(([n, l]) => (
               <button
                 type="button"
@@ -783,7 +823,7 @@ function LinkEditor({
 
         <div className="field">
           <span className="label">Always asked · required</span>
-          <div className="rc-locked">
+          <div className="flex flex-wrap gap-1.5">
             {LOCKED.map((f) => (
               <span key={f} className="tag">
                 🔒 {f}
@@ -793,7 +833,7 @@ function LinkEditor({
         </div>
         <div className="field">
           <span className="label">Optional questions</span>
-          <label className="rc-toggle">
+          <label className={checkLabel}>
             <input
               type="checkbox"
               checked={form.cf}
@@ -801,7 +841,7 @@ function LinkEditor({
             />
             Codeforces handle
           </label>
-          <label className="rc-toggle">
+          <label className={checkLabel}>
             <input
               type="checkbox"
               checked={form.why}
@@ -810,7 +850,10 @@ function LinkEditor({
             What do you want to build or learn?
           </label>
           {form.questions.map((x, n) => (
-            <div key={x.id} className="rc-q">
+            <div
+              key={x.id}
+              className="[display:grid] grid-cols-[1fr_auto_auto] gap-2 max-[721px]:grid-cols-[1fr]"
+            >
               <input
                 className="input sm"
                 value={x.label}
@@ -841,8 +884,8 @@ function LinkEditor({
           {form.questions.length < RECRUIT.maxQuestions && (
             <button
               type="button"
-              className="btn xs line"
-              style={{ alignSelf: 'flex-start' }}
+              className="btn xs line self-start"
+
               onClick={() =>
                 setForm({
                   ...form,
@@ -859,7 +902,7 @@ function LinkEditor({
           <span className="label dim">Extra questions are always optional for applicants.</span>
         </div>
 
-        <div className="row between" style={{ '--g': '12px' } as React.CSSProperties}>
+        <div className="row between [--g:12px]">
           <span className={loud ? 'body bad' : 'label'} role={loud ? 'alert' : undefined}>
             {loud ??
               (problem
@@ -922,7 +965,7 @@ function ImportCsv({ link, onClose }: { link: RecruitLink; onClose: (done: boole
         Rows become <b>pending</b> applicants for Batch {link.batch}; you still accept or reject
         each one. A CSV cannot carry photos.
       </p>
-      <div className="row" style={{ '--g': '12px' } as React.CSSProperties}>
+      <div className="row [--g:12px]">
         <label className="btn sm">
           Choose CSV file
           <input
@@ -959,7 +1002,7 @@ function ImportCsv({ link, onClose }: { link: RecruitLink; onClose: (done: boole
               )}
             </p>
             {bad.length > 0 && (
-              <div className="scroll-x rc-preview">
+              <div className="scroll-x max-h-[260px] overflow-y-auto">
                 <table className="tbl">
                   <thead>
                     <tr>
@@ -989,10 +1032,7 @@ function ImportCsv({ link, onClose }: { link: RecruitLink; onClose: (done: boole
                 At most {RECRUIT.importRows} rows per import. Split the file.
               </p>
             )}
-            <div
-              className="row"
-              style={{ '--g': '8px', justifyContent: 'flex-end' } as React.CSSProperties}
-            >
+            <div className="row [--g:8px] justify-end">
               <button className="btn sm" disabled={!good.length || tooMany || busy} onClick={go}>
                 {busy ? 'Adding…' : `Add ${good.length} for review`}
               </button>

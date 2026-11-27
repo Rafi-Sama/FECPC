@@ -9,6 +9,15 @@ import { canFully, feesOf } from '@fecpc/contracts';
 import { CONTRIBUTION, owes } from '@fecpc/content/member-area';
 import { fmtDate } from '@fecpc/content/site';
 
+const payField =
+  '[&>span]:block [&>span]:mb-2 [&>span]:[font:11px_var(--f-label)] [&>span]:uppercase block mb-4.5';
+
+const financePanel =
+  '[background:var(--panel)] [border:1px_solid_var(--line)] p-6 min-w-0 t-b:[border:2px_solid_var(--ink)] t-b:[background:var(--panel)] [&>header]:flex [&>header]:justify-between [&>header]:gap-3 [&>header]:items-center [&>header]:pb-3 [&>header]:[border-bottom:1px_solid_var(--line)] [&>header]:mb-2 [&>header]:[font:11px_var(--f-label)] [&>header]:tracking-[0.06em] [&>header]:uppercase [&>header]:text-hi [&>header_small]:[color:var(--dim)]';
+
+const financeInvoiceActionCls =
+  'flex items-center gap-3.5 justify-end flex-wrap [&_strong]:[font:500_32px/1_var(--f-num)] [&_strong]:tracking-[-1px] max-[721px]:justify-start';
+
 const tk = (n: number) => '৳' + Math.round(Math.abs(n)).toLocaleString('en-US');
 const wallets = {
   bkash: {
@@ -131,7 +140,7 @@ function PaymentModal({
 
   return (
     <div
-      className="finance-overlay"
+      className="fixed inset-0 z-50 flex justify-center [align-items:safe_center] overflow-y-auto p-[4vh_20px] [background:rgba(0,0,0,0.62)] [backdrop-filter:blur(2px)] max-[721px]:p-0"
       role="presentation"
       onMouseDown={(event) => event.target === event.currentTarget && onClose()}
     >
@@ -141,10 +150,15 @@ function PaymentModal({
         aria-modal="true"
         aria-labelledby="payment-title"
       >
-        <button className="finance-close" type="button" onClick={onClose} aria-label="Close">
+        <button
+          className="absolute z-3 top-3.5 right-3.5 w-[40px] h-[40px] p-0 [border:1px_solid_var(--line2)] [background:var(--panel)] text-[22px] t-b:[border:2px_solid_var(--ink)]"
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+        >
           ×
         </button>
-        <header className="finance-modal-head">
+        <header className="p-[22px_28px] [border-bottom:1px_solid_var(--line2)] pr-17.5 t-b:[border-bottom:2px_solid_var(--ink)] [&_h2]:m-[0_0_4px] [&_h2]:text-[30px] [&_em]:text-acc [&_em]:not-italic max-[721px]:p-[22px_20px]">
           <h2 id="payment-title">
             {gift ? (
               <>
@@ -173,8 +187,8 @@ function PaymentModal({
             ))}
           </div>
         )}
-        <div className="finance-modal-cols">
-          <div className="finance-modal-body">
+        <div className="flex flex-wrap">
+          <div className="flex-[1_1_520px] p-7 min-w-0 max-[721px]:p-5">
             {step === 1 && (
               <>
                 <p className="finance-kicker">1 · Choose how you’ll pay</p>
@@ -191,14 +205,17 @@ function PaymentModal({
                         checked={method === key}
                         onChange={() => setMethod(key)}
                       />
-                      <span className="finance-wallet-check" />
+                      <span className="[.finance-wallet-options_label.selected_&]:[background:var(--acc)] [.finance-wallet-options_label.selected_&::after]:[content:'✓'] [.finance-wallet-options_label.selected_&::after]:block [.finance-wallet-options_label.selected_&::after]:text-center [.finance-wallet-options_label.selected_&::after]:[line-height:22px] [.finance-wallet-options_label.selected_&::after]:text-on [grid-row:1/3] w-[22px] h-[22px] [border:1px_solid_currentColor]" />
                       <strong>{wallets[key].label}</strong>
                       <small>Send money</small>
                     </label>
                   ))}
                 </div>
                 <p className="finance-kicker finance-send-heading">2 · Send the money</p>
-                <div className="finance-send" aria-live="polite">
+                <div
+                  className="flex gap-7 flex-wrap items-start max-[721px]:justify-start"
+                  aria-live="polite"
+                >
                   {wallet ? (
                     <div className="finance-qr">
                       <QR text={wallet.number} size={196} />
@@ -215,7 +232,7 @@ function PaymentModal({
                       </small>
                     </div>
                   )}
-                  <div className="finance-send-info">
+                  <div className="[&_ol]:m-[18px_0_0] [&_ol]:pl-7.5 [&_li]:m-[8px_0] [&_li]:text-[14px] [&_li]:leading-[1.5] flex-[1_1_240px] min-w-0">
                     {wallet ? (
                       <>
                         <div className="finance-copy-row">
@@ -290,7 +307,7 @@ function PaymentModal({
                   </div>
                 </div>
                 {wallet && (
-                  <div className="finance-note-box">
+                  <div className="[border-left:4px_solid_var(--acc2)] [background:var(--panel)] p-[10px_14px] mt-4">
                     <strong>Use “Send Money”.</strong> Payments with a different amount or from
                     another number may need manual checking.
                   </div>
@@ -299,7 +316,7 @@ function PaymentModal({
             )}
             {step === 2 && wallet && (
               <div>
-                <label className="finance-field">
+                <label className={payField}>
                   <span>Your {wallet.label} number (sent from)</span>
                   <input
                     className="input mono"
@@ -309,7 +326,7 @@ function PaymentModal({
                     placeholder="01XXXXXXXXX"
                   />
                 </label>
-                <label className="finance-field">
+                <label className={payField}>
                   <span>Transaction ID</span>
                   <input
                     className="input mono"
@@ -319,7 +336,7 @@ function PaymentModal({
                     placeholder="BK3L9T5RP2"
                   />
                 </label>
-                <label className="finance-field">
+                <label className={payField}>
                   <span>Amount you sent</span>
                   <div className="finance-amount">
                     <span>৳</span>
@@ -332,14 +349,14 @@ function PaymentModal({
                   </div>
                 </label>
                 {error && (
-                  <p className="finance-error" role="alert">
+                  <p className="text-bad [font:12px_var(--f-label)]" role="alert">
                     {error}
                   </p>
                 )}
               </div>
             )}
             {step === 3 && wallet && (
-              <div className="finance-done">
+              <div className="[&>div]:flex [&>div]:w-[72px] [&>div]:h-[72px] [&>div]:items-center [&>div]:justify-center [&>div]:m-[0_auto_18px] [&>div]:[background:var(--acc)] [&>div]:text-on [&>div]:text-[38px] [&>div]:[box-shadow:6px_6px_0_var(--ink)] [&_h3]:m-[0_0_8px] [&_h3]:text-[30px] text-center p-[16px_8px]">
                 <div>✓</div>
                 <h3>{gift ? 'Thank you' : 'Payment submitted'}</h3>
                 <p>
@@ -350,7 +367,7 @@ function PaymentModal({
             )}
           </div>
           {step < 3 && (
-            <aside className="finance-modal-side">
+            <aside className="finance-modal-side flex-[0_0_290px] p-7 [background:var(--bg)] [border-left:1px_solid_var(--line)] max-[901px]:flex-[1_1_100%] max-[901px]:[border-left:0] max-[901px]:[border-top:1px_solid_var(--line)] max-[901px]:[order:-1] max-[901px]:p-[18px_20px]">
               <small>Paying for</small>
               <dl>
                 {!gift && (
@@ -383,7 +400,7 @@ function PaymentModal({
             </aside>
           )}
         </div>
-        <footer className="finance-modal-foot">
+        <footer className="flex justify-between gap-2.5 p-[16px_28px] [border-top:1px_solid_var(--line2)] [background:var(--bg)] t-b:[border-top:2px_solid_var(--ink)] max-[721px]:p-[14px_20px]">
           {step !== 3 && (
             <button
               type="button"
@@ -424,7 +441,7 @@ function Fees() {
     ['post', 'Post dues', 'Every 3 months from the month a member took a post'],
   ] as const;
   return (
-    <section className="finance-panel">
+    <section className={financePanel}>
       <header>
         <span>Dues amounts</span>
         <small>0 means no fee · event fees are set on each event</small>
@@ -437,7 +454,7 @@ function Fees() {
               <h3>{label}</h3>
               <p className="finance-mono">{hint}</p>
             </div>
-            <div className="finance-invoice-action">
+            <div className={financeInvoiceActionCls}>
               <div className="finance-amount">
                 <span>৳</span>
                 <input
@@ -550,7 +567,7 @@ export default function Finance() {
 
   return (
     <Page title={hero}>
-      <div className="finance-page">
+      <div className="text-ink [&_.accent]:text-acc">
         <div className="finance-tabs" role="tablist" aria-label="Finance sections">
           <button
             type="button"
@@ -584,11 +601,11 @@ export default function Finance() {
           </button>
         </div>
         {tab === 'dues' ? (
-          <div className="finance-content">
+          <div className="[display:grid] gap-6">
             <div className="finance-stats">
               <div>
                 <small>Outstanding</small>
-                <b className={owed.length ? 'blue' : 'green'}>
+                <b className={owed.length ? 'text-acc' : 'green'}>
                   {tk(owed.reduce((sum, invoice) => sum + invoice.amount, 0))}
                 </b>
                 <small>
@@ -609,7 +626,13 @@ export default function Finance() {
               <div>
                 <small>Next deadline</small>
                 <b>{next ? dateLabel(next.due) : '—'}</b>
-                <small className={next && daysUntil(next.due) < 0 ? 'red' : ''}>
+                <small
+                  className={
+                    next && daysUntil(next.due) < 0
+                      ? '[.finance-stats_small&]:text-bad [.finance-balance_b&]:text-bad'
+                      : ''
+                  }
+                >
                   {next
                     ? daysUntil(next.due) < 0
                       ? `Overdue by ${-daysUntil(next.due)} days`
@@ -619,7 +642,7 @@ export default function Finance() {
               </div>
             </div>
             {alumni && (
-              <section className="finance-panel">
+              <section className={financePanel}>
                 <header>
                   <span>Contribute</span>
                   <small>Any amount</small>
@@ -629,7 +652,7 @@ export default function Finance() {
                     <h3>Support the club</h3>
                     <p className="finance-mono">No fixed amount, no invoice.</p>
                   </div>
-                  <div className="finance-invoice-action">
+                  <div className={financeInvoiceActionCls}>
                     <button
                       className="btn sm finance-pay-btn"
                       onClick={() =>
@@ -644,7 +667,7 @@ export default function Finance() {
               </section>
             )}
             {setsFee && <Fees />}
-            <section className="finance-panel">
+            <section className={financePanel}>
               <header>
                 <span>Invoices</span>
                 <small>
@@ -674,7 +697,7 @@ export default function Finance() {
                           </span>
                         </p>
                       </div>
-                      <div className="finance-invoice-action">
+                      <div className={financeInvoiceActionCls}>
                         <strong>{tk(invoice.amount)}</strong>
                         {canPay ? (
                           <button
@@ -694,10 +717,10 @@ export default function Finance() {
                   );
                 })
               ) : (
-                <p className="finance-empty">No invoices right now.</p>
+                <p className="text-mut leading-[1.6]">No invoices right now.</p>
               )}
             </section>
-            <section className="finance-panel">
+            <section className={financePanel}>
               <header>
                 <span>Payment history</span>
                 <small>
@@ -705,8 +728,8 @@ export default function Finance() {
                 </small>
               </header>
               {payments.length ? (
-                <div className="finance-table-wrap">
-                  <table className="finance-table">
+                <div className="overflow-x-auto max-[721px]:[&_table]:min-w-170">
+                  <table className="finance-table w-full border-collapse min-w-[680px] max-[721px]:min-w-[680px]">
                     <thead>
                       <tr>
                         <th>No.</th>
@@ -736,7 +759,7 @@ export default function Finance() {
                           <td className="right">
                             {payment.status === 'verified' && payment.label !== CONTRIBUTION ? (
                               <button
-                                className="finance-link"
+                                className="[all:unset] [border-bottom:1px_solid_var(--line2)] [&&]:cursor-pointer [font:600_11px_var(--f-label)] [&&]:uppercase hover:text-acc hover:border-acc"
                                 onClick={() => setReceipt(String(payment.id))}
                               >
                                 Receipt ↗
@@ -751,7 +774,7 @@ export default function Finance() {
                   </table>
                 </div>
               ) : (
-                <p className="finance-empty">
+                <p className="text-mut leading-[1.6]">
                   No payments yet. Your receipts will appear here once the Treasurer verifies a
                   payment.
                 </p>
@@ -771,14 +794,14 @@ export default function Finance() {
         ) : officer.includes(tab) ? (
           <OfficerPanel tab={tab} />
         ) : (
-          <div className="finance-content">
-            <div className="finance-sample">
+          <div className="[display:grid] gap-6">
+            <div className="py-2.5 px-3.5 flex items-center gap-2.5 border border-dashed border-line2 bg-panel [&_span:last-child]:text-mut [&_span:last-child]:[font:11px_var(--f-label)] [&_span:last-child]:tracking-[0.06em] [&_span:last-child]:uppercase">
               <span className="tag">Partly sample</span>
               <span>
                 Everything here is real except the fund's opening balance, which is sample data
               </span>
             </div>
-            <div className="finance-transparency-grid">
+            <div className="[display:grid] grid-cols-[minmax(300px,420px)_1fr] gap-6 max-[901px]:grid-cols-[1fr]">
               <section className="finance-balance">
                 <small>Club fund balance</small>
                 <strong>{tk(fundTotal)}</strong>
@@ -788,18 +811,23 @@ export default function Finance() {
                 </div>
                 <div>
                   <span>Spent this term</span>
-                  <b className="red">−{tk(term.spent)}</b>
+                  <b className="[.finance-stats_small&]:text-bad [.finance-balance_b&]:text-bad">
+                    −{tk(term.spent)}
+                  </b>
                 </div>
                 <i aria-hidden>৳</i>
               </section>
-              <section className="finance-panel">
+              <section className={financePanel}>
                 <header>
                   <span>Money in vs. money out</span>
                   <small>Last 6 months</small>
                 </header>
-                <div className="finance-chart">
+                <div className="px-2 pt-5 pb-0 flex h-55 gap-7 items-end border-b border-b-line2">
                   {term.flow.map((m) => (
-                    <div className="finance-chart-col" key={m.month}>
+                    <div
+                      className="flex flex-1 flex-col justify-end h-full min-w-0 gap-2.5 text-center [&>div]:flex [&>div]:h-full [&>div]:items-end [&>div]:justify-center [&>div]:gap-1.5 [&_i]:block [&_i]:w-[min(46px,40%)] [&_i]:min-h-[3px] [&_i]:[background:var(--acc)] [&_i.out]:[background:var(--ink)] [&_small]:[font:11px_var(--f-label)] [&_small]:text-dim"
+                      key={m.month}
+                    >
                       <div>
                         <i
                           style={{ height: `${(m.in / flowMax) * 100}%` }}
@@ -815,7 +843,7 @@ export default function Finance() {
                     </div>
                   ))}
                 </div>
-                <div className="finance-legend">
+                <div className="flex gap-4.5 mt-3.5 text-[12px] [&_span]:inline-flex [&_span]:gap-2 [&_span]:items-center [&_i]:w-3 [&_i]:h-3 [&_i]:bg-acc [&_span:last-child_i]:bg-ink">
                   <span>
                     <i />
                     Money in
@@ -827,7 +855,7 @@ export default function Finance() {
                 </div>
               </section>
             </div>
-            <section className="finance-panel">
+            <section className={financePanel}>
               <header>
                 <span>Spending this term, by category</span>
                 <small>{tk(categories.reduce((sum, item) => sum + item.value, 0))}</small>
@@ -850,12 +878,14 @@ export default function Finance() {
                     </button>
                   ))
                 ) : (
-                  <p className="finance-empty">No approved expenses this term.</p>
+                  <p className="text-mut leading-[1.6]">No approved expenses this term.</p>
                 )}
               </div>
-              <p className="finance-note">Select a category to filter the ledger below.</p>
+              <p className="mx-2.5 mt-2.5 mb-0 text-dim [font:11px_var(--f-label)] tracking-[0.04em] uppercase">
+                Select a category to filter the ledger below.
+              </p>
             </section>
-            <section className="finance-panel">
+            <section className={financePanel}>
               <header>
                 <span>All expenses</span>
                 <small>{filteredLedger.length} shown</small>
@@ -876,8 +906,8 @@ export default function Finance() {
                   All categories
                 </button>
               </div>
-              <div className="finance-table-wrap">
-                <table className="finance-table">
+              <div className="overflow-x-auto max-[721px]:[&_table]:min-w-170">
+                <table className="finance-table w-full border-collapse min-w-[680px] max-[721px]:min-w-[680px]">
                   <thead>
                     <tr>
                       <th>Date</th>
@@ -901,7 +931,7 @@ export default function Finance() {
                     ))}
                     {!filteredLedger.length && (
                       <tr>
-                        <td colSpan={5} className="finance-empty">
+                        <td colSpan={5} className="text-mut leading-[1.6]">
                           {ledger.length ? 'No expenses match.' : 'No approved expenses this term.'}
                         </td>
                       </tr>

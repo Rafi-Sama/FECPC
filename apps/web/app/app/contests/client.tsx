@@ -66,11 +66,11 @@ export default function ContestsClient({
 
   return (
     <Page title="Contests">
-      <div className="bento fill">
+      <div className="bento fill items-stretch">
         <section className="panel c6">
           <p className="label">Upcoming on Codeforces</p>
           {up.length === 0 && <p className="body dim">Codeforces is not answering right now.</p>}
-          <div className="cf-up">
+          <div className="[&_a]:[display:grid] [&_a]:gap-[4px] [&_a]:p-[12px_14px] [&_a]:[border-left:5px_solid_var(--k)] [&_a]:[background:color-mix(in_srgb,var(--k)_7%,transparent)] [&_a]:text-hi [&_a]:[text-decoration:none] [&_a]:text-[15px] [&_a:hover]:[background:color-mix(in_srgb,var(--k)_14%,transparent)] [display:grid] gap-2.5">
             {up.map((c) => {
               const [k, color] = kind(c.name);
               return (
@@ -81,9 +81,11 @@ export default function ContestsClient({
                   rel="noreferrer"
                   style={css({ '--k': color })}
                 >
-                  <span className="cf-kind">{k}</span>
+                  <span className="py-[1px] px-2 [justify-self:start] text-[14px] font-semibold text-[#fff] [background:var(--k)]">
+                    {k}
+                  </span>
                   <strong>{c.name}</strong>
-                  <span className="cf-when">
+                  <span className="flex justify-between gap-2 flex-wrap text-[14px] text-dim [&_b]:[color:color-mix(in_oklab,var(--k),var(--ink)_25%)]">
                     {c.when} · {dur(c.durationH)}
                     <b>{until(c.start)}</b>
                   </span>
@@ -105,7 +107,7 @@ export default function ContestsClient({
           ) : data.contests.length === 0 ? (
             <p className="body dim">No rated rounds yet. Your first one will show up here.</p>
           ) : (
-            <div className="cf-ups">
+            <div className="cf-ups [display:grid] gap-3">
               {data.contests.map((c) => {
                 const left = c.problems.filter((p) => !isSolved(p.id));
                 const [, color] = kind(c.name);
@@ -131,7 +133,7 @@ export default function ContestsClient({
                     {left.length === 0 ? (
                       <p className="body ok">All solved.</p>
                     ) : (
-                      <div className="cf-probs">
+                      <div className="[&_a]:inline-flex [&_a]:items-center [&_a]:gap-1.5 [&_a]:p-[4px_10px] [&_a]:[border:1.5px_solid_var(--r)] [&_a]:[background:color-mix(in_srgb,var(--r)_10%,var(--panel))] [&_a]:text-hi [&_a]:text-[14px] [&_a:hover]:[background:color-mix(in_srgb,var(--r)_22%,var(--panel))] [&_b]:[color:color-mix(in_oklab,var(--r),var(--ink)_20%)] [&_i]:not-italic [&_i]:[color:color-mix(in_oklab,var(--r),var(--ink)_20%)] flex flex-wrap gap-2">
                         {left.slice(0, 4).map((p) => (
                           <a
                             key={p.id}
@@ -155,7 +157,7 @@ export default function ContestsClient({
           )}
         </section>
 
-        <section className="panel" style={{ gridColumn: '1 / -1' }}>
+        <section className="panel col-span-full">
           <div className="row between">
             <p className="label">Club in recent Codeforces rounds</p>
             <span className="label">{people.length} members took part</span>

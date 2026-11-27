@@ -69,7 +69,7 @@ function Clock({
   const angle = mode === 'h' ? (h12 % 12) * 30 : (min / 60) * 360;
   return (
     <div className="clock">
-      <div className="clock__read">
+      <div className="[&_button]:p-[6px_8px] [&_button]:[border:1px_solid_var(--line2)] [&_button]:rounded-[4px] [&_button]:[background:none] [&_button[aria-pressed='true']]:[background:var(--acc)] [&_button[aria-pressed='true']]:border-acc [&_button[aria-pressed='true']]:text-bg flex items-center justify-center gap-1.5 mb-2.5 text-[22px] [&>button]:min-w-[52px] [&>button]:[font-variant-numeric:tabular-nums]">
         <button type="button" aria-pressed={mode === 'h'} onClick={() => setMode('h')}>
           {pad(h12)}
         </button>
@@ -77,7 +77,7 @@ function Clock({
         <button type="button" aria-pressed={mode === 'm'} onClick={() => setMode('m')}>
           {pad(min)}
         </button>
-        <span className="clock__ampm">
+        <span className="flex flex-col gap-0.5 ml-2 [&&_button]:p-[2px_8px] [&_button]:text-[14px]">
           <button type="button" aria-pressed={!pm} onClick={() => pm && put(h24 - 12, min)}>
             AM
           </button>
@@ -218,7 +218,7 @@ export function DatePicker({
       {/* Real input, so `name` submits and `required` blocks the form; the button stands in for it. */}
       <input
         ref={field}
-        className="datepick__field"
+        className="absolute inset-[auto_0_0_0] h-[1px] opacity-0 pointer-events-none"
         tabIndex={-1}
         aria-hidden="true"
         name={name}
@@ -247,7 +247,7 @@ export function DatePicker({
       {pos && (
         <div className="datepick__pop" style={pos} role="dialog" aria-label={aria}>
           {time && (
-            <div className="datepick__views">
+            <div className="[display:grid] grid-cols-[1fr_1fr] gap-[4px] mb-2.5 [&_button]:p-[6px_8px] [&_button]:[border:1px_solid_var(--line2)] [&_button]:rounded-[4px] [&_button]:[background:none] [&_button[aria-pressed='true']]:[background:var(--acc)] [&_button[aria-pressed='true']]:border-acc [&_button[aria-pressed='true']]:text-bg [&_button:disabled]:opacity-[0.5] [&_button:disabled]:cursor-not-allowed">
               <button type="button" aria-pressed={view === 'date'} onClick={() => setView('date')}>
                 {day ? label(day, false) : 'Date'}
               </button>
@@ -269,7 +269,7 @@ export function DatePicker({
             />
           ) : (
             <>
-              <div className="datepick__head">
+              <div className="flex items-center justify-between mb-2 [&_button]:w-[32px] [&_button]:h-[32px] [&_button]:[border:0] [&_button]:rounded-[4px] [&_button]:[background:none] [&_button]:text-[20px] [&_button]:leading-[1] [&_button:hover]:[background:var(--bg)]">
                 <button
                   type="button"
                   aria-label="Previous month"
@@ -288,9 +288,17 @@ export function DatePicker({
                   ›
                 </button>
               </div>
-              <div className="datepick__grid" role="grid" ref={grid}>
+              <div
+                className="[&_button]:[aspect-ratio:1] [&_button]:[border:1px_solid_transparent] [&_button]:rounded-[50%] [&_button]:[background:none] [&_button:hover]:[background:var(--bg)] [&_button:focus-visible]:[outline:2px_solid_var(--acc)] [&_button:focus-visible]:[outline-offset:1px] [&_button[aria-current='date']]:border-acc [&_button[aria-selected='true']]:[background:var(--acc)] [&_button[aria-selected='true']]:text-bg [&_button[aria-selected='true']]:[font-weight:700] [&_button:disabled]:opacity-[0.3] [&_button:disabled]:cursor-not-allowed [display:grid] grid-cols-[repeat(7,1fr)] gap-0.5 text-center"
+                role="grid"
+                ref={grid}
+              >
                 {DAYS.map((d) => (
-                  <span key={d} className="datepick__dow" role="columnheader">
+                  <span
+                    key={d}
+                    className="p-[4px_0] [color:var(--dim)] text-[14px]"
+                    role="columnheader"
+                  >
                     {d}
                   </span>
                 ))}
@@ -331,7 +339,7 @@ export function DatePicker({
               </div>
             </>
           )}
-          <div className="datepick__foot">
+          <div className="[&_.btn:last-child:not(:first-child)]:ml-auto flex gap-1.5 mt-2.5 pt-2.5 [border-top:1px_solid_var(--line)]">
             <button
               type="button"
               className="btn xs line"

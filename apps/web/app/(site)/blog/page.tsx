@@ -3,20 +3,22 @@ import { cfUrl } from '@fecpc/content/member-area';
 import { posts } from '@fecpc/content/training';
 import { byId } from '@fecpc/content/site';
 
+import { rainBackdrop, caret } from '@/components/site/ui';
+
 export const metadata = { title: 'Editorials' };
 
 export default function Blog() {
   return (
     <>
       <section className="page-head t-a crt" data-t="a">
-        <div className="bgfx rain">
+        <div className={rainBackdrop}>
           <Rain />
         </div>
         <div className="wrap">
           <div className="head">
             <h1 className="disp">
               <span className="dim">$</span> cat ./editorials
-              <i aria-hidden className="blink blk" />
+              <i aria-hidden className={caret} />
             </h1>
             <p className="lede">
               Hints first, solution last. Try each hint before you open the next.
@@ -24,9 +26,9 @@ export default function Blog() {
           </div>
         </div>
       </section>
-      <section className="sec t-a crt" data-t="a" style={{ paddingTop: 0 }}>
+      <section className="sec t-a crt pt-0" data-t="a">
         <div className="wrap">
-          <div className="stack" style={{ '--g': '28px', maxWidth: 980 } as React.CSSProperties}>
+          <div className="stack [--g:28px] max-w-[980px]">
             {posts.map((p) => (
               <article key={p.id} className="panel">
                 <div className="row between">

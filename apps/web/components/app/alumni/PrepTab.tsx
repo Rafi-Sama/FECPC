@@ -14,19 +14,11 @@ import { useStore } from '@/components/app/Store';
 import { canFully } from '@fecpc/contracts';
 import { useConfirm } from '@/components/app/shared/PromptDialog';
 
-const mono = {
-  font: '14px ui-monospace, Menlo, monospace',
-  color: 'var(--dim, #5F5F5F)',
-} as const;
-const btn = {
-  font: '500 14px Inter, Arial, sans-serif',
-  border: '2px solid var(--line2, #0B0B0B)',
-  padding: '0 16px',
-  background: 'var(--panel, #F6F4EE)',
-  color: 'var(--ink, #0B0B0B)',
-  minHeight: 44,
-  cursor: 'pointer',
-} as const;
+const mono = '[font:14px_ui-monospace,_Menlo,_monospace] text-dim';
+const btnBox = '[border:2px_solid_var(--line2)] py-0 px-4 min-h-[44px] cursor-pointer';
+const btnFont = '[font:500_14px_Inter,_Arial,_sans-serif]';
+const btn = `${btnFont} ${btnBox} [background:var(--panel)] text-ink`;
+const btnDark = `${btnFont} ${btnBox} [background:var(--ink)] text-on`;
 
 async function query<T>(body: Record<string, unknown>): Promise<T | null> {
   try {
@@ -44,19 +36,12 @@ async function query<T>(body: Record<string, unknown>): Promise<T | null> {
 function Progress({ solved, total }: Readonly<{ solved: number; total: number }>) {
   const pct = total > 0 ? Math.round((solved / total) * 100) : 0;
   return (
-    <div style={{ width: 240 }}>
-      <div className="m" style={{ ...mono, marginBottom: 8 }}>
+    <div className="w-[240px]">
+      <div className={`m ${mono} mb-2`}>
         {solved}/{total} solved
       </div>
-      <div className="pb" style={{ height: 8, background: 'var(--line, #DCD8CC)' }}>
-        <i
-          style={{
-            display: 'block',
-            height: '100%',
-            background: 'var(--ink, #0D0D0B)',
-            width: `${pct}%`,
-          }}
-        />
+      <div className="pb h-[8px] [background:var(--line)]">
+        <i className="block h-full [background:var(--ink)]" style={{ width: `${pct}%` }} />
       </div>
     </div>
   );
@@ -80,15 +65,7 @@ function PrepSearchInput({
       placeholder={placeholder}
       value={value}
       onChange={(event) => onChange(event.target.value)}
-      style={{
-        flex: 1,
-        border: '2px solid var(--line2, #0B0B0B)',
-        background: 'var(--panel, #F6F4EE)',
-        padding: '12px 14px',
-        font: '14px Inter, Arial, sans-serif',
-        minHeight: 44,
-        color: 'var(--ink, #0B0B0B)',
-      }}
+      className="py-3 px-3.5 flex-1 [border:2px_solid_var(--line2)] [background:var(--panel)] [font:14px_Inter,_Arial,_sans-serif] min-h-[44px] text-ink"
     />
   );
 }
@@ -295,37 +272,28 @@ export function PrepTab({
     <div className="prep-tab-view">
       {open ? (
         <div>
-          <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>{search}</div>
+          <div className="mb-4 flex gap-3">{search}</div>
           {!learn && (
             <button
               type="button"
-              className="m"
+              className={`m ${mono} [background:none] [border:0] p-0 mb-4`}
               onClick={() => {
                 setOpenId(null);
                 setDrawerTopic(null);
               }}
-              style={{ ...mono, background: 'none', border: 0, padding: 0, marginBottom: 16 }}
             >
               ← All roadmaps
             </button>
           )}
-          <div
-            style={{
-              display: 'flex',
-              gap: 16,
-              flexWrap: 'wrap',
-              alignItems: 'center',
-              marginBottom: 20,
-            }}
-          >
-            <h2 style={{ margin: 0, fontSize: 22, flex: '1 1 auto' }}>{open.name}</h2>
+          <div className="mb-5 flex gap-4 flex-wrap items-center">
+            <h2 className="m-0 text-[22px] flex-[1_1_auto]">{open.name}</h2>
             <Progress solved={open.solvedCount} total={open.totalCount} />
             {canManageRoadmaps && (
               <button
                 type="button"
                 onClick={() => void openEditor(open)}
                 disabled={topicsFor !== open.id || opening}
-                style={btn}
+                className={btn}
               >
                 {opening ? 'Opening…' : 'Edit roadmap'}
               </button>
@@ -333,8 +301,8 @@ export function PrepTab({
           </div>
 
           {visibleTopics.length === 0 ? (
-            <div className="pn" style={{ padding: '48px 24px', textAlign: 'center' }}>
-              <p className="m" style={{ margin: 0 }}>
+            <div className="pn py-12 px-6 text-center">
+              <p className="m m-0">
                 {topicsFor !== open.id
                   ? 'Loading…'
                   : needle
@@ -353,34 +321,23 @@ export function PrepTab({
           )}
         </div>
       ) : learn ? (
-        <div className="pn" style={{ padding: '48px 24px', textAlign: 'center' }}>
-          <p className="m" style={{ margin: '0 0 16px' }}>
-            {!loaded ? 'Loading…' : 'No roadmap yet.'}
-          </p>
+        <div className="pn py-12 px-6 text-center">
+          <p className="m mt-0 mx-0 mb-4">{!loaded ? 'Loading…' : 'No roadmap yet.'}</p>
           {loaded && canManageRoadmaps && (
-            <button
-              type="button"
-              onClick={() => setEditing(null)}
-              style={{ ...btn, background: 'var(--ink, #0B0B0B)', color: 'var(--on, #FFFFFF)' }}
-            >
+            <button type="button" onClick={() => setEditing(null)} className={btnDark}>
               + Create the roadmap
             </button>
           )}
         </div>
       ) : (
         <div>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16 }}>
+          <div className="mb-4 flex gap-3 items-center">
             {search}
             {canManageRoadmaps && (
               <button
                 type="button"
                 onClick={() => setEditing(null)}
-                style={{
-                  ...btn,
-                  background: 'var(--ink, #0B0B0B)',
-                  color: 'var(--on, #FFFFFF)',
-                  whiteSpace: 'nowrap',
-                }}
+                className={`${btnDark} whitespace-nowrap`}
               >
                 + Create roadmap
               </button>
@@ -390,23 +347,13 @@ export function PrepTab({
           {visibleRoadmaps.map((r) => (
             <div
               key={r.id}
-              className="pn"
-              style={{
-                display: 'flex',
-                gap: 24,
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                background: 'var(--panel, #F6F4EE)',
-                border: '2px solid var(--line2, #0B0B0B)',
-                padding: 24,
-                marginBottom: 16,
-              }}
+              className="pn p-6 mb-4 flex gap-6 items-center flex-wrap [background:var(--panel)] [border:2px_solid_var(--line2)]"
             >
-              <div style={{ flex: '1 1 240px', minWidth: 240 }}>
-                <h3 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 700 }}>
+              <div className="flex-[1_1_240px] min-w-[240px]">
+                <h3 className="mt-0 mx-0 mb-1 text-[18px] font-bold">
                   <HighlightMatch text={r.name} query={prepSearch} />
                 </h3>
-                <p className="t" style={{ fontSize: 14, color: 'var(--mut, #3B3A35)', margin: 0 }}>
+                <p className="t m-0 text-[14px] text-mut">
                   <HighlightMatch
                     text={`${r.description ? `${r.description} ` : ''}${r.topicCount} topics.`}
                     query={prepSearch}
@@ -417,7 +364,7 @@ export function PrepTab({
               <button
                 type="button"
                 onClick={() => setOpenId(r.id)}
-                style={{ ...btn, fontWeight: 600 }}
+                className={`[font:600_14px_Inter,_Arial,_sans-serif] ${btnBox} [background:var(--panel)] text-ink`}
               >
                 Open roadmap
               </button>
@@ -425,8 +372,8 @@ export function PrepTab({
           ))}
 
           {visibleRoadmaps.length === 0 && (
-            <div className="pn" style={{ padding: '48px 24px', textAlign: 'center' }}>
-              <p className="m" style={{ margin: 0 }}>
+            <div className="pn py-12 px-6 text-center">
+              <p className="m m-0">
                 {needle ? `No roadmaps match “${prepSearch}”.` : 'No roadmaps yet.'}
               </p>
             </div>

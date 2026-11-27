@@ -11,6 +11,22 @@ import { publicEvents } from '@/lib/api';
 import { upcomingContests, localTime } from '@/lib/cf';
 import { badges, cfTitle, lifecycle, loops, members, squads, tracks } from '@fecpc/content/site';
 
+import {
+  crtBlockLg,
+  crtBlockSm,
+  crtCaption,
+  loopSteps,
+  rainBackdrop,
+  caret,
+  badgeGlyph,
+} from '@/components/site/ui';
+
+const heroInner =
+  'wrap inner flex-1 min-[1000px]:[.hero-d_&>.stack]:max-w-[54%] [.hero-d_&]:relative [.hero-d_&]:flex [.hero-d_&]:flex-col [.hero-d_&]:justify-between [.hero-d_&]:gap-14 [.hero-d_&]:[padding-block:clamp(56px,11vh,100px)_44px] [.hero-d_&]:pointer-events-none [.hero-d_&_a]:pointer-events-auto';
+
+const cursorCls =
+  'inline-block w-[0.42em] h-[0.8em] bg-acc align-baseline [.boot-body_&]:w-[9px] [.boot-body_&]:h-4.5';
+
 const boot = [
   'mounting /dev/brain',
   'loading caffeine.service',
@@ -56,30 +72,33 @@ export default async function Home() {
   return (
     <>
       {/* ───── A · PHOSPHOR TERMINAL ───── */}
-      <section className="hero hero-a t-a crt" data-t="a">
-        <div className="bgfx rain">
+      <section
+        className="hero [&_.inner]:[display:grid] [&_.inner]:grid-cols-[minmax(0,1fr)] [&_.inner]:gap-12 [&_.inner]:[align-items:start] [&_.inner]:[padding-block:clamp(48px,9vh,84px)_56px] min-[1100px]:[&_.inner]:grid-cols-[minmax(0,1fr)_452px] [&_.ind]:pl-[1em] t-a crt"
+        data-t="a"
+      >
+        <div className={rainBackdrop}>
           <Rain />
         </div>
-        <div className="wrap inner">
-          <div className="stack" style={{ '--g': '30px' } as React.CSSProperties}>
+        <div className={heroInner}>
+          <div className="stack [--g:30px]">
             <h1 className="disp">
-              <span className="ln">
+              <span className="[.disp_&]:block">
                 <span className="hi">while</span> <span className="dim">(</span>alive
                 <span className="dim">) {'{'}</span>
               </span>
-              <span className="ln ind">
+              <span className="[.disp_&]:block ind">
                 build<span className="dim">();</span>
               </span>
-              <span className="ln">
+              <span className="[.disp_&]:block">
                 <span className="dim">{'}'}</span>
-                <i aria-hidden className="blink blk" />
+                <i aria-hidden className={caret} />
               </span>
             </h1>
             <p className="lede">
               {site.short} is where {site.uniShort} students write, ship and break real software
               together. Workshops, contests and hack nights, all semester.
             </p>
-            <div className="row" style={{ '--g': '20px' } as React.CSSProperties}>
+            <div className="row [--g:20px]">
               <Link href="/contact" className="btn">
                 &gt; Join the club
               </Link>
@@ -97,7 +116,7 @@ export default async function Home() {
                 <i />
               </span>
             </div>
-            <div className="boot-body">
+            <div className="boot-body [&_.prompt]:mt-3.5 [&_.prompt]:flex [&_.prompt]:items-center [&_.prompt]:gap-2 [&_.prompt]:flex-wrap p-[20px_20px_24px] text-[14px] leading-[2] whitespace-pre-wrap text-ink [&>div]:opacity-[0] [&>div]:[animation:appear_0s_forwards] motion-reduce:[&>div]:opacity-[1] [&_a]:[text-decoration:none] [&_a:hover]:text-acc">
               {boot.map((l, i) => (
                 <div key={l} style={{ animationDelay: `${0.3 + i * 0.28}s` }}>
                   <span className="acc">[ OK ]</span> {l}
@@ -111,7 +130,7 @@ export default async function Home() {
                 <Link href="/contact" className="hi">
                   ./join.sh
                 </Link>
-                <i aria-hidden className="blink cursor" />
+                <i aria-hidden className={`blink ${cursorCls}`} />
               </div>
             </div>
           </div>
@@ -137,10 +156,7 @@ export default async function Home() {
               <span className="dim">$</span> ./{site.short.toLowerCase()} --status
             </h2>
           </div>
-          <div
-            className="grid stats"
-            style={{ '--min': '180px', '--g': '32px' } as React.CSSProperties}
-          >
+          <div className="grid stats [&_.stat]:block [--min:180px] [--g:32px]">
             <div className="kv">
               <span className="label">members.active</span>
               <span className="stat">{members.length * 9}</span>
@@ -158,13 +174,13 @@ export default async function Home() {
               <span className="stat">{Math.max(...members.map((x) => x.streak))}d</span>
             </div>
           </div>
-          <div className="split even" style={{ marginTop: 64 }}>
+          <div className="split even mt-16">
             <div className="panel flush">
               <div className="bar">
                 <span>TTY2 — ls ./contests --upcoming</span>
                 <span>codeforces · live</span>
               </div>
-              <div className="term-list">
+              <div className="px-5 pt-4.5 pb-5.5 text-[14px]">
                 {contests.length === 0 && (
                   <p className="body">
                     judge unreachable right now.{' '}
@@ -179,16 +195,16 @@ export default async function Home() {
                     key={c.id}
                     href={`https://codeforces.com/contests/${c.id}`}
                     rel="noreferrer"
-                    className="term-row"
+                    className="py-[11px] px-0 [display:grid] grid-cols-[auto_minmax(0,1fr)_auto] gap-4 [border-bottom:1px_dashed_var(--line2)] no-underline items-baseline [&:hover_.hi]:text-acc max-[521px]:grid-cols-[1fr_auto] max-[521px]:[&_.acc]:col-[1/-1]"
                   >
                     <span className="acc">{localTime(c.start)}</span>
-                    <span className="hi clip">{c.name}</span>
+                    <span className="hi overflow-hidden text-ellipsis whitespace-nowrap">
+                      {c.name}
+                    </span>
                     <span className="dim">{c.durationH}h</span>
                   </a>
                 ))}
-                <p className="label" style={{ paddingTop: 14 }}>
-                  times in {site.tz}
-                </p>
+                <p className="label pt-3.5">times in {site.tz}</p>
               </div>
             </div>
             <div className="panel flush">
@@ -196,9 +212,12 @@ export default async function Home() {
                 <span>TTY3 — cat green-sheet.progress</span>
                 <span>club average</span>
               </div>
-              <div className="term-list">
+              <div className="px-5 pt-4.5 pb-5.5 text-[14px]">
                 {sheet.map(([t, v]) => (
-                  <div key={t} className="sheet-row">
+                  <div
+                    key={t}
+                    className="py-[9px] px-0 [display:grid] grid-cols-[130px_minmax(0,1fr)_44px] gap-3.5 items-center [&_span:last-child]:text-right [&_span:last-child]:text-[18px] max-[521px]:grid-cols-[104px_minmax(0,1fr)_40px]"
+                  >
                     <span>{t}</span>
                     <div className="meter" style={{ '--v': `${v}%` } as React.CSSProperties}>
                       <i />
@@ -213,22 +232,27 @@ export default async function Home() {
       </section>
 
       {/* ───── B · MONOLITH DITHER ───── */}
-      <section className="hero hero-b t-b paper" data-t="b">
-        <div className="wrap inner">
-          <div className="stack" style={{ '--g': '28px' } as React.CSSProperties}>
+      <section
+        className="hero pb-9 [&_.inner]:[display:grid] [&_.inner]:grid-cols-[minmax(0,1fr)] [&_.inner]:gap-10 [&_.inner]:items-center [&_.inner]:[padding-block:clamp(48px,9vh,96px)_48px] min-[1000px]:[&_.inner]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] t-b paper"
+        data-t="b"
+      >
+        <div className={heroInner}>
+          <div className="stack [--g:28px]">
             <h2 className="disp">
-              <span className="ln">Ideas in.</span>
-              <span className="ln silk acc soft">SOFTWARE</span>
-              <span className="ln">
+              <span className="[.disp_&]:block">Ideas in.</span>
+              <span className="[.disp_&]:block silk acc [.t-b_.disp_&]:text-[0.7em] [.t-b_.disp_&]:leading-[1.15] [.t-b_.disp_&]:tracking-[0] [.t-b_.disp_&]:font-normal [.t-b_.disp_&]:[margin-block:0.05em]">
+                SOFTWARE
+              </span>
+              <span className="[.disp_&]:block">
                 out.
-                <i aria-hidden className="blink blk" />
+                <i aria-hidden className={caret} />
               </span>
             </h2>
             <p className="lede">
               {site.short} is {site.uniShort}&apos;s home for people who think in logic and build in
               code. Learn it, ship it, show it.
             </p>
-            <div className="row" style={{ '--g': '28px' } as React.CSSProperties}>
+            <div className="row [--g:28px]">
               <Link href="/about" className="btn">
                 About the club
               </Link>
@@ -237,15 +261,21 @@ export default async function Home() {
               </Link>
             </div>
           </div>
-          <figure className="fig">
-            <i aria-hidden className="rule-h" />
-            <i aria-hidden className="rule-v" />
+          <figure className="relative w-[min(100%,640px)] [aspect-ratio:1] [justify-self:center]">
+            <i
+              aria-hidden
+              className="absolute [background:var(--ink)] [left:-6%] [right:-50vw] top-[50%] h-[1px]"
+            />
+            <i
+              aria-hidden
+              className="absolute [background:var(--ink)] left-[50%] [top:-4%] [bottom:-6%] w-[1px]"
+            />
             <Sphere className="sphere" />
-            <i aria-hidden className="sq s1" />
-            <i aria-hidden className="sq s2" />
-            <i aria-hidden className="sq s3" />
-            <figcaption className="fig-no silk">FIG. 01</figcaption>
-            <div className="fig-cap mono">
+            <i aria-hidden className={crtBlockLg} />
+            <i aria-hidden className={crtBlockSm} />
+            <i aria-hidden className="absolute left-[5%] bottom-[5%] w-[2.5%] aspect-[1] bg-ink" />
+            <figcaption className={crtCaption}>FIG. 01</figcaption>
+            <div className="py-1.5 px-2 absolute right-0 bottom-[-9%] text-[14px] leading-[1.5] text-mut bg-bg mono">
               <div>1-BIT · 8×8 BAYER · 128 PX</div>
               <div>
                 LIGHT θ ={' '}
@@ -263,11 +293,11 @@ export default async function Home() {
           <div className="head sticky">
             <h2 className="h2">Four things happen here, every term.</h2>
           </div>
-          <ol className="pillars">
+          <ol className={loopSteps}>
             {pillars.map((p) => (
               <li key={p.n} className="panel">
                 <span className="silk acc big-n">{p.n}</span>
-                <div className="stack" style={{ '--g': '10px' } as React.CSSProperties}>
+                <div className="stack [--g:10px]">
                   <h3 className="h3">{p.t}</h3>
                   <p className="body">{p.d}</p>
                 </div>
@@ -283,7 +313,7 @@ export default async function Home() {
             <h2 className="h2">Six reasons to open it every day.</h2>
             <p className="lede">Problems, contests, events and dues behind one login.</p>
           </div>
-          <ol className="loops6">
+          <ol className="[display:grid] grid-cols-[repeat(auto-fit,minmax(min(100%,380px),1fr))] gap-[0_32px] [&_li]:py-5.5 [&_li]:px-0 [&_li]:[display:grid] [&_li]:grid-cols-[44px_minmax(0,1fr)] [&_li]:gap-[4px_12px] [&_li]:border-t-2 [&_li]:border-t-ink [&_strong]:text-[clamp(22px,2.2vw,30px)] [&_strong]:font-medium [&_strong]:tracking-[-0.03em] [&_p]:col-[2]">
             {loops.map((l, i) => (
               <li key={l.name}>
                 <span className="silk acc">0{i + 1}</span>
@@ -296,14 +326,17 @@ export default async function Home() {
       </section>
 
       {/* ───── C · INSERT COIN ───── */}
-      <section className="hero hero-c t-c" data-t="c">
+      <section
+        className="hero hero-c items-stretch text-center pb-0 [&_>_*]:relative [&_.inner]:flex [&_.inner]:flex-col [&_.inner]:items-center [&_.inner]:justify-center [&_.inner]:gap-[clamp(24px,4vh,40px)] [&_.inner]:[padding-block:40px_150px] [&_.disp]:flex [&_.disp]:flex-col [&_.disp]:gap-[0.22em] [&_.l1]:text-acc [&_.l1]:[text-shadow:0.055em_0.055em_0_var(--acc2),0.11em_0.11em_0_#3a1d6e] [&_.l2]:[text-shadow:0.055em_0.055em_0_var(--acc3),0.11em_0.11em_0_#3a1d6e] [&_.lede]:max-w-205 t-c"
+        data-t="c"
+      >
         <Starfield />
         <div className="wrap hud arcade">
           <div>
             <span className="acc2">1UP</span>
             <span>{String(top[0].xp).padStart(6, '0')}</span>
           </div>
-          <div className="mid">
+          <div className="[.hud_&]:items-center max-[561px]:[.hud_&]:hidden">
             <span className="acc">HI-SCORE</span>
             <span>{top[0].name.split(' ')[0]}</span>
           </div>
@@ -312,12 +345,15 @@ export default async function Home() {
             <span>{site.uniShort}</span>
           </div>
         </div>
-        <div aria-hidden className="march">
+        <div
+          aria-hidden
+          className="flex justify-center gap-[clamp(14px,3vw,44px)] mt-[clamp(20px,4vh,40px)] [animation:march_8s_steps(24)_infinite] [&_svg]:w-[clamp(24px,4.6vw,66px)] [&_svg]:h-auto"
+        >
           {Array.from({ length: 9 }, (_, i) => (
             <Bug key={i} i={i} />
           ))}
         </div>
-        <div className="wrap inner">
+        <div className={heroInner}>
           <h2 className="disp">
             <span className="l1">LEVEL UP</span>
             <span className="l2">YOUR CODE</span>
@@ -325,10 +361,7 @@ export default async function Home() {
           <p className="lede">
             Streaks, squads, duels, and a leaderboard that resets every semester.
           </p>
-          <div
-            className="row"
-            style={{ '--g': '28px', justifyContent: 'center' } as React.CSSProperties}
-          >
+          <div className="row [--g:28px] justify-center">
             <Link href="/contact" className="btn">
               PRESS START
             </Link>
@@ -337,12 +370,17 @@ export default async function Home() {
             </Link>
           </div>
         </div>
-        <div aria-hidden className="ship">
-          <span className="shot arcade">;</span>
+        <div
+          aria-hidden
+          className="absolute! left-[18%] bottom-19 flex flex-col items-center gap-3.5"
+        >
+          <span className="text-[18px] text-acc [animation:shot_1.2s_steps(10)_infinite] arcade">
+            ;
+          </span>
           <Ship />
         </div>
         <div className="wrap hud foot arcade">
-          <div className="row" style={{ '--g': '14px' } as React.CSSProperties}>
+          <div className="row [--g:14px]">
             <span>LIVES</span>
             <Heart />
             <Heart />
@@ -361,10 +399,12 @@ export default async function Home() {
             <div className="head">
               <h2 className="h2">HIGH SCORES</h2>
             </div>
-            <ol className="scores">
+            <ol className="scores [&_.sc]:[font-size:clamp(14px,1.6vw,18px)] [&_li]:[display:grid] [&_li]:grid-cols-[44px_36px_minmax(0,1fr)_auto] [&_li]:gap-3.5 [&_li]:items-center [&_li]:p-[14px_0] [&_li]:[border-bottom:4px_dotted_var(--line)] [&_small]:[font:14px_var(--mono),monospace] [&_small]:normal-case [&_small]:[color:var(--mut)] [&_li:nth-child(1)]:text-acc [&_li:nth-child(2)]:text-acc3 [&_li:nth-child(3)]:text-acc2">
               {top.map((x, i) => (
                 <li key={x.id}>
-                  <span className="rk arcade">{String(i + 1).padStart(2, '0')}</span>
+                  <span className="text-[14px] [color:var(--mut)] arcade">
+                    {String(i + 1).padStart(2, '0')}
+                  </span>
                   <Avatar
                     name={x.name}
                     size={36}
@@ -379,7 +419,7 @@ export default async function Home() {
                 </li>
               ))}
             </ol>
-            <p className="body" style={{ marginTop: 24 }}>
+            <p className="body mt-6">
               <Link href="/leaderboard" className="link acc3">
                 View all ranks →
               </Link>
@@ -389,9 +429,9 @@ export default async function Home() {
             <div className="head">
               <h2 className="h2">SQUAD CUP</h2>
             </div>
-            <div className="stack" style={{ '--g': '22px' } as React.CSSProperties}>
+            <div className="stack [--g:22px]">
               {squads.map((s) => (
-                <div key={s.name} className="squad">
+                <div key={s.name} className="flex flex-col gap-2.5 text-[14px]">
                   <div className="row between">
                     <span className="arcade" style={{ color: s.color }}>
                       {s.name.toUpperCase()}
@@ -417,14 +457,15 @@ export default async function Home() {
           <div className="head">
             <h2 className="h2">SELECT YOUR CLASS</h2>
           </div>
-          <div className="grid" style={{ '--min': '230px' } as React.CSSProperties}>
+          <div className="grid [--min:230px]">
             {tracks.map((t, i) => (
-              <article key={t.id} className="panel class-card">
+              <article
+                key={t.id}
+                className="panel flex flex-col gap-3.5 [transition:transform_0.12s,border-color_0.12s] hover:border-acc hover:[transform:translate(-4px,-4px)] [&_dl]:flex [&_dl]:flex-col [&_dl]:gap-2 [&_dl_div]:[display:grid] [&_dl_div]:grid-cols-[56px_1fr] [&_dl_div]:items-center [&_dl_div]:gap-2 [&_dd]:flex [&_dd]:gap-0.75 [&_dd_i]:flex-1 [&_dd_i]:h-[10px] [&_dd_i]:[background:var(--line)] [&_dd_i.on]:[background:var(--acc3)]"
+              >
                 <Bug i={i} size={55} />
                 <h3 className="h3 acc">{t.cls}</h3>
-                <p className="label" style={{ color: '#fff' }}>
-                  {t.name}
-                </p>
+                <p className="label text-[#fff]">{t.name}</p>
                 <dl>
                   {['LOGIC', 'BUILD', 'GRIT'].map((k, j) => (
                     <div key={k}>
@@ -441,16 +482,16 @@ export default async function Home() {
               </article>
             ))}
           </div>
-          <div className="head" style={{ marginTop: 96 }}>
+          <div className="head mt-24">
             <h2 className="h2">ACHIEVEMENTS</h2>
           </div>
-          <ul
-            className="grid badges"
-            style={{ '--min': '290px', '--g': '16px' } as React.CSSProperties}
-          >
+          <ul className="grid badges [&_.body]:text-[14px] [&_.xp]:text-[14px] [&_.xp]:text-acc [&_li]:[display:grid] [&_li]:grid-cols-[52px_minmax(0,1fr)_auto] [&_li]:gap-3.5 [&_li]:items-center [&_li]:p-3.5 [&_li]:[border:4px_solid_var(--line)] [&_li]:[background:var(--panel)] [--min:290px] [--g:16px]">
             {badges.map((b, i) => (
               <li key={b.id}>
-                <span className="glyph" style={{ color: ['#FFD23F', '#3DE1FF', '#FF4D8D'][i % 3] }}>
+                <span
+                  className={badgeGlyph}
+                  style={{ color: ['#FFD23F', '#3DE1FF', '#FF4D8D'][i % 3] }}
+                >
                   {b.glyph}
                 </span>
                 <p className="silk nm">{b.name}</p>
@@ -462,22 +503,22 @@ export default async function Home() {
       </section>
 
       {/* ───── D · SIGNAL / LIFE ───── */}
-      <section className="hero hero-d t-d" data-t="d">
-        <div className="bgfx life">
+      <section className="hero hero-d min-[1000px]:[&_.head]:max-w-[54%] t-d" data-t="d">
+        <div className="bgfx inset-[64px_0_0_auto] w-full opacity-[0.4] [-webkit-mask-image:linear-gradient(180deg,transparent_30%,#000)] [mask-image:linear-gradient(180deg,transparent_30%,#000)] pointer-events-auto min-[1000px]:w-[44%] min-[1000px]:opacity-[1] min-[1000px]:[-webkit-mask-image:linear-gradient(90deg,transparent_4%,#000_42%)] min-[1000px]:[mask-image:linear-gradient(90deg,transparent_4%,#000_42%)]">
           <Life />
         </div>
-        <div className="wrap inner">
-          <div className="stack" style={{ '--g': '32px' } as React.CSSProperties}>
+        <div className="wrap inner flex-1 min-[1000px]:[&>.stack]:max-w-[54%] relative flex flex-col justify-between gap-14 [padding-block:clamp(56px,11vh,100px)_44px] pointer-events-none [&_a]:pointer-events-auto">
+          <div className="stack [--g:32px]">
             <h2 className="disp">
-              <span className="ln">Four rules.</span>
-              <span className="ln acc">Infinite</span>
-              <span className="ln acc">outcomes.</span>
+              <span className="[.disp_&]:block">Four rules.</span>
+              <span className="[.disp_&]:block acc">Infinite</span>
+              <span className="[.disp_&]:block acc">outcomes.</span>
             </h2>
             <p className="lede">
               Every program starts as a handful of simple rules. {site.short} is where{' '}
               {site.uniShort} students learn them, then build what nobody predicted.
             </p>
-            <div className="row" style={{ '--g': '28px' } as React.CSSProperties}>
+            <div className="row [--g:28px]">
               <Link href="/contact" className="btn">
                 Join the club
               </Link>
@@ -486,7 +527,7 @@ export default async function Home() {
               </Link>
             </div>
           </div>
-          <div className="row life-stats mono">
+          <div className="row gap-10 text-[14px] items-start [&_.kv]:w-30 [&_.hint]:w-auto max-[1000px]:[&_.hint]:hidden mono">
             <div className="kv">
               <span className="label">Generation</span>
               <span data-life="gen">000012</span>
@@ -511,10 +552,7 @@ export default async function Home() {
             </h2>
           </div>
           <Roadmap done={['cpp', 'stl']} />
-          <ol
-            className="grid life-steps"
-            style={{ '--min': '200px', '--g': '0px', marginTop: 88 } as React.CSSProperties}
-          >
+          <ol className="grid life-steps [--min:200px] [--g:0px] mt-22">
             {lifecycle.map((l, i) => (
               <li key={l.step}>
                 <span className="mono acc">{String(i + 1).padStart(2, '0')}</span>
@@ -566,11 +604,11 @@ export default async function Home() {
 
       {/* ───── A · join ───── */}
       <section className="sec t-a crt" data-t="a">
-        <div className="bgfx rain dimmer">
+        <div className="bgfx rain [-webkit-mask-image:linear-gradient(90deg,rgba(0,0,0,0.07)_0_46%,#000_80%)] [mask-image:linear-gradient(90deg,rgba(0,0,0,0.07)_0_46%,#000_80%)] [&.rain]:opacity-50">
           <Rain />
         </div>
         <div className="wrap">
-          <div className="panel flush cta">
+          <div className="panel flush max-w-225">
             <div className="bar">
               <span>TTY1 — join.sh</span>
               <span className="dots" aria-hidden>
@@ -579,7 +617,7 @@ export default async function Home() {
                 <i />
               </span>
             </div>
-            <div className="cta-body">
+            <div className="p-[clamp(22px,4vw,44px)] text-[15px] leading-[2]">
               <p className="mut">
                 <span className="dim">guest@{site.short.toLowerCase()}:~$</span> ./join.sh --dry-run
               </p>
@@ -595,11 +633,11 @@ export default async function Home() {
                 <span className="acc">[3/3]</span> book an interview slot{' '}
                 <span className="dim"># we mostly ask what you want to build</span>
               </p>
-              <h2 className="h2" style={{ marginTop: 28 }}>
+              <h2 className="h2 mt-7">
                 Ready when you are
-                <i aria-hidden className="blink cursor" style={{ marginLeft: 12 }} />
+                <i aria-hidden className={`blink ${cursorCls} ml-3`} />
               </h2>
-              <div className="row" style={{ '--g': '20px', marginTop: 28 } as React.CSSProperties}>
+              <div className="row [--g:20px] mt-7">
                 <Link href="/contact" className="btn">
                   &gt; Apply now
                 </Link>

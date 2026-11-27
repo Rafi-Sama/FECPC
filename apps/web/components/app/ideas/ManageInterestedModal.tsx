@@ -5,6 +5,7 @@ import { relTime } from '@/components/app/shared/MarkdownEditor';
 import { TierAvatar } from '@/components/app/shared/SolvedTier';
 import { rankFor } from '@fecpc/contracts';
 import type { IdeaDetail } from '@fecpc/contracts';
+import { cmIdeaTag } from '@/components/app/ideas/ui';
 
 /** Owner-only applicant management: a separate modal, not the post detail view. */
 export function ManageInterestedModal({
@@ -80,18 +81,22 @@ export function ManageInterestedModal({
       aria-label="Manage interested members"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="cm-modal cm-idea-manage-modal">
-        <header className="cm-modal-head cm-idea-manage-head">
-          <div className="grow" style={{ minWidth: 0 }}>
-            <p className="cm-idea-manage-kicker">Applicant Management</p>
-            <h2 className="cm-idea-manage-title">{detail?.title ?? 'Idea'}</h2>
+      <div className="cm-modal cm-idea-manage-modal [.cm-modal&]:max-w-[800px] [box-shadow:8px_8px_0_rgba(13,_13,_11,_0.2)] [.t-d_&]:[box-shadow:8px_8px_0_rgba(0,_0,_0,_0.8)]">
+        <header className="cm-modal-head p-6 items-start [background:var(--bg)] [border-bottom:2px_solid_var(--line2)] [@media(max-width:520px)]:p-4">
+          <div className="grow min-w-0">
+            <p className="mt-0 mx-0 mb-2 [color:var(--dim)] font-label text-[12px] tracking-[0.05em] uppercase">
+              Applicant Management
+            </p>
+            <h2 className="m-0 text-hi font-disp [font-size:clamp(20px,_2.5vw,_28px)] font-bold leading-[1.2]">
+              {detail?.title ?? 'Idea'}
+            </h2>
           </div>
           <button type="button" className="cm-modal-close" aria-label="Close" onClick={onClose}>
             ×
           </button>
         </header>
 
-        <div className="cm-idea-manage-body">
+        <div className="p-6 max-[521px]:p-4 [background:var(--panel)]">
           {loading && !detail ? (
             <p className="body">Loading…</p>
           ) : !isPoster ? (
@@ -99,39 +104,46 @@ export function ManageInterestedModal({
           ) : applicants.length === 0 ? (
             <p className="body">No one has expressed interest yet.</p>
           ) : (
-            <div className="cm-idea-applicant-list">
+            <div className="flex gap-4 flex-col">
               {applicants.map((row) => {
                 const entries = Object.entries(row.response ?? {});
                 return (
-                  <div key={row.user_id} className="cm-idea-applicant">
-                    <div className="cm-idea-applicant-header">
-                      <div className="cm-idea-applicant-identity">
+                  <div
+                    key={row.user_id}
+                    className="flex gap-4 p-5 [border:2px_solid_var(--line2)] flex-col [background:var(--bg)]"
+                  >
+                    <div className="flex items-center justify-between gap-3 pb-3 flex-wrap [border-bottom:1px_solid_var(--line)]">
+                      <div className="flex items-center gap-3 min-w-0">
                         <TierAvatar
                           name={row.name}
                           solved={row.problems_solved}
                           avatarUrl={row.avatar_url}
                           size={40}
                         />
-                        <div className="cm-idea-applicant-who">
+                        <div className="flex gap-0.5 min-w-0 flex-col">
                           {onOpenProfile ? (
                             <button
                               type="button"
-                              className="cm-idea-applicant-name"
+                              className="[border:0] text-hi font-body text-[17px] [font-weight:700] hover:text-acc p-0 self-start [background:none] leading-[1.2] text-left [&:is(button)]:cursor-pointer [&:is(button):hover]:[text-decoration:underline] [&:is(button):hover]:[text-underline-offset:3px] [&:is(button):focus-visible]:[outline:2px_solid_var(--acc)] [&:is(button):focus-visible]:[outline-offset:2px]"
                               aria-label={`Open ${row.name}'s profile`}
                               onClick={(e) => onOpenProfile(row.user_id, e.currentTarget)}
                             >
                               {row.name}
                             </button>
                           ) : (
-                            <strong className="cm-idea-applicant-name">{row.name}</strong>
+                            <strong className="[border:0] text-hi font-body text-[17px] [font-weight:700] p-0 self-start [background:none] leading-[1.2] text-left">
+                              {row.name}
+                            </strong>
                           )}
-                          <span className="cm-idea-applicant-time">
+                          <span className="[color:var(--dim)] font-label text-[11px]">
                             Applied {relTime(row.created_at)}
                           </span>
                         </div>
                       </div>
-                      <div className="cm-idea-applicant-badges">
-                        <span className="cm-idea-tag cm-idea-rank-tag">
+                      <div className="flex items-center gap-2 ml-auto flex-wrap">
+                        <span
+                          className={`cm-idea-tag [border:1px_solid_var(--line2)] tracking-[0.05em] ${cmIdeaTag} [&&]:text-ink [&&]:whitespace-nowrap`}
+                        >
                           Codeforces: {rankFor(row.rating).title}
                         </span>
                         {row.status !== 'pending' && (
@@ -143,20 +155,22 @@ export function ManageInterestedModal({
                     </div>
 
                     {entries.length > 0 && (
-                      <div className="cm-idea-applicant-answers">
+                      <div className="flex gap-3 p-4 [border:1px_solid_var(--line)] flex-col [background:var(--panel)]">
                         {entries.map(([question, answer], i) => (
                           <div key={question} className="cm-idea-answer">
-                            <div className="cm-idea-answer-q">
+                            <div className="mb-1 [color:var(--dim)] font-label text-[11px] tracking-[0.02em]">
                               {i + 1}. {question}
                             </div>
-                            <div className="cm-idea-answer-a">{answer}</div>
+                            <div className="text-ink font-body text-[14px] font-semibold">
+                              {answer}
+                            </div>
                           </div>
                         ))}
                       </div>
                     )}
 
                     {row.status === 'pending' && (
-                      <div className="cm-idea-applicant-actions">
+                      <div className="cm-idea-applicant-actions flex gap-2 justify-end max-[769px]:justify-end ml-auto [@media(max-width:768px)]:ml-0 [@media(max-width:768px)]:w-full">
                         <button
                           type="button"
                           className="btn xs line"
@@ -167,7 +181,7 @@ export function ManageInterestedModal({
                         </button>
                         <button
                           type="button"
-                          className="btn xs cm-idea-accept"
+                          className="btn xs cm-idea-accept text-on hover:text-bg"
                           disabled={busy}
                           onClick={() => handleDecision(row.user_id, 'accepted')}
                         >

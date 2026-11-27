@@ -3,6 +3,10 @@ import { useRef } from 'react';
 import { excerptFromMarkdown, relTime } from '@/components/app/shared/MarkdownEditor';
 import { TierAvatar, TierName } from '@/components/app/shared/SolvedTier';
 import type { UnifiedAnnouncement } from './AnnouncementModal';
+import { badgePinned, badgeMustRead } from '@/components/app/announcements/ui';
+
+const badgeUnread =
+  'py-[0.2rem] px-[0.55rem] [font-family:var(--ann-font-mono)] text-[0.7rem] font-extrabold uppercase [border-radius:2px] inline-flex items-center gap-1 [.t-b_&]:[background:var(--ann-blue)] [.t-b_&]:text-[#ffffff] [.t-d_&]:[background:var(--acc)] [.t-d_&]:text-on [.t-d_&]:[box-shadow:0_0_8px_rgba(255,_90,_31,_0.4)]'; // was .badge-unread
 
 const fmtDay = (iso: string) => {
   const d = new Date(iso);
@@ -56,7 +60,7 @@ export function AnnouncementBoard({
   if (items.length === 0) return <p className="empty">No announcements match this filter.</p>;
 
   return (
-    <div className="ann-board">
+    <div className="flex flex-col">
       {pinned.map((a) => {
         const read = isRead(a.id);
         const count = readCount(a);
@@ -64,7 +68,7 @@ export function AnnouncementBoard({
         return (
           <article
             key={a.id}
-            className={`announcement-card${read ? '' : ' is-unread'}`}
+            className={`announcement-card p-[1.25rem] mb-[1.25rem] [background:var(--ann-surface)] cursor-pointer [transition:background_0.15s,_border-color_0.15s,_box-shadow_0.15s] text-left hover:[background:color-mix(in_srgb,_var(--ann-surface)_96%,_var(--ann-text))] hover:[outline:none] focus-visible:[background:color-mix(in_srgb,_var(--ann-surface)_96%,_var(--ann-text))] focus-visible:[outline:none] [.t-b_&:hover]:[background:#fafafa] [.t-b_&:focus-visible]:[background:#fafafa] [.t-d_&:hover]:[background:color-mix(in_srgb,_var(--panel)_92%,_var(--hi))] [.t-d_&:focus-visible]:[background:color-mix(in_srgb,_var(--panel)_92%,_var(--hi))] [.t-b_&&.is-unread]:[background:#f7faff] [.t-b_&&.is-unread]:[box-shadow:4px_4px_0_var(--ann-blue)] [.t-b_&&.is-unread:hover]:[background:#eef5ff] [.t-b_&&.is-unread:focus-visible]:[background:#eef5ff] [.t-d_&&.is-unread]:[background:color-mix(in_srgb,_var(--acc)_8%,_var(--panel))] [.t-d_&&.is-unread]:[box-shadow:4px_4px_0_rgba(255,_90,_31,_0.35)] [.t-d_&&&.is-unread:hover]:[background:color-mix(in_srgb,_var(--acc)_14%,_var(--panel))] [.t-d_&&&.is-unread:focus-visible]:[background:color-mix(in_srgb,_var(--acc)_14%,_var(--panel))] ${read ? '' : ' is-unread'}`}
             tabIndex={0}
             role="button"
             aria-label={a.title}
@@ -76,33 +80,44 @@ export function AnnouncementBoard({
               }
             }}
           >
-            <div className="card-meta-top mono">
-              {!read && <span className="badge-unread">● Unread</span>}
-              <span className="badge-pinned">Pinned</span>
-              {a.requires_ack && <span className="badge-must-read">Must Read</span>}
+            <div className="flex items-center gap-[0.75rem] [color:var(--ann-muted)] mb-[0.5rem] mono">
+              {!read && (
+                <span className={`badge-unread tracking-[0.5px] ${badgeUnread}`}>● Unread</span>
+              )}
+              <span className={`${badgePinned}`}>Pinned</span>
+              {a.requires_ack && <span className={`${badgeMustRead}`}>Must Read</span>}
               <span>{relTime(a.at)}</span>
             </div>
             <h2>{a.title}</h2>
-            {a.body_md && <p className="card-excerpt">{excerptFromMarkdown(a.body_md)}</p>}
-            <div className="card-author">
+            {a.body_md && (
+              <p className="mb-[1.25rem] [color:var(--ann-muted)] text-[1rem] leading-[1.6] [display:-webkit-box] overflow-hidden [-webkit-line-clamp:2] [-webkit-box-orient:vertical]">
+                {excerptFromMarkdown(a.body_md)}
+              </p>
+            )}
+            <div className="card-author flex items-center gap-[0.75rem] mb-[1rem]">
               <TierAvatar name={a.by} solved={a.by_solved} avatarUrl={a.by_avatar} size={36} />
               <div>
-                <div className="author-name">
+                <div className="font-bold text-[0.9rem] [color:var(--ann-text)]">
                   <TierName name={a.by} solved={a.by_solved} />
                 </div>
-                <div className="audience-tag">{a.scope}</div>
+                <div className="[color:var(--ann-muted)] [font-family:var(--ann-font-mono)] text-[0.75rem]">
+                  {a.scope}
+                </div>
               </div>
             </div>
-            <div className="card-footer">
+            <div className="flex justify-between items-center pt-[1rem] [border-top:1px_solid_var(--line)] gap-[1rem] max-[601px]:items-start max-[601px]:gap-[1rem] [@media(max-width:600px)]:flex-col">
               {isOfficer ? (
                 <div
-                  className="progress-container"
+                  className="flex items-center gap-[1rem] w-[60%] [@media(max-width:600px)]:w-full"
                   aria-label={`Read by ${count} of ${memberTotal}`}
                 >
-                  <div className="progress-bar-bg">
-                    <div className="progress-bar-fill" style={{ width: `${pct}%` }} />
+                  <div className="[flex-grow:1] h-[6px] bg-line [border-radius:3px] overflow-hidden">
+                    <div
+                      className="h-full [background-color:var(--ann-text)] [transition:width_0.3s_ease] [.t-d_&]:bg-acc"
+                      style={{ width: `${pct}%` }}
+                    />
                   </div>
-                  <span className="progress-text">
+                  <span className="[font-family:var(--ann-font-mono)] text-[0.75rem] [color:var(--ann-muted)] whitespace-nowrap">
                     {count}/{memberTotal} Acknowledged
                   </span>
                 </div>
@@ -112,11 +127,13 @@ export function AnnouncementBoard({
               <div>
                 {a.requires_ack ? (
                   read ? (
-                    <div className="mono ann-ack-done">✓ Acknowledged</div>
+                    <div className="mono [font-size:0.8rem] [color:var(--ann-muted)] [font-family:var(--ann-font-mono)] font-bold">
+                      ✓ Acknowledged
+                    </div>
                   ) : (
                     <button
                       type="button"
-                      className="ann-ack-btn"
+                      className="[border:var(--ann-border-thick)] t-b:border-[#111111] t-d:border-acc t-d:hover:border-acc2 py-[0.4rem] px-[0.8rem] [background:var(--ann-text)] [color:var(--ann-surface)] [font-family:var(--ann-font-mono)] text-[0.75rem] font-bold cursor-pointer uppercase [transition:background_0.1s,_color_0.1s,_border-color_0.1s] [.t-b_&]:[background:#111111] [.t-b_&]:text-[#ffffff] [.t-d_&]:[background:var(--acc)] [.t-d_&]:text-on [.t-d_&:hover]:[background:var(--acc2)]"
                       onClick={(e) => {
                         e.stopPropagation();
                         onMarkRead(a.id);
@@ -128,7 +145,7 @@ export function AnnouncementBoard({
                 ) : (
                   <button
                     type="button"
-                    className="ann-read-btn"
+                    className="ann-read-btn py-[0.4rem] px-[0.8rem] [background:transparent] [font-family:var(--ann-font-mono)] text-[0.75rem] font-bold cursor-pointer uppercase [color:var(--ann-text)] [transition:background_0.1s,_border-color_0.1s,_color_0.1s] hover:[color:var(--ann-blue)] [.t-d_&:hover]:text-acc"
                     onClick={(e) => {
                       e.stopPropagation();
                       onOpen(a);
@@ -144,7 +161,7 @@ export function AnnouncementBoard({
       })}
 
       {log.length > 0 && (
-        <section className="list-view">
+        <section className="[border-top:var(--ann-border-thick)] mt-[1.5rem]">
           {log.map((a) => {
             const read = isRead(a.id);
             const { day, mon } = fmtDay(a.at);
@@ -156,7 +173,7 @@ export function AnnouncementBoard({
                   if (el) rowRefs.current.set(a.id, el);
                   else rowRefs.current.delete(a.id);
                 }}
-                className={`list-item${read ? '' : ' is-unread'}`}
+                className={`list-item [display:grid] gap-[0.75rem] p-[0.85rem_0.5rem] items-center t-b:[&.is-unread]:pl-[0.75rem] t-d:[&.is-unread]:pl-[0.75rem] max-[601px]:gap-[0.25rem] grid-cols-[76px_1fr_auto] [border-bottom:var(--ann-border-thin)] cursor-pointer [color:var(--ann-text)] [transition:background_0.15s,_border-left-color_0.15s,_padding-left_0.15s] hover:[background:color-mix(in_srgb,_var(--ann-surface)_94%,_var(--ann-text))] hover:[outline:none] focus-visible:[background:color-mix(in_srgb,_var(--ann-surface)_94%,_var(--ann-text))] focus-visible:[outline:none] [.t-b_&:hover]:[background:#f0f0f0] [.t-b_&:focus-visible]:[background:#f0f0f0] [.t-d_&:hover]:[background:color-mix(in_srgb,_var(--panel)_90%,_var(--hi))] [.t-d_&:focus-visible]:[background:color-mix(in_srgb,_var(--panel)_90%,_var(--hi))] [.t-b_&&.is-unread]:[border-left:4px_solid_var(--ann-blue)] [.t-b_&&.is-unread]:[background:#f7faff] [.t-b_&&.is-unread:hover]:[background:#edf4fe] [.t-b_&&.is-unread:focus-visible]:[background:#edf4fe] [.t-d_&&.is-unread]:[border-left:4px_solid_var(--acc)] [.t-d_&&.is-unread]:[background:color-mix(in_srgb,_var(--acc)_8%,_transparent)] [.t-d_&&&.is-unread:hover]:[background:color-mix(in_srgb,_var(--acc)_14%,_transparent)] [.t-d_&&&.is-unread:focus-visible]:[background:color-mix(in_srgb,_var(--acc)_14%,_transparent)] [@media(max-width:600px)]:grid-cols-[1fr] ${read ? '' : ' is-unread'}`}
                 tabIndex={0}
                 role="button"
                 aria-label={a.title}
@@ -170,25 +187,32 @@ export function AnnouncementBoard({
                   }
                 }}
               >
-                <div className="list-date mono">
+                <div className="[font-size:0.8rem] [color:var(--ann-muted)] [.list-item.is-unread_&]:[color:var(--ann-text)] [font-family:var(--ann-font-mono)] [.list-item.is-unread_&]:font-bold mono">
                   {day} {mon}
                 </div>
                 <div>
-                  <div className="list-title">
-                    {!read && <span className="list-unread-dot" aria-label="Unread" />}
+                  <div className="[.t-b_.list-item.is-unread_&]:text-[#1d4ed8] [.t-b_.list-item.is-unread_&]:font-extrabold [.t-d_.list-item.is-unread_&]:text-acc2 [.t-d_.list-item.is-unread_&]:font-extrabold font-bold text-[1rem] [color:var(--ann-text)]">
+                    {!read && (
+                      <span
+                        className="mr-2 inline-block w-[8px] h-[8px] [border-radius:50%] [vertical-align:middle] [.t-b_&]:[background-color:var(--ann-blue)] [.t-d_&]:bg-acc [.t-d_&]:[box-shadow:0_0_6px_var(--acc)]"
+                        aria-label="Unread"
+                      />
+                    )}
                     {a.title}
                   </div>
-                  <div className="list-meta">
-                    {!read && <span className="badge-unread">Unread</span>}
-                    <span className="list-author">
+                  <div className="list-meta flex gap-[0.5rem] items-center mt-[0.25rem] [font-family:var(--ann-font-mono)] text-[0.75rem] [color:var(--ann-muted)]">
+                    {!read && (
+                      <span className={`badge-unread tracking-[0.5px] ${badgeUnread}`}>Unread</span>
+                    )}
+                    <span className="[color:var(--ann-orange)] font-bold [.t-d_.list-meta_&]:text-acc">
                       <TierName name={a.by} solved={a.by_solved} />
                     </span>
                     <span>{a.scope}</span>
-                    {a.requires_ack && <span className="badge-must-read">Must Read</span>}
+                    {a.requires_ack && <span className={`${badgeMustRead}`}>Must Read</span>}
                   </div>
                 </div>
                 {isOfficer && (
-                  <div className="list-progress">
+                  <div className="max-[601px]:hidden [font-family:var(--ann-font-mono)] text-[0.8rem] [color:var(--ann-muted)]">
                     {count}/{memberTotal}
                   </div>
                 )}

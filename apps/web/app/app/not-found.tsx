@@ -4,11 +4,9 @@ import Link from 'next/link';
 export default function NotFound() {
   return (
     <div className="page">
-      <div className="panel" style={{ maxWidth: 560 }}>
+      <div className="panel max-w-[560px]">
         <h1 className="h3">That page is not available.</h1>
-        <p className="body" style={{ marginBlock: 10 }}>
-          It does not exist, or your role cannot open it.
-        </p>
+        <p className="body my-2.5">It does not exist, or your role cannot open it.</p>
         <Link className="btn sm" href="/app">
           Back to Today
         </Link>

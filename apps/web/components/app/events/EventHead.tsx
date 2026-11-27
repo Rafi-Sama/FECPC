@@ -11,15 +11,25 @@ import { DatePicker } from '../shared/DatePicker';
 import { SaveForm } from '../SaveBar';
 import { FieldsEditor, pickDraft, useSaveEvent, windowProblem, type Draft } from './EventForm';
 
+const sectionPadOpenEnd =
+  'pb-6 [.ev-detail_&]:pt-6 [.ev-detail_&]:px-8 max-[601px]:[.ev-detail_&]:pt-[18px] max-[601px]:[.ev-detail_&]:px-5 max-[641px]:[.ev-detail_&&]:pt-4 max-[641px]:[.ev-detail_&&]:px-4';
+
+const sectionPad =
+  '[.ev-detail_&]:p-[24px_32px] max-[601px]:[.ev-detail_&]:p-[18px_20px] max-[641px]:[.ev-detail_&&]:p-4';
+
+const hasPattern =
+  '[.ev-detail_.banner&]:[background-image:repeating-linear-gradient(_135deg,_rgba(255,_255,_255,_0.07)_0_14px,_transparent_14px_28px_)] [.ev-detail_.banner&]:[background-size:56px_56px] [.ev-detail_.banner&]:[animation:ev-drift_8s_linear_infinite]'; // was .has-pattern
+const evMetaStatus =
+  '[.ev-detail_.meta_&]:flex [.ev-detail_.meta_&]:items-center [.ev-detail_.meta_&]:gap-2 [.ev-detail_.meta_&]:font-semibold [.ev-detail_.meta_&]:text-[14px] [.ev-detail_.meta_&]:uppercase [.ev-detail_.meta_&]:tracking-[0.05em] [.ev-detail_.meta_&]:text-hi [.ev-detail_.meta_&]:cursor-pointer [.ev-detail_.meta_&]:w-full [.ev-detail_.meta_&]:min-w-0 [.ev-detail_.meta_&]:whitespace-nowrap [.ev-detail_.meta_&]:overflow-hidden [.ev-detail_.meta_&]:text-ellipsis'; // was .ev-meta-status
+const evStatusDot = `[.ev-detail_.meta_&]:w-[8px] [.ev-detail_.meta_&]:h-[8px] [.ev-detail_.meta_&]:[border-radius:50%] [.ev-detail_.meta_&]:inline-block [.ev-detail_.meta_&]:flex-none [.ev-detail_.meta_&]:[background:var(--acc)] [.ev-detail_.meta_&[data-status='draft']]:[background:var(--mut)] [.ev-detail_.meta_&[data-status='published']]:[background:var(--hi)] [.ev-detail_.meta_&[data-status='open']]:[background:#10b981] [.ev-detail_.meta_&[data-status='ongoing']]:[background:var(--acc)] [.ev-detail_.meta_&[data-status='closed']]:[background:#f59e0b] [.ev-detail_.meta_&[data-status='completed']]:[background:var(--dim)] [.ev-detail_.meta_&[data-status='cancelled']]:[background:var(--bad)]`; // was .ev-status-dot
+const edPreview =
+  '[.ev-detail_&]:min-h-[140px] [.ev-detail_&]:[font-family:var(--f-body,_sans-serif)] [.ev-detail_&]:text-[15px] [.ev-detail_&]:leading-[1.7]'; // was .ed-preview
+
 const FORM = 'ev-head-form';
 
 export function MarkdownView({ text }: { text: string }) {
   if (!text || !text.trim()) {
-    return (
-      <p className="mono text-dim" style={{ fontSize: 14 }}>
-        No description provided yet.
-      </p>
-    );
+    return <p className="mono text-dim text-[14px]">No description provided yet.</p>;
   }
   const lines = text.split('\n');
   const elements: ReactNode[] = [];
@@ -28,7 +38,7 @@ export function MarkdownView({ text }: { text: string }) {
   const flushList = () => {
     if (listItems.length > 0) {
       elements.push(
-        <ul key={`ul-${elements.length}`} style={{ marginBottom: '1rem', paddingLeft: '1.5rem' }}>
+        <ul key={`ul-${elements.length}`} className="pl-[1.5rem] mb-[1rem]">
           {listItems.map((item, idx) => (
             <li key={idx} dangerouslySetInnerHTML={{ __html: formatInline(item) }} />
           ))}
@@ -46,19 +56,19 @@ export function MarkdownView({ text }: { text: string }) {
       flushList();
       if (trimmed.startsWith('### ')) {
         elements.push(
-          <h3 key={i} style={{ marginBottom: '0.5rem', fontSize: '1.2rem' }}>
+          <h3 key={i} className="mb-[0.5rem] text-[1.2rem]">
             {trimmed.slice(4)}
           </h3>,
         );
       } else if (trimmed.startsWith('## ')) {
         elements.push(
-          <h2 key={i} style={{ marginBottom: '0.6rem', fontSize: '1.4rem' }}>
+          <h2 key={i} className="mb-[0.6rem] text-[1.4rem]">
             {trimmed.slice(3)}
           </h2>,
         );
       } else if (trimmed.startsWith('# ')) {
         elements.push(
-          <h1 key={i} style={{ marginBottom: '0.75rem', fontSize: '1.6rem' }}>
+          <h1 key={i} className="mb-[0.75rem] text-[1.6rem]">
             {trimmed.slice(2)}
           </h1>,
         );
@@ -66,7 +76,7 @@ export function MarkdownView({ text }: { text: string }) {
         elements.push(
           <p
             key={i}
-            style={{ marginBottom: '1rem', lineHeight: 1.6 }}
+            className="mb-[1rem] leading-[1.6]"
             dangerouslySetInnerHTML={{ __html: formatInline(trimmed) }}
           />,
         );
@@ -123,21 +133,19 @@ export function EventHead({
 
   if (!editable) {
     return (
-      <main style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+      <main className="flex flex-col gap-8">
         <div className="post">
           <div
-            className={`banner${!e.banner ? ' has-pattern' : ''}`}
+            className={`banner${!e.banner ? ` ${hasPattern}` : ''}`}
             data-type={e.type}
             style={bannerStyle(e.banner)}
           />
-          <div className="pad" style={{ paddingBottom: 24 }}>
-            <h1 className="title" style={{ cursor: 'default', margin: 0 }}>
-              {e.title}
-            </h1>
+          <div className={sectionPadOpenEnd}>
+            <h1 className="title m-0 cursor-default">{e.title}</h1>
             <div className="meta">
               <span className="on">{e.type}</span>
-              <span className="ev-meta-status">
-                <span className="ev-status-dot" data-status={e.status} />
+              <span className={`${evMetaStatus}`}>
+                <span className={`${evStatusDot}`} data-status={e.status} />
                 {eventBadgeStatus(e)}
               </span>
               <span title="Event starts at">
@@ -151,7 +159,7 @@ export function EventHead({
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   aria-hidden="true"
-                  style={{ flexShrink: 0, opacity: 0.75 }}
+                  className="shrink-0 opacity-[0.75]"
                 >
                   <rect x="3" y="4" width="18" height="18" rx="2" />
                   <path d="M16 2v4M8 2v4M3 10h18" />
@@ -169,14 +177,12 @@ export function EventHead({
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   aria-hidden="true"
-                  style={{ flexShrink: 0, opacity: 0.75 }}
+                  className="shrink-0 opacity-[0.75]"
                 >
                   <path d="M12 2a8 8 0 0 0-8 8c0 5.25 8 12 8 12s8-6.75 8-12a8 8 0 0 0-8-8z" />
                   <circle cx="12" cy="10" r="3" />
                 </svg>
-                <span
-                  style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                >
+                <span className="overflow-hidden text-ellipsis whitespace-nowrap">
                   {e.place || 'No venue specified'}
                 </span>
               </span>
@@ -191,12 +197,10 @@ export function EventHead({
             <button type="button" className="tab on">
               Overview
             </button>
-            <span className="mono" style={{ marginLeft: 'auto', alignSelf: 'center' }}>
-              EVENT DETAILS
-            </span>
+            <span className="mono ml-auto self-center">EVENT DETAILS</span>
           </div>
-          <div className="pad">
-            <div className="ed-preview">
+          <div className={sectionPad}>
+            <div className={`ed-preview ${edPreview}`}>
               <MarkdownView text={e.about || ''} />
             </div>
           </div>
@@ -274,12 +278,12 @@ export function HeadFields({
   }, [error]);
 
   return (
-    <main style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+    <main className="flex flex-col gap-8">
       <div className="post">
         <div
           role="button"
           tabIndex={0}
-          className={`banner${!v.banner ? ' has-pattern' : ''}`}
+          className={`banner${!v.banner ? ` ${hasPattern}` : ''}`}
           aria-label="Upload banner image"
           title="Click anywhere to choose or change banner image (1200 × 630)"
           style={bannerStyle(v.banner ?? null)}
@@ -323,16 +327,25 @@ export function HeadFields({
             </svg>
           </span>
           {v.banner && (
-            <div className="banner-actions" onClick={(e) => e.stopPropagation()}>
-              <span className="banner-badge">Click anywhere to change</span>
-              <button type="button" className="banner-remove" onClick={() => set({ banner: null })}>
+            <div
+              className="[.ev-detail_&]:top-2.5 [.ev-detail_&]:right-2.5 [.ev-detail_&]:absolute [.ev-detail_&]:flex [.ev-detail_&]:items-center [.ev-detail_&]:gap-1.5 [.ev-detail_&]:z-[3]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <span className="[.ev-detail_&]:py-1 [.ev-detail_&]:px-2 [.ev-detail_&]:[font-family:var(--f-mono,_monospace)] [.ev-detail_&]:text-[14px] [.ev-detail_&]:[background:rgba(0,_0,_0,_0.75)] [.ev-detail_&]:text-[#fff] [.ev-detail_&]:[border:1px_solid_rgba(255,_255,_255,_0.3)]">
+                Click anywhere to change
+              </span>
+              <button
+                type="button"
+                className="banner-remove [.ev-detail_&]:py-1 [.ev-detail_&]:px-2 [.ev-detail_&]:[font-family:var(--f-mono,_monospace)] [.ev-detail_&]:text-[14px] [.ev-detail_&]:[background:var(--bad)] [.ev-detail_&]:text-[#fff] [.ev-detail_&]:cursor-pointer"
+                onClick={() => set({ banner: null })}
+              >
                 Remove
               </button>
             </div>
           )}
         </div>
 
-        <div className="pad" style={{ paddingBottom: 24 }}>
+        <div className={sectionPadOpenEnd}>
           <input
             form={FORM}
             className="title"
@@ -359,8 +372,8 @@ export function HeadFields({
                 ))}
               </select>
             </span>
-            <span className="ev-meta-status">
-              <span className="ev-status-dot" data-status={v.status ?? 'draft'} />
+            <span className={`${evMetaStatus}`}>
+              <span className={`${evStatusDot}`} data-status={v.status ?? 'draft'} />
               <select
                 form={FORM}
                 value={v.status ?? 'draft'}
@@ -395,7 +408,7 @@ export function HeadFields({
                 aria-label="Place"
                 placeholder="Add a place"
                 maxLength={140}
-                style={{ width: '100%', minWidth: 0 }}
+                className="w-full min-w-0"
                 value={v.place}
                 onChange={(x) => set({ place: x.target.value })}
               />
@@ -406,27 +419,20 @@ export function HeadFields({
                 type="number"
                 min={1}
                 placeholder="No limit"
-                style={{ width: 96 }}
+                className="w-[96px]"
                 value={v.seats ?? ''}
                 onChange={(e) => set({ seats: e.target.value ? +e.target.value : null })}
               />
-              <span
-                className="mono"
-                style={{ fontSize: 14, color: 'var(--dim)', textTransform: 'uppercase' }}
-              >
-                seats
-              </span>
+              <span className="mono text-[14px] text-dim uppercase">seats</span>
             </span>
             <span>
-              <span className="mono" style={{ fontSize: 14, color: 'var(--dim)' }}>
-                ৳
-              </span>
+              <span className="mono text-[14px] text-dim">৳</span>
               <input
                 form={FORM}
                 type="number"
                 min={0}
                 placeholder="Free"
-                style={{ width: 60 }}
+                className="w-[60px]"
                 value={v.fee || ''}
                 onChange={(e) => set({ fee: Math.max(0, parseInt(e.target.value, 10) || 0) })}
               />
@@ -449,16 +455,14 @@ export function HeadFields({
           >
             Preview
           </button>
-          <span className="mono" style={{ marginLeft: 'auto', alignSelf: 'center' }}>
-            Markdown supported
-          </span>
+          <span className="mono ml-auto self-center">Markdown supported</span>
         </div>
 
-        <div className="pad">
+        <div className={sectionPad}>
           {descTab === 'write' ? (
             <textarea
               form={FORM}
-              className="ed"
+              className="ed [.ev-detail_&]:p-0 [.ev-detail_&]:w-full [.ev-detail_&]:min-h-[140px] [.ev-detail_&]:[outline:none] [.ev-detail_&]:resize-y [.ev-detail_&]:[font-family:var(--f-body,_sans-serif)] [.ev-detail_&]:text-[15px] [.ev-detail_&]:leading-[1.7] [.ev-detail_&]:text-hi [.ev-detail_&]:box-border"
               aria-label="Event description"
               placeholder="What will happen, who it's for, what to bring."
               rows={8}
@@ -467,7 +471,7 @@ export function HeadFields({
               onChange={(x) => set({ about: x.target.value })}
             />
           ) : (
-            <div className="ed-preview">
+            <div className={`ed-preview ${edPreview}`}>
               <MarkdownView text={v.about || ''} />
             </div>
           )}
@@ -476,10 +480,12 @@ export function HeadFields({
 
       {/* In-place Sign-up Configuration & Questions on the canvas */}
       {isOrganizer && (
-        <div className="sec-box">
-          <div className="sec" style={{ borderTop: 0 }}>
+        <div className="[.ev-detail_&]:[border:1px_solid_var(--line2)] [.ev-detail_&]:[background:var(--panel)] [.ev-detail_&]:[box-shadow:none]">
+          <div className="sec [border-top:0]">
             <h2>Registration &amp; sign-up</h2>
-            <p className="sub">Configure the sign-up method, window and custom questions.</p>
+            <p className="[.ev-detail_.sec_&]:text-[14px] [.ev-detail_.sec_&]:[color:var(--dim)] [.ev-detail_.sec_&]:m-[0_0_20px]">
+              Configure the sign-up method, window and custom questions.
+            </p>
             <div className="f">
               <div>
                 <label className="mono" htmlFor="reg-how">
@@ -511,7 +517,7 @@ export function HeadFields({
                 </select>
               </div>
               {v.mode === 'form' && (
-                <div style={{ gridColumn: '1 / -1' }}>
+                <div className="col-span-full">
                   <label className="mono" htmlFor="reg-form-url">
                     Google Form link
                   </label>
@@ -556,10 +562,10 @@ export function HeadFields({
           </div>
           {v.mode !== 'form' && (
             <div className="sec">
-              <div className="row between" style={{ alignItems: 'flex-start', marginBottom: 12 }}>
+              <div className="row between mb-3 items-start">
                 <div>
-                  <h2 style={{ fontSize: 16, margin: 0 }}>Extra questions</h2>
-                  <p className="sub" style={{ margin: '4px 0 0 0' }}>
+                  <h2 className="m-0 text-[16px]">Extra questions</h2>
+                  <p className="[.ev-detail_.sec_&]:text-[14px] [.ev-detail_.sec_&]:[color:var(--dim)] mt-1 mx-0 mb-0">
                     We always ask for name and phone. Add anything else you need to know.
                   </p>
                 </div>
@@ -585,7 +591,7 @@ export function HeadFields({
       )}
 
       {error && (
-        <p ref={errorRef} className="bad" role="alert" style={{ fontSize: 14 }}>
+        <p ref={errorRef} className="bad text-[14px]" role="alert">
           {error}
         </p>
       )}

@@ -24,7 +24,7 @@ export function TierBadge({
 
   return (
     <span
-      className={`rank-pill rank-pill--${size}${isLegendary ? ' rank-pill--legendary' : ''}`}
+      className={`py-0.5 px-2 inline-flex items-center gap-1 font-label text-[11px] tracking-[0.06em] uppercase [background:var(--rank-bg)] [border:1px_solid_var(--rank-border)] [color:var(--rank-text)] whitespace-nowrap leading-[1.35] font-semibold [.t-d_&:not(.rank-pill--legendary)]:[color:color-mix(in_srgb,var(--rank-color)_65%,#ffffff)] rank-pill--${size}${isLegendary ? ' rank-pill--legendary' : ''}`}
       style={
         {
           '--rank-color': rank.color,

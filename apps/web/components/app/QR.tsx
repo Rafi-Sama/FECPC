@@ -29,8 +29,8 @@ export default function QR({
       viewBox={`0 0 ${n + 4} ${n + 4}`}
       width={px}
       height={px}
-      className="px"
-      style={{ background: bg, flex: 'none' }}
+      className="px flex-none"
+      style={{ background: bg }}
     >
       <path d={d} fill={fg} />
     </svg>

@@ -111,8 +111,7 @@ export default function Life({ className, cell = 10 }: { className?: string; cel
       onPointerMove={seed}
       role="img"
       aria-label="Conway's Game of Life running live on a pixel grid"
-      className={`px ${className ?? ''}`}
-      style={{ width: '100%', height: '100%', cursor: 'crosshair', touchAction: 'pan-y' }}
+      className={`px ${className ?? ''} w-full h-full [cursor:crosshair] [touch-action:pan-y]`}
     />
   );
 }

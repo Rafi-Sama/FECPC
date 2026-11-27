@@ -5,6 +5,15 @@ import { useStore } from '@/components/app/Store';
 import { SaveForm } from '@/components/app/SaveBar';
 import { MarkdownBody } from '@/components/app/shared/MarkdownEditor';
 
+const toolButton =
+  'sm py-0 px-3 min-w-[40px] h-[36px] [background:var(--panel)] [border:2px_solid_var(--line2)] text-ink cursor-pointer';
+
+const modeTab =
+  'py-0 px-2.5 [font:11px_ui-monospace,_Menlo,_monospace] tracking-[.06em] uppercase [border:2px_solid_var(--line2)] min-h-[36px] cursor-pointer';
+
+const editorLabel =
+  'm mb-2 block [font:11px_ui-monospace,_Menlo,_monospace] tracking-[.06em] uppercase text-dim';
+
 const TOPICS = ['Career', 'Interviews', 'Engineering', 'Stories', 'Grad school', 'Life abroad'];
 
 const FOCUSABLE =
@@ -174,41 +183,18 @@ export function BlogEditor({
 
   return (
     <div
-      className="ov open"
+      className="ov open inset-0 py-12 px-6 fixed [background:rgba(11,_11,_11,_0.6)] z-[9999] flex [align-items:safe_center] justify-center overflow-y-auto [backdrop-filter:blur(2px)]"
       role="presentation"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(11, 11, 11, 0.6)',
-        zIndex: 9999,
-        display: 'flex',
-        alignItems: 'safe center',
-        justifyContent: 'center',
-        padding: '48px 24px',
-        overflowY: 'auto',
-        backdropFilter: 'blur(2px)',
-      }}
     >
       <div
         ref={modalRef}
-        className="md"
+        className="md py-10 px-12 relative block max-w-[880px] w-full [background:var(--panel)] [border:2px_solid_var(--line2)] [box-shadow:10px_10px_0_var(--line2)] [animation:rise_0.2s_ease-out]"
         role="dialog"
         aria-modal="true"
         aria-label={post ? 'Edit blog post' : 'Write post'}
-        style={{
-          position: 'relative',
-          display: 'block',
-          maxWidth: 880,
-          width: '100%',
-          padding: '40px 48px',
-          background: 'var(--panel, #F6F4EE)',
-          border: '2px solid var(--line2, #0B0B0B)',
-          boxShadow: '10px 10px 0 var(--line2, #0B0B0B)',
-          animation: 'rise 0.2s ease-out',
-        }}
       >
         <SaveForm
           label={post ? 'Unsaved changes to this post' : 'Unsaved new post'}
@@ -221,55 +207,19 @@ export function BlogEditor({
             type="button"
             aria-label="Close"
             onClick={onClose}
-            style={{
-              minWidth: 44,
-              height: 44,
-              position: 'absolute',
-              right: 16,
-              top: 16,
-              background: 'var(--panel, #F6F4EE)',
-              border: '2px solid var(--line2, #0B0B0B)',
-              color: 'var(--ink, #0B0B0B)',
-              cursor: 'pointer',
-              fontSize: 22,
-              lineHeight: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontWeight: 700,
-            }}
+            className="top-4 right-4 min-w-[44px] h-[44px] absolute [background:var(--panel)] [border:2px_solid_var(--line2)] text-ink cursor-pointer text-[22px] leading-[1] flex items-center justify-center font-bold"
           >
             ×
           </button>
 
           {/* Draft byline */}
-          <div
-            className="m"
-            style={{
-              marginBottom: 24,
-              paddingRight: 56,
-              font: '11px ui-monospace, Menlo, monospace',
-              letterSpacing: '.06em',
-              textTransform: 'uppercase',
-              color: 'var(--dim, #5F5F5F)',
-            }}
-          >
+          <div className="m pr-14 mb-6 [font:11px_ui-monospace,_Menlo,_monospace] tracking-[.06em] uppercase text-dim">
             Draft by {me?.name || 'You'} ·{' '}
             {post ? (post.published_at ? 'Published' : 'Saved draft') : 'Draft'}
           </div>
 
           {error && (
-            <div
-              style={{
-                padding: '10px 14px',
-                background: 'rgba(255, 90, 31, 0.12)',
-                border: '1px solid var(--acc, #FF5A1F)',
-                color: 'var(--acc, #FF5A1F)',
-                fontSize: 13,
-                fontFamily: 'var(--mono)',
-                marginBottom: 16,
-              }}
-            >
+            <div className="py-2.5 px-3.5 mb-4 [background:rgba(255,_90,_31,_0.12)] [border:1px_solid_var(--acc)] text-acc text-[13px] [font-family:var(--mono)]">
               {error}
             </div>
           )}
@@ -281,19 +231,7 @@ export function BlogEditor({
             placeholder="Title"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            style={{
-              font: '700 36px Inter, Arial, sans-serif',
-              borderWidth: '0 0 2px',
-              borderStyle: 'solid',
-              borderColor: 'var(--line2, #0B0B0B)',
-              background: 'transparent',
-              padding: '8px 0',
-              marginBottom: 12,
-              width: '100%',
-              color: 'var(--ink, #0B0B0B)',
-              outline: 'none',
-              borderRadius: 0,
-            }}
+            className="py-2 px-0 mb-3 [font:700_36px_Inter,_Arial,_sans-serif] [border-width:0_0_2px] [border-style:solid] border-line2 [background:transparent] w-full text-ink [outline:none] [border-radius:0]"
           />
 
           {/* 20px Subtitle Input matching BlogWrite.dc.html */}
@@ -302,172 +240,80 @@ export function BlogEditor({
             placeholder="Subtitle (optional)"
             value={subtitle}
             onChange={(e) => setSubtitle(e.target.value)}
-            style={{
-              font: '20px Inter, Arial, sans-serif',
-              borderWidth: '0 0 1px',
-              borderStyle: 'solid',
-              borderColor: 'var(--line, #0B0B0B)',
-              background: 'transparent',
-              padding: '8px 0',
-              marginBottom: 24,
-              width: '100%',
-              color: 'var(--ink, #0B0B0B)',
-              outline: 'none',
-              borderRadius: 0,
-            }}
+            className="py-2 px-0 mb-6 [font:20px_Inter,_Arial,_sans-serif] [border-width:0_0_1px] [border-style:solid] border-line [background:transparent] w-full text-ink [outline:none] [border-radius:0]"
           />
 
           {/* Markdown toolstrip matching BlogWrite.dc.html */}
-          <div
-            style={{
-              display: 'flex',
-              gap: 8,
-              flexWrap: 'wrap',
-              alignItems: 'center',
-              marginBottom: 12,
-            }}
-          >
+          <div className="mb-3 flex gap-2 flex-wrap items-center">
             <button
               type="button"
-              className="sm"
+              className={`${toolButton} font-bold`}
               aria-label="Bold"
               onClick={() => insertFormat('**', '**')}
-              style={{
-                minWidth: 40,
-                height: 36,
-                padding: '0 12px',
-                background: 'var(--panel, #F6F4EE)',
-                border: '2px solid var(--line2, #0B0B0B)',
-                color: 'var(--ink, #0B0B0B)',
-                cursor: 'pointer',
-                fontWeight: 700,
-              }}
             >
               B
             </button>
             <button
               type="button"
-              className="sm"
+              className={`${toolButton} italic`}
               aria-label="Italic"
               onClick={() => insertFormat('*', '*')}
-              style={{
-                minWidth: 40,
-                height: 36,
-                padding: '0 12px',
-                background: 'var(--panel, #F6F4EE)',
-                border: '2px solid var(--line2, #0B0B0B)',
-                color: 'var(--ink, #0B0B0B)',
-                cursor: 'pointer',
-                fontStyle: 'italic',
-              }}
             >
               I
             </button>
             <button
               type="button"
-              className="sm"
+              className={`${toolButton} font-bold`}
               aria-label="Heading"
               onClick={() => insertFormat('### ', '')}
-              style={{
-                minWidth: 40,
-                height: 36,
-                padding: '0 12px',
-                background: 'var(--panel, #F6F4EE)',
-                border: '2px solid var(--line2, #0B0B0B)',
-                color: 'var(--ink, #0B0B0B)',
-                cursor: 'pointer',
-                fontWeight: 700,
-              }}
             >
               H
             </button>
             <button
               type="button"
-              className="sm"
+              className={toolButton}
               aria-label="Quote"
               onClick={() => insertFormat('> ', '')}
-              style={{
-                minWidth: 40,
-                height: 36,
-                padding: '0 12px',
-                background: 'var(--panel, #F6F4EE)',
-                border: '2px solid var(--line2, #0B0B0B)',
-                color: 'var(--ink, #0B0B0B)',
-                cursor: 'pointer',
-              }}
             >
               ❝
             </button>
             <button
               type="button"
-              className="sm"
+              className={`${toolButton} [font-family:var(--mono)]`}
               aria-label="Code"
               onClick={() => insertFormat('```\n', '\n```')}
-              style={{
-                minWidth: 40,
-                height: 36,
-                padding: '0 12px',
-                background: 'var(--panel, #F6F4EE)',
-                border: '2px solid var(--line2, #0B0B0B)',
-                color: 'var(--ink, #0B0B0B)',
-                cursor: 'pointer',
-                fontFamily: 'var(--mono)',
-              }}
             >
               &lt;/&gt;
             </button>
             <button
               type="button"
-              className="sm"
+              className={toolButton}
               aria-label="Link"
               onClick={() => insertFormat('[', '](https://)')}
-              style={{
-                minWidth: 40,
-                height: 36,
-                padding: '0 12px',
-                background: 'var(--panel, #F6F4EE)',
-                border: '2px solid var(--line2, #0B0B0B)',
-                color: 'var(--ink, #0B0B0B)',
-                cursor: 'pointer',
-              }}
             >
               ↗
             </button>
 
             {/* Write · Preview toggle on the right */}
-            <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
+            <div className="ml-auto flex gap-1">
               <button
                 type="button"
-                className={`ch sm ${!isPreview ? 'on' : ''}`}
+                className={`sm ${!isPreview ? 'on' : ''} ${modeTab}`}
                 onClick={() => setIsPreview(false)}
                 style={{
-                  font: '11px ui-monospace, Menlo, monospace',
-                  letterSpacing: '.06em',
-                  textTransform: 'uppercase',
-                  border: '2px solid var(--line2, #0B0B0B)',
-                  padding: '0 10px',
-                  minHeight: 36,
                   background: !isPreview ? 'var(--acc, #1F3BFF)' : 'var(--panel, #F6F4EE)',
                   color: !isPreview ? 'var(--on, #FFFFFF)' : 'var(--ink, #0B0B0B)',
-                  cursor: 'pointer',
                 }}
               >
                 Write
               </button>
               <button
                 type="button"
-                className={`ch sm ${isPreview ? 'on' : ''}`}
+                className={`sm ${isPreview ? 'on' : ''} ${modeTab}`}
                 onClick={() => setIsPreview(true)}
                 style={{
-                  font: '11px ui-monospace, Menlo, monospace',
-                  letterSpacing: '.06em',
-                  textTransform: 'uppercase',
-                  border: '2px solid var(--line2, #0B0B0B)',
-                  padding: '0 10px',
-                  minHeight: 36,
                   background: isPreview ? 'var(--acc, #1F3BFF)' : 'var(--panel, #F6F4EE)',
                   color: isPreview ? 'var(--on, #FFFFFF)' : 'var(--ink, #0B0B0B)',
-                  cursor: 'pointer',
                 }}
               >
                 Preview
@@ -477,17 +323,7 @@ export function BlogEditor({
 
           {/* Textarea or Preview */}
           {isPreview ? (
-            <div
-              style={{
-                minHeight: 280,
-                padding: 20,
-                border: '2px solid var(--line2, #0B0B0B)',
-                background: 'var(--bg, #FFFFFF)',
-                color: 'var(--ink, #0B0B0B)',
-                overflowY: 'auto',
-                marginBottom: 16,
-              }}
-            >
+            <div className="p-5 mb-4 min-h-[280px] [border:2px_solid_var(--line2)] [background:var(--bg)] text-ink overflow-y-auto">
               <MarkdownBody markdown={bodyMd || '*No content to preview yet.*'} />
             </div>
           ) : (
@@ -498,52 +334,21 @@ export function BlogEditor({
               placeholder="Tell your story in Markdown…"
               value={bodyMd}
               onChange={(e) => setBodyMd(e.target.value)}
-              style={{
-                width: '100%',
-                border: '2px solid var(--line2, #0B0B0B)',
-                background: 'var(--panel, #F6F4EE)',
-                padding: '14px',
-                font: '14px Inter, Arial, sans-serif',
-                lineHeight: 1.6,
-                color: 'var(--ink, #0B0B0B)',
-                borderRadius: 0,
-                resize: 'vertical',
-                minHeight: 240,
-              }}
+              className="p-3.5 w-full [border:2px_solid_var(--line2)] [background:var(--panel)] [font:14px/1.6_Inter,_Arial,_sans-serif] text-ink [border-radius:0] resize-y min-h-[240px]"
             />
           )}
 
           {/* Topic and Tags row matching BlogWrite.dc.html */}
-          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', margin: '20px 0' }}>
-            <div className="f" style={{ flex: '1 1 200px', margin: 0 }}>
-              <label
-                className="m"
-                htmlFor="tp"
-                style={{
-                  display: 'block',
-                  marginBottom: 8,
-                  font: '11px ui-monospace, Menlo, monospace',
-                  letterSpacing: '.06em',
-                  textTransform: 'uppercase',
-                  color: 'var(--dim, #5F5F5F)',
-                }}
-              >
+          <div className="my-5 mx-0 flex gap-4 flex-wrap">
+            <div className="f m-0 flex-[1_1_200px]">
+              <label className={editorLabel} htmlFor="tp">
                 Topic
               </label>
               <select
                 id="tp"
                 value={topic}
                 onChange={(e) => setTopic(e.target.value)}
-                style={{
-                  border: '2px solid var(--line2, #0B0B0B)',
-                  background: 'var(--panel, #F6F4EE)',
-                  padding: '12px 14px',
-                  font: '14px Inter, Arial, sans-serif',
-                  minHeight: 44,
-                  color: 'var(--ink, #0B0B0B)',
-                  width: '100%',
-                  cursor: 'pointer',
-                }}
+                className="py-3 px-3.5 [border:2px_solid_var(--line2)] [background:var(--panel)] [font:14px_Inter,_Arial,_sans-serif] min-h-[44px] text-ink w-full cursor-pointer"
               >
                 {TOPICS.map((t) => (
                   <option key={t} value={t}>
@@ -553,19 +358,8 @@ export function BlogEditor({
               </select>
             </div>
 
-            <div className="f" style={{ flex: '2 1 280px', margin: 0 }}>
-              <label
-                className="m"
-                htmlFor="tg"
-                style={{
-                  display: 'block',
-                  marginBottom: 8,
-                  font: '11px ui-monospace, Menlo, monospace',
-                  letterSpacing: '.06em',
-                  textTransform: 'uppercase',
-                  color: 'var(--dim, #5F5F5F)',
-                }}
-              >
+            <div className="f m-0 flex-[2_1_280px]">
+              <label className={editorLabel} htmlFor="tg">
                 Tags (comma separated, up to 3)
               </label>
               <input
@@ -573,56 +367,23 @@ export function BlogEditor({
                 placeholder="e.g. System design, Mock interviews"
                 value={tagsInput}
                 onChange={(e) => setTagsInput(e.target.value)}
-                style={{
-                  border: '2px solid var(--line2, #0B0B0B)',
-                  background: 'var(--panel, #F6F4EE)',
-                  padding: '12px 14px',
-                  font: '14px Inter, Arial, sans-serif',
-                  minHeight: 44,
-                  color: 'var(--ink, #0B0B0B)',
-                  width: '100%',
-                }}
+                className="py-3 px-3.5 [border:2px_solid_var(--line2)] [background:var(--panel)] [font:14px_Inter,_Arial,_sans-serif] min-h-[44px] text-ink w-full"
               />
             </div>
           </div>
 
           {/* Footer Action Bar matching BlogWrite.dc.html */}
-          <div
-            style={{
-              display: 'flex',
-              gap: 8,
-              alignItems: 'center',
-              borderTop: '1px solid var(--line, #CFCBBF)',
-              paddingTop: 20,
-            }}
-          >
-            <span
-              className="m"
-              style={{
-                font: '11px ui-monospace, Menlo, monospace',
-                letterSpacing: '.06em',
-                textTransform: 'uppercase',
-                color: 'var(--dim, #5F5F5F)',
-              }}
-            >
+          <div className="pt-5 flex gap-2 items-center [border-top:1px_solid_var(--line)]">
+            <span className="m [font:11px_ui-monospace,_Menlo,_monospace] tracking-[.06em] uppercase text-dim">
               Read time · {readTimeMin} min read
             </span>
-            <span style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+            <span className="ml-auto flex gap-2">
               {!isPublished && (
                 <button
                   type="button"
-                  className="k"
+                  className="k py-0 px-4 [font:500_13px_Inter,_Arial,_sans-serif] [border:2px_solid_var(--line2)] [background:var(--ink)] text-on min-h-[44px] cursor-pointer"
                   onClick={() => handleSave(true)}
                   disabled={submitting}
-                  style={{
-                    font: '500 13px Inter, Arial, sans-serif',
-                    border: '2px solid var(--line2, #0B0B0B)',
-                    padding: '0 16px',
-                    background: 'var(--ink, #0B0B0B)',
-                    color: 'var(--on, #FFFFFF)',
-                    minHeight: 44,
-                    cursor: 'pointer',
-                  }}
                 >
                   {submitting ? 'Publishing…' : 'Publish'}
                 </button>

@@ -77,11 +77,22 @@ export function Starfield({ seed = 4242, ground = true }: { seed?: number; groun
     ri += `M${x} ${16 - h}h3v1h-3z`;
   }
   return (
-    <div aria-hidden className="bgfx stars">
-      <svg viewBox="0 0 180 112" preserveAspectRatio="xMidYMid slice" className="px tw1">
+    <div
+      aria-hidden
+      className="bgfx [&_svg]:absolute [&_svg]:inset-0 [&_svg]:w-full [&_svg]:h-full [&_svg]:opacity-45 [&_.ridge]:opacity-100 [&_.ridge]:inset-[auto_0_0_0] [&_.ridge]:h-32 [.hero-c_>_&]:absolute"
+    >
+      <svg
+        viewBox="0 0 180 112"
+        preserveAspectRatio="xMidYMid slice"
+        className="px [animation:tw_2.2s_steps(1)_infinite]"
+      >
         <path d={a} fill="#fff" />
       </svg>
-      <svg viewBox="0 0 180 112" preserveAspectRatio="xMidYMid slice" className="px tw2">
+      <svg
+        viewBox="0 0 180 112"
+        preserveAspectRatio="xMidYMid slice"
+        className="px [animation:tw_3.1s_steps(1)_infinite_reverse]"
+      >
         <path d={b} fill="#8E84C9" />
       </svg>
       {ground && (

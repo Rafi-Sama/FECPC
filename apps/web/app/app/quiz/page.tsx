@@ -4,7 +4,7 @@ import { Page } from '@/components/app/Shell';
 import { useStore } from '@/components/app/Store';
 import { QuizMember } from '@/components/app/learning/QuizMember';
 import { QuizAdmin } from '@/components/app/learning/QuizAdmin';
-import '@/components/app/learning/learning.css';
+import '@/components/app/learning/learning.layer.css';
 
 export default function QuizPage() {
   const { s, me } = useStore();

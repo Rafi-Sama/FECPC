@@ -17,6 +17,8 @@ import {
   type Role,
 } from '@fecpc/contracts';
 
+import { permissionMatrix } from '@/components/app/admin/ui';
+
 const statuses = ['All', 'Active', 'Invited', 'Suspended'] as const;
 
 // Every account and what this officer may do to it. The same rank rules are enforced by the API.
@@ -39,10 +41,10 @@ function Accounts() {
   const [shown, more] = useMore(rows, 50);
   return (
     <div className="stack">
-      <div className="row" style={{ '--g': '8px' } as React.CSSProperties}>
+      <div className="row [--g:8px]">
         <input
-          className="input"
-          style={{ flex: '1 1 220px', maxWidth: 360 }}
+          className="input flex-[1_1_220px] max-w-[360px]"
+
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Name, handle or email"
@@ -60,7 +62,7 @@ function Accounts() {
         ))}
       </div>
       <div className="scroll-x">
-        <table className="tbl cards accounts">
+        <table className="tbl cards max-[701px]:[&_thead]:hidden max-[701px]:block max-[701px]:w-full max-[701px]:[&_tbody]:block max-[701px]:[&_tbody]:w-full max-[701px]:[&_tr]:block max-[701px]:[&_tr]:w-full max-[701px]:[&_td]:block max-[701px]:[&_td]:w-full max-[701px]:[&_tr]:p-[14px_0] max-[701px]:[&_tr]:[border-bottom:1px_solid_var(--line2)] max-[701px]:[&_td]:p-[3px_0] max-[701px]:[&_td]:[border:0] max-[701px]:[&_td]:text-left max-[701px]:[&_td]:wrap-anywhere accounts">
           <thead>
             <tr>
               <th>Member</th>
@@ -88,10 +90,7 @@ function Accounts() {
               return (
                 <tr key={m.id}>
                   <td>
-                    <span
-                      className="row"
-                      style={{ '--g': '10px', flexWrap: 'nowrap' } as React.CSSProperties}
-                    >
+                    <span className="row [--g:10px] flex-nowrap">
                       <MemberFace url={m.avatar_url} name={m.name} size={28} />
                       <span>
                         <strong>{m.name}</strong>
@@ -104,7 +103,7 @@ function Accounts() {
                     </span>
                   </td>
                   <td>
-                    <span className="row" style={{ '--g': '6px' } as React.CSSProperties}>
+                    <span className="row [--g:6px]">
                       {sa && !self && role !== 'president' ? (
                         <select
                           className="input sm"
@@ -162,10 +161,7 @@ function Accounts() {
                     </span>
                   </td>
                   <td className="r">
-                    <span
-                      className="row"
-                      style={{ '--g': '6px', justifyContent: 'flex-end' } as React.CSSProperties}
-                    >
+                    <span className="row [--g:6px] justify-end">
                       {link && (
                         <button
                           className="btn xs line"
@@ -223,8 +219,8 @@ function Permissions({ tab }: { tab: string }) {
       <div className="stack">
         {superAdmin && (
           <SaveForm
-            className="row"
-            style={{ '--g': '10px', alignItems: 'flex-end' } as React.CSSProperties}
+            className="row [--g:10px] items-end"
+
             label="President not appointed yet"
             saveLabel="Appoint"
             onDiscard={() => setEmail('')}
@@ -239,7 +235,7 @@ function Permissions({ tab }: { tab: string }) {
               return ok;
             }}
           >
-            <label className="field" style={{ flex: '0 1 320px' }}>
+            <label className="field flex-[0_1_320px]">
               <span className="label">
                 Appoint President · now {president.join(', ') || 'none'}
               </span>
@@ -266,12 +262,12 @@ function Permissions({ tab }: { tab: string }) {
           </SaveForm>
         )}
         <h2 className="h3">Posts</h2>
-        <p className="body" style={{ maxWidth: '70ch' }}>
+        <p className="body max-w-[70ch]">
           Each post grants the roles ticked here, on top of the member&apos;s own role.
           {superAdmin ? '' : ' Only the Super Admin changes this.'}
         </p>
         <div className="scroll-x">
-          <table className="tbl matrix">
+          <table className={permissionMatrix}>
             <thead>
               <tr>
                 <th>Post</th>

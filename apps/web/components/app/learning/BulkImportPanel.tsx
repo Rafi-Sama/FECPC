@@ -101,10 +101,10 @@ export function BulkImportPanel() {
   };
 
   return (
-    <div className="bulk-panel">
+    <div className="[border:1px_solid_var(--line)] rounded-[4px] [background:var(--panel)] mb-6 overflow-hidden">
       <button
         type="button"
-        className="bulk-panel-toggle"
+        className="w-full p-[16px_20px] flex items-center justify-between [background:none] [border:none] cursor-pointer text-[15px] [font-weight:600] text-ink text-left"
         onClick={() => setOpen(!open)}
         aria-expanded={open}
       >
@@ -113,15 +113,15 @@ export function BulkImportPanel() {
       </button>
 
       {open && (
-        <form className="bulk-panel-content" onSubmit={handleSubmit}>
+        <form className="p-[0_20px_20px_20px] flex flex-col gap-3.5" onSubmit={handleSubmit}>
           <div>
-            <p className="body" style={{ color: 'var(--dim)', marginBottom: 8 }}>
-              Bulk format example (supports comments):
-            </p>
-            <div className="json-example-box">{EXAMPLE_JSON}</div>
+            <p className="body text-dim mb-2">Bulk format example (supports comments):</p>
+            <div className="[background:#1e1e1e] text-[#d4d4d4] [font-family:ui-monospace,Menlo,Monaco,'Courier_New',monospace] text-[14px] p-3 rounded-[4px] whitespace-pre-wrap break-all overflow-x-auto">
+              {EXAMPLE_JSON}
+            </div>
           </div>
 
-          <div className="row between" style={{ alignItems: 'center' }}>
+          <div className="row between items-center">
             <span className="label">JSON Questions (max 200)</span>
             <button type="button" className="btn xs line" onClick={handleUseExample}>
               Use the example
@@ -138,7 +138,11 @@ export function BulkImportPanel() {
           />
 
           {error && <div className="alert-box error">{error}</div>}
-          {success && <div className="alert-box success">{success}</div>}
+          {success && (
+            <div className="alert-box [background:rgba(16,185,129,0.1)] border-[#10b981] text-[#047857]">
+              {success}
+            </div>
+          )}
 
           <div>
             <button type="submit" className="btn sm" disabled={submitting}>

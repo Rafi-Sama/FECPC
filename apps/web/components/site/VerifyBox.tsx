@@ -43,16 +43,16 @@ export default function VerifyBox() {
     sample ?? (found?.code === asked ? (found.hit ?? undefined) : undefined);
   const pending = !!asked && !sample && found?.code !== asked;
   return (
-    <div className="stack" style={{ '--g': '32px' } as React.CSSProperties}>
+    <div className="stack [--g:32px]">
       <form
-        className="row"
-        style={{ '--g': '12px', alignItems: 'flex-end' } as React.CSSProperties}
+        className="row [--g:12px] items-end"
+
         onSubmit={(e) => {
           e.preventDefault();
           setAsked(q.trim().toUpperCase());
         }}
       >
-        <label className="field" style={{ flex: '1 1 280px' }}>
+        <label className="field flex-[1_1_280px]">
           <span className="label">Certificate code</span>
           <input
             className="input mono"
@@ -70,7 +70,7 @@ export default function VerifyBox() {
           <button
             key={c.code}
             type="button"
-            className="link mono sample"
+            className="link mono [background:none] [border:0] cursor-pointer ml-3 p-[8px_0] [text-decoration:underline]"
             onClick={() => {
               setQ(c.code);
               setAsked(c.code);
@@ -84,31 +84,24 @@ export default function VerifyBox() {
         {asked && !hit && !pending && (
           <div className="panel box">
             <p className="label bad">No match</p>
-            <h3 className="h3" style={{ marginTop: 8 }}>
-              No certificate has the code {asked}.
-            </h3>
-            <p className="body" style={{ marginTop: 8 }}>
+            <h3 className="h3 mt-2">No certificate has the code {asked}.</h3>
+            <p className="body mt-2">
               Check for typos. If it still fails, the certificate was not issued by {site.short}.
             </p>
           </div>
         )}
         {hit && (
-          <div className="panel box cert">
+          <div className="panel box p-[clamp(24px,4vw,56px)] overflow-hidden">
             <div className="row between">
               <span className="label acc">Verified · issued by {site.short}</span>
               <span className="mono label">{hit.code}</span>
             </div>
-            <p className="label" style={{ marginTop: 36 }}>
-              This certifies that
+            <p className="label mt-9">This certifies that</p>
+            <p className="text-[clamp(36px,5vw,64px)] font-medium tracking-[-0.04em] leading-[1] [margin-block:8px_16px]">
+              {hit.name}
             </p>
-            <p className="cert-name">{hit.name}</p>
             <p className="lede">{hit.what}</p>
-            <div
-              className="row"
-              style={
-                { '--g': '40px', marginTop: 36, alignItems: 'flex-start' } as React.CSSProperties
-              }
-            >
+            <div className="row [--g:40px] mt-9 items-start">
               <div className="kv">
                 <span className="label">Date</span>
                 <span>{fmtDate(hit.date, { day: 'numeric', month: 'long', year: 'numeric' })}</span>
@@ -120,7 +113,10 @@ export default function VerifyBox() {
                 </div>
               )}
             </div>
-            <i aria-hidden className="seal dither" />
+            <i
+              aria-hidden
+              className="absolute -right-10 -bottom-10 w-45 h-45 rounded-[50%] text-acc opacity-90 dither"
+            />
           </div>
         )}
       </div>

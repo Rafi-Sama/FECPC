@@ -18,14 +18,8 @@ export function CertPreview({ html, title }: { html: string; title: string }) {
   return (
     <div
       ref={box}
-      style={{
-        position: 'relative',
-        width: '100%',
-        aspectRatio: `${CERT_W} / ${CERT_H}`,
-        overflow: 'hidden',
-        border: '2px solid var(--line2)',
-        background: '#fff',
-      }}
+      className="relative w-full overflow-hidden [border:2px_solid_var(--line2)] [background:#fff]"
+      style={{ aspectRatio: `${CERT_W} / ${CERT_H}` }}
     >
       {k > 0 && (
         <iframe
@@ -33,17 +27,8 @@ export function CertPreview({ html, title }: { html: string; title: string }) {
           sandbox=""
           srcDoc={html}
           tabIndex={-1}
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: CERT_W,
-            height: CERT_H,
-            border: 0,
-            transform: `scale(${k})`,
-            transformOrigin: '0 0',
-            pointerEvents: 'none',
-          }}
+          className="top-0 left-0 absolute [border:0] [transform-origin:0_0] pointer-events-none"
+          style={{ width: CERT_W, height: CERT_H, transform: `scale(${k})` }}
         />
       )}
     </div>

@@ -56,7 +56,10 @@ export function CourseForm({ onDone, onCancel }: { onDone: () => void; onCancel?
   };
 
   return (
-    <form className="course-form-panel" onSubmit={handleSubmit}>
+    <form
+      className="p-6 [background:var(--panel)] [border:1px_solid_var(--line)] rounded-[4px] mb-6"
+      onSubmit={handleSubmit}
+    >
       <div className="row between">
         <h3 className="h3">Add a course</h3>
         {onCancel && (
@@ -66,13 +69,9 @@ export function CourseForm({ onDone, onCancel }: { onDone: () => void; onCancel?
         )}
       </div>
 
-      {error && (
-        <div className="alert-box error" style={{ marginTop: 12 }}>
-          {error}
-        </div>
-      )}
+      {error && <div className="alert-box error mt-3">{error}</div>}
 
-      <div className="course-form-grid">
+      <div className="[display:grid] grid-cols-[1fr_1fr] gap-4 mt-4 max-[681px]:grid-cols-[1fr]">
         <div className="form-group">
           <label htmlFor="course-title">Title *</label>
           <input
@@ -124,7 +123,7 @@ export function CourseForm({ onDone, onCancel }: { onDone: () => void; onCancel?
           />
         </div>
 
-        <div className="form-group full-width">
+        <div className="form-group [grid-column:1_/_-1]">
           <label htmlFor="course-desc">Short description (up to 200 chars)</label>
           <textarea
             id="course-desc"
@@ -137,7 +136,7 @@ export function CourseForm({ onDone, onCancel }: { onDone: () => void; onCancel?
         </div>
       </div>
 
-      <div className="row" style={{ marginTop: 16, gap: 12 }}>
+      <div className="row mt-4 gap-3">
         <button type="submit" className="btn" disabled={submitting}>
           {submitting ? 'Adding course...' : 'Save course'}
         </button>

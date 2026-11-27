@@ -1,4 +1,5 @@
 'use client';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -6,9 +7,13 @@ import { Page } from '@/components/app/Shell';
 import { useStore } from '@/components/app/Store';
 import { MemberCard } from '@/components/app/members/MemberCard';
 import { MemberFilters, type MemberFilterState } from '@/components/app/members/MemberFilters';
-import { ProfileModal } from '@/components/app/members/ProfileModal';
 import { isAdmin } from '@fecpc/contracts';
 import type { MemberSummary } from '@fecpc/contracts';
+
+// Opened on demand: the dialog's code loads when it is first shown.
+const ProfileModal = dynamic(() =>
+  import('@/components/app/members/ProfileModal').then((m) => m.ProfileModal),
+);
 
 const PAGE_SIZE = 16;
 
@@ -268,7 +273,7 @@ function MembersInner({ initial }: { initial: MembersInitial | null }) {
   return (
     <Page
       title={
-        <span className="members-head-title">
+        <span className="font-bold [&_.acc]:text-acc [&_.acc]:font-medium [.t-d_&_.acc]:text-acc">
           <strong>{total}</strong>{' '}
           <span className="acc">{total === 1 ? 'member' : 'members'}.</span>
         </span>
@@ -287,9 +292,9 @@ function MembersInner({ initial }: { initial: MembersInitial | null }) {
         <ul className="bento" aria-busy="true" aria-label="Loading members">
           {Array.from({ length: 6 }).map((_, i) => (
             <li key={i} className="panel box c4 members-skeleton">
-              <div className="members-skeleton__bar" style={{ width: '55%' }} />
-              <div className="members-skeleton__bar" style={{ width: '80%' }} />
-              <div className="members-skeleton__bar" style={{ width: '40%' }} />
+              <div className="members-skeleton__bar w-[55%]" />
+              <div className="members-skeleton__bar w-[80%]" />
+              <div className="members-skeleton__bar w-[40%]" />
             </li>
           ))}
         </ul>
@@ -324,7 +329,7 @@ function MembersInner({ initial }: { initial: MembersInitial | null }) {
           </ul>
 
           {hasMore && (
-            <div className="members-pager">
+            <div className="flex justify-center items-center gap-3 mt-7">
               <button
                 type="button"
                 className="btn sm line"

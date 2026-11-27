@@ -98,7 +98,7 @@ export default function ApplyForm({
         <h2 className={`h3 ${state === 'sent' ? 'ok' : ''}`}>
           {state === 'sent' ? 'Application received.' : 'This form just closed.'}
         </h2>
-        <p className="body" style={{ marginTop: 10 }}>
+        <p className="body mt-2.5">
           {state === 'sent'
             ? 'If you are accepted, you get an email with a link to set your password.'
             : 'Your application was not sent. Ask the club for the next link.'}
@@ -114,7 +114,7 @@ export default function ApplyForm({
       </span>
       {input}
       {shown(k) && (
-        <span className="apply-err" id={`e-${k}`} role="alert">
+        <span className="text-bad text-[14px]" id={`e-${k}`} role="alert">
           {shown(k)}
         </span>
       )}
@@ -133,7 +133,7 @@ export default function ApplyForm({
       <div className="bar">
         <span>Application · Batch {link.batch}</span>
       </div>
-      <div className="join-body">
+      <div className="[&_.wide]:[grid-column:1/-1] [&_.input[aria-invalid='true']]:border-bad [&_.input[readonly]]:opacity-[0.7] [&_.input[readonly]]:cursor-not-allowed [&_.label]:text-mut [&_.label]:normal-case [&_.label]:tracking-[0.02em] [&_.label]:text-[14px] [display:grid] grid-cols-[repeat(auto-fit,minmax(min(100%,240px),1fr))] gap-5 p-[clamp(20px,3vw,32px)]">
         <div className="wide apply-photo-row">
           <label
             id="apply-photo"
@@ -154,11 +154,11 @@ export default function ApplyForm({
               onChange={(e) => pickPhoto(e.target.files?.[0])}
             />
           </label>
-          <div className="stack" style={{ '--g': '6px' } as React.CSSProperties}>
+          <div className="stack [--g:6px]">
             <span className="label">Profile photo</span>
             <span className="body">A clear photo of your face. It becomes your member avatar.</span>
             {shown('photo') && (
-              <span className="apply-err" id="e-photo" role="alert">
+              <span className="text-bad text-[14px]" id="e-photo" role="alert">
                 {shown('photo')}
               </span>
             )}
@@ -184,7 +184,7 @@ export default function ApplyForm({
           <input className="input" value={link.batch} readOnly aria-readonly tabIndex={-1} />,
         )}
         {extras && (
-          <p className="wide label apply-split">
+          <p className="wide label [border-top:1px_solid_var(--line)] pt-5">
             Optional <span className="dim">· skip anything you like</span>
           </p>
         )}
@@ -218,11 +218,11 @@ export default function ApplyForm({
         )}
         {/* Honeypot: off-screen and skipped by keyboard and screen readers; bots fill every field. */}
         <input
+          className="absolute -left-2500"
           name="website"
           tabIndex={-1}
           autoComplete="off"
           aria-hidden
-          style={{ position: 'absolute', left: '-10000px' }}
         />
         {turnstile && (
           <>
@@ -230,7 +230,7 @@ export default function ApplyForm({
             <div className="cf-turnstile wide" data-sitekey={turnstile} />
           </>
         )}
-        <div className="wide row" style={{ '--g': '20px' } as React.CSSProperties}>
+        <div className="wide row [--g:20px]">
           <button className="btn" disabled={state === 'busy'}>
             {state === 'busy' ? 'Sending…' : 'Submit application'}
           </button>

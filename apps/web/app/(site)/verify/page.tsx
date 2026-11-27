@@ -7,9 +7,9 @@ export default function Verify() {
   return (
     <>
       <section className="page-head t-b paper" data-t="b">
-        <div className="wrap split even" style={{ alignItems: 'start' }}>
+        <div className="wrap split even [align-items:start]">
           <div className="head">
-            <h1 className="disp" style={{ fontSize: 'clamp(48px,6.4vw,92px)' }}>
+            <h1 className="disp text-[clamp(48px,6.4vw,92px)]">
               Is this certificate <span className="acc">real?</span>
             </h1>
             <p className="lede">

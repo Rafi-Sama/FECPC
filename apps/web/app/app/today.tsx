@@ -71,7 +71,7 @@ export default function Today({
           </Link>
         </div>
       )}
-      <div className="bento fill">
+      <div className="bento fill items-stretch">
         <section className="panel c8">
           <div className="row between">
             <p className="label">Problems of the day · from this week&apos;s sheet</p>
@@ -95,8 +95,8 @@ export default function Today({
                     {p.tier} · {p.rating}
                   </span>
                   <a
-                    className="h3 link"
-                    style={{ fontSize: 19, textDecoration: 'none' }}
+                    className="h3 link text-[19px] [text-decoration:none]"
+
                     href={cfUrl(p.id)}
                     target="_blank"
                     rel="noreferrer"
@@ -121,10 +121,7 @@ export default function Today({
           </p>
           <p className="big">
             {LEVEL - lv.into}
-            <span className="mut" style={{ fontSize: '.36em' }}>
-              {' '}
-              XP to level {lv.lv + 1}
-            </span>
+            <span className="mut text-[.36em]"> XP to level {lv.lv + 1}</span>
           </p>
           <div className="meter" style={css({ '--v': `${(lv.into / LEVEL) * 100}%` })}>
             <i />
@@ -154,10 +151,7 @@ export default function Today({
             <>
               <p className="big" style={css({ color: rankFor(cf.rating).color })}>
                 {cf.rating}
-                <span className="mut" style={{ fontSize: '.36em' }}>
-                  {' '}
-                  {cf.rank}
-                </span>
+                <span className="mut text-[.36em]"> {cf.rank}</span>
               </p>
               <p className="label">
                 {cf.handle} · peak {cf.maxRating} · {cf.solved.length} solved
@@ -185,10 +179,7 @@ export default function Today({
             <>
               <p className="big">
                 {weekDone}
-                <span className="mut" style={{ fontSize: '.36em' }}>
-                  {' '}
-                  / {week.problems.length} solved
-                </span>
+                <span className="mut text-[.36em]"> / {week.problems.length} solved</span>
               </p>
               <div
                 className="meter"
@@ -253,7 +244,7 @@ export default function Today({
             <ul className="list">
               {events.slice(0, 4).map((e) => (
                 <li key={e.id}>
-                  <span className="mono acc" style={{ width: 64, whiteSpace: 'nowrap' }}>
+                  <span className="mono acc w-[64px] whitespace-nowrap">
                     {fmtDate(e.startsAt.slice(0, 10))}
                   </span>
                   <span className="grow">

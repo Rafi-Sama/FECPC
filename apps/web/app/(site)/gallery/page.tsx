@@ -25,9 +25,9 @@ export default function Gallery() {
           </div>
         </div>
       </section>
-      <section className="sec t-d" data-t="d" style={{ paddingTop: 0 }}>
+      <section className="sec t-d pt-0" data-t="d">
         <div className="wrap">
-          <ul className="shots">
+          <ul className="[columns:3_280px] gap-x-4 [&_li]:[break-inside:avoid] [&_li]:mb-4 [&_li]:flex [&_li]:flex-col [&_li]:gap-2 [&_img]:w-full [&_img]:h-auto [&_img]:[filter:grayscale(1)_contrast(1.1)] [&_img]:[transition:filter_0.2s] [&_li:hover_img]:[filter:none]">
             {shots.map((f) => (
               <li key={f}>
                 <img

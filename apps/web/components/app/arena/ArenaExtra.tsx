@@ -10,6 +10,8 @@ import { SolveCheck } from '../home/Daily';
 import { useConfirm } from '../shared/PromptDialog';
 import { useClubRounds } from './rounds';
 
+import { recordList } from '@/components/site/ui';
+
 const css = (o: Record<string, string | number>) => o as React.CSSProperties;
 const WEEK = 7 * 864e5;
 // Week keys are Mondays in club time (Asia/Dhaka, UTC+6).
@@ -61,7 +63,7 @@ export function Fantasy() {
         problem solved in every rated round that week. Picks for a week lock when it starts.
       </p>
       {before[0] && (
-        <div className="panel" style={{ borderColor: '#FFD23F' }}>
+        <div className="panel border-[#FFD23F]">
           <div className="row">
             <Trophy size={44} />
             <div>
@@ -85,9 +87,7 @@ export function Fantasy() {
           <ol className="list">
             {now.map((t, i) => (
               <li key={t.by} className={t.by === me.id ? 'you' : ''}>
-                <span className="arcade acc" style={{ width: 32 }}>
-                  {String(i + 1).padStart(2, '0')}
-                </span>
+                <span className="arcade acc w-[32px]">{String(i + 1).padStart(2, '0')}</span>
                 <span className="grow">
                   <strong>{name(t.by)}</strong>
                   <br />
@@ -113,19 +113,15 @@ export function Fantasy() {
             mine[i] ? (
               <button
                 key={i}
-                className="tag on"
-                style={{ fontSize: 14, padding: '10px 12px' }}
+                className="tag on text-[14px] py-2.5 px-3"
+
                 onClick={() => act('kv', { key, value: toggle(mine, mine[i]!).join(',') })}
                 title="Remove"
               >
                 {name(mine[i]!)} ✕
               </button>
             ) : (
-              <span
-                key={i}
-                className="tag"
-                style={{ fontSize: 14, padding: '10px 12px', borderStyle: 'dashed' }}
-              >
+              <span key={i} className="tag text-[14px] py-2.5 px-3 [border-style:dashed]">
                 empty slot
               </span>
             ),
@@ -134,7 +130,7 @@ export function Fantasy() {
         {pool.length === 0 ? (
           <p className="body">No member has a synced Codeforces handle yet.</p>
         ) : (
-          <div className="scroll-x" style={{ marginTop: 12 }}>
+          <div className="scroll-x mt-3">
             <table className="tbl">
               <thead>
                 <tr>
@@ -283,7 +279,7 @@ export function Trophies() {
   return (
     <div className="stack">
       {champ && (
-        <div className="panel" style={{ borderColor: '#FFD23F' }}>
+        <div className="panel border-[#FFD23F]">
           <div className="row">
             <Trophy size={54} />
             <div>
@@ -295,7 +291,7 @@ export function Trophies() {
         </div>
       )}
       <h2 className="h3 acc">RECORD HOLDERS</h2>
-      <ol className="hof">
+      <ol className={recordList}>
         {records.map(([title, r]) => (
           <li key={title}>
             <span className="arcade acc">{r?.v ?? '—'}</span>
@@ -308,7 +304,7 @@ export function Trophies() {
         ))}
       </ol>
       <h2 className="h3 acc">BADGES</h2>
-      <ul className="arena-badges">
+      <ul className="arena-badges [list-style:none] p-0 m-0 [display:grid] grid-cols-[repeat(auto-fill,minmax(min(100%,300px),1fr))] gap-3">
         {badges.map(([glyph, nm, desc, v, goal], i) => {
           const pct = Math.min(1, v / goal);
           return (
@@ -317,7 +313,9 @@ export function Trophies() {
               className={pct >= 1 ? 'got' : ''}
               style={css({ '--b': ['#FFD23F', '#3DE1FF', '#FF4D8D', '#9BFF6B'][i % 4]! })}
             >
-              <span className="glyph">{glyph}</span>
+              <span className="glyph [display:grid] [place-items:center] h-[56px] [font-weight:700] text-[16px] [color:var(--b)] [border:2px_solid_var(--b)]">
+                {glyph}
+              </span>
               <div>
                 <p className="arcade">{nm}</p>
                 <p className="body">{desc}</p>
@@ -354,10 +352,9 @@ export function Trophies() {
             <section key={k} className="panel c4">
               <p className="label">{k}</p>
               <p
-                className="big"
+                className="big [overflow-wrap:anywhere]"
                 style={{
                   fontSize: typeof v === 'string' && v.length > 8 ? 24 : 'clamp(28px, 3vw, 40px)',
-                  overflowWrap: 'anywhere',
                 }}
               >
                 {v}
@@ -408,8 +405,8 @@ export function Challenges() {
         <p className="label">Challenge the club · paste one Codeforces problem link</p>
         <div className="row" style={css({ '--g': '10px', flexWrap: 'nowrap', marginTop: 8 })}>
           <input
-            className="input"
-            style={{ flex: 1 }}
+            className="input flex-1"
+
             aria-label="Codeforces problem link"
             placeholder="https://codeforces.com/problemset/problem/1352/C"
             value={link}
@@ -420,7 +417,7 @@ export function Challenges() {
             CHALLENGE
           </button>
         </div>
-        <p className="label" style={{ marginTop: 8 }}>
+        <p className="label mt-2">
           Everyone is notified. Solves come from Codeforces; first accept after the challenge wins.
         </p>
       </form>
@@ -433,7 +430,7 @@ export function Challenges() {
           ? `color-mix(in oklab, ${rankFor(ch.rating).color}, #fff 40%)`
           : undefined;
         return (
-          <div key={ch.id} className="panel" style={{ gap: 12 }}>
+          <div key={ch.id} className="panel gap-3">
             <div className="row between" style={css({ '--g': '10px' })}>
               <div>
                 <a className="h3 link" href={cfUrl(ch.problem)} target="_blank" rel="noreferrer">
@@ -464,7 +461,7 @@ export function Challenges() {
               <ol className="list">
                 {race.map((x, i) => (
                   <li key={x.id} className={x.id === me.id ? 'you' : ''}>
-                    <span className="arcade" style={{ width: 32, color: MEDAL[i] ?? undefined }}>
+                    <span className="arcade w-[32px]" style={{ color: MEDAL[i] ?? undefined }}>
                       {String(i + 1).padStart(2, '0')}
                     </span>
                     <MemberFace

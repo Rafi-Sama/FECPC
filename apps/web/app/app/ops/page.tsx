@@ -143,8 +143,8 @@ export default function Ops() {
       {tab === 'Documents' && (
         <div className="stack">
           <button
-            className="btn sm b"
-            style={{ alignSelf: 'flex-end' }}
+            className="btn sm b self-end"
+
             onClick={() => setAdding('doc')}
           >
             + Add document
@@ -220,8 +220,8 @@ export default function Ops() {
       {tab === 'Inventory' && (
         <div className="stack">
           <button
-            className="btn sm b"
-            style={{ alignSelf: 'flex-end' }}
+            className="btn sm b self-end"
+
             onClick={() => setAdding('item')}
           >
             + Add item
@@ -319,7 +319,7 @@ export default function Ops() {
               <p className="label">8 months</p>
             </section>
           ))}
-          <section className="panel no-print" style={{ gridColumn: '1 / -1' }}>
+          <section className="panel no-print col-span-full">
             <div className="row between">
               <p className="h3">Annual report 2026</p>
               <button className="btn sm" onClick={() => print()}>
@@ -362,7 +362,7 @@ function TaskCard({
           e.dataTransfer.effectAllowed = 'move';
         }}
       >
-        <span className="row between" style={{ flexWrap: 'nowrap', alignItems: 'flex-start' }}>
+        <span className="row between flex-nowrap items-start">
           <strong>{t.title}</strong>
           <button
             className="btn xs line"
@@ -372,7 +372,7 @@ function TaskCard({
             Edit
           </button>
         </span>
-        <span className="row task__meta" style={{ '--g': '8px' } as React.CSSProperties}>
+        <span className="row text-[14px] items-center [--g:8px]">
           {t.who ? (
             <>
               <MemberFace id={t.who} name={who(t.who).name} size={22} fg="#0D0D0B" bg="#DAD6CB" />
@@ -382,7 +382,13 @@ function TaskCard({
             <span className="dim">Unassigned</span>
           )}
           {t.due && (
-            <span className={overdue ? 'task__due bad' : 'task__due'}>
+            <span
+              className={
+                overdue
+                  ? 'ml-auto text-dim [&.bad]:text-bad bad'
+                  : 'ml-auto text-dim [&.bad]:text-bad'
+              }
+            >
               {overdue ? 'Overdue · ' : 'Due '}
               {fmtDate(t.due)}
             </span>
@@ -415,7 +421,7 @@ function TaskCard({
           onChange={(e) => setDraft({ ...draft, title: e.target.value })}
         />
       </label>
-      <span className="row" style={{ '--g': '8px' } as React.CSSProperties}>
+      <span className="row [--g:8px]">
         <PersonPicker
           people={people}
           label={`Assignee of ${t.title}`}
@@ -442,7 +448,7 @@ function TaskCard({
       {sure ? (
         <span className="row between" role="alert">
           <span className="body">Delete this task?</span>
-          <span className="row" style={{ '--g': '6px' } as React.CSSProperties}>
+          <span className="row [--g:6px]">
             <button type="button" className="btn xs line" onClick={() => setSure(false)}>
               Keep
             </button>
@@ -465,7 +471,7 @@ function TaskCard({
           <button type="button" className="btn xs line danger" onClick={() => setSure(true)}>
             Delete
           </button>
-          <span className="row" style={{ '--g': '6px' } as React.CSSProperties}>
+          <span className="row [--g:6px]">
             <button type="button" className="btn xs line" data-close onClick={close}>
               Close
             </button>
@@ -512,8 +518,8 @@ function AddModal({
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <form
-        className="cm-modal"
-        style={{ maxWidth: 520 }}
+        className="cm-modal max-w-[520px]"
+
         onSubmit={async (e) => {
           e.preventDefault();
           const d = new FormData(e.currentTarget);
@@ -530,10 +536,7 @@ function AddModal({
           </button>
         </div>
         {children}
-        <div
-          className="row"
-          style={{ justifyContent: 'flex-end', '--g': '8px' } as React.CSSProperties}
-        >
+        <div className="row justify-end [--g:8px]">
           <button type="button" className="btn sm line" onClick={onClose}>
             Cancel
           </button>

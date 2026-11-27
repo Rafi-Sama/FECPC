@@ -11,6 +11,9 @@ import type { AppState } from '@fecpc/contracts';
 import { site } from '@/lib/site';
 import { useStore } from './Store';
 
+const navBadge =
+  "[font:700_14px_var(--mono),monospace] [background:var(--acc)] text-on min-w-[20px] h-[20px] [display:grid] [place-items:center] p-[0_5px] min-[861px]:[[data-rail='true']_.side_nav_&]:absolute min-[861px]:[[data-rail='true']_.side_nav_&]:top-0.5 min-[861px]:[[data-rail='true']_.side_nav_&]:right-0.5 min-[861px]:[[data-rail='true']_.side_nav_&]:min-w-[18px] min-[861px]:[[data-rail='true']_.side_nav_&]:h-[18px] [.topbar_.rail-btn_&]:absolute [.topbar_.rail-btn_&]:top-0 [.topbar_.rail-btn_&]:-right-0.5 [.topbar_.rail-btn_&]:min-w-[18px] [.topbar_.rail-btn_&]:h-[18px] [animation:badge-in_0.35s_cubic-bezier(0.3,1.6,0.6,1)]";
+
 type Item = readonly [href: string, label: string];
 const groups: { g: string; items: Item[] }[] = [
   { g: 'Home', items: [['/app', 'Today']] },
@@ -95,7 +98,7 @@ const icons: Record<string, string> = {
 };
 const Icon = ({ k }: { k: string }) => (
   <svg
-    className="ic"
+    className="flex-none [.side_nav_a_&]:text-mut [.side_nav_a_&]:[transition:transform_0.2s_ease,color_0.18s_ease] [.side_nav_a:hover_&]:[color:var(--hue)] [.side_nav_a:hover_&]:[transform:translateX(2px)_scale(1.08)] [.side_nav_a[aria-current='page']_&]:[color:var(--hue)] [.me-menu_&]:text-mut"
     viewBox="0 0 24 24"
     width="20"
     height="20"
@@ -185,11 +188,7 @@ function Palette({ th, pages }: { th: string; pages: typeof all }) {
               </button>
             </li>
           ))}
-          {hits.length === 0 && (
-            <li className="body" style={{ padding: 14 }}>
-              Nothing matches “{q}”.
-            </li>
-          )}
+          {hits.length === 0 && <li className="body p-3.5">Nothing matches “{q}”.</li>}
         </ul>
       </dialog>
     </>
@@ -280,13 +279,13 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     >
       <Icon k={href} />
       <span className="t">{label}</span>
-      {badge[href] > 0 && <b className="nbadge">{badge[href]}</b>}
+      {badge[href] > 0 && <b className={navBadge}>{badge[href]}</b>}
     </Link>
   );
   return (
     <div className="shell" data-more={more} data-rail={rail}>
       <aside className="side t-d">
-        <div className="side-top">
+        <div className="side-top flex items-center gap-[4px] min-[861px]:[[data-rail='true']_&]:flex-col max-[861px]:contents">
           <div className="brand">
             <i aria-hidden />
             <span className="t">{site.short}</span>
@@ -301,7 +300,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             <Icon k="rail" />
           </button>
           <button
-            className="rail-btn th-btn m-only"
+            className="rail-btn max-[861px]:[&.rail-btn]:[display:grid] hidden! max-[861px]:[display:grid]!"
             aria-label={dark ? 'Switch to light theme' : 'Switch to dark theme'}
             title={dark ? 'Light theme' : 'Dark theme'}
             onClick={() => act('flag', { key: 'dark', on: !dark })}
@@ -355,10 +354,10 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         </nav>
       </aside>
       <div className="body">
-        <header className="topbar t-d">
+        <header className="topbar [position:sticky] top-0 z-15 [display:grid] grid-cols-[1fr_minmax(0,420px)_1fr] items-center gap-4 min-h-[60px] p-[0_clamp(16px,3vw,40px)] [border-bottom:1px_solid_var(--line)] [&_.search]:w-full max-[861px]:hidden print:hidden t-d">
           <span />
           <Palette th={th} pages={all.filter((i) => show(i.href))} />
-          <div className="tb-right">
+          <div className="flex items-center gap-1.5 [justify-self:end]">
             <button
               className="rail-btn"
               aria-label={dark ? 'Switch to light theme' : 'Switch to dark theme'}
@@ -367,7 +366,10 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             >
               <Icon k={dark ? 'sun' : 'moon'} />
             </button>
-            <details className="notif" key={'n' + path}>
+            <details
+              className="[&_summary]:[list-style:none] [&_summary]:cursor-pointer [&_summary::-webkit-details-marker]:hidden [&[open]_summary]:text-acc relative"
+              key={'n' + path}
+            >
               <summary
                 className="rail-btn"
                 aria-label={`Inbox, ${badge['/app/notifications']} unread`}
@@ -375,7 +377,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               >
                 <Icon k="/app/notifications" />
                 {badge['/app/notifications'] > 0 && (
-                  <b className="nbadge">{badge['/app/notifications']}</b>
+                  <b className={navBadge}>{badge['/app/notifications']}</b>
                 )}
               </summary>
               <div className="notif-menu">
@@ -415,7 +417,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                   <Link key={href} href={href} aria-current={href === top ? 'page' : undefined}>
                     <Icon k={href} />
                     <span className="t">{label}</span>
-                    {badge[href] > 0 && <b className="nbadge">{badge[href]}</b>}
+                    {badge[href] > 0 && <b className={navBadge}>{badge[href]}</b>}
                   </Link>
                 ))}
                 <button onClick={signOut}>
@@ -479,10 +481,7 @@ export function Page({
 }) {
   return (
     <div className="page">
-      <header
-        className="head row between"
-        style={{ maxWidth: 'none', flexDirection: 'row', alignItems: 'flex-end' }}
-      >
+      <header className="head row between max-w-none flex-row items-end">
         <h1 className="h2">{title}</h1>
         {aside}
       </header>
@@ -494,9 +493,7 @@ export function Denied({ need }: { need: string }) {
   return (
     <div className="panel">
       <p className="label bad">Permission denied</p>
-      <h2 className="h3" style={{ marginBlock: 8 }}>
-        Your role cannot open this.
-      </h2>
+      <h2 className="h3 my-2">Your role cannot open this.</h2>
       <p className="body">Needs: {need}.</p>
     </div>
   );
@@ -511,7 +508,7 @@ export function Tabs<T extends string>({
   onChange: (t: T) => void;
 }) {
   return (
-    <div className="row tabs" role="tablist" style={{ '--g': '8px' } as React.CSSProperties}>
+    <div className="row tabs [--g:8px]" role="tablist">
       {tabs.map((t) => (
         <button
           key={t}
@@ -533,7 +530,7 @@ export function InboxActions({ n }: { n: AppState['inbox'][number] }) {
   const [busy, setBusy] = useState(false);
   if (!n.actions?.length) return null;
   return (
-    <span className="row" style={{ '--g': '8px' } as React.CSSProperties}>
+    <span className="row [--g:8px]">
       {n.actions.map((x) => (
         <button
           key={x.label}

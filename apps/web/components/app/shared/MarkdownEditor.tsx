@@ -75,7 +75,10 @@ function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
       const mention = lead ? full.slice(1) : full;
       if (lead) out.push(lead);
       out.push(
-        <span key={`${keyPrefix}-m-${idx++}`} className="cm-mention">
+        <span
+          key={`${keyPrefix}-m-${idx++}`}
+          className="inline-block p-[0_5px] rounded-[4px] [background:rgba(31,59,255,0.12)] text-[#1f3bff] [font-weight:600] [font-size:0.94em] t-d:[background:rgba(96,165,250,0.18)] t-d:text-[#93c5fd] [.read-content_&]:[color:var(--ann-blue)] [.read-content_&]:[font-weight:bold] [.read-content_&]:[background:#eff6ff] [.read-content_&]:p-[0_4px] [.read-content_&]:rounded-[2px] t-d:[.read-content_&]:text-acc t-d:[.read-content_&]:[background:color-mix(in_srgb,var(--acc)_15%,transparent)]"
+        >
           {mention}
         </span>,
       );
@@ -145,7 +148,10 @@ export function MarkdownBody({ markdown }: { markdown: string }) {
         i++;
       }
       blocks.push(
-        <blockquote key={key++} className="cm-bq">
+        <blockquote
+          key={key++}
+          className="[border-left:4px_solid_#1f3bff] p-[6px_0_6px_14px] m-[4px_0] [color:var(--mut)] [background:color-mix(in_srgb,#1f3bff_5%,transparent)] t-d:[border-left-color:#60a5fa] t-d:[background:color-mix(in_srgb,#60a5fa_8%,transparent)] [.read-content_&]:[background:#eff6ff] [.read-content_&]:[border-left:4px_solid_var(--ann-blue)] [.read-content_&]:p-[1rem] [.read-content_&]:m-[1.5rem_0] [.read-content_&]:[font-family:var(--ann-font-mono)] [.read-content_&]:[font-size:0.9rem] [.read-content_&]:text-[#111111] t-d:[.read-content_&]:[background:color-mix(in_srgb,var(--acc)_10%,var(--panel))] t-d:[.read-content_&]:[border-left:4px_solid_var(--acc)] t-d:[.read-content_&]:text-hi"
+        >
           {bqLines.map((bl, bi) => (
             <React.Fragment key={bi}>
               {bi > 0 && <br />}
@@ -245,7 +251,7 @@ export function MarkdownEditor({
   const [mode, setMode] = useState<'write' | 'preview'>('write');
   return (
     <div className="field">
-      <div className="cm-md-bar">
+      <div className="[.ann-modal_&_label.label]:[font-family:var(--ann-font-mono)] [.ann-modal_&_label.label]:[font-size:0.8rem] [.ann-modal_&_label.label]:uppercase [.ann-modal_&_label.label]:[color:var(--ann-muted)] flex items-center justify-between gap-2 flex-wrap mb-1.5 [.ann-modal_&]:flex [.ann-modal_&]:justify-between [.ann-modal_&]:items-end [.ann-modal_&]:-mb-0.5 [.ann-modal_&]:relative [.ann-modal_&]:z-1">
         {label ? (
           <label className="label" htmlFor={id}>
             {label}
@@ -253,7 +259,11 @@ export function MarkdownEditor({
         ) : (
           <span />
         )}
-        <div className="cm-md-tabs" role="tablist" aria-label="Markdown mode">
+        <div
+          className="cm-md-tabs inline-flex gap-1.5 [.ann-modal_&]:flex"
+          role="tablist"
+          aria-label="Markdown mode"
+        >
           <button
             type="button"
             role="tab"
@@ -288,7 +298,7 @@ export function MarkdownEditor({
           style={{ minHeight: rows * 22 }}
         />
       ) : (
-        <div className="cm-md-preview">
+        <div className="min-h-[140px] p-3.5 [border:2px_solid_var(--line2)] [background:var(--bg)] t-d:[border-width:1px] [.ann-modal_&]:p-[1rem] [.ann-modal_&]:[border:var(--ann-border-thick)] [.ann-modal_&]:[background:var(--ann-bg)] [.ann-modal_&]:min-h-[150px]">
           {value.trim() ? (
             <MarkdownBody markdown={value} />
           ) : (

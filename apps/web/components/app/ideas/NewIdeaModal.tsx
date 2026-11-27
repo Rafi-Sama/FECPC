@@ -3,16 +3,15 @@ import { useEffect, useState } from 'react';
 import { SaveForm } from '@/components/app/SaveBar';
 import { MarkdownEditor } from '@/components/app/shared/MarkdownEditor';
 import type { IdeaType } from '@fecpc/contracts';
-
-export const IDEA_TYPE_OPTIONS: { value: IdeaType; label: string; short: string }[] = [
-  { value: 'idea', label: 'Idea', short: 'Idea' },
-  { value: 'teammate', label: 'Teammate Request', short: 'Teammate' },
-  { value: 'study', label: 'Study Partner', short: 'Study' },
-];
-
-export function ideaTypeLabel(type: IdeaType): string {
-  return IDEA_TYPE_OPTIONS.find((t) => t.value === type)?.short ?? type;
-}
+import {
+  cmChips,
+  cmSideBox,
+  cmIdeaSubmitTitle,
+  cmIdeaSubmitNote,
+  cmIdeaPublish,
+  ideaSubmitFoot,
+  IDEA_TYPE_OPTIONS,
+} from '@/components/app/ideas/ui';
 
 export function NewIdeaModal({
   open,
@@ -94,8 +93,8 @@ export function NewIdeaModal({
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <SaveForm
-        className="cm-modal cm-idea-submit"
-        style={{ maxWidth: 750 }}
+        className="cm-modal cm-idea-submit p-0 gap-0 [box-shadow:8px_8px_0_rgba(13,_13,_11,_0.2)] [.t-d_&]:[box-shadow:8px_8px_0_rgba(0,_0,_0,_0.8)] max-w-[750px]"
+
         label="Unsubmitted idea"
         saveLabel="Submit idea"
         onDiscard={() => {
@@ -104,8 +103,8 @@ export function NewIdeaModal({
         }}
         onSubmit={handleSubmit}
       >
-        <div className="cm-modal-head cm-idea-submit-head">
-          <h2 className="h3 cm-idea-submit-title">Submit Idea</h2>
+        <div className="cm-modal-head [&_.cm-modal-close]:flex-none flex items-start gap-3.5 p-6 [background:var(--bg)] [border-bottom:2px_solid_var(--line2)] max-[521px]:p-4">
+          <h2 className={`h3 cm-idea-submit-title ${cmIdeaSubmitTitle}`}>Submit Idea</h2>
           <button type="button" className="cm-modal-close" aria-label="Close" onClick={onClose}>
             ×
           </button>
@@ -128,7 +127,11 @@ export function NewIdeaModal({
 
           <div className="field">
             <span className="label">Type</span>
-            <div className="cm-chips" role="radiogroup" aria-label="Idea type">
+            <div
+              className={`cm-chips flex gap-2 items-center ${cmChips}`}
+              role="radiogroup"
+              aria-label="Idea type"
+            >
               {IDEA_TYPE_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}
@@ -159,11 +162,10 @@ export function NewIdeaModal({
             placeholder="Explain the idea, project scope, or what you're looking for…"
           />
 
-          <div className="cm-side-box cm-idea-questions">
-            <label
-              className="row"
-              style={{ cursor: 'pointer', '--g': '10px' } as React.CSSProperties}
-            >
+          <div
+            className={`cm-side-box flex gap-3 ${cmSideBox} p-5 [border:2px_solid_var(--line2)] [&&]:[background:var(--bg)]`}
+          >
+            <label className="row cursor-pointer [--g:10px]">
               <input
                 type="checkbox"
                 className="check"
@@ -172,27 +174,24 @@ export function NewIdeaModal({
               />
               <span>
                 <strong>Ask questions to interested members</strong>
-                <span className="label" style={{ display: 'block', fontSize: 11, marginTop: 2 }}>
+                <span className="label block text-[11px] mt-0.5">
                   Optional (1–3 fields). Responses are visible only to you.
                 </span>
               </span>
             </label>
 
             {wantsRoles && (
-              <div className="stack" style={{ '--g': '10px', marginTop: 4 } as React.CSSProperties}>
+              <div className="stack [--g:10px] mt-1">
                 {roles.map((r, idx) => (
                   <label key={idx} className="field">
                     <span className="label">
                       Question {idx + 1}
                       {idx === 0 ? '' : ' (Optional)'}
                     </span>
-                    <div
-                      className="row"
-                      style={{ '--g': '8px', flexWrap: 'nowrap' } as React.CSSProperties}
-                    >
+                    <div className="row [--g:8px] flex-nowrap">
                       <input
-                        className="input grow"
-                        style={{ minHeight: 40 }}
+                        className="input grow min-h-[40px]"
+
                         value={r}
                         onChange={(e) => setRoleAt(idx, e.target.value)}
                         maxLength={140}
@@ -221,8 +220,8 @@ export function NewIdeaModal({
                 {roles.length < 3 && (
                   <button
                     type="button"
-                    className="btn xs line"
-                    style={{ alignSelf: 'flex-start' }}
+                    className="btn xs line self-start"
+
                     onClick={addRole}
                   >
                     + Add prompt ({roles.length}/3)
@@ -232,9 +231,11 @@ export function NewIdeaModal({
             )}
           </div>
 
-          <div className="cm-idea-submit-foot">
-            <span className="cm-idea-submit-note">Responses visible only to you.</span>
-            <button type="submit" className="btn sm cm-idea-publish">
+          <div className={ideaSubmitFoot}>
+            <span className={`cm-idea-submit-note tracking-[0.05em] ${cmIdeaSubmitNote}`}>
+              Responses visible only to you.
+            </span>
+            <button type="submit" className={`btn sm cm-idea-publish ${cmIdeaPublish}`}>
               Publish Idea
             </button>
           </div>

@@ -28,13 +28,15 @@ export function MilestonesCard({
   };
 
   return (
-    <section className="panel ms-card" aria-label="Milestones">
+    <section className="panel flex flex-col gap-3" aria-label="Milestones">
       <p className="label">Milestones</p>
 
       {rows.length === 0 ? (
-        <p className="ms-empty">Nothing new this week.</p>
+        <p className="ms-empty font-label text-[12px] tracking-[0.05em] [color:var(--dim)]">
+          Nothing new this week.
+        </p>
       ) : (
-        <div className="list ms-list">
+        <div className="list mt-0.5">
           {rows.map((m) => (
             <MilestoneRow
               key={m.id}

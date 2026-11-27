@@ -29,7 +29,7 @@ export default function Inbox() {
         )
       }
     >
-      <section className="panel" style={{ maxWidth: 820 }}>
+      <section className="panel max-w-[820px]">
         {inbox.length === 0 ? (
           <p className="body">
             Nothing yet. Dues, decisions, announcements and requests from other members show up
@@ -41,9 +41,7 @@ export default function Inbox() {
               const r = s.read.includes(n.id);
               return (
                 <div key={n.id} style={{ opacity: r ? 0.5 : 1 }}>
-                  <span className="pill" style={{ minWidth: 118, justifyContent: 'center' }}>
-                    {n.cat}
-                  </span>
+                  <span className="pill min-w-[118px] justify-center">{n.cat}</span>
                   <Link className="grow link" href={n.href}>
                     <strong>{n.text}</strong>
                   </Link>

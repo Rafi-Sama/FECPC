@@ -5,7 +5,7 @@ import { Page } from '@/components/app/Shell';
 import { useStore } from '@/components/app/Store';
 import { CourseGrid } from '@/components/app/learning/CourseGrid';
 import { CourseForm } from '@/components/app/learning/CourseForm';
-import '@/components/app/learning/learning.css';
+import '@/components/app/learning/learning.layer.css';
 
 export default function Courses() {
   const { s, me, courses } = useStore();
@@ -21,7 +21,7 @@ export default function Courses() {
         </>
       }
     >
-      <div className="learning-container">
+      <div className="flex flex-col gap-6 w-full">
         {isStaff && !showAddForm && (
           <div className="row">
             <button type="button" className="btn sm" onClick={() => setShowAddForm(true)}>

@@ -6,6 +6,18 @@ import { useStore } from '@/components/app/Store';
 import type { MemberProfile, AlumniJob } from '@fecpc/contracts';
 import { useConfirm } from '@/components/app/shared/PromptDialog';
 
+const statValue =
+  "[.alumni-modal_.stat:hover_&]:text-bg [font-family:var(--mono,'JetBrains_Mono',monospace)] [font-size:2.2rem] [font-weight:700] text-acc leading-[1] mb-2 [font-variant-numeric:tabular-nums] [transition:color_0.15s] [.alumni-card-full_.stat:hover_&]:text-bg";
+
+const statLabel =
+  "[font-family:var(--mono,'JetBrains_Mono',monospace)] [font-size:0.7rem] uppercase tracking-[0.08em] opacity-[0.75]";
+
+const blockLabel =
+  "[font-family:var(--mono,'JetBrains_Mono',monospace)] [font-size:0.8rem] [font-weight:700] uppercase flex items-center gap-2 mb-3.5 tracking-[0.05em] text-hi [&::before]:[content:''] [&::before]:w-[8px] [&::before]:h-[8px] [&::before]:[background:var(--acc)] [&::before]:[border:1px_solid_var(--line2)] [&::before]:flex-none";
+
+const roadmapStep =
+  "step relative mb-6.5 p-[10px_14px] [border:1px_solid_transparent] [transition:all_0.15s_var(--snap)] cursor-default last:mb-0 [&::before]:[content:''] [&::before]:absolute [&::before]:-left-6.5 [&::before]:top-4 [&::before]:w-[12px] [&::before]:h-[12px] [&::before]:[background:var(--panel)] [&::before]:[border:2px_solid_var(--line2)] [&::before]:[transition:all_0.15s] hover:border-line2 hover:[background:var(--panel)] hover:[box-shadow:var(--shadow-hard)] hover:[transform:translate(-2px,-2px)] [&:hover::before]:[background:var(--acc)] [&:hover::before]:border-line2 [&:hover::before]:[transform:rotate(45deg)] [&_small]:[font-family:var(--mono,'JetBrains_Mono',monospace)] [&_small]:text-[11px] [&_small]:text-acc [&_small]:[font-weight:700] [&_small]:block [&_small]:mb-0.75 [&_h4]:text-[15px] [&_h4]:[font-weight:700] [&_h4]:mb-0.75 [&_h4]:text-hi [&_p]:text-[13px] [&_p]:text-mut [&_p]:leading-[1.5]";
+
 const FOCUSABLE =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -654,19 +666,7 @@ export function AlumniProfileModal({
   if (loading) {
     return (
       <div className="alumni-modal-overlay" role="presentation">
-        <div
-          className="alumni-modal"
-          style={{
-            background: 'var(--panel)',
-            border: '2px solid var(--line2)',
-            padding: '32px 48px',
-            fontFamily: 'var(--mono)',
-            fontWeight: 700,
-            textTransform: 'uppercase',
-            fontSize: 13,
-            boxShadow: 'var(--shadow-hard)',
-          }}
-        >
+        <div className="alumni-modal py-8 px-12 [background:var(--panel)] [border:2px_solid_var(--line2)] [font-family:var(--mono)] font-bold uppercase text-[13px] [box-shadow:var(--shadow-hard)]">
           Loading alumni profile…
         </div>
       </div>
@@ -682,37 +682,11 @@ export function AlumniProfileModal({
           if (e.target === e.currentTarget) onClose();
         }}
       >
-        <div
-          className="alumni-modal"
-          style={{
-            background: 'var(--panel)',
-            border: '2px solid var(--line2)',
-            padding: 32,
-            maxWidth: 440,
-            textAlign: 'center',
-            boxShadow: 'var(--shadow-hard)',
-          }}
-        >
-          <p
-            style={{
-              color: 'var(--acc)',
-              marginBottom: 16,
-              fontFamily: 'var(--mono)',
-              fontSize: 13,
-              fontWeight: 700,
-            }}
-          >
+        <div className="alumni-modal p-8 [background:var(--panel)] [border:2px_solid_var(--line2)] max-w-[440px] text-center [box-shadow:var(--shadow-hard)]">
+          <p className="mb-4 text-acc [font-family:var(--mono)] text-[13px] font-bold">
             {error || 'Alumni profile not found.'}
           </p>
-          <p
-            style={{
-              color: 'var(--dim)',
-              fontFamily: 'var(--mono)',
-              fontSize: 11,
-              textTransform: 'uppercase',
-              letterSpacing: '0.06em',
-            }}
-          >
+          <p className="text-dim [font-family:var(--mono)] text-[11px] uppercase tracking-[0.06em]">
             Press Esc or click outside to close.
           </p>
         </div>
@@ -736,12 +710,11 @@ export function AlumniProfileModal({
     >
       <div
         ref={modalRef}
-        className="alumni-modal"
+        className="alumni-modal w-full max-w-[960px] relative [outline:none]"
         role="dialog"
         aria-modal="true"
         aria-label={`${profile.name} alumni profile`}
         tabIndex={-1}
-        style={{ width: '100%', maxWidth: 960, position: 'relative', outline: 'none' }}
       >
         {/* Card Component */}
         <article ref={cardRef} className="card alumni-card-full enter" id="card">
@@ -755,12 +728,12 @@ export function AlumniProfileModal({
             onPointerLeave={handleHeroPointerLeave}
             onMouseLeave={handleHeroPointerLeave}
           >
-            <div className="hero-grid"></div>
+            <div className="absolute inset-0 pointer-events-none opacity-[0.14] [background-image:linear-gradient(currentColor_1px,transparent_1px),linear-gradient(90deg,currentColor_1px,transparent_1px)] [background-size:24px_24px] [-webkit-mask-image:linear-gradient(90deg,transparent_30%,#000)] [mask-image:linear-gradient(90deg,transparent_30%,#000)]"></div>
             <div ref={wmRef} className="watermark" id="wm" data-t={batchStr}>
               {batchStr}
             </div>
 
-            <div className="hero-top">
+            <div className="flex gap-7 items-center relative z-1 flex-wrap">
               <div
                 className="avatar"
                 data-r
@@ -782,7 +755,11 @@ export function AlumniProfileModal({
                 <span className="live"></span>
               </div>
               <div>
-                <div className="badge" data-r style={{ '--i': 1 } as React.CSSProperties}>
+                <div
+                  className="inline-block [font-family:var(--mono,'JetBrains_Mono',monospace)] text-[11px] [font-weight:700] tracking-[0.06em] uppercase [background:#111] text-white p-[4px_8px] mb-3 [box-shadow:2px_2px_0_rgba(0,0,0,0.35)]"
+                  data-r
+                  style={{ '--i': 1 } as React.CSSProperties}
+                >
                   Alumni · Class of {batchYear}
                 </div>
                 <h1 className="name" id="name" aria-label={profile.name}>
@@ -823,34 +800,34 @@ export function AlumniProfileModal({
           </header>
 
           {/* STATS */}
-          <section className="stats">
+          <section className="stats [&_.stat]:block [display:grid] grid-cols-[repeat(4,1fr)] [border-bottom:2px_solid_var(--line2)] [background:var(--panel)] max-[861px]:grid-cols-[1fr_1fr]">
             <div className="stat" data-r style={{ '--i': 6 } as React.CSSProperties}>
-              <div className="stat-val">{ratingDisplay}</div>
-              <div className="stat-label">Rating</div>
+              <div className={statValue}>{ratingDisplay}</div>
+              <div className={statLabel}>Rating</div>
               <div
                 className="stat-bar"
                 style={{ '--w': ratingWidth, '--i': 0 } as React.CSSProperties}
               ></div>
             </div>
             <div className="stat" data-r style={{ '--i': 7 } as React.CSSProperties}>
-              <div className="stat-val">{solvedDisplay}</div>
-              <div className="stat-label">Solved</div>
+              <div className={statValue}>{solvedDisplay}</div>
+              <div className={statLabel}>Solved</div>
               <div
                 className="stat-bar"
                 style={{ '--w': solvedWidth, '--i': 1 } as React.CSSProperties}
               ></div>
             </div>
             <div className="stat" data-r style={{ '--i': 8 } as React.CSSProperties}>
-              <div className="stat-val">{streakDisplay}d</div>
-              <div className="stat-label">Streak</div>
+              <div className={statValue}>{streakDisplay}d</div>
+              <div className={statLabel}>Streak</div>
               <div
                 className="stat-bar"
                 style={{ '--w': streakWidth, '--i': 2 } as React.CSSProperties}
               ></div>
             </div>
             <div className="stat" data-r style={{ '--i': 9 } as React.CSSProperties}>
-              <div className="stat-val">{contestsDisplay}</div>
-              <div className="stat-label">Contests</div>
+              <div className={statValue}>{contestsDisplay}</div>
+              <div className={statLabel}>Contests</div>
               <div
                 className="stat-bar"
                 style={{ '--w': contestsWidth, '--i': 3 } as React.CSSProperties}
@@ -868,7 +845,11 @@ export function AlumniProfileModal({
                 style={{ '--i': 10 } as React.CSSProperties}
                 ref={tabsRef}
               >
-                <div className="tab-ink" id="ink" ref={inkRef}></div>
+                <div
+                  className="absolute left-0 top-0 bottom-0 [background:var(--acc)] w-[var(--w,33.33%)] [transform:translateX(var(--x,0))] [transition:transform_0.35s_var(--ease),width_0.35s_var(--ease)]"
+                  id="ink"
+                  ref={inkRef}
+                ></div>
                 <button
                   ref={aboutTabBtnRef}
                   className="tab"
@@ -901,11 +882,15 @@ export function AlumniProfileModal({
                 </button>
               </div>
 
-              <div className="panels" data-r style={{ '--i': 11 } as React.CSSProperties}>
+              <div
+                className="p-[30px_32px_34px] relative max-[861px]:p-[24px_20px]"
+                data-r
+                style={{ '--i': 11 } as React.CSSProperties}
+              >
                 {/* About Panel */}
                 <div className={`panel ${activeTab === 'about' ? 'on' : ''}`} id="p-about">
                   <div style={{ '--k': 0 } as React.CSSProperties}>
-                    <div className="section-title">About</div>
+                    <div className={blockLabel}>About</div>
                     <p className="about">
                       {profile.bio ? (
                         profile.bio
@@ -918,8 +903,8 @@ export function AlumniProfileModal({
                     </p>
                   </div>
                   <div style={{ '--k': 1 } as React.CSSProperties}>
-                    <div className="section-title">Ask me about</div>
-                    <div className="tags">
+                    <div className={blockLabel}>Ask me about</div>
+                    <div className="flex flex-wrap gap-2">
                       {skills.map((sk) => (
                         <button key={sk} type="button" className="tag">
                           {sk}
@@ -931,11 +916,14 @@ export function AlumniProfileModal({
 
                 {/* Career Panel */}
                 <div className={`panel ${activeTab === 'career' ? 'on' : ''}`} id="p-career">
-                  <div className="section-title" style={{ '--k': 0 } as React.CSSProperties}>
+                  <div className={blockLabel} style={{ '--k': 0 } as React.CSSProperties}>
                     Career path
                   </div>
-                  <div className="path">
-                    <div className="step now" style={{ '--k': 1 } as React.CSSProperties}>
+                  <div className="path [.alumni-modal_.panel.on_&::before]:[animation:growY_0.9s_0.1s_var(--ease)_forwards] relative pl-6.5 [&::before]:[content:''] [&::before]:absolute [&::before]:left-1.25 [&::before]:top-1.5 [&::before]:bottom-1.5 [&::before]:w-[2px] [&::before]:[background:var(--line2)] [&::before]:[transform-origin:top] [&::before]:[transform:scaleY(0)] [.alumni-card-full_.panel.on_&&::before]:[animation:fullGrowY_0.9s_0.1s_var(--ease)_forwards]">
+                    <div
+                      className="step relative mb-6.5 p-[10px_14px] [border:1px_solid_transparent] [transition:all_0.15s_var(--snap)] cursor-default last:mb-0 [&::before]:[content:''] [&::before]:absolute [&::before]:-left-6.5 [&::before]:top-4 [&::before]:w-[12px] [&::before]:h-[12px] [&::before]:[border:2px_solid_var(--line2)] [&::before]:[transition:all_0.15s] [&::before]:[background:var(--acc)] [&&::before]:border-acc hover:border-line2 hover:[background:var(--panel)] hover:[box-shadow:var(--shadow-hard)] hover:[transform:translate(-2px,-2px)] [&:hover::before]:[background:var(--acc)] [&:hover::before]:border-line2 [&:hover::before]:[transform:rotate(45deg)] [&_small]:[font-family:var(--mono,'JetBrains_Mono',monospace)] [&_small]:text-[11px] [&_small]:text-acc [&_small]:[font-weight:700] [&_small]:block [&_small]:mb-0.75 [&_h4]:text-[15px] [&_h4]:[font-weight:700] [&_h4]:mb-0.75 [&_h4]:text-hi [&_p]:text-[13px] [&_p]:text-mut [&_p]:leading-[1.5] now"
+                      style={{ '--k': 1 } as React.CSSProperties}
+                    >
                       <small>NOW</small>
                       <h4>
                         {roleTitle} · {company}
@@ -947,7 +935,7 @@ export function AlumniProfileModal({
                       ? profile.experience.map((exp, idx) => (
                           <div
                             key={idx}
-                            className="step"
+                            className={roadmapStep}
                             style={{ '--k': idx + 2 } as React.CSSProperties}
                           >
                             <small>[{exp.period}]</small>
@@ -958,7 +946,7 @@ export function AlumniProfileModal({
                       : null}
 
                     <div
-                      className="step"
+                      className={roadmapStep}
                       style={
                         {
                           '--k': (profile.experience?.length || 0) + 2,
@@ -971,7 +959,7 @@ export function AlumniProfileModal({
                     </div>
 
                     <div
-                      className="step"
+                      className={roadmapStep}
                       style={
                         {
                           '--k': (profile.experience?.length || 0) + 3,
@@ -989,20 +977,16 @@ export function AlumniProfileModal({
 
                 {/* Jobs Panel */}
                 <div className={`panel ${activeTab === 'jobs' ? 'on' : ''}`} id="p-jobs">
-                  <div className="jobs-head" style={{ '--k': 0 } as React.CSSProperties}>
-                    <div className="section-title" style={{ margin: 0 }}>
+                  <div
+                    className="flex justify-between items-center mb-1.5"
+                    style={{ '--k': 0 } as React.CSSProperties}
+                  >
+                    <div className="[font-family:var(--mono,'JetBrains_Mono',monospace)] [font-size:0.8rem] [font-weight:700] uppercase flex items-center gap-2 tracking-[0.05em] text-hi [&::before]:[content:''] [&::before]:w-[8px] [&::before]:h-[8px] [&::before]:[background:var(--acc)] [&::before]:[border:1px_solid_var(--line2)] [&::before]:flex-none m-0">
                       Jobs posted
                     </div>
                   </div>
                   {jobsPosted.length === 0 ? (
-                    <p
-                      style={{
-                        color: 'var(--dim)',
-                        fontFamily: 'var(--mono)',
-                        fontSize: 13,
-                        padding: '16px 0',
-                      }}
-                    >
+                    <p className="py-4 px-0 text-dim [font-family:var(--mono)] text-[13px]">
                       No jobs posted yet.
                     </p>
                   ) : (
@@ -1023,7 +1007,7 @@ export function AlumniProfileModal({
                               <span className="src">{job.source || 'manual'}</span>
                             </div>
                           </div>
-                          <div className="job-actions">
+                          <div className="flex gap-1.5">
                             {(isOwner || canAdmin) && (
                               <button
                                 type="button"
@@ -1038,8 +1022,7 @@ export function AlumniProfileModal({
                                 href={job.url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="btn sm primary"
-                                style={{ textDecoration: 'none' }}
+                                className="btn sm [background:var(--hi)] text-bg [box-shadow:var(--shadow-hard)] hover:[background:var(--acc)] hover:border-acc hover:text-on hover:[transform:translate(-2px,-2px)] hover:[box-shadow:var(--shadow-hover)] active:[transform:translate(2px,2px)] active:[box-shadow:none] [text-decoration:none]"
                               >
                                 Apply ↗
                               </a>
@@ -1057,23 +1040,23 @@ export function AlumniProfileModal({
             <aside className="right">
               {/* Alumni Pass */}
               <div className="pass" data-r style={{ '--i': 12 } as React.CSSProperties}>
-                <div className="pass-h">
+                <div className="flex justify-between items-center p-[12px_16px] [background:var(--hi)] text-bg [font-family:var(--mono,'JetBrains_Mono',monospace)] text-[11px] [font-weight:700] uppercase tracking-[0.06em]">
                   <span>Alumni Pass</span>
                   <span className={`pill ${available ? '' : 'off'}`} id="pill">
                     <i className="dot"></i>
                     <span id="pillT">{available ? 'Open' : 'Closed'}</span>
                   </span>
                 </div>
-                <div className="pass-b">
-                  <div className="hint" style={{ marginTop: 0 }}>
+                <div className="p-4">
+                  <div className="hint mt-0">
                     {available
                       ? 'Usually replies within a few days.'
                       : 'Not taking questions right now.'}
                   </div>
-                  <div className="btns">
+                  <div className="[display:grid] grid-cols-[1fr_1fr] gap-2.5 mb-3.5">
                     <button
                       type="button"
-                      className="btn primary"
+                      className="btn [background:var(--hi)] text-bg [box-shadow:var(--shadow-hard)] hover:[background:var(--acc)] hover:border-acc hover:text-on hover:[transform:translate(-2px,-2px)] hover:[box-shadow:var(--shadow-hover)] active:[transform:translate(2px,2px)] active:[box-shadow:none]"
                       id="kudos"
                       onClick={handleKudosClick}
                     >
@@ -1112,21 +1095,13 @@ export function AlumniProfileModal({
                       </a>
                     )}
                     {!profile.cf_handle && !profile.github_url && !profile.linkedin_url && (
-                      <span
-                        style={{
-                          color: 'var(--dim)',
-                          fontFamily: 'var(--mono)',
-                          fontSize: 11,
-                          padding: '6px 0',
-                          display: 'block',
-                        }}
-                      >
+                      <span className="py-1.5 px-0 text-dim [font-family:var(--mono)] text-[11px] block">
                         No social links
                       </span>
                     )}
                   </div>
                   {canToggle && (
-                    <label className="switch">
+                    <label className="[&_input:checked+.track]:[background:var(--acc)] [&_input:checked+.track::after]:[transform:translateX(18px)] [&_input:checked+.track::after]:[background:var(--on)] flex items-center gap-2.5 mt-3.5 [font-family:var(--mono,'JetBrains_Mono',monospace)] text-[10px] uppercase cursor-pointer [user-select:none] tracking-[0.05em] [color:var(--dim)] [&_input]:absolute [&_input]:opacity-[0] [&_input]:w-[1px] [&_input]:h-[1px] [&_input]:-m-0.25 [&_input]:p-0 [&_input]:overflow-hidden [&_input]:[clip:rect(0,0,0,0)] [&_input]:[border:0]">
                       <input
                         type="checkbox"
                         id="avail"
@@ -1141,8 +1116,12 @@ export function AlumniProfileModal({
               </div>
 
               {/* History Viz */}
-              <div className="viz" data-r style={{ '--i': 13 } as React.CSSProperties}>
-                <div className="viz-t">
+              <div
+                className="[border:2px_solid_var(--line2)] [background:var(--panel)] [box-shadow:var(--shadow-hard)] [transition:transform_0.15s_var(--snap),box-shadow_0.15s] hover:[transform:translate(-2px,-2px)] hover:[box-shadow:var(--shadow-hover)] p-4.5"
+                data-r
+                style={{ '--i': 13 } as React.CSSProperties}
+              >
+                <div className="flex justify-between items-center [font-family:var(--mono,'JetBrains_Mono',monospace)] text-[11px] [font-weight:700] [color:var(--dim)] uppercase mb-3.5 tracking-[0.05em]">
                   <span>History</span>
                   <div className="seg" role="tablist">
                     <button
@@ -1163,13 +1142,19 @@ export function AlumniProfileModal({
                     </button>
                   </div>
                 </div>
-                <div className="viz-big">
+                <div className="flex items-center gap-2.5 flex-wrap [&_b]:[font-family:var(--mono,'JetBrains_Mono',monospace)] [&_b]:[font-size:2.4rem] [&_b]:leading-[1] [&_b]:text-acc [&_b]:[font-variant-numeric:tabular-nums]">
                   <b id="vbig">{bigValueDisplay}</b>
-                  <span className="delta" id="vdelta">
+                  <span
+                    className="[font-family:var(--mono,'JetBrains_Mono',monospace)] text-[10px] [font-weight:700] [background:var(--hi)] text-bg p-[3px_7px] uppercase"
+                    id="vdelta"
+                  >
                     {deltaDisplay}
                   </span>
                 </div>
-                <small className="viz-cap" id="vlab">
+                <small
+                  className="block [font-family:var(--mono,'JetBrains_Mono',monospace)] text-[10px] uppercase tracking-[0.06em] [color:var(--dim)] m-[6px_0_10px]"
+                  id="vlab"
+                >
                   {chartLabel}
                 </small>
 
@@ -1191,16 +1176,27 @@ export function AlumniProfileModal({
                   >
                     <defs>
                       <linearGradient id="ag" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0" style={{ stopColor: 'var(--acc)', stopOpacity: 0.4 }} />
-                        <stop offset="1" style={{ stopColor: 'var(--acc)', stopOpacity: 0 }} />
+                        <stop offset="0" className="[stop-color:var(--acc)] [stop-opacity:0.4]" />
+                        <stop offset="1" className="[stop-color:var(--acc)] [stop-opacity:0]" />
                       </linearGradient>
                     </defs>
 
                     {/* Grid lines */}
                     {gridLines.map((gl, i) => (
                       <React.Fragment key={i}>
-                        <line className="gridl" x1={PL} x2={SW - PR} y1={gl.y} y2={gl.y} />
-                        <text className="ylab" x={PL - 6} y={gl.y + 3} textAnchor="end">
+                        <line
+                          className="stroke-line [stroke-width:1] [stroke-dasharray:3_3]"
+                          x1={PL}
+                          x2={SW - PR}
+                          y1={gl.y}
+                          y2={gl.y}
+                        />
+                        <text
+                          className="[font:400_8px_var(--mono,'JetBrains_Mono',monospace)] fill-dim"
+                          x={PL - 6}
+                          y={gl.y + 3}
+                          textAnchor="end"
+                        >
                           {gl.val}
                         </text>
                       </React.Fragment>
@@ -1208,7 +1204,7 @@ export function AlumniProfileModal({
 
                     {/* Crosshair */}
                     <line
-                      className={`cross ${hoveredPoint ? 'on' : ''}`}
+                      className={`stroke-hi [stroke-width:1] [stroke-dasharray:2_2] opacity-[0] [transition:opacity_0.12s] [&.on]:opacity-[1] ${hoveredPoint ? 'on' : ''}`}
                       x1={hoveredPoint?.x ?? 0}
                       x2={hoveredPoint?.x ?? 0}
                       y1={PT - 6}
@@ -1226,20 +1222,25 @@ export function AlumniProfileModal({
                     />
 
                     {/* Pulsing ring on peak (last point) */}
-                    <circle className="ring" cx={pts[4][0]} cy={pts[4][1]} r="5" />
+                    <circle
+                      className="[fill:none] stroke-acc [stroke-width:2] opacity-[0] [transform-box:fill-box] [transform-origin:center]"
+                      cx={pts[4][0]}
+                      cy={pts[4][1]}
+                      r="5"
+                    />
 
                     {/* Data Points */}
                     {pts.map((p, i) => (
                       <React.Fragment key={i}>
                         <circle
-                          className={`pt ${i === 4 ? 'peak' : ''} ${hoveredPoint?.index === i ? 'hot' : ''}`}
+                          className={`fill-panel stroke-hi [stroke-width:2] [cursor:crosshair] opacity-[0] [transform-box:fill-box] [transform-origin:center] [transition:transform_0.12s_var(--snap),fill_0.12s] [&.peak]:fill-acc [&.hot]:fill-acc [&.hot]:[transform:scale(1.6)] ${i === 4 ? 'peak' : ''} ${hoveredPoint?.index === i ? 'hot' : ''}`}
                           cx={p[0]}
                           cy={p[1]}
                           style={{ '--n': i } as React.CSSProperties}
                           r="4.5"
                         />
                         <text
-                          className={`xlab ${i === 4 ? 'last' : ''}`}
+                          className={`[font:400_8px_var(--mono,'JetBrains_Mono',monospace)] fill-dim [&.last]:fill-acc [&.last]:[font-weight:700] ${i === 4 ? 'last' : ''}`}
                           x={cx(i)}
                           y={SH - 8}
                           textAnchor="middle"
@@ -1250,7 +1251,12 @@ export function AlumniProfileModal({
                     ))}
 
                     {/* Peak text */}
-                    <text className="peakl" x={pts[4][0] - 9} y={pts[4][1] - 9} textAnchor="end">
+                    <text
+                      className="[.alumni-modal_.card.go_&]:[animation:fade1_0.4s_2.1s_forwards] [font:700_8px_var(--mono,'JetBrains_Mono',monospace)] fill-acc opacity-[0] tracking-[0.06em] [.alumni-card-full.go_&]:[animation:fullFade1_0.4s_2.1s_forwards]"
+                      x={pts[4][0] - 9}
+                      y={pts[4][1] - 9}
+                      textAnchor="end"
+                    >
                       PEAK
                     </text>
                   </svg>

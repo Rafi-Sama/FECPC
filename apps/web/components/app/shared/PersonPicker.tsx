@@ -99,7 +99,11 @@ export function PersonPicker({
               }
             }}
           />
-          <div className="picker__list" role="listbox" aria-label={label}>
+          <div
+            className="picker__list max-h-[260px] overflow-y-auto [border-top:1px_solid_var(--line2)]"
+            role="listbox"
+            aria-label={label}
+          >
             {none !== null && !s && (
               <button
                 type="button"
@@ -122,7 +126,9 @@ export function PersonPicker({
                 {p.handle && <span className="dim">{p.handle}</span>}
               </button>
             ))}
-            {pool.length === 0 && <p className="picker__empty">No members found.</p>}
+            {pool.length === 0 && (
+              <p className="m-0 p-[12px_14px] [color:var(--dim)] text-[14px]">No members found.</p>
+            )}
           </div>
         </div>
       )}

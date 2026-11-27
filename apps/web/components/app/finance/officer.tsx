@@ -70,8 +70,8 @@ function Payments() {
         <p className="body">No payments have been submitted yet.</p>
       ) : (
         <button
-          className="btn xs line"
-          style={{ alignSelf: 'flex-end' }}
+          className="btn xs line self-end"
+
           onClick={() =>
             download('payments.csv', [
               ['id', 'member', 'for', 'amount', 'via', 'trx', 'sender', 'status', 'submitted'],
@@ -93,7 +93,7 @@ function Payments() {
         </button>
       )}
       <div className="scroll-x">
-        <table className="tbl cards">
+        <table className="tbl cards max-[701px]:[&_thead]:hidden max-[701px]:block max-[701px]:w-full max-[701px]:[&_tbody]:block max-[701px]:[&_tbody]:w-full max-[701px]:[&_tr]:block max-[701px]:[&_tr]:w-full max-[701px]:[&_td]:block max-[701px]:[&_td]:w-full max-[701px]:[&_tr]:p-[14px_0] max-[701px]:[&_tr]:[border-bottom:1px_solid_var(--line2)] max-[701px]:[&_td]:p-[3px_0] max-[701px]:[&_td]:[border:0] max-[701px]:[&_td]:text-left max-[701px]:[&_td]:wrap-anywhere">
           <thead>
             <tr>
               <th>Payment</th>
@@ -185,7 +185,7 @@ function MyRequests() {
           return ok;
         }}
       >
-        <label className="field" style={{ gridColumn: 'span 2' }}>
+        <label className="field col-[span_2]">
           <span className="label">What is it for</span>
           <input
             name="what"
@@ -227,9 +227,7 @@ function MyRequests() {
                   {x.event ? ` · ${x.event}` : ''}
                 </span>
               </span>
-              <span className="mono" style={{ fontSize: 20 }}>
-                {tk(x.amount)}
-              </span>
+              <span className="mono text-[20px]">{tk(x.amount)}</span>
               <span
                 className={`pill ${x.status === 'approved' ? 'ok' : x.status === 'rejected' ? 'bad' : 'warn'}`}
               >
@@ -250,7 +248,7 @@ function Expenses() {
   const approve = can(s.roles, 'expense.approve');
   return (
     <div className="stack">
-      <p className="body" style={{ maxWidth: '70ch' }}>
+      <p className="body max-w-[70ch]">
         Up to {tk(APPROVAL_THRESHOLD)} one officer decides. Above it, one officer passes the request
         up and a second, with full authority, decides. Nobody decides their own request.
       </p>
@@ -266,7 +264,7 @@ function Expenses() {
                   : x.status,
             mine = !big || x.status === 'sent to President';
           return (
-            <div key={x.id} style={{ flexWrap: 'wrap' }}>
+            <div className="flex-wrap" key={x.id}>
               <span className="grow">
                 <strong>{x.what}</strong>
                 <br />
@@ -275,9 +273,7 @@ function Expenses() {
                   {big ? ' · above threshold' : ''}
                 </span>
               </span>
-              <span className="mono" style={{ fontSize: 20 }}>
-                {tk(x.amount)}
-              </span>
+              <span className="mono text-[20px]">{tk(x.amount)}</span>
               {st ? (
                 <span
                   className={`pill ${st === 'rejected' ? 'bad' : st === 'approved' ? 'ok' : 'warn'}`}
@@ -333,7 +329,7 @@ function ClubFund() {
   const { accounts = [], budgets = [], ledger = [] } = office.fund ?? {};
   return (
     <div className="bento">
-      <p className="body" style={{ gridColumn: '1 / -1' }} role="note">
+      <p className="body col-span-full" role="note">
         Verified payments and approved expenses update the balance, ledger and budgets. The opening
         balance and accounts are sample figures.
       </p>
@@ -424,8 +420,8 @@ function ClubFund() {
           >
             <input
               name="name"
-              className="input"
-              style={{ flex: '1 1 160px' }}
+              className="input flex-[1_1_160px]"
+
               placeholder="Event name"
               aria-label="Budget name"
               required
@@ -500,7 +496,7 @@ export function Receipt({
   }, [onClose]);
   return (
     <div
-      className="finance-overlay receipt-modal"
+      className="fixed inset-0 z-50 flex justify-center [align-items:safe_center] overflow-y-auto p-[4vh_20px] [background:rgba(0,0,0,0.62)] [backdrop-filter:blur(2px)] max-[721px]:p-0 receipt-modal print:[body:has(.receipt-modal)_&]:visible print:[body:has(.receipt-modal)_&_*]:visible print:absolute print:inset-[0_auto_auto_0] print:w-full print:block print:p-0 print:[background:none] print:[backdrop-filter:none]"
       role="presentation"
       onMouseDown={(event) => event.target === event.currentTarget && onClose()}
     >
@@ -511,7 +507,7 @@ export function Receipt({
         aria-labelledby="receipt-title"
       >
         <button
-          className="finance-close no-print"
+          className="absolute z-3 top-3.5 right-3.5 w-[40px] h-[40px] p-0 [border:1px_solid_var(--line2)] [background:var(--panel)] text-[22px] t-b:[border:2px_solid_var(--ink)] no-print"
           type="button"
           onClick={onClose}
           aria-label="Close"
@@ -521,7 +517,7 @@ export function Receipt({
         <div className="row between">
           <div>
             <p className="label">FECPC · Payment receipt</p>
-            <p id="receipt-title" className="mono" style={{ fontSize: 22 }}>
+            <p id="receipt-title" className="mono text-[22px]">
               {id}
             </p>
           </div>

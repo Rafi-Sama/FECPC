@@ -186,7 +186,7 @@ export default function ContestDay() {
   const renderLeaderboard = (data: Board, isLoading: boolean) => {
     if (isLoading) {
       return (
-        <div className="panel" style={{ textAlign: 'center', padding: '48px 0' }}>
+        <div className="panel text-center py-12 px-0">
           <p className="body">Scraping leaderboard from VJudge...</p>
         </div>
       );
@@ -194,7 +194,7 @@ export default function ContestDay() {
 
     if (!data || 'error' in data) {
       return (
-        <div className="panel" style={{ textAlign: 'center', padding: '48px 0' }}>
+        <div className="panel text-center py-12 px-0">
           <p className="body">
             {data
               ? data.error
@@ -213,49 +213,28 @@ export default function ContestDay() {
     );
 
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div className="flex flex-col gap-4">
         {/* Contest Info Header Bar */}
-        <div
-          className="panel box"
-          style={{
-            border: '2px solid var(--ink)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 14,
-            padding: '20px 24px',
-          }}
-        >
-          <div className="row between" style={{ alignItems: 'flex-start' }}>
+        <div className="panel box [border:2px_solid_var(--ink)] flex flex-col gap-3.5 py-5 px-6">
+          <div className="row between items-start">
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                <h2 className="h3" style={{ margin: 0, fontWeight: 700 }}>
-                  {data.title}
-                </h2>
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h2 className="h3 m-0 font-bold">{data.title}</h2>
                 {data.isRunning ? (
-                  <span
-                    className="tag on"
-                    style={{
-                      background: '#16a34a',
-                      color: '#ffffff',
-                      borderColor: '#16a34a',
-                      fontWeight: 700,
-                    }}
-                  >
+                  <span className="tag on bg-[#16a34a] text-[#ffffff] border-[#16a34a] font-bold">
                     ● LIVE
                   </span>
                 ) : (
-                  <span className="tag" style={{ fontWeight: 600 }}>
-                    FINAL STANDINGS
-                  </span>
+                  <span className="tag font-semibold">FINAL STANDINGS</span>
                 )}
               </div>
-              <p className="label" style={{ marginTop: 6, color: 'var(--dim)' }}>
-                CONTEST ID: <strong style={{ color: 'var(--hi)' }}>{data.id}</strong> ·{' '}
-                {data.problems.length} PROBLEMS · {data.standings.length} TEAMS
+              <p className="label mt-1.5 text-dim">
+                CONTEST ID: <strong className="text-hi">{data.id}</strong> · {data.problems.length}{' '}
+                PROBLEMS · {data.standings.length} TEAMS
               </p>
             </div>
 
-            <div className="row" style={{ '--g': '10px' } as React.CSSProperties}>
+            <div className="row [--g:10px]">
               <button
                 className="btn xs line"
                 onClick={() => refreshContest(String(data.id), data.isRunning)}
@@ -267,11 +246,11 @@ export default function ContestDay() {
           </div>
 
           {/* Search Bar */}
-          <div style={{ maxWidth: 360 }}>
+          <div className="max-w-[360px]">
             <input
               type="text"
-              className="input"
-              style={{ minHeight: 38, fontSize: 14 }}
+              className="input min-h-[38px] text-[14px]"
+
               placeholder="Search team name or member..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -280,45 +259,23 @@ export default function ContestDay() {
         </div>
 
         {/* The VJudge Scoreboard Table */}
-        <div
-          className="panel box flush"
-          style={{
-            border: '2px solid var(--ink)',
-            overflowX: 'auto',
-          }}
-        >
-          <table
-            className="tbl board"
-            style={{
-              width: '100%',
-              borderCollapse: 'collapse',
-              textAlign: 'left',
-              minWidth: 900,
-            }}
-          >
+        <div className="panel box flush [border:2px_solid_var(--ink)] overflow-x-auto">
+          <table className="tbl board w-full [border-collapse:collapse] text-left min-w-[900px]">
             <thead>
-              <tr style={{ background: 'color-mix(in srgb, var(--ink) 4%, var(--panel))' }}>
-                <th style={{ width: 48, textAlign: 'center', padding: '12px 6px' }}>#</th>
-                <th style={{ minWidth: 220, padding: '12px 14px' }}>TEAM / CONTESTANT</th>
-                <th style={{ width: 68, textAlign: 'center', padding: '12px 8px' }}>SOLVED</th>
-                <th style={{ width: 78, textAlign: 'center', padding: '12px 8px' }}>PENALTY</th>
+              <tr className="[background:color-mix(in_srgb,var(--ink)_4%,var(--panel))]">
+                <th className="w-[48px] text-center py-3 px-1.5">#</th>
+                <th className="min-w-[220px] py-3 px-3.5">TEAM / CONTESTANT</th>
+                <th className="w-[68px] text-center py-3 px-2">SOLVED</th>
+                <th className="w-[78px] text-center py-3 px-2">PENALTY</th>
                 {data.problems.map((p) => {
                   const stat = data.problemStats[p];
                   return (
                     <th
+                      className="w-[74px] text-center [border-left:1px_solid_var(--line2)] py-2 px-1"
                       key={p}
-                      style={{
-                        width: 74,
-                        textAlign: 'center',
-                        borderLeft: '1px solid var(--line2)',
-                        padding: '8px 4px',
-                      }}
                     >
-                      <div style={{ fontWeight: 700, fontSize: 15 }}>{p}</div>
-                      <div
-                        className="label"
-                        style={{ fontSize: 11, color: 'var(--dim)', marginTop: 2 }}
-                      >
+                      <div className="font-bold text-[15px]">{p}</div>
+                      <div className="label text-[11px] text-dim mt-0.5">
                         {stat?.solvedCount ?? 0}/{stat?.totalAttempts ?? 0}
                       </div>
                     </th>
@@ -334,9 +291,9 @@ export default function ContestDay() {
 
                 return (
                   <tr
+                    className="[border-bottom:1px_solid_var(--line)]"
                     key={row.userId}
                     style={{
-                      borderBottom: '1px solid var(--line)',
                       background:
                         s.vjudge && row.username.toLowerCase() === s.vjudge.toLowerCase()
                           ? 'color-mix(in srgb, var(--acc) 10%, transparent)'
@@ -345,47 +302,28 @@ export default function ContestDay() {
                   >
                     {/* Rank */}
                     <td
-                      style={{
-                        textAlign: 'center',
-                        fontWeight: 700,
-                        fontFamily: 'var(--mono), monospace',
-                        color: rankColor,
-                        padding: '10px 4px',
-                      }}
+                      className="text-center py-2.5 px-1 font-bold [font-family:var(--mono),monospace]"
+                      style={{ color: rankColor }}
                     >
                       {row.rank}
                     </td>
 
                     {/* Team info */}
-                    <td style={{ padding: '10px 14px' }}>
-                      <strong style={{ fontSize: 15, display: 'block' }}>{row.username}</strong>
-                      <span className="dim" style={{ fontSize: 12 }}>
-                        {row.nickname}
-                      </span>
+                    <td className="py-2.5 px-3.5">
+                      <strong className="text-[15px] block">{row.username}</strong>
+                      <span className="dim text-[12px]">{row.nickname}</span>
                     </td>
 
                     {/* Solved */}
                     <td
-                      style={{
-                        textAlign: 'center',
-                        fontWeight: 700,
-                        fontSize: 16,
-                        fontFamily: 'var(--arcade), monospace',
-                        color: row.solved > 0 ? 'var(--acc)' : 'var(--dim)',
-                      }}
+                      className="text-center font-bold text-[16px] [font-family:var(--arcade),monospace]"
+                      style={{ color: row.solved > 0 ? 'var(--acc)' : 'var(--dim)' }}
                     >
                       {row.solved}
                     </td>
 
                     {/* Penalty */}
-                    <td
-                      style={{
-                        textAlign: 'center',
-                        fontFamily: 'var(--mono), monospace',
-                        fontSize: 14,
-                        color: 'var(--mut)',
-                      }}
-                    >
+                    <td className="text-center text-mut [font-family:var(--mono),monospace] text-[14px]">
                       {row.penalty}
                     </td>
 
@@ -395,14 +333,10 @@ export default function ContestDay() {
                       if (!cell) {
                         return (
                           <td
+                            className="text-center [border-left:1px_solid_var(--line)] p-1"
                             key={p}
-                            style={{
-                              textAlign: 'center',
-                              borderLeft: '1px solid var(--line)',
-                              padding: '4px',
-                            }}
                           >
-                            <span style={{ color: 'var(--line2)' }}>·</span>
+                            <span className="text-line2">·</span>
                           </td>
                         );
                       }
@@ -412,20 +346,15 @@ export default function ContestDay() {
                         if (cell.isFirst) {
                           return (
                             <td
+                              className="text-center [border-left:1px_solid_var(--line)] p-1 bg-[#15803d] text-[#ffffff]"
                               key={p}
-                              style={{
-                                textAlign: 'center',
-                                borderLeft: '1px solid var(--line)',
-                                padding: '4px',
-                                backgroundColor: '#15803d',
-                                color: '#ffffff',
-                              }}
+
                               title={`First solve! Solved at minute ${cell.time} with ${cell.attempts} failed tries`}
                             >
-                              <div style={{ fontWeight: 700, fontSize: 14, lineHeight: 1.1 }}>
+                              <div className="font-bold text-[14px] leading-[1.1]">
                                 {cell.attempts > 0 ? `+${cell.attempts}` : '+'}
                               </div>
-                              <div style={{ fontSize: 11, opacity: 0.9 }}>{cell.time}m</div>
+                              <div className="text-[11px] opacity-90">{cell.time}m</div>
                             </td>
                           );
                         }
@@ -433,20 +362,15 @@ export default function ContestDay() {
                         // Normal Accepted
                         return (
                           <td
+                            className="text-center [border-left:1px_solid_var(--line)] p-1 bg-[rgba(34,197,94,0.16)]"
                             key={p}
-                            style={{
-                              textAlign: 'center',
-                              borderLeft: '1px solid var(--line)',
-                              padding: '4px',
-                              backgroundColor: 'rgba(34, 197, 94, 0.16)',
-                              color: readable('#16a34a'),
-                            }}
+                            style={{ color: readable('#16a34a') }}
                             title={`Accepted at minute ${cell.time} with ${cell.attempts} failed tries`}
                           >
-                            <div style={{ fontWeight: 700, fontSize: 14, lineHeight: 1.1 }}>
+                            <div className="font-bold text-[14px] leading-[1.1]">
                               {cell.attempts > 0 ? `+${cell.attempts}` : '+'}
                             </div>
-                            <div style={{ fontSize: 11, color: 'var(--dim)' }}>{cell.time}m</div>
+                            <div className="text-[11px] text-dim">{cell.time}m</div>
                           </td>
                         );
                       }
@@ -456,17 +380,12 @@ export default function ContestDay() {
                           // Pending / Frozen
                           return (
                             <td
+                              className="text-center [border-left:1px_solid_var(--line)] p-1 bg-[rgba(245,158,11,0.16)]"
                               key={p}
-                              style={{
-                                textAlign: 'center',
-                                borderLeft: '1px solid var(--line)',
-                                padding: '4px',
-                                backgroundColor: 'rgba(245, 158, 11, 0.16)',
-                                color: readable('#d97706'),
-                              }}
+                              style={{ color: readable('#d97706') }}
                               title={`${cell.attempts} pending runs`}
                             >
-                              <div style={{ fontWeight: 700, fontSize: 14 }}>?{cell.attempts}</div>
+                              <div className="font-bold text-[14px]">?{cell.attempts}</div>
                             </td>
                           );
                         }
@@ -474,31 +393,19 @@ export default function ContestDay() {
                         // Failed attempts (WA)
                         return (
                           <td
+                            className="text-center [border-left:1px_solid_var(--line)] p-1 bg-[rgba(239,68,68,0.15)]"
                             key={p}
-                            style={{
-                              textAlign: 'center',
-                              borderLeft: '1px solid var(--line)',
-                              padding: '4px',
-                              backgroundColor: 'rgba(239, 68, 68, 0.15)',
-                              color: readable('#dc2626'),
-                            }}
+                            style={{ color: readable('#dc2626') }}
                             title={`${cell.attempts} failed attempts`}
                           >
-                            <div style={{ fontWeight: 700, fontSize: 14 }}>-{cell.attempts}</div>
+                            <div className="font-bold text-[14px]">-{cell.attempts}</div>
                           </td>
                         );
                       }
 
                       return (
-                        <td
-                          key={p}
-                          style={{
-                            textAlign: 'center',
-                            borderLeft: '1px solid var(--line)',
-                            padding: '4px',
-                          }}
-                        >
-                          <span style={{ color: 'var(--line2)' }}>·</span>
+                        <td className="text-center [border-left:1px_solid_var(--line)] p-1" key={p}>
+                          <span className="text-line2">·</span>
                         </td>
                       );
                     })}
@@ -509,62 +416,37 @@ export default function ContestDay() {
 
             {/* Bottom Summary Statistics Row */}
             <tfoot>
-              <tr
-                style={{
-                  background: 'color-mix(in srgb, var(--ink) 4%, var(--panel))',
-                  borderTop: '2px solid var(--line2)',
-                }}
-              >
-                <td colSpan={2} style={{ padding: '10px 14px', fontWeight: 700 }}>
+              <tr className="[background:color-mix(in_srgb,var(--ink)_4%,var(--panel))] [border-top:2px_solid_var(--line2)]">
+                <td className="py-2.5 px-3.5 font-bold" colSpan={2}>
                   Solved / Attempts
                 </td>
-                <td
-                  style={{
-                    textAlign: 'center',
-                    fontWeight: 700,
-                    fontFamily: 'var(--arcade), monospace',
-                  }}
-                >
+                <td className="text-center font-bold [font-family:var(--arcade),monospace]">
                   {filteredStandings.reduce((sum, r) => sum + r.solved, 0)}
                 </td>
-                <td style={{ textAlign: 'center', fontFamily: 'var(--mono), monospace' }}>—</td>
+                <td className="text-center [font-family:var(--mono),monospace]">—</td>
                 {data.problems.map((p) => {
                   const stat = data.problemStats[p];
                   return (
                     <td
+                      className="text-center [border-left:1px_solid_var(--line2)] py-2 px-1 text-[12px]"
                       key={p}
-                      style={{
-                        textAlign: 'center',
-                        borderLeft: '1px solid var(--line2)',
-                        padding: '8px 4px',
-                        fontSize: 12,
-                      }}
                     >
                       <strong>{stat?.solvedCount ?? 0}</strong>/{stat?.totalAttempts ?? 0}
                     </td>
                   );
                 })}
               </tr>
-              <tr
-                style={{
-                  background: 'color-mix(in srgb, var(--ink) 2%, var(--panel))',
-                  fontSize: 11,
-                }}
-              >
-                <td colSpan={4} style={{ padding: '8px 14px', color: 'var(--dim)' }}>
+              <tr className="[background:color-mix(in_srgb,var(--ink)_2%,var(--panel))] text-[11px]">
+                <td className="py-2 px-3.5 text-dim" colSpan={4}>
                   First Solver
                 </td>
                 {data.problems.map((p) => {
                   const stat = data.problemStats[p];
                   return (
                     <td
+                      className="text-center [border-left:1px_solid_var(--line2)] py-1.5 px-0.5 text-dim"
                       key={p}
-                      style={{
-                        textAlign: 'center',
-                        borderLeft: '1px solid var(--line2)',
-                        padding: '6px 2px',
-                        color: 'var(--dim)',
-                      }}
+
                       title={
                         stat?.firstSolver
                           ? `${stat.firstSolver.name} (${stat.firstSolver.time}m)`
@@ -572,7 +454,7 @@ export default function ContestDay() {
                       }
                     >
                       {stat?.firstSolver ? (
-                        <span style={{ color: readable('#16a34a'), fontWeight: 600 }}>
+                        <span className="font-semibold" style={{ color: readable('#16a34a') }}>
                           {stat.firstSolver.time}m
                         </span>
                       ) : (
@@ -594,7 +476,7 @@ export default function ContestDay() {
       title="CONTEST DAY"
       aside={
         isAdmin ? (
-          <div className="row" style={{ '--g': '8px' } as React.CSSProperties}>
+          <div className="row [--g:8px]">
             <button
               className={`btn sm ${tab === 'ADMIN SETUP' ? '' : 'line'}`}
               onClick={() => setTab('ADMIN SETUP')}
@@ -609,7 +491,7 @@ export default function ContestDay() {
 
       {/* Tab 1: Running Club Contest */}
       {!s.vjudge && (tab === 'RUNNING CONTEST' || tab === 'PREVIOUS CONTESTS') && (
-        <div className="panel" style={{ marginBottom: 16 }}>
+        <div className="panel mb-4">
           <p className="body">Link your VJudge handle to find yourself on the board.</p>
           <VjudgeBox />
         </div>
@@ -618,22 +500,11 @@ export default function ContestDay() {
 
       {/* Tab 2: Previous Contests */}
       {tab === 'PREVIOUS CONTESTS' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div
-            className="panel box"
-            style={{
-              border: '2px solid var(--ink)',
-              padding: '16px 20px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: 14,
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div className="flex flex-col gap-4">
+          <div className="panel box [border:2px_solid_var(--ink)] py-4 px-5 flex items-center justify-between flex-wrap gap-3.5">
+            <div className="flex items-center gap-3 flex-wrap">
               <span className="label">SELECT CONTEST:</span>
-              <div className="row" style={{ '--g': '6px' } as React.CSSProperties}>
+              <div className="row [--g:6px]">
                 {previousConfigs.map((c) => (
                   <button
                     key={c.id}
@@ -646,7 +517,7 @@ export default function ContestDay() {
               </div>
             </div>
 
-            <span className="label" style={{ color: 'var(--dim)' }}>
+            <span className="label text-dim">
               {previousConfigs.length} PREVIOUS CONTESTS RECORDED
             </span>
           </div>
@@ -657,13 +528,11 @@ export default function ContestDay() {
 
       {/* Tab 3: Admin Section (Section for the admin to add contest id) */}
       {tab === 'ADMIN SETUP' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 960 }}>
+        <div className="flex flex-col gap-6 max-w-[960px]">
           {/* Add Contest ID Box */}
-          <div className="panel box" style={{ border: '2px solid var(--ink)', padding: 24 }}>
-            <h2 className="h3" style={{ marginBottom: 6 }}>
-              Admin Contest ID Manager
-            </h2>
-            <p className="body" style={{ marginBottom: 20, fontSize: 14, color: 'var(--dim)' }}>
+          <div className="panel box [border:2px_solid_var(--ink)] p-6">
+            <h2 className="h3 mb-1.5">Admin Contest ID Manager</h2>
+            <p className="body mb-5 text-[14px] text-dim">
               Add running or past club contests by entering a VJudge Contest ID or URL. Standings
               will be fetched and computed directly from{' '}
               <code>https://vjudge.net/contest/&lt;id&gt;#rank</code> and{' '}
@@ -671,6 +540,7 @@ export default function ContestDay() {
             </p>
 
             <SaveForm
+              className="flex flex-col gap-4"
               onSubmit={handleAddContest}
               label="Contest not added"
               saveLabel="Add contest to board"
@@ -678,9 +548,8 @@ export default function ContestDay() {
                 setAdminInputId('');
                 setAdminInputName('');
               }}
-              style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
             >
-              <div className="grid" style={{ '--min': '260px', gap: 16 } as React.CSSProperties}>
+              <div className="grid [--min:260px] gap-4">
                 <div className="field">
                   <label className="label">VJudge Contest ID or Link *</label>
                   <input
@@ -707,13 +576,8 @@ export default function ContestDay() {
 
               <div className="field">
                 <label className="label">Contest Status Classification</label>
-                <div
-                  className="row"
-                  style={{ '--g': '16px', accentColor: '#22c55e' } as React.CSSProperties}
-                >
-                  <label
-                    style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
-                  >
+                <div className="row [--g:16px] [accent-color:#22c55e]">
+                  <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="radio"
                       name="adminType"
@@ -722,9 +586,7 @@ export default function ContestDay() {
                     />
                     <strong>Set as Running Contest</strong> (Active Live Scoreboard)
                   </label>
-                  <label
-                    style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
-                  >
+                  <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="radio"
                       name="adminType"
@@ -738,15 +600,12 @@ export default function ContestDay() {
 
               {adminMsg && (
                 <div
+                  className="py-2.5 px-3.5 [border:1px_solid_currentColor] text-[14px] font-medium"
                   style={{
-                    padding: '10px 14px',
                     background: adminMsg.error
                       ? 'rgba(239, 68, 68, 0.12)'
                       : 'rgba(34, 197, 94, 0.12)',
                     color: adminMsg.error ? '#dc2626' : '#16a34a',
-                    border: '1px solid currentColor',
-                    fontSize: 14,
-                    fontWeight: 500,
                   }}
                 >
                   {adminMsg.text}
@@ -756,14 +615,14 @@ export default function ContestDay() {
           </div>
 
           {/* Configured Contests List */}
-          <div className="panel box" style={{ border: '2px solid var(--ink)', padding: 24 }}>
-            <div className="row between" style={{ marginBottom: 14 }}>
+          <div className="panel box [border:2px_solid_var(--ink)] p-6">
+            <div className="row between mb-3.5">
               <p className="label">Configured VJudge Contests ({registry.length})</p>
               <span className="label">Direct VJudge Links</span>
             </div>
 
             <div className="scroll-x">
-              <table className="tbl" style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <table className="tbl w-full [border-collapse:collapse]">
                 <thead>
                   <tr>
                     <th>Type</th>
@@ -778,10 +637,7 @@ export default function ContestDay() {
                     <tr key={c.id}>
                       <td>
                         {c.type === 'running' ? (
-                          <span
-                            className="tag on"
-                            style={{ background: '#16a34a', borderColor: '#16a34a', color: '#fff' }}
-                          >
+                          <span className="tag on bg-[#16a34a] border-[#16a34a] text-[#fff]">
                             RUNNING
                           </span>
                         ) : (
@@ -790,39 +646,30 @@ export default function ContestDay() {
                       </td>
                       <td>
                         <strong>{c.name}</strong>
-                        <div className="label" style={{ fontSize: 11, marginTop: 2 }}>
-                          ID: #{c.id}
-                        </div>
+                        <div className="label text-[11px] mt-0.5">ID: #{c.id}</div>
                       </td>
                       <td>
                         <a
-                          className="link acc"
+                          className="link acc text-[13px]"
                           href={`https://vjudge.net/contest/${c.id}#rank`}
                           target="_blank"
                           rel="noreferrer"
-                          style={{ fontSize: 13 }}
                         >
                           https://vjudge.net/contest/{c.id}#rank ↗
                         </a>
                       </td>
                       <td>
                         <a
-                          className="link dim"
+                          className="link dim text-[13px]"
                           href={`https://vjudge.net/contest/rank/single/${c.id}`}
                           target="_blank"
                           rel="noreferrer"
-                          style={{ fontSize: 13 }}
                         >
                           /rank/single/{c.id} ↗
                         </a>
                       </td>
                       <td className="r">
-                        <div
-                          className="row"
-                          style={
-                            { justifyContent: 'flex-end', '--g': '6px' } as React.CSSProperties
-                          }
-                        >
+                        <div className="row justify-end [--g:6px]">
                           {c.type !== 'running' && (
                             <button
                               className="btn xs line"
@@ -833,8 +680,8 @@ export default function ContestDay() {
                             </button>
                           )}
                           <button
-                            className="btn xs line"
-                            style={{ color: 'var(--bad)' }}
+                            className="btn xs line text-bad"
+
                             onClick={() => handleDeleteContest(c.id)}
                             title="Remove from list"
                           >

@@ -6,6 +6,9 @@ import { rankFor } from '@fecpc/contracts';
 import { excerptFromMarkdown, relTime } from '@/components/app/shared/MarkdownEditor';
 import { HighlightMatch } from './HighlightMatch';
 
+const voteButton =
+  'py-0 px-4 [border:0] min-h-[44px] [background:transparent] cursor-pointer text-[16px] text-ink';
+
 export function BlogCard({
   post,
   onOpen,
@@ -44,7 +47,7 @@ export function BlogCard({
 
   return (
     <article
-      className="pn blog-card"
+      className="pn blog-card p-0 mb-6 flex [background:var(--panel)] [border:2px_solid_var(--line2)] cursor-pointer relative [transition:transform_0.14s_ease,_box-shadow_0.14s_ease]"
       tabIndex={0}
       role="button"
       aria-label={`${post.title} by ${post.author_name || 'Alumnus'}. Read post.`}
@@ -55,94 +58,25 @@ export function BlogCard({
           onOpen(post);
         }
       }}
-      style={{
-        padding: 0,
-        display: 'flex',
-        marginBottom: 24,
-        background: 'var(--panel, #F6F4EE)',
-        border: '2px solid var(--line2, #0B0B0B)',
-        cursor: 'pointer',
-        position: 'relative',
-        transition: 'transform 0.14s ease, box-shadow 0.14s ease',
-      }}
     >
       {/* 72px Left Upvote Column matching mockup 41f59af4 */}
-      <div
-        style={{
-          flex: '0 0 72px',
-          borderRight: '1px solid var(--line, #CFCBBF)',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          userSelect: 'none',
-        }}
-      >
-        <button
-          type="button"
-          aria-label="Upvote"
-          onClick={handleUpvote}
-          style={{
-            border: 0,
-            minHeight: 44,
-            padding: '0 16px',
-            background: 'transparent',
-            cursor: 'pointer',
-            fontSize: 16,
-            color: 'var(--ink, #0B0B0B)',
-          }}
-        >
+      <div className="flex-[0_0_72px] [border-right:1px_solid_var(--line)] flex flex-col items-center justify-center [user-select:none]">
+        <button type="button" aria-label="Upvote" onClick={handleUpvote} className={voteButton}>
           ▲
         </button>
-        <b
-          className="mo"
-          style={{
-            fontFamily: 'ui-monospace, Menlo, monospace',
-            fontSize: 14,
-            color: 'var(--ink, #0B0B0B)',
-            fontWeight: 700,
-          }}
-        >
+        <b className="mo [font-family:ui-monospace,_Menlo,_monospace] text-[14px] text-ink font-bold">
           {votes}
         </b>
-        <button
-          type="button"
-          aria-label="Downvote"
-          onClick={handleDownvote}
-          style={{
-            border: 0,
-            minHeight: 44,
-            padding: '0 16px',
-            background: 'transparent',
-            cursor: 'pointer',
-            fontSize: 16,
-            color: 'var(--ink, #0B0B0B)',
-          }}
-        >
+        <button type="button" aria-label="Downvote" onClick={handleDownvote} className={voteButton}>
           ▼
         </button>
       </div>
 
       {/* Right Content Column */}
-      <div style={{ flex: 1, padding: 24, minWidth: 0 }}>
+      <div className="p-6 flex-1 min-w-0">
         {/* Author Header Row */}
-        <div
-          className="hd"
-          style={{
-            display: 'flex',
-            gap: 12,
-            alignItems: 'center',
-            marginBottom: 16,
-          }}
-        >
-          <div
-            style={{
-              border: `2px solid ${tierColor}`,
-              padding: 2,
-              flex: 'none',
-              lineHeight: 0,
-            }}
-          >
+        <div className="hd mb-4 flex gap-3 items-center">
+          <div className="p-0.5 flex-none leading-[0]" style={{ border: `2px solid ${tierColor}` }}>
             <AvatarRing
               name={post.author_name || 'Alumnus'}
               avatarUrl={post.author_avatar}
@@ -153,111 +87,41 @@ export function BlogCard({
             />
           </div>
 
-          <div className="g" style={{ flex: 1, minWidth: 0 }}>
-            <b style={{ color: tierText(tierColor), fontSize: 15, fontWeight: 700 }}>
+          <div className="g flex-1 min-w-0">
+            <b className="text-[15px] font-bold" style={{ color: tierText(tierColor) }}>
               <HighlightMatch text={post.author_name || 'Alumnus'} query={highlightQuery} />
             </b>
-            <div
-              className="m"
-              style={{
-                marginTop: 2,
-                font: '11px ui-monospace, Menlo, monospace',
-                letterSpacing: '.06em',
-                textTransform: 'uppercase',
-                color: 'var(--dim, #5F5F5F)',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
+            <div className="m mt-0.5 [font:11px_ui-monospace,_Menlo,_monospace] tracking-[.06em] uppercase text-dim overflow-hidden text-ellipsis whitespace-nowrap">
               {post.author_role || 'Software Engineer'} · Batch 17
             </div>
           </div>
 
-          <span
-            className="m"
-            style={{
-              font: '11px ui-monospace, Menlo, monospace',
-              letterSpacing: '.06em',
-              textTransform: 'uppercase',
-              color: 'var(--dim, #5F5F5F)',
-            }}
-          >
+          <span className="m [font:11px_ui-monospace,_Menlo,_monospace] tracking-[.06em] uppercase text-dim">
             {dateStr}
           </span>
         </div>
 
         {/* Title */}
-        <h3
-          style={{
-            fontSize: 24,
-            lineHeight: 1.2,
-            margin: '0 0 8px',
-            fontWeight: 700,
-            color: 'var(--ink, #0B0B0B)',
-          }}
-        >
+        <h3 className="mt-0 mx-0 mb-2 text-[24px] leading-[1.2] font-bold text-ink">
           <HighlightMatch text={post.title} query={highlightQuery} />
         </h3>
 
         {/* 2-line Excerpt */}
-        <p
-          className="t"
-          style={{
-            fontSize: 15,
-            lineHeight: 1.55,
-            color: 'var(--mut, #3B3A35)',
-            margin: '0 0 16px',
-            display: '-webkit-box',
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: 'vertical',
-            overflow: 'hidden',
-          }}
-        >
+        <p className="t mt-0 mx-0 mb-4 text-[15px] leading-[1.55] text-mut line-clamp-2">
           <HighlightMatch text={excerpt} query={highlightQuery} />
         </p>
 
         {/* Footer Meta Row */}
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <span
-            className="tg"
-            style={{
-              margin: 0,
-              font: '11px ui-monospace, Menlo, monospace',
-              textTransform: 'uppercase',
-              letterSpacing: '.06em',
-              border: '1px solid var(--line2, #0B0B0B)',
-              padding: '4px 8px',
-              background: 'var(--bg, #FFFFFF)',
-              color: 'var(--ink, #0B0B0B)',
-            }}
-          >
+        <div className="flex gap-3 items-center">
+          <span className="tg py-1 px-2 m-0 [font:11px_ui-monospace,_Menlo,_monospace] uppercase tracking-[.06em] [border:1px_solid_var(--line2)] [background:var(--bg)] text-ink">
             {tag}
           </span>
 
-          <span
-            className="m"
-            style={{
-              font: '11px ui-monospace, Menlo, monospace',
-              letterSpacing: '.06em',
-              textTransform: 'uppercase',
-              color: 'var(--dim, #5F5F5F)',
-            }}
-          >
+          <span className="m [font:11px_ui-monospace,_Menlo,_monospace] tracking-[.06em] uppercase text-dim">
             {readTime} min read
           </span>
 
-          <span
-            className="m"
-            style={{
-              marginLeft: 'auto',
-              color: 'var(--ink, #0B0B0B)',
-              font: '11px ui-monospace, Menlo, monospace',
-              letterSpacing: '.06em',
-              textTransform: 'uppercase',
-              fontWeight: 700,
-            }}
-          >
+          <span className="m ml-auto text-ink [font:700_11px_ui-monospace,_Menlo,_monospace] tracking-[.06em] uppercase">
             Read →
           </span>
         </div>

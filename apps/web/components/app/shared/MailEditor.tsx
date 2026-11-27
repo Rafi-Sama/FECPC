@@ -14,6 +14,8 @@ import {
 import { useStore } from '../Store';
 import { useConfirm } from './PromptDialog';
 
+import { previewCard, previewMeta, formFoot } from '@/components/app/shared/ui';
+
 export function MailEditor({
   kind,
   title,
@@ -99,8 +101,8 @@ export function MailEditor({
             ×
           </button>
         </header>
-        <div className="me-grid">
-          <div className="me-edit">
+        <div className="[display:grid] grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] gap-6 min-h-0 max-[901px]:grid-cols-[1fr]">
+          <div className="flex flex-col gap-3.5 min-w-0">
             <label className="field">
               <span className="label">Subject</span>
               <input
@@ -114,12 +116,12 @@ export function MailEditor({
             </label>
             <div className="field">
               <span className="label">Insert a placeholder</span>
-              <div className="me-vars">
+              <div className="flex flex-wrap gap-1.5">
                 {MAIL_VARS[kind].map(([k, d]) => (
                   <button
                     key={k}
                     type="button"
-                    className="me-var"
+                    className="p-[5px_9px] [border:1px_solid_var(--line2)] [background:none] text-ink font-label text-[14px] cursor-pointer hover:border-acc hover:text-acc focus-visible:border-acc focus-visible:text-acc"
                     title={d}
                     onClick={() => insert(k)}
                   >
@@ -128,7 +130,7 @@ export function MailEditor({
                 ))}
               </div>
             </div>
-            <label className="field me-code">
+            <label className="field [&_textarea]:min-h-[340px] [&_textarea]:font-label [&_textarea]:text-[14px] [&_textarea]:leading-[1.5] [&_textarea]:[tab-size:2] [&_textarea]:whitespace-pre [&_textarea]:[overflow-wrap:normal] max-[901px]:[&_textarea]:min-h-[240px]">
               <span className="label">
                 Body · HTML and CSS <span className="dim">· {kb} KB of 100</span>
               </span>
@@ -142,12 +144,12 @@ export function MailEditor({
                 onChange={(e) => setHtml(e.target.value)}
               />
             </label>
-            <p className="me-hint">
+            <p className="[color:var(--dim)] text-[14px]">
               Gmail keeps inline styles and a &lt;style&gt; block. Scripts, forms and custom fonts
               are removed. Images must be https links.
             </p>
           </div>
-          <div className="me-view">
+          <div className="flex flex-col gap-3.5 min-w-0">
             <div className="row between">
               <span className="label">Preview with sample details</span>
               <div className="rc-seg" role="tablist" aria-label="Preview size">
@@ -164,8 +166,8 @@ export function MailEditor({
                 ))}
               </div>
             </div>
-            <div className="me-inbox">
-              <p className="me-subject">
+            <div className={previewCard}>
+              <p className={previewMeta}>
                 <span className="dim">Subject</span> {view.subject || '—'}
               </p>
               <iframe
@@ -177,7 +179,7 @@ export function MailEditor({
             </div>
           </div>
         </div>
-        <footer className="me-foot">
+        <footer className={formFoot}>
           <span className={check.error ? 'bad' : 'label'} role={check.error ? 'alert' : undefined}>
             {check.error ??
               (isDefault ? 'This is the built-in design.' : dirty ? 'Unsaved changes.' : 'Saved.')}

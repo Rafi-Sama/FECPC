@@ -59,7 +59,11 @@ export function EventsCalendar({ events }: { events: ClubEvent[] }) {
             ›
           </button>
         </div>
-        <div className="cal2" role="grid" aria-label={name}>
+        <div
+          className="cal2 [display:grid] gap-[4px] my-3 mx-0 grid-cols-[repeat(7,_minmax(0,_1fr))]"
+          role="grid"
+          aria-label={name}
+        >
           {DOW.map((d) => (
             <span key={d} className="cal2-dow" role="columnheader">
               {d}
@@ -100,8 +104,7 @@ export function EventsCalendar({ events }: { events: ClubEvent[] }) {
         </div>
         <button
           type="button"
-          className="btn xs line"
-          style={{ alignSelf: 'flex-start' }}
+          className="btn xs line self-start"
           onClick={() => {
             setCursor({ y: ty, m: tm - 1 });
             setDay(null);
@@ -130,9 +133,7 @@ export function EventsCalendar({ events }: { events: ClubEvent[] }) {
         <div className="list">
           {shown.map((e) => (
             <Link key={e.id} href={`/app/events/${e.id}`} className="cal2-item">
-              <span className="mono acc" style={{ width: 28 }}>
-                {e.startsAt.slice(8, 10)}
-              </span>
+              <span className="mono acc w-[28px]">{e.startsAt.slice(8, 10)}</span>
               <span className="grow">
                 <strong>{e.title}</strong>
                 <br />

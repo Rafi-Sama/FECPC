@@ -4,6 +4,8 @@ import { upcomingContests, localTime } from '@/lib/cf';
 import { byId, fmtDate, pastContests } from '@fecpc/content/site';
 import { site } from '@/lib/site';
 
+import { rainBackdrop, caret } from '@/components/site/ui';
+
 export const metadata = { title: 'Contests' };
 const sheets = [
   ['starter.sheet', 40, 'Zero to first AC. Input, loops, arrays, strings.', 'open to everyone'],
@@ -27,14 +29,14 @@ export default async function Contests() {
   return (
     <>
       <section className="page-head t-a crt" data-t="a">
-        <div className="bgfx rain">
+        <div className={rainBackdrop}>
           <Rain />
         </div>
         <div className="wrap">
           <div className="head">
             <h1 className="disp">
               <span className="dim">$</span> ./compete
-              <i aria-hidden className="blink blk" />
+              <i aria-hidden className={caret} />
             </h1>
             <p className="lede">
               Every rated round worth entering, in {site.city.split(',')[0]} time, plus the
@@ -58,14 +60,10 @@ export default async function Contests() {
               <table className="tbl">
                 <thead>
                   <tr>
-                    <th style={{ width: 230 }}>starts ({site.tz})</th>
+                    <th className="w-[230px]">starts ({site.tz})</th>
                     <th>round</th>
-                    <th className="r" style={{ width: 90 }}>
-                      length
-                    </th>
-                    <th className="r" style={{ width: 90 }}>
-                      link
-                    </th>
+                    <th className="r w-[90px]">length</th>
+                    <th className="r w-[90px]">link</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -79,9 +77,7 @@ export default async function Contests() {
                   )}
                   {up.map((c) => (
                     <tr key={c.id}>
-                      <td className="acc" style={{ whiteSpace: 'nowrap' }}>
-                        {localTime(c.start)}
-                      </td>
+                      <td className="acc whitespace-nowrap">{localTime(c.start)}</td>
                       <td className="hi">{c.name}</td>
                       <td className="r">{c.durationH}h</td>
                       <td className="r">
@@ -99,7 +95,7 @@ export default async function Contests() {
               </table>
             </div>
           </div>
-          <p className="body" style={{ marginTop: 18 }}>
+          <p className="body mt-4.5">
             Members also see AtCoder, CodeChef and LeetCode rounds, with reminders.
           </p>
         </div>
@@ -109,15 +105,15 @@ export default async function Contests() {
         <div className="wrap">
           <div className="head">
             <h2 className="h2">
-              <span className="nw">register → compete →</span>{' '}
-              <span className="nw">report → upsolve</span>
+              <span className="whitespace-nowrap">register → compete →</span>{' '}
+              <span className="whitespace-nowrap">report → upsolve</span>
             </h2>
           </div>
-          <ol className="grid" style={{ '--min': '240px' } as React.CSSProperties}>
+          <ol className="grid [--min:240px]">
             {loop.map(([t, d], i) => (
               <li key={t} className="panel">
                 <p className="label">step {i + 1}/4</p>
-                <h3 className="h3" style={{ marginBlock: 10 }}>
+                <h3 className="h3 my-2.5">
                   <span className="acc">./</span>
                   {t}
                 </h3>
@@ -136,7 +132,7 @@ export default async function Contests() {
               Past club contests with problem sets and member-written editorials.
             </p>
           </div>
-          <div className="stack" style={{ '--g': '0px' } as React.CSSProperties}>
+          <div className="stack [--g:0px]">
             {pastContests.map((c) => (
               <details key={c.id} className="arch" name="arch">
                 <summary>
@@ -145,11 +141,14 @@ export default async function Contests() {
                   </span>
                   <span className="hi">{c.name}</span>
                   <span className="dim">{c.teams} entered</span>
-                  <span aria-hidden className="chev">
+                  <span
+                    aria-hidden
+                    className="[.arch[open]_&]:text-acc [color:var(--dim)] max-[641px]:[.arch_summary_&]:[grid-row:1] max-[641px]:[.arch_summary_&]:[grid-column:2]"
+                  >
                     [+]
                   </span>
                 </summary>
-                <div className="arch-body">
+                <div className="pt-1 pr-1 pb-6 pl-37.5 leading-[2.1] max-[641px]:pl-1">
                   <p>
                     <span className="dim">winner&nbsp;&nbsp;&nbsp;</span> {byId(c.winner).name}{' '}
                     <span className="dim">@{byId(c.winner).handle}</span>
@@ -161,7 +160,7 @@ export default async function Contests() {
                   <p>
                     <span className="dim">topics&nbsp;&nbsp;&nbsp;</span>{' '}
                     {c.topics.map((t) => (
-                      <span key={t} className="tag" style={{ marginRight: 6 }}>
+                      <span key={t} className="tag mr-1.5">
                         {t}
                       </span>
                     ))}
@@ -210,7 +209,7 @@ export default async function Contests() {
               </table>
             </div>
           </div>
-          <div className="row" style={{ marginTop: 40, '--g': '20px' } as React.CSSProperties}>
+          <div className="row mt-10 [--g:20px]">
             <Link href="/contact" className="btn">
               &gt; Get the sheets
             </Link>

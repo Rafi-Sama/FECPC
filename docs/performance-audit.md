@@ -1,6 +1,7 @@
 # Performance audit
 
-Audit of every page under load and with a very large club, on 24 November 2026. It records how each page was
+Audit of every page under load and with a very large club, on 24 November 2026 (scores re-checked on 27
+November 2026). It records how each page was
 measured, what was wrong, what was changed and what is still open. Re-run it with [Reproduce](#reproduce) after
 any change to the state payload, a list query or the shell.
 
@@ -156,6 +157,26 @@ own; **medium** — costs a few points or grows with the club; **low** — waste
     was fetched with `no-store`. Fix: kept for a minute (`next.revalidate: 60`); `/` went from 56 to 400 requests
     a second on the same laptop power state.
 
+Found when the audit was re-checked on 27 November 2026, after the Tailwind migration:
+
+24. **High — every public page loaded the member area's utilities.** After the migration one utility sheet held
+    the classes of every page, so public pages downloaded 38.5 KB (gzip) of CSS and FCP went from 0.9 s to
+    1.2–1.5 s (scores 94–97). Fix: each section builds its own utilities (`(site)/site.utilities.css`,
+    `app/app/app.layer.css`), and the root sheet keeps only the layer order and the base styles. CSS per page:
+    public 15.6 KB, member 57.3 KB (60.2 KB before the migration). Public FCP is back to 0.9 s.
+25. **High — Zod shipped to every member page (36 KB gzip), and tripped the CSP.** The pages import
+    `@fecpc/contracts` as a whole, and its auth schemas (used only by the API) are built at module load, so the
+    bundler kept them and Zod with them. Zod's start-up check calls `Function('')`, which the CSP blocks; Chrome
+    logs that as an issue, and best practices fell to 96 on every member page. Fix: `"sideEffects": false` in the
+    contracts package lets the bundler drop modules a page doesn't use. Member pages load 200–225 KB of JavaScript
+    instead of 236–261 KB, and best practices is 100 again (96 where the made-up Codeforces handles answer 502).
+26. **Medium — dialogs shipped with their pages.** Community's post, new post, announcement, idea, join and
+    interested dialogs, the profile modal (Community, directory) and Career's alumni profile, job detail and post
+    job dialogs render nothing until opened. Fix: they load with `next/dynamic` when first opened.
+27. **The audit database's schema was stale.** Officer pages ended on `/login` and the Codeforces sync answered
+    500, which also cost best practices. Fix: `pnpm db:migrate` against the audit database before measuring
+    (now in [Reproduce](#reproduce)).
+
 ### Page by page
 
 Every member page waited on findings 1–5 and 10 (the state request and the fade-in); those are not repeated
@@ -187,80 +208,82 @@ below. Numbers refer to the findings above.
 
 ## Scores
 
-Median of three runs per page on the final build (the run with the median performance score is shown, with
-all three performance scores). Mobile preset; `CPU` is the calibrated slowdown.
+Re-measured on 27 November 2026, after the Tailwind migration and findings 24–26, on the final build. Median of
+three runs per page (the run with the median performance score is shown, with all three scores). Mobile preset;
+`CPU` is the calibrated slowdown (these runs were on battery, so 2×). `/apply/[token]` was not re-run (99 on 24
+November; SEO 60 because the page is `noindex` on purpose).
 
-**Against the 95 target:** every public page passes (95–99). In the member area, 12 of 22 member pages and 1
-of 9 officer pages reach 95; the rest score 90–94. Accessibility, best practices and SEO are 95 or more
-everywhere, except `/apply/[token]`, whose SEO is 60 because the page is `noindex` on purpose.
+**Against the 95 target:** every public page passes (96–98). In the member area, 16 of 22 member pages and 3 of
+9 officer pages reach 95; the rest score 92–94, except Community (87 as a member, 88 as the President).
+Accessibility, best practices and SEO are 95 or more everywhere.
 
-Before the changes, member pages scored **41–63** where they loaded at all (`/app` 41 and `/app/admin` 44 with
-photos; 56–63 without; `/app/events` 66), and the public pages 95–98. Lighthouse is not meaningful for the
+Before the audit's changes, member pages scored **41–63** where they loaded at all (`/app` 41 and `/app/admin` 44
+with photos; 56–63 without; `/app/events` 66), and the public pages 95–98. Lighthouse is not meaningful for the
 original state request (15 s before the first byte), so the "before" scores above are already after findings 1
 and 2.
 
-Every page below 95 has the same profile: observed LCP equals FCP (nothing paints late any more, no long task
-blocks it), but Lighthouse's simulation charges the shared JavaScript and the one 188 KB member stylesheet to it
-(LCP 3.0–3.6 s against 2.6–2.7 s on the pages that pass). The same page moves 3–6 points between runs. See
-[open item 5](#open-items) for what would move them all.
+Every page below 95 has the same profile: observed LCP equals FCP (nothing paints late), but Lighthouse's
+simulation charges the files loaded before the first paint to it (LCP 2.9–3.3 s against 2.6–2.8 s on the pages
+that pass). The same page moves 3–5 points between runs. Community is the exception: it loads five member photos
+(45 KB each) before its first paint, which the simulation charges about a second for; see
+[open item 8](#open-items).
 
 **Member pages, as a member (5,000-member club)**
 
-| Page                      |   Perf | A11y |  BP | SEO |   FCP |   LCP |    TBT |   CLS | Perf, 3 runs | CPU |
-| ------------------------- | -----: | ---: | --: | --: | ----: | ----: | -----: | ----: | ------------ | --- |
-| `/app`                    | **96** |   96 |  96 | 100 | 1.4 s | 2.7 s |  60 ms |     0 | 92/96/96     | 4x  |
-| `/app/alumni`             | **99** |  100 | 100 | 100 | 1.2 s | 2.1 s |  50 ms |     0 | 97/99/99     | 4x  |
-| `/app/arena`              | **92** |   96 |  96 | 100 | 1.4 s | 3.2 s | 120 ms |     0 | 90/92/95     | 4x  |
-| `/app/career`             | **91** |   96 |  96 | 100 | 1.4 s | 3.3 s | 130 ms |     0 | 90/91/93     | 4x  |
-| `/app/community`          | **90** |   96 | 100 | 100 | 1.4 s | 3.6 s |  50 ms |     0 | 87/90/90     | 4x  |
-| `/app/contest-day`        | **96** |  100 | 100 | 100 | 1.4 s | 2.7 s |  70 ms | 0.002 | 92/96/96     | 4x  |
-| `/app/contests`           | **96** |   95 |  96 | 100 | 1.4 s | 2.6 s | 120 ms |     0 | 92/96/97     | 4x  |
-| `/app/courses`            | **91** |   98 | 100 | 100 | 1.5 s | 3.4 s |  70 ms |     0 | 90/91/91     | 4x  |
-| `/app/directory`          | **94** |   96 | 100 | 100 | 1.4 s | 3.0 s |  50 ms |     0 | 94/94/94     | 4x  |
-| `/app/events`             | **92** |  100 | 100 | 100 | 1.4 s | 3.3 s |  70 ms |     0 | 92/92/96     | 4x  |
-| `/app/events/perf-ev-900` | **92** |   95 | 100 | 100 | 1.4 s | 3.3 s |  50 ms |     0 | 91/92/95     | 4x  |
-| `/app/events/new`         | **96** |  100 | 100 | 100 | 1.4 s | 2.7 s |  70 ms |     0 | 95/96/96     | 4x  |
-| `/app/finance`            | **92** |   98 | 100 | 100 | 1.4 s | 3.3 s |  70 ms |     0 | 92/92/96     | 4x  |
-| `/app/learn`              | **95** |  100 | 100 | 100 | 1.4 s | 2.7 s | 140 ms | 0.001 | 92/95/95     | 4x  |
-| `/app/members`            | **96** |  100 | 100 | 100 | 1.2 s | 2.7 s |  50 ms |     0 | 96/96/99     | 4x  |
-| `/app/notifications`      | **92** |  100 | 100 | 100 | 1.4 s | 3.4 s |  70 ms |     0 | 91/92/92     | 4x  |
-| `/app/prep`               | **95** |   98 | 100 | 100 | 1.4 s | 2.7 s | 140 ms |     0 | 93/95/95     | 4x  |
-| `/app/profile`            | **94** |   96 |  96 | 100 | 1.4 s | 2.7 s | 150 ms |     0 | 93/94/95     | 4x  |
-| `/app/quiz`               | **92** |  100 | 100 | 100 | 1.5 s | 3.2 s | 130 ms |     0 | 90/92/95     | 4x  |
-| `/app/sheets`             | **96** |   96 |  96 | 100 | 1.4 s | 2.7 s |  70 ms |     0 | 92/96/96     | 4x  |
-| `/app/teams`              | **91** |  100 | 100 | 100 | 1.4 s | 3.3 s | 110 ms |     0 | 91/91/95     | 4x  |
-| `/app/wiki`               | **96** |  100 | 100 | 100 | 1.4 s | 2.6 s | 130 ms |     0 | 90/96/97     | 4x  |
+| Page                      |   Perf | A11y |  BP | SEO |   FCP |   LCP |   TBT | CLS | Perf, 3 runs | CPU |
+| ------------------------- | -----: | ---: | --: | --: | ----: | ----: | ----: | --: | ------------ | --- |
+| `/app`                    | **96** |   96 |  96 | 100 | 1.4 s | 2.8 s | 60 ms |   0 | 96/93/96     | 2x  |
+| `/app/alumni`             | **96** |  100 | 100 | 100 | 1.2 s | 2.7 s | 50 ms |   0 | 96/98/96     | 2x  |
+| `/app/arena`              | **96** |   96 |  96 | 100 | 1.4 s | 2.8 s | 40 ms |   0 | 96/96/96     | 2x  |
+| `/app/career`             | **96** |   96 |  96 | 100 | 1.4 s | 2.8 s | 40 ms |   0 | 96/96/96     | 2x  |
+| `/app/community`          | **87** |  100 | 100 | 100 | 1.4 s | 4.0 s | 20 ms |   0 | 87/87/88     | 2x  |
+| `/app/contest-day`        | **95** |  100 | 100 | 100 | 1.4 s | 2.9 s | 70 ms |   0 | 96/95/93     | 2x  |
+| `/app/contests`           | **96** |   95 |  96 | 100 | 1.4 s | 2.6 s | 70 ms |   0 | 96/96/96     | 2x  |
+| `/app/courses`            | **92** |   98 | 100 | 100 | 1.5 s | 3.3 s | 40 ms |   0 | 96/92/92     | 2x  |
+| `/app/directory`          | **94** |   96 | 100 | 100 | 1.4 s | 3.0 s | 40 ms |   0 | 91/94/94     | 2x  |
+| `/app/events`             | **93** |  100 | 100 | 100 | 1.4 s | 3.2 s | 60 ms |   0 | 93/93/95     | 2x  |
+| `/app/events/perf-ev-900` | **95** |   95 | 100 | 100 | 1.4 s | 2.9 s | 40 ms |   0 | 91/95/96     | 2x  |
+| `/app/events/new`         | **96** |  100 | 100 | 100 | 1.4 s | 2.7 s | 40 ms |   0 | 96/96/96     | 2x  |
+| `/app/finance`            | **95** |   98 | 100 | 100 | 1.4 s | 2.7 s | 80 ms |   0 | 91/95/95     | 2x  |
+| `/app/learn`              | **96** |  100 | 100 | 100 | 1.4 s | 2.7 s | 30 ms |   0 | 96/96/96     | 2x  |
+| `/app/members`            | **96** |  100 | 100 | 100 | 1.2 s | 2.7 s | 50 ms |   0 | 96/96/96     | 2x  |
+| `/app/notifications`      | **95** |  100 | 100 | 100 | 1.4 s | 2.9 s | 70 ms |   0 | 95/96/93     | 2x  |
+| `/app/prep`               | **96** |   98 | 100 | 100 | 1.4 s | 2.7 s | 40 ms |   0 | 92/96/96     | 2x  |
+| `/app/profile`            | **95** |   96 |  96 | 100 | 1.4 s | 2.9 s | 40 ms |   0 | 95/96/93     | 2x  |
+| `/app/quiz`               | **96** |  100 | 100 | 100 | 1.5 s | 2.7 s | 40 ms |   0 | 96/96/96     | 2x  |
+| `/app/sheets`             | **93** |   96 |  96 | 100 | 1.4 s | 3.2 s | 70 ms |   0 | 96/93/93     | 2x  |
+| `/app/teams`              | **96** |  100 | 100 | 100 | 1.4 s | 2.7 s | 40 ms |   0 | 96/96/96     | 2x  |
+| `/app/wiki`               | **93** |  100 | 100 | 100 | 1.4 s | 3.2 s | 70 ms |   0 | 93/93/96     | 2x  |
 
 **Officer pages, as the President**
 
-| Page                      |   Perf | A11y |  BP | SEO |   FCP |   LCP |    TBT | CLS | Perf, 3 runs | CPU |
-| ------------------------- | -----: | ---: | --: | --: | ----: | ----: | -----: | --: | ------------ | --- |
-| `/app/admin`              | **93** |  100 | 100 | 100 | 1.5 s | 3.0 s |  90 ms |   0 | 92/93/94     | 4x  |
-| `/app/ops`                | **93** |  100 | 100 | 100 | 1.5 s | 2.9 s | 150 ms |   0 | 92/93/93     | 4x  |
-| `/app/finance`            | **93** |   98 | 100 | 100 | 1.5 s | 2.9 s | 170 ms |   0 | 91/93/94     | 4x  |
-| `/app/events`             | **93** |  100 | 100 | 100 | 1.5 s | 3.2 s |  70 ms |   0 | 91/93/95     | 4x  |
-| `/app/events/perf-ev-900` | **94** |   96 | 100 | 100 | 1.5 s | 3.0 s |  60 ms |   0 | 90/94/95     | 4x  |
-| `/app`                    | **95** |   96 |  96 | 100 | 1.5 s | 2.7 s |  70 ms |   0 | 92/95/95     | 4x  |
-| `/app/directory`          | **90** |   96 | 100 | 100 | 1.5 s | 3.5 s |  50 ms |   0 | 88/90/93     | 4x  |
-| `/app/community`          | **90** |  100 | 100 | 100 | 1.5 s | 3.6 s |  60 ms |   0 | 89/90/91     | 4x  |
-| `/app/arena`              | **93** |   96 |  96 | 100 | 1.5 s | 2.9 s | 160 ms |   0 | 93/93/94     | 4x  |
+| Page                      |   Perf | A11y |  BP | SEO |   FCP |   LCP |   TBT |  CLS | Perf, 3 runs | CPU |
+| ------------------------- | -----: | ---: | --: | --: | ----: | ----: | ----: | ---: | ------------ | --- |
+| `/app/admin`              | **95** |  100 | 100 | 100 | 1.5 s | 2.9 s | 40 ms |    0 | 95/94/96     | 2x  |
+| `/app/ops`                | **95** |  100 | 100 | 100 | 1.5 s | 2.9 s | 40 ms | 0.02 | 95/95/95     | 2x  |
+| `/app/finance`            | **94** |   98 | 100 | 100 | 1.5 s | 3.0 s | 40 ms |    0 | 95/94/94     | 2x  |
+| `/app/events`             | **94** |  100 | 100 | 100 | 1.5 s | 3.0 s | 80 ms |    0 | 92/94/94     | 2x  |
+| `/app/events/perf-ev-900` | **92** |   96 | 100 | 100 | 1.7 s | 3.2 s | 40 ms |    0 | 92/92/92     | 2x  |
+| `/app`                    | **94** |   96 |  96 | 100 | 1.5 s | 2.9 s | 70 ms |    0 | 93/94/95     | 2x  |
+| `/app/directory`          | **94** |   96 | 100 | 100 | 1.5 s | 3.0 s | 40 ms |    0 | 94/90/94     | 2x  |
+| `/app/community`          | **88** |  100 | 100 | 100 | 1.7 s | 3.8 s | 40 ms |    0 | 86/88/88     | 2x  |
+| `/app/arena`              | **95** |   96 |  96 | 100 | 1.5 s | 2.9 s | 50 ms |    0 | 95/94/95     | 2x  |
 
 **Public pages**
 
-| Page             |   Perf | A11y |  BP | SEO |   FCP |   LCP |    TBT | CLS | Perf, 3 runs | CPU |
-| ---------------- | -----: | ---: | --: | --: | ----: | ----: | -----: | --: | ------------ | --- |
-| `/apply/[token]` | **99** |   96 | 100 |  60 | 0.9 s | 2.3 s |  50 ms |   0 | 95/99/99     | 4x  |
-| `/`              | **95** |   96 | 100 | 100 | 1.1 s | 2.9 s | 100 ms |   0 | 94/95/95     | 4x  |
-| `/about`         | **96** |  100 | 100 | 100 | 0.9 s | 2.7 s |  50 ms |   0 | 96/96/96     | 4x  |
-| `/alumni`        | **96** |  100 | 100 | 100 | 0.9 s | 2.7 s |  50 ms |   0 | 96/96/99     | 4x  |
-| `/blog`          | **96** |  100 | 100 | 100 | 0.9 s | 2.7 s |  50 ms |   0 | 96/96/99     | 4x  |
-| `/contact`       | **96** |  100 | 100 | 100 | 0.9 s | 2.6 s | 100 ms |   0 | 96/96/96     | 4x  |
-| `/contests`      | **96** |  100 | 100 | 100 | 0.9 s | 2.7 s |  50 ms |   0 | 96/96/96     | 4x  |
-| `/events`        | **96** |  100 | 100 | 100 | 0.9 s | 2.7 s |  50 ms |   0 | 96/96/96     | 4x  |
-| `/leaderboard`   | **96** |  100 | 100 | 100 | 0.9 s | 2.7 s |  50 ms |   0 | 96/96/99     | 4x  |
-| `/login`         | **96** |  100 | 100 | 100 | 0.9 s | 2.7 s |  50 ms |   0 | 96/96/99     | 2x  |
-| `/projects`      | **96** |   98 | 100 | 100 | 0.9 s | 2.7 s |  50 ms |   0 | 96/96/96     | 4x  |
-| `/verify`        | **96** |  100 | 100 | 100 | 0.9 s | 2.7 s |  50 ms |   0 | 96/96/99     | 4x  |
+| Page           |   Perf | A11y |  BP | SEO |   FCP |   LCP |   TBT | CLS | Perf, 3 runs | CPU |
+| -------------- | -----: | ---: | --: | --: | ----: | ----: | ----: | --: | ------------ | --- |
+| `/`            | **98** |   96 | 100 | 100 | 1.2 s | 2.4 s | 30 ms |   0 | 95/98/98     | 2x  |
+| `/about`       | **97** |  100 | 100 | 100 | 0.9 s | 2.7 s | 30 ms |   0 | 97/97/97     | 2x  |
+| `/alumni`      | **97** |  100 | 100 | 100 | 0.9 s | 2.7 s | 30 ms |   0 | 97/97/97     | 2x  |
+| `/blog`        | **97** |  100 | 100 | 100 | 0.9 s | 2.7 s | 30 ms |   0 | 97/97/97     | 2x  |
+| `/contact`     | **97** |  100 | 100 | 100 | 0.9 s | 2.7 s | 30 ms |   0 | 97/97/97     | 2x  |
+| `/contests`    | **97** |  100 | 100 | 100 | 0.9 s | 2.7 s | 30 ms |   0 | 96/97/97     | 2x  |
+| `/events`      | **96** |  100 | 100 | 100 | 1.1 s | 2.9 s | 30 ms |   0 | 96/96/96     | 2x  |
+| `/leaderboard` | **96** |  100 | 100 | 100 | 1.1 s | 2.8 s | 30 ms |   0 | 96/96/96     | 2x  |
+| `/login`       | **97** |  100 | 100 | 100 | 0.9 s | 2.6 s | 20 ms |   0 | 97/97/99     | 2x  |
+| `/projects`    | **97** |   98 | 100 | 100 | 0.9 s | 2.7 s | 30 ms |   0 | 99/97/96     | 2x  |
+| `/verify`      | **97** |  100 | 100 | 100 | 0.9 s | 2.7 s | 30 ms |   0 | 97/97/97     | 2x  |
 
 ## Load
 
@@ -316,20 +339,21 @@ audit's changes.
    now that the state is mostly cached; 85–150 ms with a cold cache).
 4. **Still in every state:** `counts.kudos` (one entry per member with kudos, about 90 KB raw at 5,000
    members) and the 50 newest announcements with their full text (67 KB raw here).
-5. **The shared floor — why ten member pages and most officer pages are at 90–94.** Every member page loads
-   about 190 KB (gzip) of JavaScript and one 188 KB stylesheet (35 KB gzip) with every page's styles, plus
-   `alumni-cards.css` (33 KB). On simulated slow 4G that puts FCP at 1.4–1.5 s and LCP at 2.6–3.6 s. About half
-   of `app.css` belongs to six features (community 15 %, events 12 %, alumni 10 %, finance 7 %, recruitment 4 %,
-   announcements 3 %); importing each from the pages that use it, and `alumni-cards.css` from Career only,
-   would roughly halve the render-blocking CSS on every member page. It was not done here because moving rules
-   changes cascade order across a recently finished design, and it needs a visual check of every page.
+5. **The shared floor — why the member pages below 95 are at 92–94.** Every member page loads 200–225 KB
+   (gzip) of JavaScript and 57 KB (gzip) of CSS: `app.css` with every member page's styles, `alumni-cards.css`
+   (Career only), and one utility sheet for the whole member area. On simulated slow 4G that puts FCP at
+   1.4–1.5 s and LCP at 2.7–3.3 s. Splitting `app.css` by feature (community 15 %, events 12 %, alumni 10 %,
+   finance 7 %, recruitment 4 %, announcements 3 %) and loading `alumni-cards.css` from Career only would cut
+   the render-blocking CSS on most pages. It needs every page checked against the current look, since moving
+   rules changes cascade order.
 6. **Best practices 96 on pages that show Codeforces data:** the test members' handles are made up, so
    `/api/cf/:handle` answers 502 and the browser logs it. Real handles answer 200.
 7. **Accessibility (all ≥ 95):** low contrast on a few small labels (Today's problem tier, sheet tags, contest
    chips, the kudos limit, the ID card's dim text), `h3` without an `h2` (courses, finance, prep, projects),
    `role` on an `article`/`li` that does not allow it (alumni cards, directory), a small _View_ target on alumni
    cards, and `aria-label` on a `dd` on the home page.
-8. **Photos are stored at 512 px** and shown at 28–64 px. A 128 px copy made at upload would cut photo bytes by
+8. **Photos are stored at 512 px** and shown at 28–64 px. This is now the main cost on Community (87–88): five
+   feed photos (45 KB each) load before its first paint. A 128 px copy made at upload would cut photo bytes by
    about ten times.
 9. **Filtering upcoming events loads all of them.** 500 upcoming events (as seeded) is 270 KB; a club that plans
    that far ahead would want the filters on the server.
@@ -341,6 +365,8 @@ audit's changes.
 psql postgres://fecpc:fecpc_dev@127.0.0.1:5433/fecpc -c 'create database fecpc_perf'
 export PERF=postgres://fecpc:fecpc_dev@127.0.0.1:5433/fecpc_perf
 DATABASE_URL=$PERF SEED_PASSWORD=fecpc-dev-2026 pnpm --filter @fecpc/api db:seed
+# An existing audit database needs the current schema first, or officer pages and the CF sync fail.
+DATABASE_URL=$PERF pnpm --filter @fecpc/api db:migrate
 psql $PERF -f apps/api/scripts/perf-seed.sql
 
 # 2. Production builds on spare ports, pointed at it.

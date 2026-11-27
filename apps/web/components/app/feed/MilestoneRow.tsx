@@ -4,6 +4,9 @@ import { AvatarRing } from '@/components/app/shared/RatingBadge';
 import { formatMilestoneSubline, formatMilestoneTarget, rankFor } from '@fecpc/contracts';
 import type { MilestoneDTO } from '@fecpc/contracts';
 
+const msKudosBtn = 'whitespace-nowrap'; // was .ms-kudos-btn
+const msKudosBtnGiven = '[&[disabled]]:opacity-[0.6] [&[disabled]]:cursor-not-allowed'; // was .ms-kudos-btn--given
+
 export function MilestoneRow({
   milestone,
   isOwner,
@@ -38,7 +41,7 @@ export function MilestoneRow({
       return (
         <button
           type="button"
-          className="btn xs ms-kudos-btn ms-kudos-btn--given"
+          className={`btn xs ${msKudosBtn} ${msKudosBtnGiven}`}
           disabled
           title={
             milestone.kudos_count > 0
@@ -56,7 +59,7 @@ export function MilestoneRow({
       return (
         <button
           type="button"
-          className="btn xs ms-kudos-btn ms-kudos-btn--given"
+          className={`btn xs ${msKudosBtn} ${msKudosBtnGiven}`}
           disabled
           title={`You congratulated ${milestone.member_name} (${milestone.kudos_count} total)`}
           aria-label={`Congratulated ${milestone.member_name}`}
@@ -70,7 +73,7 @@ export function MilestoneRow({
       return (
         <button
           type="button"
-          className="btn xs line ms-kudos-btn"
+          className={`btn xs line ${msKudosBtn}`}
           disabled
           title="Operator accounts cannot give kudos"
           aria-label="Cannot give kudos"
@@ -83,7 +86,7 @@ export function MilestoneRow({
     return (
       <button
         type="button"
-        className="btn xs line ms-kudos-btn"
+        className={`btn xs line ${msKudosBtn}`}
         disabled={pending}
         onClick={() => onGiveKudos(milestone.id)}
         aria-label={`Give kudos to ${milestone.member_name} for reaching ${targetText}`}
@@ -94,10 +97,10 @@ export function MilestoneRow({
   };
 
   return (
-    <div className="ms-row">
+    <div className="ms-row w-full">
       <button
         type="button"
-        className="ms-avatar-btn"
+        className="ms-avatar-btn p-0 [background:none] cursor-pointer inline-flex flex-none leading-[0] focus-visible:[outline:2px_solid_var(--acc)] focus-visible:[outline-offset:2px]"
         onClick={(e) => onOpenMember(milestone.user_id, e.currentTarget)}
         aria-label={`Open ${milestone.member_name}'s profile`}
       >
@@ -111,11 +114,11 @@ export function MilestoneRow({
         />
       </button>
 
-      <div className="ms-body">
-        <div className="ms-headline">
+      <div className="ms-body flex-1 flex-col">
+        <div className="text-[14px] leading-[1.35] text-ink [overflow-wrap:anywhere]">
           <button
             type="button"
-            className="ms-name-btn"
+            className="ms-name-btn hover:[text-decoration:underline] hover:[text-underline-offset:3px] focus-visible:[outline:2px_solid_var(--acc)] focus-visible:[outline-offset:2px]"
             style={{ '--rank-text': rank.textColor, '--rank-color': rank.color } as CSSProperties}
             onClick={(e) => onOpenMember(milestone.user_id, e.currentTarget)}
           >
@@ -123,11 +126,17 @@ export function MilestoneRow({
           </button>{' '}
           reached <strong>{targetText}</strong>
         </div>
-        <div className="ms-subline">{subline}</div>
-        {ownerCongratsLine && <div className="ms-owner-signal">{ownerCongratsLine}</div>}
+        <div className="font-label text-[11px] tracking-[0.05em] uppercase [color:var(--dim)] leading-[1.35]">
+          {subline}
+        </div>
+        {ownerCongratsLine && (
+          <div className="font-label text-[11px] tracking-[0.04em] [color:var(--mut)] leading-[1.35]">
+            {ownerCongratsLine}
+          </div>
+        )}
       </div>
 
-      <div className="ms-action">{renderButton()}</div>
+      <div className="ms-action flex-none">{renderButton()}</div>
     </div>
   );
 }

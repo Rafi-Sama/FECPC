@@ -1,5 +1,8 @@
 'use client';
 
+const cmVoteBtn =
+  'p-0 [background:none] w-[40px] h-[36px] [display:grid] [place-items:center] leading-[1] text-[18px] [color:var(--dim)] cursor-pointer hover:text-hi [&.on]:text-[#1f3bff] [&.on]:font-bold [.t-d_&.on]:text-[#6fa8ff]'; // was .cm-vote-btn
+
 export function VoteWidget({
   score,
   myVote,
@@ -47,10 +50,13 @@ export function VoteWidget({
   }
 
   return (
-    <div className="cm-vote" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="cm-vote flex-col w-[48px] flex-none [font-family:var(--mono),_monospace]"
+      onClick={(e) => e.stopPropagation()}
+    >
       <button
         type="button"
-        className={`cm-vote-btn ${myVote === 1 ? 'on' : ''}`}
+        className={`cm-vote-btn [border:1px_solid_transparent] hover:border-line2 ${cmVoteBtn} ${myVote === 1 ? 'on' : ''}`}
         aria-label="Upvote"
         aria-pressed={myVote === 1}
         disabled={disabled}
@@ -58,10 +64,14 @@ export function VoteWidget({
       >
         ▲
       </button>
-      <span className={`cm-vote-score ${myVote !== 0 ? 'on' : ''}`}>{score}</span>
+      <span
+        className={`text-[16px] font-bold text-hi [font-variant-numeric:tabular-nums] [&.on]:text-[#1f3bff] [.t-d_&.on]:text-[#6fa8ff] ${myVote !== 0 ? 'on' : ''}`}
+      >
+        {score}
+      </span>
       <button
         type="button"
-        className={`cm-vote-btn ${myVote === -1 ? 'on' : ''}`}
+        className={`cm-vote-btn [border:1px_solid_transparent] hover:border-line2 ${cmVoteBtn} ${myVote === -1 ? 'on' : ''}`}
         aria-label="Downvote"
         aria-pressed={myVote === -1}
         disabled={disabled}

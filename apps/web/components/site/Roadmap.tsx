@@ -20,7 +20,11 @@ export default function Roadmap({ done = [] as string[] }) {
   };
   return (
     <div className="roadmap">
-      <svg viewBox="0 0 1000 300" aria-hidden className="rm-svg">
+      <svg
+        viewBox="0 0 1000 300"
+        aria-hidden
+        className="[.roadmap_&]:w-full [.roadmap_&]:h-auto [.roadmap_&]:hidden [.roadmap_&]:overflow-visible min-[900px]:[.roadmap_&]:block"
+      >
         {roadmap.flatMap((n) =>
           n.needs.map((d) => {
             const [x1, y1] = pos[d],
@@ -29,7 +33,7 @@ export default function Roadmap({ done = [] as string[] }) {
             return (
               <path
                 key={d + n.id}
-                className={`edge ${done.includes(d) ? 'lit' : ''}`}
+                className={`[fill:none] [stroke:var(--line2)] [stroke-width:1.5] [stroke-dasharray:3_4] [&.lit]:[stroke:var(--acc)] [&.lit]:[stroke-dasharray:none] ${done.includes(d) ? 'lit' : ''}`}
                 d={`M${x1 + W} ${y1 + H / 2}H${mx}V${y2 + H / 2}H${x2}`}
               />
             );
@@ -40,10 +44,18 @@ export default function Roadmap({ done = [] as string[] }) {
           return (
             <g key={n.id} className={`node ${state(n.id)}`} transform={`translate(${x} ${y})`}>
               <rect width={W} height={H} />
-              <text x={12} y={28} className="t1">
+              <text
+                x={12}
+                y={28}
+                className="[.node_&]:[fill:var(--ink)] [.node_&]:[font:500_15px_var(--sans),sans-serif] [.node_&]:tracking-[-0.01em] [.node.done_&]:[fill:var(--on)]"
+              >
                 {n.name}
               </text>
-              <text x={12} y={50} className="t2">
+              <text
+                x={12}
+                y={50}
+                className="[.node_&]:[fill:var(--mut)] [.node_&]:[font:14px_var(--mono),monospace] [.node.open_&]:[fill:var(--acc2)] [.node.done_&]:[fill:var(--on)]"
+              >
                 {state(n.id) === 'done'
                   ? '✓ complete'
                   : state(n.id) === 'open'
@@ -54,7 +66,7 @@ export default function Roadmap({ done = [] as string[] }) {
           );
         })}
       </svg>
-      <ol className="rm-list">
+      <ol className="flex flex-col [&_li]:py-4 [&_li]:px-0 [&_li]:[display:grid] [&_li]:grid-cols-[64px_minmax(0,1fr)] [&_li]:gap-[4px_14px] [&_li]:border-t [&_li]:border-t-line [&_.st]:text-[14px] [&_.st]:row-[span_2] [&_.st]:text-dim [&_.st]:pt-1 [&_.done_.st]:text-acc [&_.open_.st]:text-acc2 [&_strong]:text-[18px] [&_strong]:font-medium [&_.locked_strong]:text-dim min-[900px]:hidden">
         {roadmap.map((n) => (
           <li key={n.id} className={state(n.id)}>
             <span className="mono st">{state(n.id) === 'done' ? 'done' : state(n.id)}</span>
@@ -68,7 +80,7 @@ export default function Roadmap({ done = [] as string[] }) {
           </li>
         ))}
       </ol>
-      <p className="label rm-key">
+      <p className="label flex gap-6 mt-6 [&_span]:flex [&_span]:items-center [&_span]:gap-2">
         <span>
           <i className="k done" />
           complete

@@ -5,6 +5,15 @@ import React, { useEffect, useRef, useState } from 'react';
 import type { AlumniJob } from '@fecpc/contracts';
 import { JobCard } from './JobCard';
 
+const stepperButton =
+  'w-[38px] h-[38px] [border:none] [background:transparent] text-[16px] font-bold cursor-pointer text-ink';
+
+const label = 'm mb-1.5 block text-dim';
+const inputBase = 'btn line w-full text-left [background:var(--bg)] text-ink';
+const input = `${inputBase} min-h-[40px]`;
+const errorText = 'mt-1 text-[11px] text-acc block';
+const grid2 = '[display:grid] grid-cols-[1fr_1fr] gap-4';
+
 const FOCUSABLE =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -196,269 +205,109 @@ export function PostJobModal({
 
   return (
     <div
-      className="profile-modal-backdrop post-job-backdrop"
+      className="profile-modal-backdrop post-job-backdrop inset-0 p-4 fixed [background:rgba(11,_11,_11,_0.65)] [backdrop-filter:blur(4px)] flex items-center justify-center z-[9999]"
       role="presentation"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(11, 11, 11, 0.65)',
-        backdropFilter: 'blur(4px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 9999,
-        padding: '16px',
-      }}
     >
       <div
         ref={modalRef}
-        className="panel post-job-modal"
+        className="panel max-[861px]:max-h-[100vh]! max-[861px]:min-h-[100vh] p-0 w-full max-w-[1040px] max-h-[90vh] [background:var(--panel)] [border:2px_solid_var(--line2)] [box-shadow:10px_10px_0_var(--line2)] flex flex-col overflow-hidden relative"
         role="dialog"
         aria-modal="true"
         aria-label="Post a new job"
-        style={{
-          width: '100%',
-          maxWidth: 1040,
-          maxHeight: '90vh',
-          background: 'var(--panel, #F6F4EE)',
-          border: '2px solid var(--line2, #0B0B0B)',
-          boxShadow: '10px 10px 0 var(--line2, #0B0B0B)',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          position: 'relative',
-          padding: 0,
-        }}
       >
         {/* Top Header */}
-        <header
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            padding: '16px 24px',
-            borderBottom: '2px solid var(--line2, #0B0B0B)',
-            background: 'var(--bg, #ECE9E1)',
-          }}
-        >
+        <header className="py-4 px-6 flex justify-between items-center [border-bottom:2px_solid_var(--line2)] [background:var(--bg)]">
           <div>
-            <span
-              className="m"
-              style={{
-                fontSize: 11,
-                fontWeight: 600,
-                color: 'var(--acc, #1F3BFF)',
-                letterSpacing: '.08em',
-                display: 'block',
-              }}
-            >
+            <span className="m text-[11px] font-semibold text-acc tracking-[.08em] block">
               MANUAL · SHARED WITH ALL ALUMNI
             </span>
-            <h2
-              style={{
-                fontSize: 20,
-                fontWeight: 700,
-                margin: '2px 0 0',
-                color: 'var(--ink, #0B0B0B)',
-              }}
-            >
-              Post a <i style={{ color: 'var(--acc, #1F3BFF)', fontStyle: 'normal' }}>job.</i>
+            <h2 className="mt-0.5 mx-0 mb-0 text-[20px] font-bold text-ink">
+              Post a <i className="text-acc not-italic">job.</i>
             </h2>
           </div>
 
           <button
             type="button"
-            className="btn xs line"
+            className="btn xs line p-0 min-w-[36px] min-h-[36px] text-[18px] text-ink"
             aria-label="Close"
             onClick={onClose}
-            style={{
-              minWidth: 36,
-              minHeight: 36,
-              padding: 0,
-              fontSize: 18,
-              color: 'var(--ink, #0B0B0B)',
-            }}
           >
             ×
           </button>
         </header>
 
         {/* Modal Body: Two Columns (Form on Left, Sticky Live Preview on Right) */}
-        <div
-          className="post-job-modal__grid"
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 340px',
-            overflowY: 'auto',
-            flex: 1,
-          }}
-        >
+        <div className="max-[861px]:[&>form]:[border-right:0]! max-[861px]:[&>form]:[border-bottom:1px_solid_var(--line)] max-[861px]:grid-cols-[1fr]! [display:grid] grid-cols-[1fr_340px] overflow-y-auto flex-1">
           {/* Form */}
           <SaveForm
             onSubmit={handleSubmit}
             onDiscard={onClose}
             label="Unpublished job"
             saveLabel="Publish job"
-            style={{
-              padding: '24px 32px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 16,
-              borderRight: '2px solid var(--line2, #0B0B0B)',
-            }}
+            className="py-6 px-8 flex flex-col gap-4 [border-right:2px_solid_var(--line2)]"
           >
             {errors.form && (
-              <div
-                style={{
-                  background: 'rgba(176, 0, 32, 0.12)',
-                  border: '2px solid var(--acc, #B00020)',
-                  color: 'var(--acc, #B00020)',
-                  padding: '10px 14px',
-                  fontSize: 13,
-                  fontWeight: 500,
-                }}
-              >
+              <div className="py-2.5 px-3.5 [background:rgba(176,_0,_32,_0.12)] [border:2px_solid_var(--acc)] text-acc text-[13px] font-medium">
                 {errors.form}
               </div>
             )}
 
             {/* Row 1: Company + Role */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div className={grid2}>
               <div>
-                <label
-                  className="m"
-                  style={{ display: 'block', marginBottom: 6, color: 'var(--dim, #5F5F5F)' }}
-                >
-                  COMPANY NAME *
-                </label>
+                <label className={label}>COMPANY NAME *</label>
                 <input
                   ref={companyInputRef}
-                  className="btn line"
+                  className={input}
                   required
                   placeholder="e.g. Northwind Labs"
                   value={company}
                   onChange={(e) => setCompany(e.target.value)}
                   style={{
-                    width: '100%',
-                    minHeight: 40,
-                    textAlign: 'left',
-                    background: 'var(--bg, #FFFFFF)',
-                    color: 'var(--ink, #0B0B0B)',
                     borderColor: errors.company ? 'var(--acc, #B00020)' : 'var(--line2, #0B0B0B)',
                   }}
                 />
-                {errors.company && (
-                  <span
-                    style={{
-                      fontSize: 11,
-                      color: 'var(--acc, #B00020)',
-                      marginTop: 4,
-                      display: 'block',
-                    }}
-                  >
-                    {errors.company}
-                  </span>
-                )}
+                {errors.company && <span className={errorText}>{errors.company}</span>}
               </div>
 
               <div>
-                <label
-                  className="m"
-                  style={{ display: 'block', marginBottom: 6, color: 'var(--dim, #5F5F5F)' }}
-                >
-                  ROLE TITLE *
-                </label>
+                <label className={label}>ROLE TITLE *</label>
                 <input
-                  className="btn line"
+                  className={input}
                   required
                   placeholder="e.g. Frontend Engineer"
                   value={role}
                   onChange={(e) => setRole(e.target.value)}
                   style={{
-                    width: '100%',
-                    minHeight: 40,
-                    textAlign: 'left',
-                    background: 'var(--bg, #FFFFFF)',
-                    color: 'var(--ink, #0B0B0B)',
                     borderColor: errors.role ? 'var(--acc, #B00020)' : 'var(--line2, #0B0B0B)',
                   }}
                 />
-                {errors.role && (
-                  <span
-                    style={{
-                      fontSize: 11,
-                      color: 'var(--acc, #B00020)',
-                      marginTop: 4,
-                      display: 'block',
-                    }}
-                  >
-                    {errors.role}
-                  </span>
-                )}
+                {errors.role && <span className={errorText}>{errors.role}</span>}
               </div>
             </div>
 
             {/* Row 2: Vacancies Stepper + Job Type */}
-            <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: 16 }}>
+            <div className="[display:grid] grid-cols-[140px_1fr] gap-4">
               <div>
-                <label
-                  className="m"
-                  style={{ display: 'block', marginBottom: 6, color: 'var(--dim, #5F5F5F)' }}
-                >
-                  VACANCIES
-                </label>
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    border: '2px solid var(--line2, #0B0B0B)',
-                    background: 'var(--bg, #FFF)',
-                    color: 'var(--ink, #0B0B0B)',
-                  }}
-                >
+                <label className={label}>VACANCIES</label>
+                <div className="flex items-center [border:2px_solid_var(--line2)] [background:var(--bg)] text-ink">
                   <button
                     type="button"
                     onClick={() => setVacancies((v) => Math.max(1, v - 1))}
-                    style={{
-                      width: 38,
-                      height: 38,
-                      border: 'none',
-                      background: 'transparent',
-                      fontSize: 16,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      color: 'var(--ink, #0B0B0B)',
-                    }}
+                    className={stepperButton}
                   >
                     -
                   </button>
-                  <span
-                    style={{
-                      flex: 1,
-                      textAlign: 'center',
-                      fontFamily: 'ui-monospace, monospace',
-                      fontWeight: 700,
-                      fontSize: 15,
-                    }}
-                  >
+                  <span className="flex-1 text-center [font-family:ui-monospace,_monospace] font-bold text-[15px]">
                     {vacancies}
                   </span>
                   <button
                     type="button"
                     onClick={() => setVacancies((v) => Math.min(99, v + 1))}
-                    style={{
-                      width: 38,
-                      height: 38,
-                      border: 'none',
-                      background: 'transparent',
-                      fontSize: 16,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      color: 'var(--ink, #0B0B0B)',
-                    }}
+                    className={stepperButton}
                   >
                     +
                   </button>
@@ -466,20 +315,14 @@ export function PostJobModal({
               </div>
 
               <div>
-                <label
-                  className="m"
-                  style={{ display: 'block', marginBottom: 6, color: 'var(--dim, #5F5F5F)' }}
-                >
-                  JOB TYPE
-                </label>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <label className={label}>JOB TYPE</label>
+                <div className="flex gap-1.5 flex-wrap">
                   {['Full-time', 'Part-time', 'Contract', 'Internship'].map((type) => (
                     <button
                       key={type}
                       type="button"
-                      className={`tag tab ${jobType === type ? 'on' : ''}`}
+                      className={`tag tab ${jobType === type ? 'on' : ''} min-h-[38px] text-[12px]`}
                       onClick={() => setJobType(type)}
-                      style={{ minHeight: 38, fontSize: 12 }}
                     >
                       {type}
                     </button>
@@ -489,37 +332,19 @@ export function PostJobModal({
             </div>
 
             {/* Row 3: Location + Deadline */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div className={grid2}>
               <div>
-                <label
-                  className="m"
-                  style={{ display: 'block', marginBottom: 6, color: 'var(--dim, #5F5F5F)' }}
-                >
-                  LOCATION
-                </label>
+                <label className={label}>LOCATION</label>
                 <input
-                  className="btn line"
+                  className={`${input} border-line2`}
                   placeholder="Dhaka · Hybrid / Remote"
                   value={location}
                   onChange={(e) => setLocation(e.target.value)}
-                  style={{
-                    width: '100%',
-                    minHeight: 40,
-                    textAlign: 'left',
-                    background: 'var(--bg, #FFFFFF)',
-                    color: 'var(--ink, #0B0B0B)',
-                    borderColor: 'var(--line2, #0B0B0B)',
-                  }}
                 />
               </div>
 
               <div>
-                <label
-                  className="m"
-                  style={{ display: 'block', marginBottom: 6, color: 'var(--dim, #5F5F5F)' }}
-                >
-                  CLOSING DEADLINE *
-                </label>
+                <label className={label}>CLOSING DEADLINE *</label>
                 <DatePicker
                   className="grow"
                   label="Closing deadline"
@@ -528,246 +353,112 @@ export function PostJobModal({
                   value={deadline}
                   onChange={setDeadline}
                 />
-                {errors.deadline && (
-                  <span
-                    style={{
-                      fontSize: 11,
-                      color: 'var(--acc, #B00020)',
-                      marginTop: 4,
-                      display: 'block',
-                    }}
-                  >
-                    {errors.deadline}
-                  </span>
-                )}
+                {errors.deadline && <span className={errorText}>{errors.deadline}</span>}
               </div>
             </div>
 
             {/* Row 4: Application URL + Experience */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div className={grid2}>
               <div>
-                <label
-                  className="m"
-                  style={{ display: 'block', marginBottom: 6, color: 'var(--dim, #5F5F5F)' }}
-                >
-                  APPLICATION URL *
-                </label>
+                <label className={label}>APPLICATION URL *</label>
                 <input
                   type="url"
-                  className="btn line"
+                  className={input}
                   required
                   placeholder="https://..."
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
                   style={{
-                    width: '100%',
-                    minHeight: 40,
-                    textAlign: 'left',
-                    background: 'var(--bg, #FFFFFF)',
-                    color: 'var(--ink, #0B0B0B)',
                     borderColor: errors.url ? 'var(--acc, #B00020)' : 'var(--line2, #0B0B0B)',
                   }}
                 />
-                {errors.url && (
-                  <span
-                    style={{
-                      fontSize: 11,
-                      color: 'var(--acc, #B00020)',
-                      marginTop: 4,
-                      display: 'block',
-                    }}
-                  >
-                    {errors.url}
-                  </span>
-                )}
+                {errors.url && <span className={errorText}>{errors.url}</span>}
               </div>
 
               <div>
-                <label
-                  className="m"
-                  style={{ display: 'block', marginBottom: 6, color: 'var(--dim, #5F5F5F)' }}
-                >
-                  EXPERIENCE (OPTIONAL)
-                </label>
+                <label className={label}>EXPERIENCE (OPTIONAL)</label>
                 <input
-                  className="btn line"
+                  className={`${input} border-line2`}
                   placeholder="e.g. 2–4 years"
                   value={experience}
                   onChange={(e) => setExperience(e.target.value)}
-                  style={{
-                    width: '100%',
-                    minHeight: 40,
-                    textAlign: 'left',
-                    background: 'var(--bg, #FFFFFF)',
-                    color: 'var(--ink, #0B0B0B)',
-                    borderColor: 'var(--line2, #0B0B0B)',
-                  }}
                 />
               </div>
             </div>
 
             {/* Row 5: Salary + Logo URL */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div className={grid2}>
               <div>
-                <label
-                  className="m"
-                  style={{ display: 'block', marginBottom: 6, color: 'var(--dim, #5F5F5F)' }}
-                >
-                  SALARY / STIPEND (OPTIONAL)
-                </label>
+                <label className={label}>SALARY / STIPEND (OPTIONAL)</label>
                 <input
-                  className="btn line"
+                  className={`${input} border-line2`}
                   placeholder="e.g. ৳70k–110k"
                   value={salary}
                   onChange={(e) => setSalary(e.target.value)}
-                  style={{
-                    width: '100%',
-                    minHeight: 40,
-                    textAlign: 'left',
-                    background: 'var(--bg, #FFFFFF)',
-                    color: 'var(--ink, #0B0B0B)',
-                    borderColor: 'var(--line2, #0B0B0B)',
-                  }}
                 />
               </div>
 
               <div>
-                <label
-                  className="m"
-                  style={{ display: 'block', marginBottom: 6, color: 'var(--dim, #5F5F5F)' }}
-                >
-                  COMPANY LOGO URL (OPTIONAL)
-                </label>
+                <label className={label}>COMPANY LOGO URL (OPTIONAL)</label>
                 <input
                   type="url"
-                  className="btn line"
+                  className={`${input} border-line2`}
                   placeholder="https://.../logo.png"
                   value={companyLogoUrl}
                   onChange={(e) => setCompanyLogoUrl(e.target.value)}
-                  style={{
-                    width: '100%',
-                    minHeight: 40,
-                    textAlign: 'left',
-                    background: 'var(--bg, #FFFFFF)',
-                    color: 'var(--ink, #0B0B0B)',
-                    borderColor: 'var(--line2, #0B0B0B)',
-                  }}
                 />
               </div>
             </div>
 
             {/* Description */}
             <div>
-              <label
-                className="m"
-                style={{ display: 'block', marginBottom: 6, color: 'var(--dim, #5F5F5F)' }}
-              >
-                ABOUT THE ROLE (OPTIONAL)
-              </label>
+              <label className={label}>ABOUT THE ROLE (OPTIONAL)</label>
               <textarea
-                className="btn line"
+                className={`${inputBase} min-h-[70px] border-line2 [font-family:inherit] resize-y`}
                 rows={3}
                 placeholder="Give candidates an overview of the company, team and what you are building…"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                style={{
-                  width: '100%',
-                  minHeight: 70,
-                  textAlign: 'left',
-                  background: 'var(--bg, #FFFFFF)',
-                  color: 'var(--ink, #0B0B0B)',
-                  borderColor: 'var(--line2, #0B0B0B)',
-                  fontFamily: 'inherit',
-                  resize: 'vertical',
-                }}
               />
             </div>
 
             {/* Responsibilities (one per line) */}
             <div>
-              <label
-                className="m"
-                style={{ display: 'block', marginBottom: 6, color: 'var(--dim, #5F5F5F)' }}
-              >
-                RESPONSIBILITIES (ONE PER LINE)
-              </label>
+              <label className={label}>RESPONSIBILITIES (ONE PER LINE)</label>
               <textarea
-                className="btn line"
+                className={`${inputBase} min-h-[70px] border-line2 [font-family:inherit] resize-y`}
                 rows={3}
                 placeholder="Build and maintain React interfaces&#10;Turn designs into accessible components&#10;Review pull requests"
                 value={responsibilitiesText}
                 onChange={(e) => setResponsibilitiesText(e.target.value)}
-                style={{
-                  width: '100%',
-                  minHeight: 70,
-                  textAlign: 'left',
-                  background: 'var(--bg, #FFFFFF)',
-                  color: 'var(--ink, #0B0B0B)',
-                  borderColor: 'var(--line2, #0B0B0B)',
-                  fontFamily: 'inherit',
-                  resize: 'vertical',
-                }}
               />
             </div>
 
             {/* Requirements (one per line) */}
             <div>
-              <label
-                className="m"
-                style={{ display: 'block', marginBottom: 6, color: 'var(--dim, #5F5F5F)' }}
-              >
-                REQUIREMENTS (ONE PER LINE)
-              </label>
+              <label className={label}>REQUIREMENTS (ONE PER LINE)</label>
               <textarea
-                className="btn line"
+                className={`${inputBase} min-h-[70px] border-line2 [font-family:inherit] resize-y`}
                 rows={3}
                 placeholder="2+ years of professional React experience&#10;Comfortable with TypeScript&#10;Clear written English"
                 value={requirementsText}
                 onChange={(e) => setRequirementsText(e.target.value)}
-                style={{
-                  width: '100%',
-                  minHeight: 70,
-                  textAlign: 'left',
-                  background: 'var(--bg, #FFFFFF)',
-                  color: 'var(--ink, #0B0B0B)',
-                  borderColor: 'var(--line2, #0B0B0B)',
-                  fontFamily: 'inherit',
-                  resize: 'vertical',
-                }}
               />
             </div>
           </SaveForm>
 
           {/* Right Column: Sticky Live Preview */}
-          <aside
-            style={{
-              padding: '24px 20px',
-              background: 'var(--bg, #ECE9E1)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 16,
-            }}
-          >
+          <aside className="py-6 px-5 [background:var(--bg)] flex flex-col gap-4">
             <div>
-              <span
-                className="m"
-                style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  letterSpacing: '.08em',
-                  color: 'var(--dim, #5F5F5F)',
-                  display: 'block',
-                  marginBottom: 12,
-                }}
-              >
+              <span className="m mb-3 text-[11px] font-bold tracking-[.08em] text-dim block">
                 LIVE PREVIEW
               </span>
-              <p style={{ fontSize: 12, color: 'var(--dim, #5F5F5F)', margin: '0 0 16px' }}>
+              <p className="mt-0 mx-0 mb-4 text-[12px] text-dim">
                 This is how alumni and students will see your posting in the Jobs directory.
               </p>
             </div>
 
-            <div style={{ pointerEvents: 'none' }}>
+            <div className="pointer-events-none">
               <JobCard job={previewJob} onOpenDetail={() => {}} />
             </div>
           </aside>

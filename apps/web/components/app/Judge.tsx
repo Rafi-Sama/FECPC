@@ -129,8 +129,8 @@ export function HandleBox() {
     );
   return (
     <SaveForm
-      className="row"
-      style={{ '--g': '10px', alignItems: 'flex-end' } as React.CSSProperties}
+      className="row [--g:10px] items-end"
+
       label="Codeforces handle not linked yet"
       saveLabel="Link handle"
       onDiscard={() => setV('')}
@@ -140,7 +140,7 @@ export function HandleBox() {
         return ok;
       }}
     >
-      <label className="field" style={{ flex: '0 1 260px' }}>
+      <label className="field flex-[0_1_260px]">
         <span className="label">Codeforces handle</span>
         <input
           className="input"
@@ -168,8 +168,8 @@ export function VjudgeBox() {
     );
   return (
     <SaveForm
-      className="row"
-      style={{ '--g': '10px', alignItems: 'flex-end' } as React.CSSProperties}
+      className="row [--g:10px] items-end"
+
       label="VJudge username not linked yet"
       saveLabel="Link username"
       onDiscard={() => setV('')}
@@ -183,7 +183,7 @@ export function VjudgeBox() {
         return ok;
       }}
     >
-      <label className="field" style={{ flex: '0 1 260px' }}>
+      <label className="field flex-[0_1_260px]">
         <span className="label">VJudge username</span>
         <input
           className="input"

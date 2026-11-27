@@ -36,7 +36,7 @@ export function MemberCard({
 
   return (
     <li
-      className="panel box pcard c4 member-card"
+      className="panel box flex flex-col gap-2.5 p-4! [&_.one]:whitespace-nowrap [&_.one]:overflow-hidden [&_.one]:text-ellipsis [&_.one]:block [&_.row]:flex-nowrap [&_.row]:overflow-hidden c4 member-card"
       role="button"
       tabIndex={0}
       aria-label={`${member.name}, ${roleLabel}, ${rank.title}, ${member.problems_solved} problems solved. Open profile.`}
@@ -54,9 +54,12 @@ export function MemberCard({
         }
       }}
     >
-      <i className="member-card__accent" aria-hidden />
+      <i
+        className="absolute left-0 top-0 bottom-0 w-1 [background:var(--rank-color,#b0b0b0)] [transition:background_120ms_ease] pointer-events-none [.member-card:hover_&]:[background:var(--rank-hover-color,var(--rank-color,#949494))]"
+        aria-hidden
+      />
 
-      <div className="member-card__top">
+      <div className="[display:grid] grid-cols-[auto_minmax(0,1fr)_auto] gap-3 items-center">
         <AvatarRing
           name={member.name}
           avatarUrl={member.avatar_url}
@@ -66,12 +69,12 @@ export function MemberCard({
           rank={rank}
         />
 
-        <div className="member-card__ident">
-          <strong className="member-card__name">
+        <div className="min-w-0">
+          <strong className="block text-[17px] font-medium text-hi whitespace-nowrap overflow-hidden text-ellipsis">
             <HighlightMatch text={member.name} query={highlightQuery} />
           </strong>
-          <div className="member-card__meta-row">
-            <span className="member-card__meta">
+          <div className="flex items-center gap-1.5 min-w-0 mt-0.5">
+            <span className="font-label text-[12px] tracking-[0.05em] uppercase text-dim whitespace-nowrap overflow-hidden text-ellipsis min-w-0">
               <HighlightMatch
                 text={`${roleLabel} · ${member.dept} · Batch ${member.batch}`}
                 query={highlightQuery}
@@ -81,7 +84,7 @@ export function MemberCard({
           </div>
         </div>
 
-        <div className="member-card__actions">
+        <div className="inline-flex items-center gap-1.5 flex-none">
           {isSelf ? (
             <span
               className="pill"
@@ -91,7 +94,7 @@ export function MemberCard({
               YOU
             </span>
           ) : (
-            <span className="member-card__kudos-wrap">
+            <span className="relative inline-flex [&_.btn:focus-visible]:[outline:2px_solid_var(--acc)] [&_.btn:focus-visible]:outline-offset-[2px]">
               <button
                 type="button"
                 className={`btn xs ${hasKudos ? '' : 'line'}`}
@@ -117,16 +120,16 @@ export function MemberCard({
         </div>
       </div>
 
-      <div className="member-card__stats">
+      <div className="flex items-center gap-2 flex-wrap min-h-6">
         <TierBadge rating={member.cf_rating} size="sm" rank={rank} />
-        <span className="member-card__stat-text">
+        <span className="[font:13px_var(--mono),monospace] text-mut whitespace-nowrap">
           {!rank.unrated ? '· ' : ''}
           {member.problems_solved} solved · {member.current_streak}d streak
         </span>
       </div>
 
       {member.skills.length > 0 && (
-        <div className="member-card__tags">
+        <div className="flex items-center gap-1.5 flex-wrap overflow-hidden [&_.tag]:py-[3px] [&_.tag]:px-[7px] [&_.tag]:cursor-default [&_.tag]:text-[12px]">
           {member.skills.map((skill) => (
             <span key={skill} className="tag">
               <HighlightMatch text={skill} query={highlightQuery} />

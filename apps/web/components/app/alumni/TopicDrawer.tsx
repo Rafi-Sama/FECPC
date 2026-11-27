@@ -3,6 +3,11 @@ import { SaveForm } from '@/components/app/SaveBar';
 import React, { useState } from 'react';
 import type { InterviewTopic, InterviewProblem } from '@fecpc/contracts';
 
+const drawerInput =
+  'py-2.5 px-3 [border:2px_solid_var(--line2)] [background:var(--bg)] text-ink text-[14px] w-full';
+
+const sectionLabel = 'm mb-1.5 block [font:11px_ui-monospace,_Menlo,_monospace] uppercase text-dim';
+
 export function TopicDrawer({
   roadmapName = 'Data structures & algorithms',
   topic,
@@ -47,120 +52,48 @@ export function TopicDrawer({
 
   return (
     <div
-      className="ov open"
+      className="ov open inset-0 fixed [background:rgba(11,_11,_11,_0.6)] flex justify-end z-[9999] [backdrop-filter:blur(2px)]"
       role="presentation"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(11, 11, 11, 0.6)',
-        display: 'flex',
-        justifyContent: 'flex-end',
-        zIndex: 9999,
-        backdropFilter: 'blur(2px)',
-      }}
     >
       <aside
-        className="md"
+        className="md p-8 relative block max-w-[480px] w-full self-stretch [border-width:0_0_0_2px] border-line2 [border-style:solid] overflow-y-auto [background:var(--panel)] [box-shadow:-8px_0_24px_rgba(0,_0,_0,_0.2)] [animation:rise_0.2s_ease-out]"
         role="dialog"
         aria-modal="true"
         aria-label={`${topic.name} problems`}
-        style={{
-          position: 'relative',
-          display: 'block',
-          maxWidth: 480,
-          width: '100%',
-          alignSelf: 'stretch',
-          borderWidth: '0 0 0 2px',
-          borderColor: 'var(--line2, #0B0B0B)',
-          borderStyle: 'solid',
-          overflowY: 'auto',
-          padding: 32,
-          background: 'var(--panel, #F6F4EE)',
-          boxShadow: '-8px 0 24px rgba(0, 0, 0, 0.2)',
-          animation: 'rise 0.2s ease-out',
-        }}
       >
         {/* Close Button */}
         <button
           type="button"
           aria-label="Close"
           onClick={onClose}
-          style={{
-            minWidth: 44,
-            height: 44,
-            position: 'absolute',
-            right: 16,
-            top: 16,
-            background: 'var(--panel, #F6F4EE)',
-            border: '2px solid var(--line2, #0B0B0B)',
-            color: 'var(--ink, #0B0B0B)',
-            fontSize: 22,
-            lineHeight: 1,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontWeight: 700,
-          }}
+          className="top-4 right-4 min-w-[44px] h-[44px] absolute [background:var(--panel)] [border:2px_solid_var(--line2)] text-ink text-[22px] leading-[1] cursor-pointer flex items-center justify-center font-bold"
         >
           ×
         </button>
 
         {/* Roadmap Breadcrumb */}
-        <div
-          className="m"
-          style={{
-            marginBottom: 8,
-            paddingRight: 56,
-            font: '11px ui-monospace, Menlo, monospace',
-            letterSpacing: '.06em',
-            textTransform: 'uppercase',
-            color: 'var(--dim, #5F5F5F)',
-          }}
-        >
+        <div className="m pr-14 mb-2 [font:11px_ui-monospace,_Menlo,_monospace] tracking-[.06em] uppercase text-dim">
           {roadmapName}
         </div>
 
         {/* Topic Title */}
-        <h2
-          style={{ fontSize: 28, fontWeight: 700, margin: '0 0 8px', color: 'var(--ink, #0B0B0B)' }}
-        >
-          {topic.name}
-        </h2>
+        <h2 className="mt-0 mx-0 mb-2 text-[28px] font-bold text-ink">{topic.name}</h2>
         {topic.description && (
-          <p style={{ margin: '0 0 12px', fontSize: 14, color: 'var(--mut, #3B3A35)' }}>
-            {topic.description}
-          </p>
+          <p className="mt-0 mx-0 mb-3 text-[14px] text-mut">{topic.description}</p>
         )}
 
         {/* Progress Stats */}
-        <div
-          className="mo"
-          style={{
-            marginBottom: 8,
-            font: '13px ui-monospace, Menlo, monospace',
-            color: 'var(--ink, #0B0B0B)',
-            fontWeight: 600,
-          }}
-        >
+        <div className="mo mb-2 [font:600_13px_ui-monospace,_Menlo,_monospace] text-ink">
           {solvedCount} of {total} solved · {pct}%
         </div>
 
-        <div
-          className="pb"
-          style={{ height: 8, background: 'var(--line, #DCD8CC)', marginBottom: 16 }}
-        >
+        <div className="pb mb-4 h-[8px] [background:var(--line)]">
           <i
-            style={{
-              display: 'block',
-              height: '100%',
-              background: 'var(--ink, #0D0D0B)',
-              width: `${pct}%`,
-              transition: 'width 0.25s ease',
-            }}
+            className="block h-full [background:var(--ink)] [transition:width_0.25s_ease]"
+            style={{ width: `${pct}%` }}
           />
         </div>
 
@@ -170,20 +103,7 @@ export function TopicDrawer({
             href={topic.link}
             target="_blank"
             rel="noopener noreferrer"
-            className="mo"
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              border: '2px solid var(--line2, #0B0B0B)',
-              padding: '12px 16px',
-              marginBottom: 32,
-              color: 'var(--ink, #0B0B0B)',
-              textDecoration: 'none',
-              background: 'var(--bg, #FFFFFF)',
-              font: '13px ui-monospace, Menlo, monospace',
-              fontWeight: 600,
-            }}
+            className="mo py-3 px-4 mb-8 flex justify-between items-center [border:2px_solid_var(--line2)] text-ink [text-decoration:none] [background:var(--bg)] [font:600_13px_ui-monospace,_Menlo,_monospace]"
           >
             <span>Editorial playlist</span>
             <span>↗</span>
@@ -191,31 +111,13 @@ export function TopicDrawer({
         )}
 
         {/* Problems List */}
-        <section className="sc" style={{ marginBottom: 32 }}>
-          <div
-            className="m"
-            style={{
-              paddingBottom: 8,
-              borderBottom: '1px solid var(--line, #CFCBBF)',
-              marginBottom: 16,
-              font: '11px ui-monospace, Menlo, monospace',
-              letterSpacing: '.06em',
-              textTransform: 'uppercase',
-              color: 'var(--dim, #5F5F5F)',
-            }}
-          >
+        <section className="sc mb-8">
+          <div className="m pb-2 mb-4 [border-bottom:1px_solid_var(--line)] [font:11px_ui-monospace,_Menlo,_monospace] tracking-[.06em] uppercase text-dim">
             · Problems
           </div>
 
           {problems.length === 0 ? (
-            <div
-              className="m"
-              style={{
-                padding: '16px 0',
-                color: 'var(--dim, #5F5F5F)',
-                font: '11px ui-monospace, Menlo, monospace',
-              }}
-            >
+            <div className="m py-4 px-0 text-dim [font:11px_ui-monospace,_Menlo,_monospace]">
               No problems added yet for this topic.
             </div>
           ) : (
@@ -229,34 +131,18 @@ export function TopicDrawer({
               return (
                 <div
                   key={p.id}
-                  className="r"
-                  style={{
-                    display: 'flex',
-                    gap: 12,
-                    alignItems: 'center',
-                    padding: '12px 0',
-                    borderTop: '1px solid var(--line, #CFCBBF)',
-                  }}
+                  className="r py-3 px-0 flex gap-3 items-center [border-top:1px_solid_var(--line)]"
                 >
                   <input
                     type="checkbox"
                     checked={Boolean(p.solved)}
                     onChange={() => onToggleProblem(p.id, Boolean(p.solved))}
                     aria-label={`Solved: ${p.title}`}
-                    style={{
-                      width: 20,
-                      minHeight: 20,
-                      cursor: 'pointer',
-                      border: '2px solid var(--line2, #0B0B0B)',
-                    }}
+                    className="w-[20px] min-h-[20px] cursor-pointer [border:2px_solid_var(--line2)]"
                   />
                   <span
-                    className="g"
+                    className="g flex-1 min-w-0 text-[14px] font-semibold"
                     style={{
-                      flex: 1,
-                      minWidth: 0,
-                      fontSize: 14,
-                      fontWeight: 600,
                       color: p.solved ? 'var(--dim, #5F5F5F)' : 'var(--ink, #0B0B0B)',
                       textDecoration: p.solved ? 'line-through' : 'none',
                     }}
@@ -267,17 +153,8 @@ export function TopicDrawer({
                   {canManage && (
                     <button
                       type="button"
-                      className="sm"
+                      className="sm py-0 px-2 min-h-[28px] text-[11px] [border:1px_solid_var(--line2)] [background:var(--panel)] text-ink cursor-pointer"
                       onClick={() => onDeleteProblem(p.id)}
-                      style={{
-                        minHeight: 28,
-                        padding: '0 8px',
-                        fontSize: 11,
-                        border: '1px solid var(--line2, #0B0B0B)',
-                        background: 'var(--panel, #F6F4EE)',
-                        color: 'var(--ink, #0B0B0B)',
-                        cursor: 'pointer',
-                      }}
                     >
                       Delete
                     </button>
@@ -285,12 +162,8 @@ export function TopicDrawer({
 
                   {/* Difficulty pill */}
                   <span
-                    className="tg"
+                    className="tg py-[3px] px-2 m-0 [font:600_11px_ui-monospace,_Menlo,_monospace] uppercase tracking-[.06em]"
                     style={{
-                      margin: 0,
-                      font: '11px ui-monospace, Menlo, monospace',
-                      textTransform: 'uppercase',
-                      letterSpacing: '.06em',
                       border: `1px solid ${isMed ? 'var(--acc, #1F3BFF)' : 'var(--line2, #0B0B0B)'}`,
                       background: isHard ? 'var(--ink, #0B0B0B)' : 'var(--bg, #FFFFFF)',
                       color: isMed
@@ -298,8 +171,6 @@ export function TopicDrawer({
                         : isHard
                           ? 'var(--on, #FFFFFF)'
                           : 'var(--ink, #0B0B0B)',
-                      padding: '3px 8px',
-                      fontWeight: 600,
                     }}
                   >
                     {diffLabel}
@@ -310,13 +181,7 @@ export function TopicDrawer({
                       href={p.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="m"
-                      style={{
-                        color: 'var(--ink, #0B0B0B)',
-                        textDecoration: 'none',
-                        fontWeight: 700,
-                        fontSize: 13,
-                      }}
+                      className="m text-ink [text-decoration:none] font-bold text-[13px]"
                       title="Open problem in new tab"
                     >
                       ↗
@@ -327,16 +192,7 @@ export function TopicDrawer({
             })
           )}
 
-          <div
-            className="m"
-            style={{
-              marginTop: 12,
-              font: '11px ui-monospace, Menlo, monospace',
-              letterSpacing: '.06em',
-              textTransform: 'uppercase',
-              color: 'var(--dim, #5F5F5F)',
-            }}
-          >
+          <div className="m mt-3 [font:11px_ui-monospace,_Menlo,_monospace] tracking-[.06em] uppercase text-dim">
             Showing {problems.length} of {problems.length}
           </div>
         </section>
@@ -348,39 +204,14 @@ export function TopicDrawer({
             onDiscard={clearNew}
             label="Unsaved problem"
             saveLabel="Add problem"
-            className="in"
-            style={{
-              marginTop: 24,
-              borderTop: '2px solid var(--line2, #0B0B0B)',
-              paddingTop: 20,
-            }}
+            className="in pt-5 mt-6 [border-top:2px_solid_var(--line2)]"
           >
-            <div
-              className="m"
-              style={{
-                marginBottom: 12,
-                font: '11px ui-monospace, Menlo, monospace',
-                letterSpacing: '.06em',
-                textTransform: 'uppercase',
-                color: 'var(--dim, #5F5F5F)',
-                fontWeight: 700,
-              }}
-            >
+            <div className="m mb-3 [font:700_11px_ui-monospace,_Menlo,_monospace] tracking-[.06em] uppercase text-dim">
               Add problem · alumni and admin
             </div>
 
-            <div className="f" style={{ marginBottom: 12 }}>
-              <label
-                className="m"
-                htmlFor="p-title"
-                style={{
-                  display: 'block',
-                  marginBottom: 6,
-                  font: '11px ui-monospace, Menlo, monospace',
-                  textTransform: 'uppercase',
-                  color: 'var(--dim, #5F5F5F)',
-                }}
-              >
+            <div className="f mb-3">
+              <label className={sectionLabel} htmlFor="p-title">
                 Title
               </label>
               <input
@@ -391,29 +222,12 @@ export function TopicDrawer({
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
                 placeholder="e.g. Valid Anagram"
-                style={{
-                  border: '2px solid var(--line2, #0B0B0B)',
-                  background: 'var(--bg, #FFFFFF)',
-                  color: 'var(--ink, #0B0B0B)',
-                  padding: '10px 12px',
-                  fontSize: 14,
-                  width: '100%',
-                }}
+                className={drawerInput}
               />
             </div>
 
-            <div className="f" style={{ marginBottom: 12 }}>
-              <label
-                className="m"
-                htmlFor="p-url"
-                style={{
-                  display: 'block',
-                  marginBottom: 6,
-                  font: '11px ui-monospace, Menlo, monospace',
-                  textTransform: 'uppercase',
-                  color: 'var(--dim, #5F5F5F)',
-                }}
-              >
+            <div className="f mb-3">
+              <label className={sectionLabel} htmlFor="p-url">
                 URL
               </label>
               <input
@@ -424,44 +238,19 @@ export function TopicDrawer({
                 value={newUrl}
                 onChange={(e) => setNewUrl(e.target.value)}
                 placeholder="https://leetcode.com/problems/..."
-                style={{
-                  border: '2px solid var(--line2, #0B0B0B)',
-                  background: 'var(--bg, #FFFFFF)',
-                  color: 'var(--ink, #0B0B0B)',
-                  padding: '10px 12px',
-                  fontSize: 14,
-                  width: '100%',
-                }}
+                className={drawerInput}
               />
             </div>
 
-            <div className="f" style={{ marginBottom: 16 }}>
-              <label
-                className="m"
-                htmlFor="p-diff"
-                style={{
-                  display: 'block',
-                  marginBottom: 6,
-                  font: '11px ui-monospace, Menlo, monospace',
-                  textTransform: 'uppercase',
-                  color: 'var(--dim, #5F5F5F)',
-                }}
-              >
+            <div className="f mb-4">
+              <label className={sectionLabel} htmlFor="p-diff">
                 Difficulty
               </label>
               <select
                 id="p-diff"
                 value={newDiff}
                 onChange={(e) => setNewDiff(e.target.value)}
-                style={{
-                  border: '2px solid var(--line2, #0B0B0B)',
-                  background: 'var(--bg, #FFFFFF)',
-                  color: 'var(--ink, #0B0B0B)',
-                  padding: '10px 12px',
-                  fontSize: 14,
-                  width: '100%',
-                  cursor: 'pointer',
-                }}
+                className="py-2.5 px-3 [border:2px_solid_var(--line2)] [background:var(--bg)] text-ink text-[14px] w-full cursor-pointer"
               >
                 <option value="easy">Easy</option>
                 <option value="medium">Medium</option>

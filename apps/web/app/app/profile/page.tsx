@@ -39,7 +39,7 @@ const since = (iso?: string) =>
 /** One labelled detail; empty ones say so, so the member knows what is missing. */
 function Detail({ k, v, href }: { k: string; v?: string | null; href?: string }) {
   return (
-    <div className="pd">
+    <div className="[&_dt]:font-label [&_dt]:text-[14px] [&_dt]:opacity-[0.65] [&_dd]:m-[2px_0_0] [&_dd]:text-[15px] [&_dd]:wrap-anywhere [&_dd_a]:[color:inherit] [&_dd_a]:[text-decoration:underline] [&&_dd_a]:[text-decoration-color:var(--r)] [&_dd_a]:[text-underline-offset:3px] [&_dd_a:hover]:[color:var(--r)] [&_.dim]:opacity-[0.55] min-w-0">
       <dt>{k}</dt>
       <dd>
         {!v ? (
@@ -108,9 +108,7 @@ function Password() {
           {msg[1]}
         </p>
       )}
-      <button className="btn sm" style={{ alignSelf: 'flex-start' }}>
-        Change password
-      </button>
+      <button className="btn sm self-start">Change password</button>
     </form>
   );
 }
@@ -164,7 +162,7 @@ export default function Profile() {
     <Page
       title={me.name}
       aside={
-        <span className="row no-print" style={{ '--g': '8px' } as React.CSSProperties}>
+        <span className="row no-print [--g:8px]">
           <button className="btn sm" disabled={!p} onClick={() => setEditing(true)}>
             Request a change
           </button>
@@ -228,11 +226,14 @@ export default function Profile() {
           )}
         </div>
       )}
-      <div className="bento fill profile">
-        <section className="c5 idcard" style={{ '--r': tier.color } as React.CSSProperties}>
+      <div className="bento fill items-stretch profile">
+        <section
+          className="min-[760px]:[grid-column:span_12] min-[1100px]:[grid-column:span_5] print:[grid-column:span_5]! [border:2px_solid_var(--ink)] [background:var(--ink)] text-bg [display:grid] [&_strong]:[font-weight:500] [&_strong]:[letter-spacing:-0.02em] [&_strong]:block max-w-[none] [box-shadow:6px_6px_0_var(--acc)] [&_.label]:[color:inherit] [&&]:[border-left:8px_solid_var(--r)] [align-content:center] print:[break-inside:avoid] print:[print-color-adjust:exact] print:[-webkit-print-color-adjust:exact] [&_strong]:text-[32px] p-8 gap-7 grid-cols-[auto_minmax(0,1fr)] items-center max-[561px]:grid-cols-[1fr] max-[561px]:[justify-items:start]"
+          style={{ '--r': tier.color } as React.CSSProperties}
+        >
           <button
             type="button"
-            className="idcard-photo"
+            className="relative p-0 [border:0] [background:none] cursor-pointer leading-[0] rounded-[50%] [outline:4px_solid_var(--r)] outline-offset-[4px] [&_>_svg]:rounded-[50%] focus-visible:[outline-color:var(--acc)]"
             onClick={() => setEditing(true)}
             disabled={!p}
             title={me.avatar_url ? 'Ask for a new photo' : 'Add a photo'}
@@ -244,20 +245,22 @@ export default function Profile() {
               fg={tier.color}
               bg="#1a1a17"
             />
-            {!me.avatar_url && <span className="idcard-add no-print">+ Add photo</span>}
+            {!me.avatar_url && (
+              <span className="py-1 px-2.5 absolute left-[50%] -bottom-3.5 [transform:translateX(-50%)] whitespace-nowrap [background:var(--r)] text-[#0d0d0b] [font:600_14px/1.2_var(--f-label)] no-print">
+                + Add photo
+              </span>
+            )}
           </button>
           <div>
-            <p className="label" style={{ opacity: 0.7 }}>
-              FECPC · Member card
-            </p>
+            <p className="label opacity-70">FECPC · Member card</p>
             <strong>{me.name}</strong>
-            <p className="mono" style={{ fontSize: 14, marginTop: 6 }}>
+            <p className="mono text-[14px] mt-1.5">
               {me.role || roleName[s.role]} · {me.dept} · Batch {me.batch}
             </p>
-            <p className="mono" style={{ fontSize: 14, marginTop: 4, opacity: 0.8 }}>
+            <p className="mono text-[14px] mt-1 opacity-80">
               FEC-{String(me.no).padStart(4, '0')} · since {since(p?.joined)}
             </p>
-            <p className="idcard-cf">
+            <p className="mt-3 text-[15px] font-semibold [&_a]:[color:var(--r)] [&_a]:no-underline">
               {data ? (
                 <a
                   href={`https://codeforces.com/profile/${data.handle}`}
@@ -272,18 +275,21 @@ export default function Profile() {
                 'Codeforces not linked'
               )}
             </p>
-            <p className="idcard-kudos" title="Kudos on your profile, ideas and milestones">
+            <p
+              className="py-[3px] px-2.5 inline-block mt-2.5 text-[15px] bg-[#e5413a] text-[#fff]"
+              title="Kudos on your profile, ideas and milestones"
+            >
               ♥ {kudos} kudos
             </p>
           </div>
-          <dl className="idcard-dl">
+          <dl className="[grid-column:1_/_-1] [display:grid] grid-cols-[repeat(auto-fill,minmax(min(100%,190px),1fr))] gap-[14px_20px] m-0 pt-5 [border-top:1px_solid_color-mix(in_srgb,var(--bg)_20%,transparent)]">
             <Detail k="Email" v={p?.email} href={p?.email ? `mailto:${p.email}` : undefined} />
             <Detail k="Phone" v={p?.phone} href={p?.phone ? `tel:${p.phone}` : undefined} />
             <Detail k="Student ID" v={p?.student_id} />
             <Detail k="Location" v={p?.location} />
           </dl>
           {(p?.github_url || p?.linkedin_url) && (
-            <p className="idcard-links">
+            <p className="[&_a]:p-[6px_12px] [&_a]:[border:1px_solid_color-mix(in_srgb,var(--bg)_35%,transparent)] [&_a]:[color:inherit] [&_a]:[font:600_14px/1_var(--f-label)] [&_a]:[text-decoration:none] [&_a:hover]:[border-color:var(--r)] [&_a:hover]:[color:var(--r)] [&_a:focus-visible]:[border-color:var(--r)] [&_a:focus-visible]:[color:var(--r)] [grid-column:1_/_-1] flex flex-wrap gap-2">
               {p.github_url && (
                 <a href={p.github_url} target="_blank" rel="noreferrer">
                   GitHub ↗
@@ -296,12 +302,12 @@ export default function Profile() {
               )}
             </p>
           )}
-          <p className="idcard-private no-print">
+          <p className="col-span-full text-[14px] opacity-60 no-print">
             Email, phone and student ID: only you and the Secretary and President see these.
           </p>
         </section>
-        <section className="panel c7">
-          <div className="pstats">
+        <section className="panel min-[760px]:[grid-column:span_12] min-[1100px]:[grid-column:span_7] print:[grid-column:span_7]!">
+          <div className="[&_.stat]:text-[28px] [&_.stat]:leading-[1.1] [&_.stat]:[color:color-mix(in_oklab,var(--r,var(--hi)),var(--ink)_15%)] [&>div]:[display:grid] [&>div]:gap-0.5 [&>div]:p-[10px_12px] [&>div]:[border-top:4px_solid_var(--r,var(--line2))] [&>div]:[background:color-mix(in_srgb,var(--r,var(--ink))_6%,transparent)] [display:grid] grid-cols-[repeat(auto-fill,minmax(130px,1fr))] gap-2.5 mb-2">
             {stats.map(([k, v, sub, c]) => (
               <div key={k} style={c ? ({ '--r': c } as React.CSSProperties) : undefined}>
                 <span className="label">{k}</span>
@@ -314,7 +320,7 @@ export default function Profile() {
           {data && hist.length > 1 ? (
             <>
               <Line pts={hist} />
-              <div className="bars-x">
+              <div className="flex justify-between [font:14px_var(--mono),monospace] [color:var(--dim)] mt-1.5">
                 <span>first contest · {hist[0]}</span>
                 <span>now · {hist.at(-1)}</span>
               </div>
@@ -328,11 +334,11 @@ export default function Profile() {
           )}
         </section>
         {p && (p.bio || p.skills.length > 0 || p.experience.length > 0) && (
-          <section className="panel pdetails">
+          <section className="panel [grid-column:1_/_-1] flex flex-col gap-4">
             <p className="label">About</p>
-            {p.bio ? <p className="body pbio">{p.bio}</p> : null}
+            {p.bio ? <p className="body max-w-[75ch] whitespace-pre-wrap">{p.bio}</p> : null}
             {p.skills.length > 0 && (
-              <div className="pskills">
+              <div className="flex flex-wrap gap-1.5">
                 {p.skills.map((x) => (
                   <span key={x} className="tag">
                     {x}
@@ -341,7 +347,7 @@ export default function Profile() {
               </div>
             )}
             {p.experience.length > 0 && (
-              <ul className="pexp">
+              <ul className="[&_li]:[display:grid] [&_li]:gap-0.5 [&_li]:pl-3 [&_li]:[border-left:3px_solid_var(--line2)] [display:grid] gap-3">
                 {p.experience.map((x, i) => (
                   <li key={i}>
                     <span className="label">{x.period}</span>
@@ -365,7 +371,7 @@ export default function Profile() {
           {data ? (
             <>
               <Heatmap days={days} />
-              <div className="bars-x">
+              <div className="flex justify-between [font:14px_var(--mono),monospace] [color:var(--dim)] mt-1.5">
                 <span>a year ago</span>
                 <span>less ▫ ▪ ■ more</span>
                 <span>today</span>
@@ -375,14 +381,12 @@ export default function Profile() {
             <p className="body dim">Link a handle to fill this in from the judge.</p>
           )}
         </section>
-        <section className="panel c4" style={{ alignItems: 'center' }}>
-          <p className="label" style={{ alignSelf: 'flex-start' }}>
-            Strongest topics{data ? '' : ' · club sheet'}
-          </p>
+        <section className="panel c4 items-center">
+          <p className="label self-start">Strongest topics{data ? '' : ' · club sheet'}</p>
           <Radar data={tags} />
         </section>
         {data && data.contests.length > 0 && (
-          <section className="panel" style={{ gridColumn: '1 / -1' }}>
+          <section className="panel col-span-full">
             <p className="label">Recent rated rounds</p>
             <ul className="list">
               {data.contests.map((c) => (
@@ -399,10 +403,7 @@ export default function Profile() {
                     </span>
                   </span>
                   <span className="num">#{c.rank.toLocaleString()}</span>
-                  <b
-                    className={`num ${c.delta >= 0 ? 'ok' : 'bad'}`}
-                    style={{ width: 56, textAlign: 'right' }}
-                  >
+                  <b className={`num ${c.delta >= 0 ? 'ok' : 'bad'} w-[56px] text-right`}>
                     {c.delta >= 0 ? '+' : ''}
                     {c.delta}
                   </b>

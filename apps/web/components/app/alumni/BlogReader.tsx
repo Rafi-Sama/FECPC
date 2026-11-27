@@ -126,41 +126,18 @@ export function BlogReader({
 
   return (
     <div
-      className="ov open"
+      className="ov open inset-0 py-12 px-6 fixed [background:rgba(11,_11,_11,_0.62)] flex items-start justify-center overflow-y-auto z-[9999] [backdrop-filter:blur(2px)]"
       role="presentation"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(11, 11, 11, 0.62)',
-        display: 'flex',
-        alignItems: 'flex-start',
-        justifyContent: 'center',
-        padding: '48px 24px',
-        overflowY: 'auto',
-        zIndex: 9999,
-        backdropFilter: 'blur(2px)',
-      }}
     >
       <div
         ref={modalRef}
-        className="md"
+        className="md py-12 px-16 relative block max-w-[820px] w-full [background:var(--panel)] [border:2px_solid_var(--line2)] [box-shadow:10px_10px_0_var(--line2)] [animation:rise_0.2s_ease-out]"
         role="dialog"
         aria-modal="true"
         aria-label={post.title}
-        style={{
-          position: 'relative',
-          display: 'block',
-          maxWidth: 820,
-          width: '100%',
-          padding: '48px 64px',
-          background: 'var(--panel, #F6F4EE)',
-          border: '2px solid var(--line2, #0B0B0B)',
-          boxShadow: '10px 10px 0 var(--line2, #0B0B0B)',
-          animation: 'rise 0.2s ease-out',
-        }}
       >
         {/* Close Button */}
         <button
@@ -168,91 +145,29 @@ export function BlogReader({
           type="button"
           aria-label="Close"
           onClick={onClose}
-          style={{
-            minWidth: 44,
-            height: 44,
-            position: 'absolute',
-            right: 16,
-            top: 16,
-            background: 'var(--panel, #F6F4EE)',
-            border: '2px solid var(--line2, #0B0B0B)',
-            color: 'var(--ink, #0B0B0B)',
-            cursor: 'pointer',
-            fontSize: 24,
-            lineHeight: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontWeight: 700,
-          }}
+          className="top-4 right-4 min-w-[44px] h-[44px] absolute [background:var(--panel)] [border:2px_solid_var(--line2)] text-ink cursor-pointer text-[24px] leading-[1] flex items-center justify-center font-bold"
         >
           ×
         </button>
 
         {/* Tag on Top */}
-        <span
-          className="tg"
-          style={{
-            margin: 0,
-            display: 'inline-block',
-            font: '11px ui-monospace, Menlo, monospace',
-            textTransform: 'uppercase',
-            letterSpacing: '.06em',
-            border: '1px solid var(--line2, #0B0B0B)',
-            padding: '4px 8px',
-            background: 'var(--bg, #FFFFFF)',
-            color: 'var(--ink, #0B0B0B)',
-          }}
-        >
+        <span className="tg py-1 px-2 m-0 inline-block [font:11px_ui-monospace,_Menlo,_monospace] uppercase tracking-[.06em] [border:1px_solid_var(--line2)] [background:var(--bg)] text-ink">
           {tag}
         </span>
 
         {/* 40px Grotesque Title */}
-        <h2
-          style={{
-            fontSize: 'clamp(28px, 4.5vw, 40px)',
-            lineHeight: 1.15,
-            letterSpacing: '-1px',
-            margin: '16px 0 12px',
-            color: 'var(--ink, #0B0B0B)',
-            fontWeight: 700,
-          }}
-        >
+        <h2 className="mt-4 mx-0 mb-3 [font-size:clamp(28px,_4.5vw,_40px)] leading-[1.15] tracking-[-1px] text-ink font-bold">
           {post.title}
         </h2>
 
         {/* 20px Subtitle */}
         {post.subtitle && (
-          <p
-            style={{
-              fontSize: 20,
-              lineHeight: 1.4,
-              color: 'var(--dim, #5F5F5F)',
-              margin: '0 0 24px',
-            }}
-          >
-            {post.subtitle}
-          </p>
+          <p className="mt-0 mx-0 mb-6 text-[20px] leading-[1.4] text-dim">{post.subtitle}</p>
         )}
 
         {/* Author Byline Row */}
-        <div
-          className="hd"
-          style={{
-            display: 'flex',
-            gap: 12,
-            alignItems: 'center',
-            marginBottom: 20,
-          }}
-        >
-          <div
-            style={{
-              border: `2px solid ${tierColor}`,
-              padding: 2,
-              flex: 'none',
-              lineHeight: 0,
-            }}
-          >
+        <div className="hd mb-5 flex gap-3 items-center">
+          <div className="p-0.5 flex-none leading-[0]" style={{ border: `2px solid ${tierColor}` }}>
             <AvatarRing
               name={post.author_name || 'Alumnus'}
               avatarUrl={post.author_avatar}
@@ -264,70 +179,35 @@ export function BlogReader({
           </div>
 
           <div>
-            <b style={{ color: tierText(tierColor), fontSize: 15, fontWeight: 700 }}>
+            <b className="text-[15px] font-bold" style={{ color: tierText(tierColor) }}>
               {post.author_name || 'Alumnus'}
             </b>
-            <div
-              className="m"
-              style={{
-                marginTop: 2,
-                font: '11px ui-monospace, Menlo, monospace',
-                letterSpacing: '.06em',
-                textTransform: 'uppercase',
-                color: 'var(--dim, #5F5F5F)',
-              }}
-            >
+            <div className="m mt-0.5 [font:11px_ui-monospace,_Menlo,_monospace] tracking-[.06em] uppercase text-dim">
               {post.author_role || 'Software Engineer'} · {dateStr} · {readTime} min read
             </div>
           </div>
         </div>
 
         {/* Action Bar (Upvote / Downvote / Share / Edit) */}
-        <div
-          style={{
-            display: 'flex',
-            gap: 12,
-            alignItems: 'center',
-            borderTop: '1px solid var(--line, #CFCBBF)',
-            borderBottom: '1px solid var(--line, #CFCBBF)',
-            padding: '12px 0',
-            marginBottom: 32,
-          }}
-        >
-          <span style={{ display: 'flex', gap: 8 }}>
+        <div className="py-3 px-0 mb-8 flex gap-3 items-center [border-top:1px_solid_var(--line)] [border-bottom:1px_solid_var(--line)]">
+          <span className="flex gap-2">
             <button
               type="button"
-              className="sm"
+              className="sm py-0 px-3.5 [font:700_13px_Inter,_Arial,_sans-serif] [border:2px_solid_var(--line2)] min-h-[36px] cursor-pointer"
               aria-label="Upvote"
               onClick={handleUpvote}
               style={{
-                font: '500 13px Inter, Arial, sans-serif',
-                border: '2px solid var(--line2, #0B0B0B)',
-                padding: '0 14px',
                 background: upvoted ? 'var(--acc, #1F3BFF)' : 'var(--panel, #F6F4EE)',
                 color: upvoted ? 'var(--on, #FFFFFF)' : 'var(--ink, #0B0B0B)',
-                minHeight: 36,
-                cursor: 'pointer',
-                fontWeight: 700,
               }}
             >
               ▲ {votes}
             </button>
             <button
               type="button"
-              className="sm"
+              className="sm py-0 px-3 [font:700_13px_Inter,_Arial,_sans-serif] [border:2px_solid_var(--line2)] [background:var(--panel)] text-ink min-h-[36px] cursor-pointer"
               aria-label="Downvote"
               onClick={handleDownvote}
-              style={{
-                font: '500 13px Inter, Arial, sans-serif',
-                border: '2px solid var(--line2, #0B0B0B)',
-                padding: '0 12px',
-                background: 'var(--panel, #F6F4EE)',
-                color: 'var(--ink, #0B0B0B)',
-                minHeight: 36,
-                cursor: 'pointer',
-                fontWeight: 700,
-              }}
             >
               ▼
             </button>
@@ -335,19 +215,8 @@ export function BlogReader({
 
           <button
             type="button"
-            className="sm"
+            className="sm py-0 px-4 ml-auto [font:600_13px_Inter,_Arial,_sans-serif] [border:2px_solid_var(--line2)] [background:var(--panel)] text-ink min-h-[36px] cursor-pointer"
             onClick={handleShare}
-            style={{
-              marginLeft: 'auto',
-              font: '500 13px Inter, Arial, sans-serif',
-              border: '2px solid var(--line2, #0B0B0B)',
-              padding: '0 16px',
-              background: 'var(--panel, #F6F4EE)',
-              color: 'var(--ink, #0B0B0B)',
-              minHeight: 36,
-              cursor: 'pointer',
-              fontWeight: 600,
-            }}
           >
             Share
           </button>
@@ -355,18 +224,8 @@ export function BlogReader({
           {canManage && onEdit && (
             <button
               type="button"
-              className="sm"
+              className="sm py-0 px-3.5 [font:600_13px_Inter,_Arial,_sans-serif] [border:2px_solid_var(--line2)] [background:var(--panel)] text-ink min-h-[36px] cursor-pointer"
               onClick={() => onEdit(post)}
-              style={{
-                font: '500 13px Inter, Arial, sans-serif',
-                border: '2px solid var(--line2, #0B0B0B)',
-                padding: '0 14px',
-                background: 'var(--panel, #F6F4EE)',
-                color: 'var(--ink, #0B0B0B)',
-                minHeight: 36,
-                cursor: 'pointer',
-                fontWeight: 600,
-              }}
             >
               Edit
             </button>
@@ -375,21 +234,11 @@ export function BlogReader({
           {canManage && onDelete && (
             <button
               type="button"
-              className="sm"
+              className="sm py-0 px-3.5 [font:600_13px_Inter,_Arial,_sans-serif] [border:2px_solid_var(--line2)] [background:var(--panel)] text-acc min-h-[36px] cursor-pointer"
               onClick={async () => {
                 if (await sure('Delete this blog post?')) {
                   onDelete(post.id);
                 }
-              }}
-              style={{
-                font: '500 13px Inter, Arial, sans-serif',
-                border: '2px solid var(--line2, #0B0B0B)',
-                padding: '0 14px',
-                background: 'var(--panel, #F6F4EE)',
-                color: 'var(--acc, #C4321C)',
-                minHeight: 36,
-                cursor: 'pointer',
-                fontWeight: 600,
               }}
             >
               Delete
@@ -398,35 +247,17 @@ export function BlogReader({
         </div>
 
         {/* Post Markdown Body */}
-        <div
-          className="blog-content"
-          style={{
-            fontSize: 18,
-            lineHeight: 1.7,
-            color: 'var(--ink, #1C1C1A)',
-          }}
-        >
+        <div className="blog-content text-[18px] leading-[1.7] text-ink">
           <MarkdownBody markdown={post.body_md} />
         </div>
 
         {/* Tags Row */}
         {post.tags && post.tags.length > 0 && (
-          <div style={{ margin: '32px 0' }}>
+          <div className="my-8 mx-0">
             {post.tags.map((t) => (
               <span
                 key={t}
-                className="tg"
-                style={{
-                  display: 'inline-block',
-                  font: '11px ui-monospace, Menlo, monospace',
-                  textTransform: 'uppercase',
-                  letterSpacing: '.06em',
-                  border: '1px solid var(--line2, #0B0B0B)',
-                  padding: '4px 8px',
-                  margin: '0 6px 6px 0',
-                  background: 'var(--bg, #FFFFFF)',
-                  color: 'var(--ink, #0B0B0B)',
-                }}
+                className="tg py-1 px-2 mt-0 mr-1.5 mb-1.5 ml-0 inline-block [font:11px_ui-monospace,_Menlo,_monospace] uppercase tracking-[.06em] [border:1px_solid_var(--line2)] [background:var(--bg)] text-ink"
               >
                 {t}
               </span>
@@ -435,27 +266,8 @@ export function BlogReader({
         )}
 
         {/* Author Bio Card matching mockup 258bdec8 */}
-        <div
-          className="pn"
-          style={{
-            margin: 0,
-            display: 'flex',
-            gap: 16,
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            background: 'var(--panel, #F6F4EE)',
-            border: '2px solid var(--line2, #0B0B0B)',
-            padding: 20,
-          }}
-        >
-          <div
-            style={{
-              border: `2px solid ${tierColor}`,
-              padding: 2,
-              flex: 'none',
-              lineHeight: 0,
-            }}
-          >
+        <div className="pn p-5 m-0 flex gap-4 items-center flex-wrap [background:var(--panel)] [border:2px_solid_var(--line2)]">
+          <div className="p-0.5 flex-none leading-[0]" style={{ border: `2px solid ${tierColor}` }}>
             <AvatarRing
               name={post.author_name || 'Alumnus'}
               avatarUrl={post.author_avatar}
@@ -466,25 +278,12 @@ export function BlogReader({
             />
           </div>
 
-          <div className="g" style={{ minWidth: 200, flex: 1 }}>
-            <div
-              className="m"
-              style={{
-                font: '11px ui-monospace, Menlo, monospace',
-                letterSpacing: '.06em',
-                textTransform: 'uppercase',
-                color: 'var(--dim, #5F5F5F)',
-              }}
-            >
+          <div className="g min-w-[200px] flex-1">
+            <div className="m [font:11px_ui-monospace,_Menlo,_monospace] tracking-[.06em] uppercase text-dim">
               Written by
             </div>
-            <b style={{ fontSize: 16, color: 'var(--ink, #0B0B0B)' }}>
-              {post.author_name || 'Alumnus'}
-            </b>
-            <p
-              className="t"
-              style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--dim, #5F5F5F)' }}
-            >
+            <b className="text-[16px] text-ink">{post.author_name || 'Alumnus'}</b>
+            <p className="t mt-1 mx-0 mb-0 text-[13px] text-dim">
               {post.author_role || 'FECPC Alumnus'} · Competitive programmer and software engineer.
             </p>
           </div>
@@ -492,18 +291,8 @@ export function BlogReader({
           {post.author_id && onOpenProfile && (
             <button
               type="button"
-              className="btn"
+              className="btn py-0 px-4 [font:600_13px_Inter,_Arial,_sans-serif] [border:2px_solid_var(--line2)] [background:var(--panel)] text-ink min-h-[40px] cursor-pointer"
               onClick={() => onOpenProfile(post.author_id!)}
-              style={{
-                font: '500 13px Inter, Arial, sans-serif',
-                border: '2px solid var(--line2, #0B0B0B)',
-                padding: '0 16px',
-                background: 'var(--panel, #F6F4EE)',
-                color: 'var(--ink, #0B0B0B)',
-                minHeight: 40,
-                cursor: 'pointer',
-                fontWeight: 600,
-              }}
             >
               View profile
             </button>

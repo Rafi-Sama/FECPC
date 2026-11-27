@@ -23,6 +23,24 @@ import {
   type EventRole,
 } from '@fecpc/contracts';
 
+import { fieldLabel, fieldStack } from './ui';
+
+import { previewCard, previewMeta } from '@/components/app/shared/ui';
+
+const itemText =
+  '[.ev-detail_.item_&_b]:block [.ev-detail_.item_&_b]:text-[16px] [.ev-detail_.item_&_b]:[font-weight:600] [.ev-detail_.item_&_b]:[letter-spacing:-0.01em] [.ev-detail_.item_&_b]:text-hi [.ev-detail_.item_&_span]:text-[14px] [.ev-detail_.item_&_span]:[color:var(--dim)]';
+
+const itemArrow =
+  'ar [.ev-detail_.item_&]:text-[15px] [.ev-detail_.item_&]:text-dim [.ev-detail_.item:hover_&]:text-acc';
+
+const itemDelete =
+  'del [.ev-detail_&]:[font-family:var(--f-mono,monospace)] [.ev-detail_&]:[font-weight:700] [.ev-detail_&]:text-[14px] [.ev-detail_&]:uppercase [.ev-detail_&]:[background:none] [.ev-detail_&]:[border:0] [.ev-detail_&&]:[border-bottom:1px_solid_transparent] [.ev-detail_&]:text-bad [.ev-detail_&]:p-[4px_0] [.ev-detail_&]:cursor-pointer [.ev-detail_&]:[transition:border-color_0.2s] [.ev-detail_&:hover]:[border-bottom-color:var(--bad)]';
+
+const txCls = '[.ev-detail_.item_&]:flex-1'; // was .tx
+const arCls =
+  '[.ev-detail_.item_&]:[font-family:var(--f-mono,_monospace)] [.ev-detail_.item_&]:[transition:transform_0.2s,_color_0.2s] [.ev-detail_.item:hover_&]:[transform:translate(2px,_-2px)]'; // was .ar
+const delCls = '[.ev-detail_&]:self-start [.ev-detail_&]:tracking-[0.06em]'; // was .del
+
 /** Command sidebar for event organizers (Status, Responses, Roles, Certificates, Email, Feedback, Settings) */
 export function EventAdmin({ e, reload }: { e: EventDetail; reload: () => void }) {
   const { act } = useStore();
@@ -77,53 +95,53 @@ export function EventAdmin({ e, reload }: { e: EventDetail; reload: () => void }
       {/* Launchpad Rail */}
       <div className="panel">
         <button type="button" className="item" onClick={() => setModal('responses')}>
-          <span className="tx">
+          <span className={`${itemText} ${txCls}`}>
             <b>Responses &amp; awards</b>
             <span>
               {totalEntries} registered · {approvedCount} approved · {pendingCount} pending
               {placedCount > 0 ? ` · ${placedCount} placed` : ''}
             </span>
           </span>
-          <span className="ar">↗</span>
+          <span className={`${itemArrow} ${arCls}`}>↗</span>
         </button>
 
         <button type="button" className="item" onClick={() => setModal('roles')}>
-          <span className="tx">
+          <span className={`${itemText} ${txCls}`}>
             <b>Event roles</b>
             <span>{rolesCount} configured · volunteer or TA roles</span>
           </span>
-          <span className="ar">↗</span>
+          <span className={`${itemArrow} ${arCls}`}>↗</span>
         </button>
 
         <button type="button" className="item" onClick={() => setModal('certs')}>
-          <span className="tx">
+          <span className={`${itemText} ${txCls}`}>
             <b>Certificates studio</b>
             <span>
               {e.certs ? 'Downloads on' : 'Downloads off'} ·{' '}
               {certsIssued > 0 ? `${certsIssued} issued` : 'template editor'}
             </span>
           </span>
-          <span className="ar">↗</span>
+          <span className={`${itemArrow} ${arCls}`}>↗</span>
         </button>
 
         <button type="button" className="item" onClick={() => setModal('feedback')}>
-          <span className="tx">
+          <span className={`${itemText} ${txCls}`}>
             <b>Attendee feedback</b>
             <span>
               {fb.length > 0 ? `★ ${avgFb} / 5 (${fb.length} reviews)` : 'No reviews yet'}
             </span>
           </span>
-          <span className="ar">↗</span>
+          <span className={`${itemArrow} ${arCls}`}>↗</span>
         </button>
 
         <button type="button" className="item" onClick={() => setModal('email')}>
-          <span className="tx">
+          <span className={`${itemText} ${txCls}`}>
             <b>Approval email</b>
             <span>
               {hasCustomMail ? 'Custom design' : 'Built-in design'} · preview &amp; styling
             </span>
           </span>
-          <span className="ar">↗</span>
+          <span className={`${itemArrow} ${arCls}`}>↗</span>
         </button>
       </div>
 
@@ -139,7 +157,7 @@ export function EventAdmin({ e, reload }: { e: EventDetail; reload: () => void }
       )}
 
       {/* Delete Event */}
-      <button type="button" className="del" onClick={del}>
+      <button type="button" className={`${itemDelete} ${delCls}`} onClick={del}>
         Delete event
       </button>
 
@@ -231,28 +249,11 @@ function RoleForm({
 
   return (
     <form
-      className="stack"
-      style={{
-        padding: '16px',
-        background: 'var(--bg)',
-        border: '1px solid var(--line2)',
-        marginTop: 8,
-        gap: 14,
-      }}
+      className="stack p-4 mt-2 [background:var(--bg)] [border:1px_solid_var(--line2)] gap-3.5"
       onSubmit={handleSubmit}
     >
-      <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <label
-          className="mono"
-          style={{
-            fontSize: 14,
-            color: 'var(--dim)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.08em',
-          }}
-        >
-          Role
-        </label>
+      <div className={`form-group ${fieldStack}`}>
+        <label className={fieldLabel}>Role</label>
         <input
           className="ctl"
           required
@@ -262,18 +263,8 @@ function RoleForm({
           onChange={(x) => set({ title: x.target.value })}
         />
       </div>
-      <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <label
-          className="mono"
-          style={{
-            fontSize: 14,
-            color: 'var(--dim)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.08em',
-          }}
-        >
-          What they do
-        </label>
+      <div className={`form-group ${fieldStack}`}>
+        <label className={fieldLabel}>What they do</label>
         <input
           className="ctl"
           maxLength={1000}
@@ -282,18 +273,8 @@ function RoleForm({
           onChange={(x) => set({ about: x.target.value })}
         />
       </div>
-      <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <label
-          className="mono"
-          style={{
-            fontSize: 14,
-            color: 'var(--dim)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.08em',
-          }}
-        >
-          Sign up method
-        </label>
+      <div className={`form-group ${fieldStack}`}>
+        <label className={fieldLabel}>Sign up method</label>
         <select
           className="ctl"
           value={v.mode}
@@ -304,18 +285,8 @@ function RoleForm({
         </select>
       </div>
       {v.mode === 'form' && (
-        <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <label
-            className="mono"
-            style={{
-              fontSize: 14,
-              color: 'var(--dim)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
-            }}
-          >
-            Google Forms URL
-          </label>
+        <div className={`form-group ${fieldStack}`}>
+          <label className={fieldLabel}>Google Forms URL</label>
           <input
             className="ctl"
             placeholder="https://forms.gle/..."
@@ -324,18 +295,8 @@ function RoleForm({
           />
         </div>
       )}
-      <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <label
-          className="mono"
-          style={{
-            fontSize: 14,
-            color: 'var(--dim)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.08em',
-          }}
-        >
-          Who gets in?
-        </label>
+      <div className={`form-group ${fieldStack}`}>
+        <label className={fieldLabel}>Who gets in?</label>
         <select
           className="ctl"
           value={v.approval}
@@ -347,30 +308,15 @@ function RoleForm({
       </div>
       {v.mode === 'platform' && <FieldsEditor value={fields} onChange={setFields} />}
 
-      <div className="row" style={{ gap: 8, marginTop: 8 }}>
+      <div className="row mt-2 gap-2">
         <button
-          className="eb"
+          className="eb py-2.5 px-4 flex-1 [background:var(--acc)] [color:white] border-acc font-bold text-[14px] cursor-pointer"
           type="submit"
           disabled={saving}
-          style={{
-            flex: 1,
-            padding: '10px 16px',
-            background: 'var(--acc)',
-            color: 'white',
-            borderColor: 'var(--acc)',
-            fontWeight: 700,
-            fontSize: 14,
-            cursor: 'pointer',
-          }}
         >
           {saving ? 'Saving...' : role ? 'Save role' : 'Add role'}
         </button>
-        <button
-          className="eb"
-          type="button"
-          onClick={done}
-          style={{ padding: '10px 16px', fontSize: 14, cursor: 'pointer' }}
-        >
+        <button className="eb py-2.5 px-4 text-[14px] cursor-pointer" type="button" onClick={done}>
           Cancel
         </button>
       </div>
@@ -387,22 +333,19 @@ function Roles({ e, reload }: { e: EventDetail; reload: () => void }) {
     reload();
   };
   return (
-    <div className="stack" style={{ gap: 14 }}>
+    <div className="stack gap-3.5">
       {e.roles.map((r) => (
-        <div key={r.id} className="panel" style={{ padding: '14px 18px' }}>
-          <div className="row between" style={{ alignItems: 'flex-start' }}>
+        <div key={r.id} className="panel py-3.5 px-4.5">
+          <div className="row between items-start">
             <div>
-              <b style={{ fontSize: 15, display: 'block' }}>{r.title}</b>
-              <span
-                className="mono text-dim"
-                style={{ fontSize: 14, marginTop: 4, display: 'block' }}
-              >
+              <b className="text-[15px] block">{r.title}</b>
+              <span className="mono text-dim mt-1 text-[14px] block">
                 {r.mode === 'form'
                   ? 'Google Forms link'
                   : `${r.approval === 'auto' ? 'Auto approval' : 'Manual approval'} · ${r.counts?.approved ?? 0} approved · ${r.counts?.pending ?? 0} pending`}
               </span>
             </div>
-            <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+            <div className="row gap-2 items-center">
               <button
                 className="eb"
                 type="button"
@@ -411,7 +354,7 @@ function Roles({ e, reload }: { e: EventDetail; reload: () => void }) {
                 {open === r.id ? 'Close' : 'Edit'}
               </button>
               <button
-                className="del"
+                className={`${itemDelete} ${delCls}`}
                 type="button"
                 onClick={async () =>
                   (await confirmIt(
@@ -429,38 +372,28 @@ function Roles({ e, reload }: { e: EventDetail; reload: () => void }) {
             </div>
           </div>
           {open === r.id && (
-            <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
+            <div className="pt-3.5 mt-3.5 [border-top:1px_solid_var(--line)]">
               <RoleForm eventId={e.id} role={r} done={done} />
             </div>
           )}
         </div>
       ))}
       {open === 'new' ? (
-        <div className="panel" style={{ padding: '16px' }}>
-          <div
-            className="row between"
-            style={{
-              marginBottom: 12,
-              borderBottom: '1px solid var(--line)',
-              paddingBottom: 8,
-            }}
-          >
-            <span className="mono" style={{ fontWeight: 700 }}>
-              New Event Role
-            </span>
-            <button className="del" type="button" onClick={() => setOpen(null)}>
+        <div className="panel p-4">
+          <div className="row between pb-2 mb-3 [border-bottom:1px_solid_var(--line)]">
+            <span className="mono font-bold">New Event Role</span>
+            <button
+              className={`${itemDelete} ${delCls}`}
+              type="button"
+              onClick={() => setOpen(null)}
+            >
               Cancel
             </button>
           </div>
           <RoleForm eventId={e.id} done={done} />
         </div>
       ) : (
-        <button
-          className="add"
-          type="button"
-          style={{ width: '100%', justifyContent: 'center' }}
-          onClick={() => setOpen('new')}
-        >
+        <button className="add w-full justify-center" type="button" onClick={() => setOpen('new')}>
           + Add a role
         </button>
       )}
@@ -531,15 +464,8 @@ function Responses({
       onClose={onClose}
       headerActions={
         <button
-          className="eb"
+          className="eb py-0 px-3 whitespace-nowrap h-[34px] text-[14px] font-bold"
           type="button"
-          style={{
-            whiteSpace: 'nowrap',
-            height: 34,
-            padding: '0 12px',
-            fontSize: 14,
-            fontWeight: 700,
-          }}
           disabled={!rows.length}
           onClick={() =>
             downloadCsv(`${e.id}-responses.csv`, [
@@ -562,31 +488,15 @@ function Responses({
         </button>
       }
     >
-      <div className="stack" style={{ gap: 14 }}>
+      <div className="stack gap-3.5">
         {e.mode === 'form' && (
-          <div
-            className="row between"
-            style={{
-              padding: '8px 12px',
-              background: 'var(--bg)',
-              border: '1px solid var(--line)',
-              alignItems: 'center',
-              gap: 8,
-              flexWrap: 'wrap',
-            }}
-          >
-            <span className="mono text-dim" style={{ fontSize: 14 }}>
+          <div className="row between py-2 px-3 [background:var(--bg)] [border:1px_solid_var(--line)] items-center gap-2 flex-wrap">
+            <span className="mono text-dim text-[14px]">
               Participants register on Google Forms; their answers are in the form, not here.
             </span>
             {e.formUrl && (
               <a
-                className="eb"
-                style={{
-                  fontSize: 14,
-                  padding: '4px 10px',
-                  textDecoration: 'none',
-                  whiteSpace: 'nowrap',
-                }}
+                className="eb py-1 px-2.5 text-[14px] [text-decoration:none] whitespace-nowrap"
                 href={e.formUrl}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -598,21 +508,19 @@ function Responses({
         )}
 
         {/* Search Toolbar & Filters in SAME row */}
-        <div className="row" style={{ gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+        <div className="row gap-[0.75rem] flex-wrap items-center">
           <input
             type="search"
-            className="ctl"
-            style={{ flex: '1 1 200px', height: 40 }}
+            className="ctl flex-[1_1_200px] h-[40px]"
             placeholder="Search name, email, phone, answers..."
             value={q}
             onChange={(x) => setQ(x.target.value)}
           />
           <select
-            className="ctl"
+            className="ctl w-auto h-[40px] text-[14px] flex-[0_1_140px]"
             aria-label="Who"
             value={who}
             onChange={(x) => setWho(x.target.value)}
-            style={{ width: 'auto', height: 40, fontSize: 14, flex: '0 1 140px' }}
           >
             <option value="all">Everyone</option>
             <option value="participants">Participants</option>
@@ -623,11 +531,10 @@ function Responses({
             ))}
           </select>
           <select
-            className="ctl"
+            className="ctl w-auto h-[40px] text-[14px] flex-[0_1_130px]"
             aria-label="Status"
             value={status}
             onChange={(x) => setStatus(x.target.value)}
-            style={{ width: 'auto', height: 40, fontSize: 14, flex: '0 1 130px' }}
           >
             {['all', 'pending', 'approved', 'rejected', 'cancelled'].map((s) => (
               <option key={s}>{s}</option>
@@ -636,52 +543,21 @@ function Responses({
         </div>
 
         {picked.length > 0 && (
-          <div
-            className="row between"
-            style={{
-              background: 'var(--bg)',
-              padding: '8px 14px',
-              border: '1px solid var(--line2)',
-              boxShadow: '2px 2px 0 var(--line2)',
-              alignItems: 'center',
-            }}
-          >
-            <span className="mono" style={{ fontSize: 14, fontWeight: 700 }}>
+          <div className="row between py-2 px-3.5 [background:var(--bg)] [border:1px_solid_var(--line2)] [box-shadow:2px_2px_0_var(--line2)] items-center">
+            <span className="mono text-[14px] font-bold">
               {picked.length} {picked.length === 1 ? 'entry' : 'entries'} selected
             </span>
-            <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+            <div className="row gap-2 items-center">
               <button
                 type="button"
-                style={{
-                  fontSize: 14,
-                  fontWeight: 700,
-                  fontFamily: 'var(--f-mono, monospace)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.04em',
-                  padding: '5px 12px',
-                  background: '#16a34a',
-                  color: '#ffffff',
-                  border: '1px solid #16a34a',
-                  cursor: 'pointer',
-                }}
+                className="py-[5px] px-3 text-[14px] font-bold [font-family:var(--f-mono,_monospace)] uppercase tracking-[0.04em] [background:#16a34a] text-[#ffffff] [border:1px_solid_#16a34a] cursor-pointer"
                 onClick={() => decide(picked, 'approved')}
               >
                 Approve ({picked.length})
               </button>
               <button
                 type="button"
-                style={{
-                  fontSize: 14,
-                  fontWeight: 700,
-                  fontFamily: 'var(--f-mono, monospace)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.04em',
-                  padding: '5px 10px',
-                  background: 'transparent',
-                  color: '#dc2626',
-                  border: 'none',
-                  cursor: 'pointer',
-                }}
+                className="py-[5px] px-2.5 text-[14px] font-bold [font-family:var(--f-mono,_monospace)] uppercase tracking-[0.04em] [background:transparent] text-[#dc2626] [border:none] cursor-pointer"
                 onMouseEnter={(e) => {
                   e.currentTarget.style.textDecoration = 'underline';
                 }}
@@ -697,18 +573,11 @@ function Responses({
         )}
 
         {/* Data Table */}
-        <div
-          style={{
-            overflowX: 'auto',
-            border: '1px solid var(--line2)',
-            background: 'var(--panel)',
-            boxShadow: '2px 2px 0 var(--line2)',
-          }}
-        >
-          <table className="mini-table">
+        <div className="overflow-x-auto [border:1px_solid_var(--line2)] [background:var(--panel)] [box-shadow:2px_2px_0_var(--line2)]">
+          <table className="mini-table [.ev-detail_&]:w-full [.ev-detail_&]:[border-collapse:collapse] [.ev-detail_&]:text-[14px] [.ev-detail_&]:[font-family:var(--f-body,_sans-serif)] [.evm-modal_&]:w-full [.evm-modal_&]:[border-collapse:collapse] [.evm-modal_&]:text-[14px] [.evm-modal_&]:[font-family:var(--f-body,_sans-serif)]">
             <thead>
               <tr>
-                <th style={{ width: 36, paddingLeft: 14 }}>
+                <th className="pl-3.5 w-[36px]">
                   <input
                     type="checkbox"
                     aria-label="Select all"
@@ -718,14 +587,14 @@ function Responses({
                 </th>
                 <th>NAME &amp; CONTACT</th>
                 <th>STATUS / PLACE</th>
-                <th style={{ textAlign: 'right', paddingRight: 14 }}>ACTIONS</th>
+                <th className="pr-3.5 text-right">ACTIONS</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((x) => (
                 <Fragment key={x.id}>
                   <tr>
-                    <td style={{ paddingLeft: 14 }}>
+                    <td className="pl-3.5">
                       <input
                         type="checkbox"
                         aria-label={`Select ${x.name}`}
@@ -738,36 +607,9 @@ function Responses({
                       />
                     </td>
                     <td>
-                      <span
-                        style={{
-                          display: 'block',
-                          fontSize: 14,
-                          fontWeight: 700,
-                          color: 'var(--hi)',
-                        }}
-                      >
-                        {x.name}
-                      </span>
-                      <div
-                        className="mono text-dim"
-                        style={{
-                          fontSize: 14,
-                          marginTop: 4,
-                          display: 'flex',
-                          flexWrap: 'wrap',
-                          gap: 6,
-                          alignItems: 'center',
-                        }}
-                      >
-                        <span
-                          style={{
-                            background: 'var(--bg)',
-                            padding: '1px 6px',
-                            border: '1px solid var(--line)',
-                            color: 'var(--hi)',
-                            fontWeight: 600,
-                          }}
-                        >
+                      <span className="block text-[14px] font-bold text-hi">{x.name}</span>
+                      <div className="mono text-dim mt-1 text-[14px] flex flex-wrap gap-1.5 items-center">
+                        <span className="py-px px-1.5 [background:var(--bg)] [border:1px_solid_var(--line)] text-hi font-semibold">
                           {roleName(x)}
                         </span>
                         {x.batch && <span>b{x.batch}</span>}
@@ -776,7 +618,7 @@ function Responses({
                       </div>
                     </td>
                     <td>
-                      <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+                      <div className="row gap-2 items-center">
                         {(() => {
                           const statusConfig: Record<
                             string,
@@ -826,33 +668,16 @@ function Responses({
                           };
                           return (
                             <span
-                              style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 6,
-                                padding: '3px 8px',
-                                background: cfg.bg,
-                                border: `1px solid ${cfg.border}`,
-                                borderRadius: 2,
-                              }}
+                              className="py-[3px] px-2 inline-flex items-center gap-1.5 [border-radius:2px]"
+                              style={{ background: cfg.bg, border: `1px solid ${cfg.border}` }}
                             >
                               <span
-                                style={{
-                                  width: 6,
-                                  height: 6,
-                                  borderRadius: '50%',
-                                  background: cfg.dot,
-                                }}
+                                className="w-[6px] h-[6px] [border-radius:50%]"
+                                style={{ background: cfg.dot }}
                               />
                               <span
-                                className="mono"
-                                style={{
-                                  fontSize: 14,
-                                  fontWeight: 700,
-                                  color: cfg.color,
-                                  textTransform: 'uppercase',
-                                  letterSpacing: '0.04em',
-                                }}
+                                className="mono text-[14px] font-bold uppercase tracking-[0.04em]"
+                                style={{ color: cfg.color }}
                               >
                                 {cfg.label}
                               </span>
@@ -861,17 +686,9 @@ function Responses({
                         })()}
                         {x.roleId === null && x.status === 'approved' && (
                           <select
-                            className="ctl"
+                            className="ctl py-0 px-2 w-auto text-[14px] h-[26px] [font-family:var(--f-mono,_monospace)] font-semibold"
                             aria-label={`Place for ${x.name}`}
                             value={x.place ?? ''}
-                            style={{
-                              width: 'auto',
-                              padding: '0 8px',
-                              fontSize: 14,
-                              height: 26,
-                              fontFamily: 'var(--f-mono, monospace)',
-                              fontWeight: 600,
-                            }}
                             onChange={async (c) => {
                               const val = c.target.value ? +c.target.value : null;
                               if (await act('entryPlace', { id: x.id, place: val })) reload();
@@ -885,26 +702,12 @@ function Responses({
                         )}
                       </div>
                     </td>
-                    <td style={{ paddingRight: 14 }}>
-                      <div
-                        className="row"
-                        style={{ gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}
-                      >
+                    <td className="pr-3.5">
+                      <div className="row gap-2 justify-end items-center">
                         {x.status !== 'approved' && x.status !== 'cancelled' && (
                           <button
                             type="button"
-                            style={{
-                              fontSize: 14,
-                              fontWeight: 700,
-                              fontFamily: 'var(--f-mono, monospace)',
-                              textTransform: 'uppercase',
-                              letterSpacing: '0.04em',
-                              padding: '4px 10px',
-                              background: '#16a34a',
-                              color: '#ffffff',
-                              border: '1px solid #16a34a',
-                              cursor: 'pointer',
-                            }}
+                            className="py-1 px-2.5 text-[14px] font-bold [font-family:var(--f-mono,_monospace)] uppercase tracking-[0.04em] [background:#16a34a] text-[#ffffff] [border:1px_solid_#16a34a] cursor-pointer"
                             onClick={() => decide([x.id], 'approved')}
                           >
                             Approve
@@ -913,18 +716,7 @@ function Responses({
                         {x.status !== 'rejected' && x.status !== 'cancelled' && (
                           <button
                             type="button"
-                            style={{
-                              fontSize: 14,
-                              fontWeight: 700,
-                              fontFamily: 'var(--f-mono, monospace)',
-                              textTransform: 'uppercase',
-                              letterSpacing: '0.04em',
-                              padding: '4px 8px',
-                              background: 'transparent',
-                              color: '#dc2626',
-                              border: 'none',
-                              cursor: 'pointer',
-                            }}
+                            className="py-1 px-2 text-[14px] font-bold [font-family:var(--f-mono,_monospace)] uppercase tracking-[0.04em] [background:transparent] text-[#dc2626] [border:none] cursor-pointer"
                             onMouseEnter={(e) => {
                               e.currentTarget.style.textDecoration = 'underline';
                             }}
@@ -938,19 +730,11 @@ function Responses({
                         )}
                         {Object.keys(x.answers).length > 0 && (
                           <button
-                            className="eb"
+                            className="eb py-1 px-2.5 text-[14px] font-bold [font-family:var(--f-mono,_monospace)] uppercase tracking-[0.04em] border-line2 cursor-pointer"
                             type="button"
                             style={{
-                              fontSize: 14,
-                              fontWeight: 700,
-                              fontFamily: 'var(--f-mono, monospace)',
-                              textTransform: 'uppercase',
-                              letterSpacing: '0.04em',
-                              padding: '4px 10px',
                               background: shown === x.id ? 'var(--ink)' : 'transparent',
                               color: shown === x.id ? 'var(--panel)' : 'var(--hi)',
-                              borderColor: 'var(--line2)',
-                              cursor: 'pointer',
                             }}
                             onClick={() => setShown(shown === x.id ? null : x.id)}
                           >
@@ -964,37 +748,15 @@ function Responses({
                     <tr>
                       <td
                         colSpan={4}
-                        style={{
-                          background: 'var(--bg)',
-                          padding: '14px 18px',
-                          borderBottom: '1px solid var(--line2)',
-                        }}
+                        className="py-3.5 px-4.5 [background:var(--bg)] [border-bottom:1px_solid_var(--line2)]"
                       >
-                        <dl className="stack" style={{ gap: 8, margin: 0 }}>
+                        <dl className="stack m-0 gap-2">
                           {Object.entries(x.answers).map(([k, v]) => (
-                            <div
-                              key={k}
-                              style={{
-                                fontSize: 14,
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: 2,
-                              }}
-                            >
-                              <dt
-                                className="mono text-dim"
-                                style={{
-                                  fontSize: 14,
-                                  fontWeight: 700,
-                                  textTransform: 'uppercase',
-                                  letterSpacing: '0.06em',
-                                }}
-                              >
+                            <div key={k} className="text-[14px] flex flex-col gap-0.5">
+                              <dt className="mono text-dim text-[14px] font-bold uppercase tracking-[0.06em]">
                                 {k}
                               </dt>
-                              <dd style={{ margin: 0, color: 'var(--hi)', fontWeight: 500 }}>
-                                {v}
-                              </dd>
+                              <dd className="m-0 text-hi font-medium">{v}</dd>
                             </div>
                           ))}
                         </dl>
@@ -1005,10 +767,7 @@ function Responses({
               ))}
               {!rows.length && (
                 <tr>
-                  <td
-                    colSpan={4}
-                    style={{ textAlign: 'center', color: 'var(--dim)', padding: '2rem 1rem' }}
-                  >
+                  <td colSpan={4} className="py-[2rem] px-[1rem] text-center text-dim">
                     No responses match.
                   </td>
                 </tr>
@@ -1025,8 +784,8 @@ function Feedback({ e }: { e: EventDetail }) {
   const fb = e.admin!.feedback;
   if (!fb.length)
     return (
-      <div className="pad" style={{ textAlign: 'center', padding: '32px 16px' }}>
-        <p className="mono text-dim" style={{ fontSize: 14, margin: 0 }}>
+      <div className="py-8 px-4 text-center">
+        <p className="mono text-dim m-0 text-[14px]">
           {e.status === 'completed'
             ? 'No feedback submitted yet.'
             : 'Attendee feedback opens when the event is marked completed.'}
@@ -1035,41 +794,32 @@ function Feedback({ e }: { e: EventDetail }) {
     );
   const avg = (fb.reduce((s, f) => s + f.rating, 0) / fb.length).toFixed(1);
   return (
-    <div className="stack" style={{ gap: 16 }}>
-      <div className="panel" style={{ padding: '16px 20px', background: 'var(--bg)' }}>
-        <div className="row between" style={{ alignItems: 'baseline' }}>
+    <div className="stack gap-4">
+      <div className="panel py-4 px-5 [background:var(--bg)]">
+        <div className="row between items-baseline">
           <div>
-            <span className="mono" style={{ fontSize: 14, color: 'var(--dim)' }}>
-              OVERALL RATING
-            </span>
-            <div className="big" style={{ fontSize: 28, marginTop: 4 }}>
-              ★ {avg}{' '}
-              <span style={{ fontSize: 16, color: 'var(--dim)', fontWeight: 500 }}>/ 5</span>
+            <span className="mono text-[14px] text-dim">OVERALL RATING</span>
+            <div className="big mt-1 text-[28px]">
+              ★ {avg} <span className="text-[16px] text-dim font-medium">/ 5</span>
             </div>
           </div>
-          <span className="mono" style={{ fontSize: 14 }}>
+          <span className="mono text-[14px]">
             {fb.length} {fb.length === 1 ? 'response' : 'responses'}
           </span>
         </div>
       </div>
 
-      <div className="stack" style={{ gap: 10 }}>
+      <div className="stack gap-2.5">
         {fb.map((f, i) => (
-          <div key={i} className="panel" style={{ padding: '14px 18px' }}>
-            <div className="row between" style={{ marginBottom: 6 }}>
-              <span className="mono" style={{ fontWeight: 700, fontSize: 14 }}>
-                {f.name}
-              </span>
-              <span className="tag dark" style={{ fontSize: 14, background: 'var(--ink)' }}>
+          <div key={i} className="panel py-3.5 px-4.5">
+            <div className="row between mb-1.5">
+              <span className="mono font-bold text-[14px]">{f.name}</span>
+              <span className="tag dark text-[14px] [background:var(--ink)]">
                 {'★'.repeat(f.rating)}
                 {'☆'.repeat(5 - f.rating)}
               </span>
             </div>
-            {f.body && (
-              <p style={{ fontSize: 14, margin: 0, lineHeight: 1.5, color: 'var(--hi)' }}>
-                “{f.body}”
-              </p>
-            )}
+            {f.body && <p className="m-0 text-[14px] leading-[1.5] text-hi">“{f.body}”</p>}
           </div>
         ))}
       </div>
@@ -1130,7 +880,7 @@ function CertificateModal({
       title={`Certificate Preview · ${sample.headline || 'Participation'}`}
       onClose={onClose}
     >
-      <div className="stack" style={{ gap: 16 }}>
+      <div className="stack gap-4">
         {/* Certificate Preview (A4 landscape scale) */}
         <CertPreview
           html={fillTemplate(html, sample)}
@@ -1139,28 +889,19 @@ function CertificateModal({
 
         {/* HTML/CSS Template Editor */}
         {editHtml && (
-          <div
-            className="stack"
-            style={{
-              background: 'var(--bg)',
-              padding: '1rem',
-              border: '1px solid var(--line)',
-            }}
-          >
-            <span className="mono text-dim" style={{ fontSize: 14 }}>
+          <div className="stack p-[1rem] [background:var(--bg)] [border:1px_solid_var(--line)]">
+            <span className="mono text-dim text-[14px]">
               PLACEHOLDERS: {CERT_VARS.map((v) => `{{${v}}}`).join(' ')}
             </span>
             <textarea
-              className="ctl mono"
-              style={{ height: 'auto', minHeight: 180, resize: 'vertical' }}
+              className="ctl mono h-auto min-h-[180px] resize-y"
               rows={10}
               value={html}
               onChange={(x) => setHtml(x.target.value)}
             />
-            <div className="row" style={{ gap: 8, marginTop: 8 }}>
+            <div className="row mt-2 gap-2">
               <button
-                className="eb"
-                style={{ background: 'var(--acc)', color: 'white', borderColor: 'var(--acc)' }}
+                className="eb [background:var(--acc)] [color:white] border-acc"
                 type="button"
                 disabled={!unsaved}
                 onClick={async () => {
@@ -1175,7 +916,7 @@ function CertificateModal({
                 Save design
               </button>
               <button
-                className="del"
+                className={`${itemDelete} ${delCls}`}
                 type="button"
                 disabled={!custom}
                 onClick={() => setHtml(DEFAULT_CERT)}
@@ -1186,9 +927,7 @@ function CertificateModal({
           </div>
         )}
 
-        <div
-          style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', flexWrap: 'wrap' }}
-        >
+        <div className="flex justify-end gap-[0.75rem] flex-wrap">
           <button type="button" className="eb" onClick={() => setEditHtml(!editHtml)}>
             {editHtml ? 'Hide HTML/CSS' : 'Edit HTML/CSS'}
           </button>
@@ -1227,21 +966,15 @@ function Certificates({
   const done = e.status === 'completed';
 
   return (
-    <div className="stack" style={{ gap: 16 }}>
+    <div className="stack gap-4">
       {/* Top Banner / Distribution State */}
-      <div className="panel" style={{ padding: '14px 18px', background: 'var(--bg)' }}>
-        <div className="row between" style={{ alignItems: 'center' }}>
+      <div className="panel py-3.5 px-4.5 [background:var(--bg)]">
+        <div className="row between items-center">
           <div>
-            <span className="mono" style={{ fontSize: 14, color: 'var(--dim)', display: 'block' }}>
-              ATTENDEE DOWNLOADS
-            </span>
+            <span className="mono text-[14px] text-dim block">ATTENDEE DOWNLOADS</span>
             <span
-              className="mono"
-              style={{
-                fontSize: 14,
-                fontWeight: 700,
-                color: e.certs ? 'var(--acc)' : 'var(--dim)',
-              }}
+              className="mono text-[14px] font-bold"
+              style={{ color: e.certs ? 'var(--acc)' : 'var(--dim)' }}
             >
               {e.certs
                 ? '● Active — Attendees can download certificates'
@@ -1263,20 +996,10 @@ function Certificates({
       </div>
 
       {/* Kind Selector & Template Preview */}
-      <div className="panel" style={{ padding: '16px 20px', background: 'var(--bg)' }}>
-        <div className="stack" style={{ gap: 12 }}>
+      <div className="panel py-4 px-5 [background:var(--bg)]">
+        <div className="stack gap-3">
           <div>
-            <label
-              className="mono"
-              style={{
-                fontSize: 14,
-                color: 'var(--dim)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.08em',
-                display: 'block',
-                marginBottom: 6,
-              }}
-            >
+            <label className="mono mb-1.5 text-[14px] text-dim uppercase tracking-[0.08em] block">
               Select Certificate Type
             </label>
             <select className="ctl" value={kind} onChange={(x) => setKind(x.target.value)}>
@@ -1289,26 +1012,17 @@ function Certificates({
             </select>
           </div>
 
-          <div className="row" style={{ gap: 8 }}>
+          <div className="row gap-2">
             <button
               type="button"
-              className="eb"
-              style={{ flex: 1, padding: '10px 14px', textAlign: 'center' }}
+              className="eb py-2.5 px-3.5 flex-1 text-center"
               onClick={onOpenPreview}
             >
               Edit Template &amp; Live Preview ↗
             </button>
             <button
               type="button"
-              className="eb"
-              style={{
-                flex: 1,
-                padding: '10px 14px',
-                textAlign: 'center',
-                background: 'var(--acc)',
-                color: 'white',
-                borderColor: 'var(--acc)',
-              }}
+              className="eb py-2.5 px-3.5 flex-1 text-center [background:var(--acc)] [color:white] border-acc"
               disabled={!done}
               title={!done ? 'Event must be completed to issue certificates' : ''}
               onClick={async () => {
@@ -1322,17 +1036,15 @@ function Certificates({
       </div>
 
       {/* CSV Import Section */}
-      <div className="panel" style={{ padding: '16px' }}>
-        <div className="row between" style={{ alignItems: 'center' }}>
+      <div className="panel p-4">
+        <div className="row between items-center">
           <div>
-            <span className="mono" style={{ fontSize: 14, color: 'var(--dim)', display: 'block' }}>
-              BATCH ISSUANCE VIA CSV
-            </span>
-            <span style={{ fontSize: 14, color: 'var(--hi)' }}>
+            <span className="mono text-[14px] text-dim block">BATCH ISSUANCE VIA CSV</span>
+            <span className="text-[14px] text-hi">
               Issue certificates to a list of external recipients
             </span>
           </div>
-          <label className="eb" style={{ cursor: 'pointer', margin: 0 }}>
+          <label className="eb m-0 cursor-pointer">
             Import CSV
             <input
               type="file"
@@ -1358,29 +1070,16 @@ function Certificates({
         </div>
 
         {csv && (
-          <div
-            className="stack"
-            style={{
-              marginTop: 14,
-              background: 'var(--bg)',
-              padding: 12,
-              border: '1px solid var(--line)',
-            }}
-          >
-            <p className="mono text-dim" style={{ fontSize: 14, margin: 0 }}>
+          <div className="stack p-3 mt-3.5 [background:var(--bg)] [border:1px_solid_var(--line)]">
+            <p className="mono text-dim m-0 text-[14px]">
               {csv.length - 1} rows detected. Map columns to certificate variables:
             </p>
-            <div className="stack" style={{ gap: 6, marginTop: 8 }}>
+            <div className="stack mt-2 gap-1.5">
               {csv[0]!.map((h, i) => (
-                <label
-                  key={i}
-                  className="row between"
-                  style={{ fontSize: 14, alignItems: 'center' }}
-                >
+                <label key={i} className="row between text-[14px] items-center">
                   <span className="mono">{h}</span>
                   <input
-                    className="ctl"
-                    style={{ width: 160, height: 32, padding: '2px 8px', fontSize: 14 }}
+                    className="ctl py-0.5 px-2 w-[160px] h-[32px] text-[14px]"
                     list="cert-vars"
                     value={map[i] ?? ''}
                     onChange={(x) => setMap(map.map((m, j) => (j === i ? x.target.value : m)))}
@@ -1393,7 +1092,7 @@ function Certificates({
                 ))}
               </datalist>
             </div>
-            <div className="row" style={{ marginTop: 12, gap: 8 }}>
+            <div className="row mt-3 gap-2">
               <button
                 className="add"
                 type="button"
@@ -1411,7 +1110,11 @@ function Certificates({
               >
                 Generate {csv.length - 1} Certificates
               </button>
-              <button className="del" type="button" onClick={() => setCsv(null)}>
+              <button
+                className={`${itemDelete} ${delCls}`}
+                type="button"
+                onClick={() => setCsv(null)}
+              >
                 Cancel
               </button>
             </div>
@@ -1443,8 +1146,8 @@ function Email({ e, reload }: { e: EventDetail; reload: () => void }) {
   return (
     <div className="stack">
       <MailStatus />
-      <div className="row between" style={{ alignItems: 'center' }}>
-        <p className="body" style={{ margin: 0, fontSize: 14, color: 'var(--dim)' }}>
+      <div className="row between items-center">
+        <p className="body m-0 text-[14px] text-dim">
           Sent when someone is approved, by you or automatically.{' '}
           {e.admin!.mail ? 'Custom design active.' : 'Built-in design active.'}
         </p>
@@ -1452,8 +1155,8 @@ function Email({ e, reload }: { e: EventDetail; reload: () => void }) {
           Edit email
         </button>
       </div>
-      <div className="me-inbox">
-        <p className="me-subject">
+      <div className={previewCard}>
+        <p className={previewMeta}>
           <span className="dim">Subject</span> {view.subject}
         </p>
         <iframe title="Approval email" sandbox="" srcDoc={view.html} className="me-frame desktop" />

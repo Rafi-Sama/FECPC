@@ -2,9 +2,8 @@ import { redirect } from 'next/navigation';
 import { StoreProvider } from '@/components/app/Store';
 import Shell from '@/components/app/Shell';
 import { serverState } from '@/lib/api.ts';
-import '../(site)/site.css';
-import './app.css';
-import './alumni-cards.css';
+import '../(site)/site.layer.css';
+import './app.layer.css';
 
 export const metadata = { title: 'Members' };
 export const dynamic = 'force-dynamic';

@@ -15,6 +15,8 @@ import { useStore } from '../Store';
 import { MemberFace } from '../shared/MemberFace';
 import { useConfirm } from '../shared/PromptDialog';
 
+import { formFoot } from '@/components/app/shared/ui';
+
 type Values = Record<ProfileField, string>;
 const HANDLES: ProfileField[] = ['cf_handle', 'vjudge_handle'];
 const INPUT: Partial<Record<ProfileField, { type?: string; ph: string; wide?: boolean }>> = {
@@ -141,7 +143,11 @@ export function ProfileForm({
       aria-label={title}
       onClick={(e) => e.target === e.currentTarget && void leave()}
     >
-      <form className="cm-modal pf" onSubmit={submit} noValidate>
+      <form
+        className="cm-modal [&_.input[aria-invalid='true']]:border-bad max-w-[760px]"
+        onSubmit={submit}
+        noValidate
+      >
         <header className="cm-modal-head">
           <h2 className="h3">{title}</h2>
           <button type="button" className="cm-modal-close" aria-label="Close" onClick={leave}>
@@ -149,15 +155,20 @@ export function ProfileForm({
           </button>
         </header>
         {mode === 'request' && (
-          <p className="pf-lead">Change what you need; the Secretary or President reviews it.</p>
+          <p className="[color:var(--mut)]">
+            Change what you need; the Secretary or President reviews it.
+          </p>
         )}
-        <div className="pf-photo">
+        <div className="flex items-center gap-4">
           <MemberFace url={v.avatar_url || null} name={v.name || profile.name} size={88} />
-          <div className="stack" style={{ '--g': '8px' } as React.CSSProperties}>
-            <span className="pf-label">
-              Photo{changes.avatar_url !== undefined && <i className="pf-dot"> · changed</i>}
+          <div className="stack [--g:8px]">
+            <span className="font-label text-[14px] [color:var(--mut)]">
+              Photo
+              {changes.avatar_url !== undefined && (
+                <i className="not-italic text-acc"> · changed</i>
+              )}
             </span>
-            <div className="row" style={{ '--g': '8px' } as React.CSSProperties}>
+            <div className="row [--g:8px]">
               <button type="button" className="btn xs line" onClick={() => file.current?.click()}>
                 {v.avatar_url ? 'Replace photo' : 'Add a photo'}
               </button>
@@ -172,7 +183,7 @@ export function ProfileForm({
               )}
             </div>
             {(photoErr || shown('avatar_url')) && (
-              <span className="pf-err" role="alert">
+              <span className="text-bad text-[14px]" role="alert">
                 {photoErr || shown('avatar_url')}
               </span>
             )}
@@ -188,14 +199,14 @@ export function ProfileForm({
             }}
           />
         </div>
-        <div className="pf-grid">
+        <div className="[&_.wide]:[grid-column:1_/_-1] [display:grid] grid-cols-[repeat(auto-fill,minmax(min(100%,220px),1fr))] gap-[14px_16px]">
           {fields
             .filter(([k]) => k !== 'avatar_url')
             .map(([k, label]) => (
               <label key={k} className={`field${k === 'bio' || INPUT[k]?.wide ? ' wide' : ''}`}>
-                <span className="pf-label">
+                <span className="font-label text-[14px] [color:var(--mut)]">
                   {label}
-                  {changes[k] !== undefined && <i className="pf-dot"> · changed</i>}
+                  {changes[k] !== undefined && <i className="not-italic text-acc"> · changed</i>}
                 </span>
                 {k === 'bio' ? (
                   <textarea
@@ -217,7 +228,7 @@ export function ProfileForm({
                   />
                 )}
                 {shown(k) && (
-                  <span className="pf-err" role="alert">
+                  <span className="text-bad text-[14px]" role="alert">
                     {shown(k)}
                   </span>
                 )}
@@ -225,7 +236,9 @@ export function ProfileForm({
             ))}
           {mode === 'request' && (
             <label className="field wide">
-              <span className="pf-label">Note for the reviewer · optional</span>
+              <span className="font-label text-[14px] [color:var(--mut)]">
+                Note for the reviewer · optional
+              </span>
               <input
                 className="input"
                 maxLength={300}
@@ -236,8 +249,8 @@ export function ProfileForm({
             </label>
           )}
         </div>
-        <footer className="me-foot">
-          <span className="pf-label">
+        <footer className={formFoot}>
+          <span className="font-label text-[14px] [color:var(--mut)]">
             {n ? `${n} change${n === 1 ? '' : 's'}` : 'Nothing changed yet'}
           </span>
           <button className="btn sm" disabled={busy || !n}>

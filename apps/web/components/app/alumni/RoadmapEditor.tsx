@@ -136,55 +136,23 @@ function invalid(name: string, description: string, nodes: EditorNode[]) {
   return null;
 }
 
-const field: React.CSSProperties = {
-  border: '2px solid var(--line2, #0B0B0B)',
-  background: 'var(--bg, #FFFFFF)',
-  padding: '10px 12px',
-  font: '14px Inter, Arial, sans-serif',
-  minHeight: 44,
-  width: '100%',
-  color: 'var(--ink, #0B0B0B)',
-};
-const label: React.CSSProperties = {
-  display: 'block',
-  marginBottom: 6,
-  font: '14px ui-monospace, Menlo, monospace',
-  color: 'var(--dim, #5F5F5F)',
-};
-const heading: React.CSSProperties = {
-  font: '600 14px ui-monospace, Menlo, monospace',
-  textTransform: 'uppercase',
-  letterSpacing: '.06em',
-  color: 'var(--ink, #0B0B0B)',
-  margin: '0 0 12px',
-};
-const section: React.CSSProperties = {
-  borderTop: '2px solid var(--line2, #0B0B0B)',
-  padding: '16px 0',
-};
-const btn: React.CSSProperties = {
-  font: '500 14px Inter, Arial, sans-serif',
-  border: '2px solid var(--line2, #0B0B0B)',
-  padding: '0 14px',
-  background: 'var(--panel, #F6F4EE)',
-  minHeight: 40,
-  color: 'var(--ink, #0B0B0B)',
-  cursor: 'pointer',
-};
-const danger: React.CSSProperties = { ...btn, width: '100%', color: 'var(--bad, #C8261B)' };
-const plus: React.CSSProperties = {
-  position: 'absolute',
-  width: 32,
-  height: 32,
-  padding: 0,
-  fontSize: 20,
-  lineHeight: 1,
-  background: 'var(--acc, #1F3BFF)',
-  color: 'var(--on, #FFFFFF)',
-  border: '2px solid var(--line2, #0B0B0B)',
-  cursor: 'pointer',
-  zIndex: 4,
-};
+// Shared editor styles. Parts are split so an override never puts two classes for one property on an element.
+const fieldBox = '[border:2px_solid_var(--line2)] [background:var(--bg)] py-2.5 px-3 text-ink';
+const fieldFont = '[font:14px_Inter,_Arial,_sans-serif]';
+const field = `${fieldBox} ${fieldFont} min-h-[44px] w-full`;
+const fieldRow = `${fieldBox} ${fieldFont} min-h-[40px]`;
+const labelText = 'block [font:14px_ui-monospace,_Menlo,_monospace] text-dim';
+const label = `${labelText} mb-1.5`;
+const headingText =
+  '[font:600_14px_ui-monospace,_Menlo,_monospace] uppercase tracking-[.06em] text-ink';
+const heading = `${headingText} mt-0 mx-0 mb-3`;
+const section = '[border-top:2px_solid_var(--line2)] py-4 px-0';
+const btnBase =
+  '[font:500_14px_Inter,_Arial,_sans-serif] [border:2px_solid_var(--line2)] py-0 px-3.5 [background:var(--panel)] min-h-[40px] cursor-pointer';
+const btn = `${btnBase} text-ink`;
+const danger = `${btnBase} w-full text-bad`;
+const plus =
+  'absolute w-[32px] h-[32px] p-0 text-[20px] leading-[1] [background:var(--acc)] text-on [border:2px_solid_var(--line2)] cursor-pointer z-[4]';
 
 async function post(body: Record<string, unknown>) {
   const res = await fetch('/api/alumni', {
@@ -375,7 +343,7 @@ export function RoadmapEditor({
 
   return (
     <SaveForm
-      style={{ maxWidth: 1280, margin: '0 auto', paddingBottom: 60 }}
+      className="pb-15 my-0 mx-auto max-w-[1280px]"
       label={roadmap ? 'Unsaved changes to this roadmap' : 'Unsaved new roadmap'}
       saveLabel="Save roadmap"
       trackFields={false}
@@ -383,53 +351,53 @@ export function RoadmapEditor({
       onDiscard={onCancel}
       onSubmit={save}
     >
-      <div className="row between" style={{ alignItems: 'baseline', marginBottom: 16 }}>
-        <h1 style={{ fontSize: 40, margin: 0, color: 'var(--ink, #0B0B0B)' }}>
-          <span style={{ fontWeight: 500 }}>{roadmap ? 'Edit' : 'Create'}</span>{' '}
-          <i style={{ color: 'var(--acc, #1F3BFF)', fontStyle: 'normal' }}>roadmap.</i>
+      <div className="row between mb-4 items-baseline">
+        <h1 className="m-0 text-[40px] text-ink">
+          <span className="font-medium">{roadmap ? 'Edit' : 'Create'}</span>{' '}
+          <i className="text-acc not-italic">roadmap.</i>
         </h1>
-        <button type="button" data-close onClick={onCancel} style={btn} disabled={busy}>
+        <button type="button" data-close onClick={onCancel} className={btn} disabled={busy}>
           ← Back
         </button>
       </div>
 
-      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 12 }}>
-        <label style={{ flex: '1 1 260px' }}>
-          <span style={label}>Roadmap name</span>
+      <div className="mb-3 flex gap-4 flex-wrap">
+        <label className="flex-[1_1_260px]">
+          <span className={label}>Roadmap name</span>
           <input
             maxLength={80}
             value={name}
             placeholder="e.g. Data structures & algorithms"
             onChange={(e) => setName(e.target.value)}
-            style={field}
+            className={field}
           />
         </label>
-        <label style={{ flex: '2 1 360px' }}>
-          <span style={label}>Description (optional)</span>
+        <label className="flex-[2_1_360px]">
+          <span className={label}>Description (optional)</span>
           <input
             maxLength={300}
             value={description}
             placeholder="One line shown on the roadmap card"
             onChange={(e) => setDescription(e.target.value)}
-            style={field}
+            className={field}
           />
         </label>
       </div>
-      <p style={{ ...label, marginBottom: 12 }}>
+      <p className={`${labelText} mb-3`}>
         {nodes.length} topic{nodes.length === 1 ? '' : 's'} · {problemCount} problem
         {problemCount === 1 ? '' : 's'}
         {full && ` · topic limit (${MAX_TOPICS}) reached`}
       </p>
       {error && (
-        <p role="alert" style={{ color: 'var(--bad, #C8261B)', fontSize: 14, margin: '0 0 12px' }}>
+        <p role="alert" className="mt-0 mx-0 mb-3 text-bad text-[14px]">
           {error}
         </p>
       )}
 
-      <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+      <div className="flex gap-6 flex-wrap items-start">
         {/* Tree */}
-        <div style={{ flex: '3 1 480px', minWidth: 0 }}>
-          <p style={{ ...label, margin: '0 0 8px' }}>
+        <div className="flex-[3_1_480px] min-w-0">
+          <p className={`${labelText} mt-0 mx-0 mb-2`}>
             Click a topic to edit it. On the selected topic, + below adds a subtopic, + on a side
             adds a topic beside it.
           </p>
@@ -453,41 +421,24 @@ export function RoadmapEditor({
                         void deleteSelected();
                       }
                     }}
+                    className="py-0 px-3.5 absolute flex flex-col justify-center gap-1 text-left text-ink cursor-pointer z-[3]"
                     style={{
-                      position: 'absolute',
                       left: b.x,
                       top: b.y,
                       width: NODE_W,
                       height: NODE_H,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'center',
-                      gap: 4,
-                      textAlign: 'left',
                       background: n.id === null ? 'var(--bg, #FFFFFF)' : 'var(--panel, #F6F4EE)',
                       border: isSelected
                         ? '3px solid var(--acc, #1F3BFF)'
                         : bad
                           ? '2px dashed var(--bad, #C8261B)'
                           : '2px solid var(--line2, #0B0B0B)',
-                      color: 'var(--ink, #0B0B0B)',
-                      cursor: 'pointer',
-                      padding: '0 14px',
-                      zIndex: 3,
                     }}
                   >
-                    <b
-                      style={{
-                        fontSize: 16,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        width: '100%',
-                      }}
-                    >
+                    <b className="text-[16px] overflow-hidden text-ellipsis whitespace-nowrap w-full">
                       {n.name.trim() || 'Untitled topic'}
                     </b>
-                    <span style={{ ...label, margin: 0 }}>
+                    <span className={`${labelText} m-0`}>
                       {n.problems.length} problem{n.problems.length === 1 ? '' : 's'}
                       {n.link.trim() ? ' · link' : ''}
                       {n.id === null ? ' · new' : ''}
@@ -500,7 +451,8 @@ export function RoadmapEditor({
                         aria-label={`Add subtopic under ${n.name}`}
                         title="Add subtopic"
                         onClick={() => add(n, 'child')}
-                        style={{ ...plus, left: b.x + NODE_W / 2 - 16, top: b.y + NODE_H - 16 }}
+                        className={plus}
+                        style={{ left: b.x + NODE_W / 2 - 16, top: b.y + NODE_H - 16 }}
                       >
                         +
                       </button>
@@ -509,7 +461,8 @@ export function RoadmapEditor({
                         aria-label={`Add topic before ${n.name}`}
                         title="Add topic before"
                         onClick={() => add(n, 'before')}
-                        style={{ ...plus, left: b.x - 16, top: b.y + NODE_H / 2 - 16 }}
+                        className={plus}
+                        style={{ left: b.x - 16, top: b.y + NODE_H / 2 - 16 }}
                       >
                         +
                       </button>
@@ -518,7 +471,8 @@ export function RoadmapEditor({
                         aria-label={`Add topic after ${n.name}`}
                         title="Add topic after"
                         onClick={() => add(n, 'after')}
-                        style={{ ...plus, left: b.x + NODE_W - 16, top: b.y + NODE_H / 2 - 16 }}
+                        className={plus}
+                        style={{ left: b.x + NODE_W - 16, top: b.y + NODE_H / 2 - 16 }}
                       >
                         +
                       </button>
@@ -532,62 +486,55 @@ export function RoadmapEditor({
 
         {/* Inspector */}
         <aside
-          className="pn"
+          className="pn py-4 px-5 m-0 flex-[2_1_380px] [background:var(--panel)] [border:2px_solid_var(--line2)]"
           aria-label="Selected topic"
-          style={{
-            flex: '2 1 380px',
-            margin: 0,
-            padding: '16px 20px',
-            background: 'var(--panel, #F6F4EE)',
-            border: '2px solid var(--line2, #0B0B0B)',
-          }}
         >
           {selected ? (
             <>
-              <p style={{ ...label, margin: '0 0 12px' }}>{path(selected).join(' › ')}</p>
+              <p className={`${labelText} mt-0 mx-0 mb-3`}>{path(selected).join(' › ')}</p>
 
-              <section style={{ ...section, borderTop: 0, paddingTop: 0 }}>
-                <h2 style={heading}>Details</h2>
-                <label style={{ display: 'block', marginBottom: 12 }}>
-                  <span style={label}>Topic name</span>
+              <section className="[border-top:0] pt-0 pb-4 px-0">
+                <h2 className={heading}>Details</h2>
+                <label className="mb-3 block">
+                  <span className={label}>Topic name</span>
                   <input
                     maxLength={80}
                     value={selected.name}
                     onChange={(e) => update({ name: e.target.value })}
-                    style={field}
+                    className={field}
                   />
                 </label>
-                <label style={{ display: 'block', marginBottom: 12 }}>
-                  <span style={label}>Description</span>
+                <label className="mb-3 block">
+                  <span className={label}>Description</span>
                   <textarea
                     rows={2}
                     maxLength={300}
                     value={selected.description}
                     onChange={(e) => update({ description: e.target.value })}
-                    style={{ ...field, resize: 'vertical' }}
+                    className={`${field} resize-y`}
                   />
                 </label>
-                <label style={{ display: 'block' }}>
-                  <span style={label}>Editorial or playlist link (optional)</span>
+                <label className="block">
+                  <span className={label}>Editorial or playlist link (optional)</span>
                   <input
                     type="url"
                     maxLength={400}
                     placeholder="https://youtube.com/playlist?list=…"
                     value={selected.link}
                     onChange={(e) => update({ link: e.target.value })}
-                    style={field}
+                    className={field}
                   />
                 </label>
               </section>
 
-              <section style={section}>
-                <h2 style={heading}>Position</h2>
-                <label style={{ display: 'block', marginBottom: 12 }}>
-                  <span style={label}>Parent topic</span>
+              <section className={section}>
+                <h2 className={heading}>Position</h2>
+                <label className="mb-3 block">
+                  <span className={label}>Parent topic</span>
                   <select
                     value={selected.parentKey ?? ''}
                     onChange={(e) => update({ parentKey: e.target.value || null })}
-                    style={field}
+                    className={field}
                   >
                     <option value="">None (top level)</option>
                     {parentChoices.map((n) => (
@@ -600,7 +547,7 @@ export function RoadmapEditor({
                 <div className="row" style={{ '--g': '8px' } as React.CSSProperties}>
                   <button
                     type="button"
-                    style={btn}
+                    className={btn}
                     disabled={sibIndex < 1}
                     onClick={() => move(-1)}
                   >
@@ -608,7 +555,7 @@ export function RoadmapEditor({
                   </button>
                   <button
                     type="button"
-                    style={btn}
+                    className={btn}
                     disabled={sibIndex < 0 || sibIndex >= siblings.length - 1}
                     onClick={() => move(1)}
                   >
@@ -616,7 +563,7 @@ export function RoadmapEditor({
                   </button>
                   <button
                     type="button"
-                    style={btn}
+                    className={btn}
                     disabled={full}
                     onClick={() => add(selected, 'child')}
                   >
@@ -625,13 +572,13 @@ export function RoadmapEditor({
                 </div>
               </section>
 
-              <section style={section}>
-                <div className="row between" style={{ marginBottom: 12 }}>
-                  <h2 style={{ ...heading, margin: 0 }}>Problems · {selected.problems.length}</h2>
+              <section className={section}>
+                <div className="row between mb-3">
+                  <h2 className={`${headingText} m-0`}>Problems · {selected.problems.length}</h2>
                   <span className="row" style={{ '--g': '8px' } as React.CSSProperties}>
                     <button
                       type="button"
-                      style={btn}
+                      className={btn}
                       onClick={() => {
                         setBulk(bulk === null ? '' : null);
                         setBulkError(null);
@@ -641,7 +588,7 @@ export function RoadmapEditor({
                     </button>
                     <button
                       type="button"
-                      style={btn}
+                      className={btn}
                       disabled={selected.problems.length >= MAX_PROBLEMS}
                       onClick={() =>
                         setProblems((ps) => [
@@ -656,9 +603,9 @@ export function RoadmapEditor({
                 </div>
 
                 {bulk !== null && (
-                  <div style={{ marginBottom: 12 }}>
-                    <label style={{ display: 'block' }}>
-                      <span style={label}>One per line: title, link, difficulty</span>
+                  <div className="mb-3">
+                    <label className="block">
+                      <span className={label}>One per line: title, link, difficulty</span>
                       <textarea
                         rows={5}
                         value={bulk}
@@ -666,34 +613,29 @@ export function RoadmapEditor({
                           'Two Sum, https://leetcode.com/problems/two-sum/, easy\nGroup Anagrams, https://leetcode.com/problems/group-anagrams/, medium'
                         }
                         onChange={(e) => setBulk(e.target.value)}
-                        style={{ ...field, fontFamily: 'ui-monospace, Menlo, monospace' }}
+                        className={`${fieldBox} [font:14px_ui-monospace,_Menlo,_monospace] min-h-[44px] w-full`}
                       />
                     </label>
                     {bulkError && (
-                      <p role="alert" style={{ color: 'var(--bad, #C8261B)', fontSize: 14 }}>
+                      <p role="alert" className="text-bad text-[14px]">
                         {bulkError}
                       </p>
                     )}
-                    <button type="button" style={{ ...btn, marginTop: 8 }} onClick={addBulk}>
+                    <button type="button" className={`${btn} mt-2`} onClick={addBulk}>
                       Add these problems
                     </button>
                   </div>
                 )}
 
                 {selected.problems.length === 0 && bulk === null && (
-                  <p style={label}>No problems yet. Add one, or paste a list.</p>
+                  <p className={label}>No problems yet. Add one, or paste a list.</p>
                 )}
-                <ol style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                <ol className="p-0 m-0 [list-style:none]">
                   {selected.problems.map((p, i) => (
                     <li
                       key={p.key}
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: '1fr auto auto',
-                        gap: 6,
-                        padding: '10px 0',
-                        borderTop: i ? '1px solid var(--line, #CFCBBF)' : 0,
-                      }}
+                      className="py-2.5 px-0 [display:grid] grid-cols-[1fr_auto_auto] gap-1.5"
+                      style={{ borderTop: i ? '1px solid var(--line, #CFCBBF)' : 0 }}
                     >
                       <input
                         aria-label={`Problem ${i + 1} title`}
@@ -701,7 +643,7 @@ export function RoadmapEditor({
                         maxLength={120}
                         value={p.title}
                         onChange={(e) => editProblem(p.key, { title: e.target.value })}
-                        style={{ ...field, minHeight: 40 }}
+                        className={`${fieldRow} w-full`}
                       />
                       <select
                         aria-label={`Problem ${i + 1} difficulty`}
@@ -709,7 +651,7 @@ export function RoadmapEditor({
                         onChange={(e) =>
                           editProblem(p.key, { difficulty: e.target.value as Difficulty })
                         }
-                        style={{ ...field, minHeight: 40, width: 'auto' }}
+                        className={`${fieldRow} w-auto`}
                       >
                         {DIFFS.map((d) => (
                           <option key={d} value={d}>
@@ -722,7 +664,7 @@ export function RoadmapEditor({
                         aria-label={`Remove ${p.title || `problem ${i + 1}`}`}
                         title="Remove problem"
                         onClick={() => setProblems((ps) => ps.filter((x) => x.key !== p.key))}
-                        style={{ ...btn, color: 'var(--bad, #C8261B)' }}
+                        className={`${btnBase} text-bad`}
                       >
                         ×
                       </button>
@@ -733,38 +675,38 @@ export function RoadmapEditor({
                         maxLength={400}
                         value={p.url}
                         onChange={(e) => editProblem(p.key, { url: e.target.value })}
-                        style={{ ...field, minHeight: 40, gridColumn: '1 / -1' }}
+                        className={`${fieldRow} w-full col-span-full`}
                       />
                     </li>
                   ))}
                 </ol>
                 {selected.problems.some((p) => p.id !== null) && (
-                  <p style={{ ...label, marginTop: 8 }}>
+                  <p className={`${label} mt-2`}>
                     Editing a problem keeps members’ progress; removing it deletes that progress.
                   </p>
                 )}
               </section>
 
-              <section style={section}>
-                <h2 style={heading}>Delete</h2>
+              <section className={section}>
+                <h2 className={heading}>Delete</h2>
                 {canDelete ? (
-                  <button type="button" onClick={deleteSelected} style={danger}>
+                  <button type="button" onClick={deleteSelected} className={danger}>
                     Delete topic
                     {subtree(nodes, selected.key).size > 1 ? ' and its subtopics' : ''}
                   </button>
                 ) : (
-                  <p style={label}>The only top-level topic can’t be deleted.</p>
+                  <p className={label}>The only top-level topic can’t be deleted.</p>
                 )}
               </section>
             </>
           ) : (
-            <p style={label}>Select a topic in the tree.</p>
+            <p className={label}>Select a topic in the tree.</p>
           )}
 
           {roadmap && (
-            <section style={section}>
-              <h2 style={heading}>Roadmap</h2>
-              <button type="button" onClick={remove} disabled={busy} style={danger}>
+            <section className={section}>
+              <h2 className={heading}>Roadmap</h2>
+              <button type="button" onClick={remove} disabled={busy} className={danger}>
                 Delete the whole roadmap
               </button>
             </section>

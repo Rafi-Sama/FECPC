@@ -24,8 +24,12 @@ export function MemberFilters({
   onReset: () => void;
 }) {
   return (
-    <div className="member-filters" role="search" aria-label="Filter members">
-      <div className="member-filters__search">
+    <div
+      className="[display:grid] gap-3 grid-cols-[1fr] mb-6 items-center min-[760px]:grid-cols-2 min-[1100px]:flex min-[1100px]:flex-wrap min-[1100px]:gap-3 min-[1100px]:items-center"
+      role="search"
+      aria-label="Filter members"
+    >
+      <div className="min-[1100px]:flex-[0_1_250px] min-[1100px]:min-w-50">
         <input
           type="search"
           className="member-filter-ctrl"
@@ -36,7 +40,7 @@ export function MemberFilters({
         />
       </div>
 
-      <div className="member-filters__select">
+      <div className="min-[1100px]:flex-[0_1_168px] min-[1100px]:min-w-37">
         <select
           className="member-filter-ctrl"
           aria-label="All ratings"
@@ -52,7 +56,7 @@ export function MemberFilters({
         </select>
       </div>
 
-      <div className="member-filters__select">
+      <div className="min-[1100px]:flex-[0_1_168px] min-[1100px]:min-w-37">
         <select
           className="member-filter-ctrl"
           aria-label="Any skill"
@@ -68,7 +72,7 @@ export function MemberFilters({
         </select>
       </div>
 
-      <div className="member-filters__select">
+      <div className="min-[1100px]:flex-[0_1_168px] min-[1100px]:min-w-37">
         <select
           className="member-filter-ctrl"
           aria-label="All batches"
@@ -84,7 +88,7 @@ export function MemberFilters({
         </select>
       </div>
 
-      <div className="member-filters__type">
+      <div className="min-[760px]:col-span-full min-[760px]:flex min-[760px]:items-center min-[760px]:justify-between min-[760px]:gap-3 min-[760px]:flex-wrap min-[1100px]:ml-auto min-[1100px]:flex min-[1100px]:items-center min-[1100px]:gap-2 min-[1100px]:flex-wrap">
         {hasActive && (
           <button type="button" className="btn xs line" onClick={onReset}>
             Reset

@@ -5,6 +5,8 @@ import QR from '../QR';
 import { useStore } from '../Store';
 import type { EventEntry, EventField } from '@fecpc/contracts';
 
+import { fieldLabel, fieldStack } from './ui';
+
 const STATUS: Record<EventEntry['status'], string> = {
   pending: 'Waiting for approval',
   approved: 'Approved',
@@ -48,43 +50,20 @@ export function SignUp({
 
   if (mode === 'form')
     return formUrl ? (
-      <div className="stack" style={{ gap: 14, alignItems: 'center', textAlign: 'center' }}>
-        <div
-          style={{
-            background: '#ffffff',
-            padding: 8,
-            border: '1px solid var(--line2)',
-            display: 'inline-flex',
-            boxShadow: '2px 2px 0 var(--line2)',
-          }}
-        >
+      <div className="stack gap-3.5 items-center text-center">
+        <div className="p-2 [background:#ffffff] [border:1px_solid_var(--line2)] inline-flex [box-shadow:2px_2px_0_var(--line2)]">
           <QR text={formUrl} size={130} />
         </div>
-        <div className="stack" style={{ gap: 6, width: '100%', alignItems: 'center' }}>
+        <div className="stack gap-1.5 w-full items-center">
           <a
-            className="eb"
-            style={{
-              display: 'block',
-              width: '100%',
-              padding: '10px 14px',
-              textAlign: 'center',
-              textDecoration: 'none',
-              background: 'var(--acc)',
-              color: 'white',
-              borderColor: 'var(--acc)',
-              fontWeight: 700,
-              fontSize: 14,
-            }}
+            className="eb py-2.5 px-3.5 block w-full text-center [text-decoration:none] [background:var(--acc)] [color:white] border-acc font-bold text-[14px]"
             href={formUrl}
             target="_blank"
             rel="noopener noreferrer"
           >
             Open the form ↗
           </a>
-          <span
-            className="mono text-dim"
-            style={{ fontSize: 14, textTransform: 'uppercase', letterSpacing: '0.06em' }}
-          >
+          <span className="mono text-dim text-[14px] uppercase tracking-[0.06em]">
             Answers stay with Google Forms.
           </span>
         </div>
@@ -100,33 +79,21 @@ export function SignUp({
 
   if (entry && entry.status !== 'cancelled')
     return (
-      <div className="stack" style={{ gap: 12 }}>
-        <div
-          className="row"
-          style={{
-            alignItems: 'center',
-            gap: 8,
-            padding: '8px 12px',
-            background: 'var(--bg)',
-            border: '1px solid var(--line)',
-          }}
-        >
+      <div className="stack gap-3">
+        <div className="row py-2 px-3 items-center gap-2 [background:var(--bg)] [border:1px_solid_var(--line)]">
           <span className="ev-status-dot" data-status={entryStatus} />
-          <span className="mono" style={{ fontSize: 14, fontWeight: 600, color: 'var(--hi)' }}>
-            {STATUS[entry.status]}
-          </span>
+          <span className="mono text-[14px] font-semibold text-hi">{STATUS[entry.status]}</span>
         </div>
         {entry.status === 'rejected' && entry.reason && (
-          <p className="mono text-dim" style={{ fontSize: 14, margin: 0 }}>
-            <span style={{ color: 'var(--bad)', fontWeight: 600 }}>Reason: </span>
+          <p className="mono text-dim m-0 text-[14px]">
+            <span className="text-bad font-semibold">Reason: </span>
             {entry.reason}
           </p>
         )}
         {entry.status !== 'rejected' && !locked && (
           <button
-            className="del"
+            className="del [.ev-detail_&]:[font-family:var(--f-mono,monospace)] [.ev-detail_&]:[font-weight:700] [.ev-detail_&]:text-[14px] [.ev-detail_&]:uppercase [.ev-detail_&]:[background:none] [.ev-detail_&]:[border:0] [.ev-detail_&&]:[border-bottom:1px_solid_transparent] [.ev-detail_&]:text-bad [.ev-detail_&]:cursor-pointer [.ev-detail_&]:[transition:border-color_0.2s] [.ev-detail_&:hover]:[border-bottom-color:var(--bad)] py-2 px-3 w-full justify-center"
             type="button"
-            style={{ width: '100%', justifyContent: 'center', padding: '8px 12px' }}
             onClick={async () => (await act('unregister', { eventId, roleId })) && done()}
           >
             Withdraw application
@@ -134,25 +101,11 @@ export function SignUp({
         )}
       </div>
     );
-  if (!open)
-    return (
-      <p className="mono text-dim" style={{ fontSize: 14, margin: 0 }}>
-        {closedText}
-      </p>
-    );
+  if (!open) return <p className="mono text-dim m-0 text-[14px]">{closedText}</p>;
   if (!editing)
     return (
       <button
-        className="eb"
-        style={{
-          width: '100%',
-          padding: '12px',
-          background: 'var(--acc)',
-          color: 'white',
-          borderColor: 'var(--acc)',
-          fontWeight: 700,
-          fontSize: 14,
-        }}
+        className="eb p-3 w-full [background:var(--acc)] [color:white] border-acc font-bold text-[14px]"
         type="button"
         disabled={me.system}
         onClick={() => setEditing(true)}
@@ -164,8 +117,7 @@ export function SignUp({
   return (
     // Opening the form is the intent to register, so the bar shows right away.
     <SaveForm
-      className="stack"
-      style={{ gap: 12 }}
+      className="stack gap-3"
       label={roleId ? 'Application not sent' : 'Registration not sent'}
       saveLabel={roleId ? 'Send application' : 'Register'}
       extraDirty
@@ -185,18 +137,8 @@ export function SignUp({
         return ok;
       }}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <span
-          className="mono"
-          style={{
-            fontSize: 14,
-            color: 'var(--dim)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.08em',
-          }}
-        >
-          Name
-        </span>
+      <div className={fieldStack}>
+        <span className={fieldLabel}>Name</span>
         <input
           className="ctl"
           required
@@ -205,18 +147,8 @@ export function SignUp({
           onChange={(e) => setName(e.target.value)}
         />
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <span
-          className="mono"
-          style={{
-            fontSize: 14,
-            color: 'var(--dim)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.08em',
-          }}
-        >
-          Phone
-        </span>
+      <div className={fieldStack}>
+        <span className={fieldLabel}>Phone</span>
         <input
           className="ctl"
           type="tel"
@@ -231,16 +163,8 @@ export function SignUp({
         />
       </div>
       {fields.map((f) => (
-        <div key={f.label} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <span
-            className="mono"
-            style={{
-              fontSize: 14,
-              color: 'var(--dim)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
-            }}
-          >
+        <div key={f.label} className={fieldStack}>
+          <span className={fieldLabel}>
             {f.label}
             {f.required && ' *'}
           </span>
@@ -267,25 +191,15 @@ export function SignUp({
           )}
         </div>
       ))}
-      <div className="row" style={{ gap: 8, marginTop: 8 }}>
+      <div className="row mt-2 gap-2">
         <button
-          className="eb"
-          style={{
-            flex: 1,
-            padding: '10px 16px',
-            background: 'var(--acc)',
-            color: 'white',
-            borderColor: 'var(--acc)',
-            fontWeight: 700,
-            fontSize: 14,
-          }}
+          className="eb py-2.5 px-4 flex-1 [background:var(--acc)] [color:white] border-acc font-bold text-[14px]"
           type="submit"
         >
           {roleId ? 'Send Application' : 'Register'}
         </button>
         <button
-          className="eb"
-          style={{ padding: '10px 14px', fontSize: 14 }}
+          className="eb py-2.5 px-3.5 text-[14px]"
           type="button"
           data-close
           onClick={() => setEditing(false)}

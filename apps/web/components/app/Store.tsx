@@ -12,6 +12,8 @@ import {
 import type { AppState, MilestoneDTO, Roster } from '@fecpc/contracts';
 import { earned, level } from '@fecpc/contracts';
 
+import { toastStack } from '@/components/app/shared/ui';
+
 // The member area's state lives on the server. This store holds the last copy the server sent,
 // asks the server to make every change (`act`), and replaces its copy with the answer.
 type Toast = { id: number; text: string; kind?: 'big' | 'bad' };
@@ -239,7 +241,7 @@ export function StoreProvider({
           close={() => setNotice('')}
         />
       )}
-      <div className="toasts" aria-live="polite">
+      <div className={toastStack} aria-live="polite">
         {toasts.map((t) => (
           <div key={t.id} className={`toast ${t.kind ?? ''}`}>
             {t.text}
@@ -255,11 +257,13 @@ function Notice({ text, close }: { text: string; close: () => void }) {
     links = text.match(/https?:\/\/\S+/g) ?? [],
     link = links.length > 1 ? text : links[0]; // several links (a bulk accept): copy the whole list
   return (
-    <div className="notice t-b" role="alertdialog" aria-label="Notice">
-      <p className="body" style={{ overflowWrap: 'anywhere', whiteSpace: 'pre-line' }}>
-        {text}
-      </p>
-      <div className="row" style={{ '--g': '8px' } as React.CSSProperties}>
+    <div
+      className="fixed inset-[auto_16px_16px_auto] z-60 w-[min(440px,calc(100vw_-_32px))] flex flex-col gap-3 items-start p-5 [border:2px_solid_var(--ink)] [box-shadow:0_12px_32px_rgba(0,0,0,0.35)] max-[861px]:bottom-19 t-b"
+      role="alertdialog"
+      aria-label="Notice"
+    >
+      <p className="body [overflow-wrap:anywhere] whitespace-pre-line">{text}</p>
+      <div className="row [--g:8px]">
         {link && (
           <button
             className="btn sm"

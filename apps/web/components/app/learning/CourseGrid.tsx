@@ -25,20 +25,21 @@ export function CourseGrid({ courses, isStaff }: { courses: Course[]; isStaff: b
 
   if (courses.length === 0) {
     return (
-      <div className="panel" style={{ padding: '40px 20px', textAlign: 'center' }}>
-        <p className="body" style={{ color: 'var(--dim)' }}>
-          No courses have been added yet.
-        </p>
+      <div className="panel py-10 px-5 text-center">
+        <p className="body text-dim">No courses have been added yet.</p>
       </div>
     );
   }
 
   return (
-    <div className="courses-grid">
+    <div className="[display:grid] grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-4 w-full">
       {courses.map((c) => (
-        <article key={c.id} className="course-card">
-          <div className="course-card-header">
-            <span className="course-meta">
+        <article
+          key={c.id}
+          className="flex flex-col justify-between p-5 [border:1px_solid_var(--line)] [background:var(--panel)] rounded-[4px] min-h-[220px] gap-4 [transition:transform_0.15s_ease,border-color_0.15s_ease] hover:border-line2"
+        >
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[14px] [color:var(--dim)]">
               {c.weeks} week{c.weeks > 1 ? 's' : ''} · {c.instructor}
             </span>
             <h3 className="course-title">{c.title}</h3>
@@ -46,7 +47,7 @@ export function CourseGrid({ courses, isStaff }: { courses: Course[]; isStaff: b
 
           <p className="course-desc">{c.description || 'No description provided.'}</p>
 
-          <div className="course-card-actions">
+          <div className="flex items-center justify-between gap-3 pt-3 [border-top:1px_solid_var(--line)]">
             <a href={c.url} target="_blank" rel="noopener noreferrer" className="btn sm line">
               Open course ↗
             </a>
@@ -54,8 +55,8 @@ export function CourseGrid({ courses, isStaff }: { courses: Course[]; isStaff: b
             {isStaff && (
               <button
                 type="button"
-                className="btn xs line"
-                style={{ color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.3)' }}
+                className="btn xs line text-[#ef4444] border-[rgba(239,68,68,0.3)]"
+
                 disabled={deletingId === c.id}
                 onClick={() => handleDelete(c)}
               >

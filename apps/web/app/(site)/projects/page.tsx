@@ -56,17 +56,14 @@ export default function Projects() {
           <ProjectGrid />
         </div>
       </section>
-      <section className="sec t-e" data-t="e" style={{ background: 'var(--panel)' }}>
+      <section className="sec t-e bg-panel" data-t="e">
         <div className="wrap">
           <div className="head">
             <h2 className="h2">
               How a project <span className="acc">starts here.</span>
             </h2>
           </div>
-          <ol
-            className="grid life-steps"
-            style={{ '--min': '220px', '--g': '0px' } as React.CSSProperties}
-          >
+          <ol className="grid life-steps [--min:220px] [--g:0px]">
             {steps.map(([t, d], i) => (
               <li key={t}>
                 <span className="mono acc">{String(i + 1).padStart(2, '0')}</span>
@@ -75,7 +72,7 @@ export default function Projects() {
               </li>
             ))}
           </ol>
-          <p style={{ marginTop: 56 }}>
+          <p className="mt-14">
             <Link href="/contact" className="btn">
               Join and pitch yours
             </Link>

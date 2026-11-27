@@ -3,16 +3,7 @@ import { useEffect, useState } from 'react';
 import { SaveForm } from '@/components/app/SaveBar';
 import { MarkdownEditor } from '@/components/app/shared/MarkdownEditor';
 import type { FeedCategory } from '@fecpc/contracts';
-
-export const FEED_CATEGORIES: { value: FeedCategory; label: string; chip: string }[] = [
-  { value: 'problem-solving', label: 'Wins · Problem-solving', chip: 'Wins' },
-  { value: 'upsolving', label: 'Help · Upsolving', chip: 'Help' },
-  { value: 'topic', label: 'Contests · Topic', chip: 'Contests' },
-];
-
-export function feedCategoryChip(cat: FeedCategory): string {
-  return FEED_CATEGORIES.find((c) => c.value === cat)?.chip ?? cat;
-}
+import { FEED_CATEGORIES } from '@/components/app/feed/ui';
 
 export function NewPostModal({
   open,
@@ -61,8 +52,8 @@ export function NewPostModal({
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <SaveForm
-        className="cm-modal"
-        style={{ maxWidth: 640 }}
+        className="cm-modal max-w-[640px]"
+
         label="Unpublished post"
         saveLabel="Publish"
         onDiscard={() => {

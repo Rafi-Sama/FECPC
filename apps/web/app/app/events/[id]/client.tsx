@@ -12,6 +12,9 @@ import { useStore } from '@/components/app/Store';
 import { type EventDetail } from '@fecpc/contracts';
 import { clubNow, fmtWhen, renderCertificate, useEventsQuery } from '@/lib/events';
 
+const kicker = 'mono text-[14px] font-bold uppercase tracking-[0.08em]';
+const note = 'mono text-dim text-[14px]';
+
 const CERT_NAME: Record<string, string> = {
   participant: 'Participation',
   winner1: '1st place',
@@ -33,33 +36,21 @@ export default function EventDetailPage({ initial }: { initial?: EventDetail }) 
     CERT_NAME[k] ?? e.roles.find((r) => `role:${r.id}` === k)?.title ?? k;
 
   const renderMemberParticipation = (isOrg = false) => (
-    <div className="stack" style={{ gap: '1rem' }}>
+    <div className="stack gap-[1rem]">
       {e.certificates.length ? (
         <div className="panel">
           <div className="ph">
-            <span
-              className="mono"
-              style={{
-                fontSize: 14,
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: '0.08em',
-              }}
-            >
-              Your certificates
-            </span>
+            <span className={kicker}>Your certificates</span>
           </div>
           <div className="st stack">
             {e.certificates.map((c) => (
               <div key={c.code} className="stack">
-                <span className="mono" style={{ fontSize: 14, fontWeight: 600 }}>
+                <span className="mono text-[14px] font-semibold">
                   {certName(c.kind)} <span className="text-dim">({c.code})</span>
                 </span>
                 <CertPreview html={c.html} title={`${certName(c.kind)} certificate preview`} />
-                <div className="row" style={{ gap: 8, marginTop: 8 }}>
-                  <span className="mono text-dim" style={{ fontSize: 14 }}>
-                    Download:
-                  </span>
+                <div className="row gap-2 mt-2">
+                  <span className={note}>Download:</span>
                   {(['png', 'jpeg'] as const).map((t) => (
                     <button
                       key={t}
@@ -78,43 +69,20 @@ export default function EventDetailPage({ initial }: { initial?: EventDetail }) 
       ) : e.status === 'completed' && tookPart ? (
         <div className="panel">
           <div className="ph">
-            <span
-              className="mono"
-              style={{
-                fontSize: 14,
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: '0.08em',
-              }}
-            >
-              Your certificates
-            </span>
+            <span className={kicker}>Your certificates</span>
           </div>
           <div className="st">
-            <p className="mono text-dim" style={{ fontSize: 14, margin: 0 }}>
+            <p className="mono text-dim text-[14px] m-0">
               Not issued yet. They will appear here to download.
             </p>
           </div>
         </div>
       ) : (
         <div className="panel">
-          <div
-            className="ph"
-            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-          >
-            <span
-              className="mono"
-              style={{
-                fontSize: 14,
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: '0.08em',
-              }}
-            >
-              Participate
-            </span>
+          <div className="ph flex justify-between items-center">
+            <span className={kicker}>Participate</span>
             {e.mode === 'platform' && left !== null && (
-              <span className="mono text-dim" style={{ fontSize: 14 }}>
+              <span className={note}>
                 {left} of {e.seats} left
               </span>
             )}
@@ -141,8 +109,8 @@ export default function EventDetailPage({ initial }: { initial?: EventDetail }) 
             />
             {e.fee > 0 && entry(null)?.status === 'approved' && (
               <Link
-                className="eb"
-                style={{ textAlign: 'center', marginTop: 8 }}
+                className="eb text-center mt-2"
+
                 href="/app/finance"
               >
                 Pay ৳{e.fee}
@@ -163,27 +131,10 @@ export default function EventDetailPage({ initial }: { initial?: EventDetail }) 
         e.roles.map((r) => (
           <div key={r.id} className="panel">
             <div className="ph">
-              <span
-                className="mono"
-                style={{
-                  fontSize: 14,
-                  fontWeight: 700,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.08em',
-                }}
-              >
-                {r.title}
-              </span>
+              <span className={kicker}>{r.title}</span>
             </div>
             <div className="st stack">
-              {r.about && (
-                <span
-                  className="mono text-dim"
-                  style={{ fontSize: 14, marginBottom: 8, display: 'block' }}
-                >
-                  {r.about}
-                </span>
-              )}
+              {r.about && <span className="mono text-dim text-[14px] mb-2 block">{r.about}</span>}
               <SignUp
                 eventId={e.id}
                 roleId={r.id}
@@ -215,7 +166,7 @@ export default function EventDetailPage({ initial }: { initial?: EventDetail }) 
         )}
       </div>
 
-      <div className="layout-grid">
+      <div className="[&&]:[display:grid] [&&]:grid-cols-[minmax(0,_1fr)_340px] [&&]:gap-9 [&&]:[align-items:start] [@media(max-width:992px)]:grid-cols-[minmax(0,_1fr)] [@media(max-width:980px)]:[&&&]:grid-cols-[1fr]">
         {/* Left Column: The Event Canvas */}
         <EventHead e={e} reload={reload} />
 
@@ -225,11 +176,11 @@ export default function EventDetailPage({ initial }: { initial?: EventDetail }) 
             <>
               <EventAdmin e={e} reload={reload} />
               {(tookPart || e.certificates.length > 0) && (
-                <details className="panel" style={{ padding: '12px 16px' }}>
-                  <summary className="mono" style={{ cursor: 'pointer', fontWeight: 600 }}>
+                <details className="panel py-3 px-4">
+                  <summary className="mono cursor-pointer font-semibold">
                     My Attendance &amp; Certificates
                   </summary>
-                  <div style={{ marginTop: 12 }}>{renderMemberParticipation(true)}</div>
+                  <div className="mt-3">{renderMemberParticipation(true)}</div>
                 </details>
               )}
             </>
@@ -257,33 +208,14 @@ function CheckIn({ e }: { e: EventDetail }) {
       }}
     >
       <div className="ph">
-        <span
-          className="mono"
-          style={{
-            fontSize: 14,
-            fontWeight: 700,
-            textTransform: 'uppercase',
-            letterSpacing: '0.08em',
-          }}
-        >
-          Check in
-        </span>
+        <span className={kicker}>Check in</span>
       </div>
       <div className="st stack">
         {room && (
-          <div className="ev-code" style={{ marginBottom: 12 }}>
-            <span className="mono text-dim" style={{ fontSize: 14 }}>
-              ROOM CODE
-            </span>
-            <span
-              className="mono"
-              style={{ fontSize: 32, fontWeight: 700, letterSpacing: '0.1em' }}
-            >
-              {room.code}
-            </span>
-            <span className="mono text-dim" style={{ fontSize: 14 }}>
-              {room.arrived} checked in
-            </span>
+          <div className="ev-code [display:grid] gap-[4px] p-4 [border:2px_dashed_var(--acc)] [justify-items:center] mb-3">
+            <span className={note}>ROOM CODE</span>
+            <span className="mono text-[32px] font-bold tracking-[0.1em]">{room.code}</span>
+            <span className={note}>{room.arrived} checked in</span>
           </div>
         )}
         {!approved ? null : s.present.includes(e.id) ? (

@@ -158,7 +158,7 @@ export function SaveBarProvider({ children }: Readonly<{ children: ReactNode }>)
           <span className="savebar-label">
             <span aria-hidden="true">●</span> {active.label}
           </span>
-          <div className="row" style={{ '--g': '8px' } as React.CSSProperties}>
+          <div className="row [--g:8px]">
             <button
               type="button"
               className="btn sm line"

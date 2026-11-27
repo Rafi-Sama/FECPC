@@ -9,6 +9,9 @@ import { AdminMenu } from './AdminMenu';
 import { AlumniSection } from './AlumniSection';
 import { ProfileForm } from './ProfileForm';
 
+const sectionTitle =
+  'm-0 font-label text-[12px] [font-weight:500] tracking-[0.14em] uppercase [color:var(--dim)]';
+
 const FOCUSABLE =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -146,7 +149,7 @@ export function ProfileModal({
 
   return (
     <div
-      className="profile-modal-backdrop"
+      className="profile-modal-backdrop fixed inset-0 z-80 [background:rgba(11,11,11,0.62)] flex items-center justify-center p-6 max-[640px]:p-0"
       role="presentation"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
@@ -165,8 +168,8 @@ export function ProfileModal({
           } as CSSProperties
         }
       >
-        <header className="profile-modal__topbar">
-          <span className="dossier__no">
+        <header className="[position:sticky] top-0 z-10 flex items-center justify-between gap-3 [border-bottom:1px_solid_var(--line)] [background:var(--panel)] flex-none p-[8px_12px_8px_22px]">
+          <span className="font-label text-[12px] tracking-[0.14em] uppercase [color:var(--dim)]">
             {editing
               ? 'Edit profile'
               : profile
@@ -176,7 +179,7 @@ export function ProfileModal({
           <button
             ref={closeBtnRef}
             type="button"
-            className="profile-modal__close"
+            className="min-w-[40px] min-h-[40px] p-0 [background:var(--panel)] [border:2px_solid_var(--line2)] text-hi text-[20px] leading-[1] cursor-pointer [display:grid] [place-items:center] t-b:border-[#0b0b0b] hover:border-acc hover:text-acc focus-visible:[outline:2px_solid_var(--acc)] focus-visible:[outline-offset:2px]"
             aria-label="Close"
             onClick={onClose}
           >
@@ -186,20 +189,20 @@ export function ProfileModal({
           </button>
         </header>
 
-        <div className="dossier__scroll">
+        <div className="flex-1 min-h-0 overflow-y-auto [scrollbar-width:thin] [scrollbar-color:var(--line2)_transparent]">
           {loading && !profile ? (
-            <div className="dossier__state">
-              <span className="dossier__skel" />
-              <span className="dossier__skel dossier__skel--short" />
+            <div className="p-[24px_22px] flex flex-col gap-3">
+              <span className="h-[22px] w-[60%] [background:linear-gradient(_90deg,var(--line)_0%,color-mix(in_srgb,var(--line)_30%,transparent)_50%,var(--line)_100%_)] [&&]:[background-size:200%_100%] [animation:dossier-skel_1.2s_linear_infinite]" />
+              <span className="h-[22px] [background:linear-gradient(_90deg,var(--line)_0%,color-mix(in_srgb,var(--line)_30%,transparent)_50%,var(--line)_100%_)] [&&]:[background-size:200%_100%] [animation:dossier-skel_1.2s_linear_infinite] w-[35%]" />
             </div>
           ) : error || !profile ? (
-            <div className="dossier__state">
+            <div className="p-[24px_22px] flex flex-col gap-3">
               <p className="body bad">{error || 'Member not found.'}</p>
             </div>
           ) : (
             <>
-              <section className="dossier__hero">
-                <div className="dossier__id">
+              <section className="[display:grid] grid-cols-[minmax(0,1fr)_minmax(0,300px)] gap-6 [align-items:end] p-[22px_22px_18px] [background:linear-gradient(_180deg,color-mix(in_srgb,var(--rank-color)_12%,transparent),transparent_85%_)] max-[701px]:grid-cols-[1fr] max-[701px]:gap-4.5">
+                <div className="flex items-center gap-4.5 min-w-0">
                   <AvatarRing
                     name={profile.name}
                     avatarUrl={profile.avatar_url}
@@ -209,13 +212,15 @@ export function ProfileModal({
                     notched
                     rank={rank}
                   />
-                  <div className="dossier__who">
-                    <h2 className="dossier__name">{profile.name}</h2>
-                    <p className="dossier__line">
+                  <div className="flex flex-col gap-1.5 min-w-0">
+                    <h2 className="m-0 font-disp [font-size:clamp(26px,3.4vw,38px)] [font-weight:700] leading-[1.05] [letter-spacing:-0.03em] text-hi wrap-anywhere">
+                      {profile.name}
+                    </h2>
+                    <p className="m-0 flex items-center gap-2 flex-wrap font-label text-[12px] tracking-[0.08em] uppercase [color:var(--mut)]">
                       {roleLabel} · {profile.dept} · Batch {profile.batch}
                       {profile.is_alumni && <span className="alumni-tag">Alumni</span>}
                     </p>
-                    <div className="dossier__links">
+                    <div className="flex flex-wrap gap-1.5 mt-0.5">
                       {profile.cf_handle && (
                         <ExtLink
                           href={`https://codeforces.com/profile/${encodeURIComponent(profile.cf_handle)}`}
@@ -233,7 +238,10 @@ export function ProfileModal({
                 <RankLadder solved={profile.problems_solved} rank={rank} />
               </section>
 
-              <div className="dossier__stats" aria-label="Member statistics">
+              <div
+                className="[display:grid] grid-cols-[repeat(4,minmax(0,1fr))] [border-top:1px_solid_var(--line)] [border-bottom:1px_solid_var(--line)] max-[701px]:grid-cols-[repeat(2,minmax(0,1fr))]"
+                aria-label="Member statistics"
+              >
                 <StatTile
                   label="Rating"
                   value={profile.cf_rating && profile.cf_rating > 0 ? profile.cf_rating : null}
@@ -255,18 +263,20 @@ export function ProfileModal({
               <div
                 className={`dossier__body${contests.length || profile.recent_activity.length ? '' : ' is-single'}`}
               >
-                <div className="dossier__main">
+                <div className="flex flex-col gap-5.5 p-[20px_22px_24px] min-w-0">
                   <section className="dossier__sec" aria-label="About">
-                    <h3 className="dossier__h">About</h3>
+                    <h3 className={sectionTitle}>About</h3>
                     {profile.bio ? (
-                      <p className="dossier__bio">{profile.bio}</p>
+                      <p className="m-0 max-w-[66ch] text-[15px] leading-[1.6] text-ink whitespace-pre-line wrap-anywhere">
+                        {profile.bio}
+                      </p>
                     ) : (
-                      <p className="dossier__empty">
+                      <p className="m-0 text-[15px] [color:var(--dim)]">
                         {isOwner ? 'Add a bio from Edit profile.' : 'No bio yet.'}
                       </p>
                     )}
                     {profile.skills.length > 0 && (
-                      <div className="dossier__skills">
+                      <div className="flex flex-wrap gap-1.5">
                         {profile.skills.map((sk) => (
                           <Link
                             key={sk}
@@ -280,8 +290,8 @@ export function ProfileModal({
                       </div>
                     )}
                     {profile.is_alumni && (
-                      <div className="dossier__availability">
-                        <span className="dossier__tag">
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <span className="font-label text-[12px] tracking-[0.08em] uppercase [color:var(--dim)]">
                           {profile.available_for_questions
                             ? 'Available for questions'
                             : 'Not taking questions'}
@@ -320,16 +330,22 @@ export function ProfileModal({
 
                   {profile.experience.length > 0 && (
                     <section className="dossier__sec" aria-label="Experience">
-                      <h3 className="dossier__h">Experience</h3>
-                      <ol className="dossier__journey">
+                      <h3 className={sectionTitle}>Experience</h3>
+                      <ol className="dossier__journey [list-style:none] m-0 p-[0_0_0_18px] [border-left:2px_solid_var(--line)] flex flex-col gap-4.5">
                         {profile.experience.map((exp, idx) => (
                           <li
                             key={`${exp.period}-${exp.role}-${idx}`}
                             style={{ '--i': idx } as CSSProperties}
                           >
-                            <span className="dossier__period">{exp.period}</span>
-                            <strong className="dossier__role">{exp.role}</strong>
-                            {exp.summary && <p className="dossier__summary">{exp.summary}</p>}
+                            <span className="font-label text-[12px] tracking-[0.08em] [color:var(--dim)]">
+                              {exp.period}
+                            </span>
+                            <strong className="text-[17px] text-hi">{exp.role}</strong>
+                            {exp.summary && (
+                              <p className="m-0 max-w-[64ch] text-[15px] leading-[1.55] [color:var(--mut)]">
+                                {exp.summary}
+                              </p>
+                            )}
                           </li>
                         ))}
                       </ol>
@@ -340,16 +356,16 @@ export function ProfileModal({
                 </div>
 
                 {(contests.length > 0 || profile.recent_activity.length > 0) && (
-                  <aside className="dossier__side">
+                  <aside className="flex flex-col gap-5.5 p-[20px_22px_24px] min-w-0 [border-left:1px_solid_var(--line)] max-[701px]:[border-left:0] max-[701px]:[border-top:1px_solid_var(--line)]">
                     {contests.length > 0 && (
                       <section className="dossier__sec" id="dossier-contests" aria-label="Contests">
-                        <h3 className="dossier__h">Rating changes</h3>
+                        <h3 className={sectionTitle}>Rating changes</h3>
                         <ContestChart rows={contests} />
                       </section>
                     )}
                     {profile.recent_activity.length > 0 && (
                       <section className="dossier__sec" aria-label="Recent activity">
-                        <h3 className="dossier__h">Recent activity</h3>
+                        <h3 className={sectionTitle}>Recent activity</h3>
                         <ul className="dossier__activity">
                           {profile.recent_activity.slice(0, 5).map((item) => (
                             <li key={`${item.kind}-${item.id}`}>
@@ -386,10 +402,10 @@ export function ProfileModal({
         </div>
 
         {profile && (
-          <footer className="profile-modal__actionbar">
+          <footer className="[&_.btn:focus-visible]:[outline:2px_solid_var(--acc)] [&_.btn:focus-visible]:[outline-offset:2px] bottom-0 z-10 flex items-center justify-between gap-2.5 flex-wrap p-[12px_20px] [border-top:1px_solid_var(--line)] [background:var(--panel)] flex-none relative">
             {
               <>
-                <div className="row" style={{ '--g': '8px' } as CSSProperties}>
+                <div className="row [--g:8px]">
                   {isOwner ? (
                     <button type="button" className="btn sm" onClick={() => setEditing(true)}>
                       Request a change
@@ -477,11 +493,17 @@ function StatTile({
       <span className={`dossier__stat-v${value === null ? ' is-empty' : ''}`}>
         {value === null ? '—' : `${n}${suffix}`}
       </span>
-      <span className="dossier__stat-l">{label}</span>
+      <span className="[.dossier\_\_stat.is-link:hover_&]:text-acc font-label text-[12px] tracking-[0.1em] uppercase [color:var(--dim)] [transition:color_0.2s]">
+        {label}
+      </span>
     </>
   );
   return onClick ? (
-    <button type="button" className="dossier__stat is-link" onClick={onClick}>
+    <button
+      type="button"
+      className="dossier__stat is-link cursor-pointer [transition:background_0.2s] hover:[background:color-mix(in_srgb,var(--acc)_8%,transparent)] focus-visible:[outline:2px_solid_var(--acc)] focus-visible:[outline-offset:-2px]"
+      onClick={onClick}
+    >
       {body}
     </button>
   ) : (
@@ -503,10 +525,12 @@ function RankLadder({ solved, rank }: { solved: number; rank: Rank }) {
   };
   const focus = hover !== null ? RANKS[hover]! : null;
   return (
-    <div className="ladder">
-      <div className="ladder__top">
-        <span className="ladder__n">{rank.unrated ? '—' : shown}</span>
-        <span className="ladder__cap">
+    <div className="flex flex-col gap-2">
+      <div className="flex items-baseline gap-2.5 min-h-[44px]">
+        <span className="font-num text-[40px] [font-weight:700] leading-[1] [letter-spacing:-0.03em] [font-variant-numeric:tabular-nums] [color:var(--rank-text,var(--hi))] t-a:[color:color-mix(in_srgb,var(--rank-color)_70%,#ffffff)] t-c:[color:color-mix(in_srgb,var(--rank-color)_70%,#ffffff)] t-d:[color:color-mix(in_srgb,var(--rank-color)_70%,#ffffff)]">
+          {rank.unrated ? '—' : shown}
+        </span>
+        <span className="font-label text-[12px] leading-[1.35] tracking-[0.05em] uppercase [color:var(--mut)]">
           {focus
             ? `${focus.title} · ${focus.min}${Number.isFinite(focus.max) ? `–${focus.max}` : '+'} solved`
             : rank.unrated
@@ -545,22 +569,29 @@ function ContestChart({ rows }: { rows: MemberContestRow[] }) {
   const fmt = (d: number) => (d >= 0 ? `+${d}` : `−${Math.abs(d)}`);
   return (
     <div className="chart">
-      <div className="chart__read" aria-live="polite">
+      <div
+        className="[display:grid] grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_auto] gap-x-4 min-h-[52px] pb-2.5 [border-bottom:1px_solid_var(--line)]"
+        aria-live="polite"
+      >
         {cur && (
           <>
-            <strong className="chart__name">{cur.name}</strong>
-            <span className="chart__facts">
+            <strong className="text-[16px] text-hi overflow-hidden text-ellipsis whitespace-nowrap">
+              {cur.name}
+            </strong>
+            <span className="[grid-row:2] font-label text-[12px] tracking-[0.06em] uppercase [color:var(--dim)]">
               Rank #{cur.rank}
               {cur.date ? ` · ${cur.date}` : ''}
             </span>
-            <span className={`chart__delta ${cur.delta >= 0 ? 'up' : 'down'}`}>
+            <span
+              className={`[grid-row:1_/_span_2] [grid-column:2] self-center font-num text-[30px] [font-weight:700] [font-variant-numeric:tabular-nums] ${cur.delta >= 0 ? 'up' : 'down'}`}
+            >
               {fmt(cur.delta)}
             </span>
           </>
         )}
       </div>
       <div
-        className="chart__bars"
+        className="focus-visible:[outline:2px_solid_var(--acc)] focus-visible:[outline-offset:4px] [display:grid] [grid-auto-flow:column] [grid-auto-columns:minmax(6px,22px)] [justify-content:start] gap-[4px] h-[120px] p-[4px_0] [background:linear-gradient(var(--line),var(--line))_center_/_100%_1px_no-repeat]"
         role="listbox"
         aria-label={`Rating changes, net ${fmt(net)}`}
         tabIndex={0}
@@ -588,7 +619,7 @@ function ContestChart({ rows }: { rows: MemberContestRow[] }) {
           </div>
         ))}
       </div>
-      <p className="chart__net">
+      <p className="m-0 font-label text-[12px] tracking-[0.06em] uppercase [color:var(--dim)]">
         Net over {rows.length} contest{rows.length === 1 ? '' : 's'}:{' '}
         <b className={net >= 0 ? 'up' : 'down'}>{fmt(net)}</b>
       </p>
@@ -639,7 +670,12 @@ function KudosButton({
 
 function ExtLink({ href, children }: { href: string; children: React.ReactNode }) {
   return (
-    <a href={href} target="_blank" rel="noopener noreferrer" className="dossier__link">
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1.25 p-[3px_8px] [border:1px_solid_var(--line)] font-label text-[13px] text-ink [text-decoration:none] [transition:border-color_0.2s,color_0.2s,transform_0.3s_cubic-bezier(0.16,1,0.3,1)] hover:border-acc hover:text-acc hover:[transform:translateY(-1px)] [&:hover_svg]:[transform:translate(1px,-1px)] [&_svg]:[transition:transform_0.3s_cubic-bezier(0.16,1,0.3,1)]"
+    >
       {children}
       <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden>
         <path d="M5 11l6-6M6 5h5v5" fill="none" stroke="currentColor" strokeWidth="1.6" />

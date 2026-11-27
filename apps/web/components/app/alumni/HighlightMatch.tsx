@@ -12,13 +12,7 @@ export function HighlightMatch({ text, query }: Readonly<{ text: string; query?:
         index % 2 === 1 ? (
           <mark
             key={`${part}-${index}`}
-            style={{
-              // A light tint of the accent keeps the matched text readable in both themes.
-              background: 'color-mix(in srgb, var(--acc, #1F3BFF) 18%, transparent)',
-              color: 'inherit',
-              boxShadow: 'inset 0 -2px 0 color-mix(in srgb, var(--acc, #1F3BFF) 55%, transparent)',
-              padding: 0,
-            }}
+            className="p-0 [background:color-mix(in_srgb,_var(--acc)_18%,_transparent)] [color:inherit] [box-shadow:inset_0_-2px_0_color-mix(in_srgb,_var(--acc)_55%,_transparent)]"
           >
             {part}
           </mark>

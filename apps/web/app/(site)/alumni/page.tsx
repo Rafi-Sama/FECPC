@@ -4,6 +4,8 @@ import { Avatar } from '@/components/pixel/Sprites';
 import { alumni } from '@fecpc/content/training';
 import { site } from '@/lib/site';
 
+import { lifeBackdrop } from '@/components/site/ui';
+
 export const metadata = { title: 'Alumni' };
 const ways = [
   ['Answer', 'One hour a month answering a member who wants your job.'],
@@ -15,11 +17,14 @@ const ways = [
 export default function Alumni() {
   return (
     <>
-      <section className="page-head hero-d t-d" data-t="d" style={{ minHeight: 520 }}>
-        <div className="bgfx life" style={{ top: 64 }}>
+      <section
+        className="page-head hero-d min-[1000px]:[&_.head]:max-w-[54%] t-d min-h-[520px]"
+        data-t="d"
+      >
+        <div className={lifeBackdrop}>
           <Life />
         </div>
-        <div className="wrap" style={{ position: 'relative', pointerEvents: 'none' }}>
+        <div className="wrap relative pointer-events-none">
           <div className="head">
             <h1 className="disp">
               You graduate. <span className="acc">You do not leave.</span>
@@ -27,7 +32,7 @@ export default function Alumni() {
             <p className="lede">
               Graduates keep their profile, their hall of fame entry and a way to give back.
             </p>
-            <p style={{ pointerEvents: 'auto' }}>
+            <p className="pointer-events-auto">
               <a href={`mailto:${site.email}?subject=Alumni`} className="btn">
                 Get back in touch
               </a>
@@ -37,42 +42,33 @@ export default function Alumni() {
       </section>
       <section className="sec t-d" data-t="d">
         <div className="wrap">
-          <ul className="grid" style={{ '--min': '400px', '--g': '0px' } as React.CSSProperties}>
+          <ul className="grid [--min:400px] [--g:0px]">
             {alumni.map((a) => (
               <li key={a.name} className="panel proj">
                 <div className="row">
                   <Avatar name={a.name} size={56} />
                   <div>
-                    <h2 className="h3" style={{ fontSize: 24 }}>
-                      {a.name}
-                    </h2>
+                    <h2 className="h3 text-[24px]">{a.name}</h2>
                     <p className="label">
                       Batch {a.batch} · {a.city}
                     </p>
                   </div>
                 </div>
                 <p className="body">{a.at}</p>
-                {a.open && (
-                  <span className="tag on" style={{ alignSelf: 'flex-start' }}>
-                    Open to questions
-                  </span>
-                )}
+                {a.open && <span className="tag on self-start">Open to questions</span>}
               </li>
             ))}
           </ul>
         </div>
       </section>
-      <section className="sec t-d" data-t="d" style={{ background: '#131314' }}>
+      <section className="sec t-d bg-[#131314]" data-t="d">
         <div className="wrap">
           <div className="head">
             <h2 className="h2">
               Give the next batch <span className="acc">what you wanted.</span>
             </h2>
           </div>
-          <ol
-            className="grid life-steps"
-            style={{ '--min': '220px', '--g': '0px' } as React.CSSProperties}
-          >
+          <ol className="grid life-steps [--min:220px] [--g:0px]">
             {ways.map(([t, d], i) => (
               <li key={t}>
                 <span className="mono acc">0{i + 1}</span>
@@ -81,11 +77,11 @@ export default function Alumni() {
               </li>
             ))}
           </ol>
-          <p style={{ marginTop: 56 }}>
+          <p className="mt-14">
             <a href={`mailto:${site.email}?subject=Alumni`} className="btn">
               Get back in touch
             </a>{' '}
-            <Link href="/leaderboard#hall" className="btn ghost" style={{ marginLeft: 20 }}>
+            <Link href="/leaderboard#hall" className="btn ghost ml-5">
               Hall of fame →
             </Link>
           </p>

@@ -3,6 +3,8 @@ import Life from '@/components/pixel/Life';
 import EventRow from '@/components/site/EventRow';
 import { publicEvents } from '@/lib/api';
 
+import { lifeBackdrop } from '@/components/site/ui';
+
 export const metadata = { title: 'Events' };
 const types = [
   ['Class', 'Bootcamp lessons with slides, recordings and auto-checked assignments.'],
@@ -41,17 +43,20 @@ export default async function Events() {
   );
   return (
     <>
-      <section className="page-head hero-d t-d" data-t="d" style={{ minHeight: 560 }}>
-        <div className="bgfx life" style={{ top: 64 }}>
+      <section
+        className="page-head hero-d min-[1000px]:[&_.head]:max-w-[54%] t-d min-h-[560px]"
+        data-t="d"
+      >
+        <div className={lifeBackdrop}>
           <Life />
         </div>
-        <div className="wrap" style={{ position: 'relative', pointerEvents: 'none' }}>
+        <div className="wrap relative pointer-events-none">
           <div className="head">
             <h1 className="disp">
               Show up. <span className="acc">Something happens.</span>
             </h1>
             <p className="lede">Classes, contests, workshops and hack nights on one calendar.</p>
-            <p style={{ pointerEvents: 'auto' }}>
+            <p className="pointer-events-auto">
               <Link href={`#${events[0]?.id ?? ''}`} className="btn">
                 See what is next
               </Link>
@@ -72,11 +77,14 @@ export default async function Events() {
           </div>
           <aside className="sticky">
             <div className="panel">
-              <div className="row between" style={{ marginBottom: 18 }}>
+              <div className="row between mb-4.5">
                 <h3 className="h3">November 2026</h3>
                 <span className="label">Sun → Sat</span>
               </div>
-              <ol className="cal" aria-label="November 2026">
+              <ol
+                className="[display:grid] grid-cols-[repeat(7,1fr)] gap-1 [&_li]:aspect-[1] [&_li]:[display:grid] [&_li]:[place-items:center] [&_li]:[font:14px_var(--mono),monospace] [&_li]:text-mut [&_li]:[background:color-mix(in_srgb,var(--ink)_7%,var(--bg))] [&_li.has]:bg-acc [&_li.has]:text-on [&_li.has]:font-bold [&_li.has_a]:[display:grid] [&_li.has_a]:[place-items:center] [&_li.has_a]:w-full [&_li.has_a]:h-full [&_li.has_a]:no-underline [&_li.ghost]:opacity-30 [&_li.today]:[outline:2px_solid_var(--acc)] [&_li.today]:outline-offset-[-2px] [&_li.today]:text-ink"
+                aria-label="November 2026"
+              >
                 {Array.from({ length: 30 }, (_, i) => {
                   const d = i + 1,
                     e = marks.get(d);
@@ -98,7 +106,7 @@ export default async function Events() {
                   </li>
                 ))}
               </ol>
-              <p className="label rm-key">
+              <p className="label flex gap-6 mt-6 [&_span]:flex [&_span]:items-center [&_span]:gap-2">
                 <span>
                   <i className="k done" />
                   event
@@ -108,7 +116,7 @@ export default async function Events() {
                   today
                 </span>
               </p>
-              <hr className="rule" style={{ marginBlock: 20 }} />
+              <hr className="rule my-5" />
               <p className="body">
                 Members can subscribe from Google or Apple Calendar through an iCal feed, and set a
                 reminder per event.
@@ -125,10 +133,7 @@ export default async function Events() {
               What a term <span className="acc">is made of.</span>
             </h2>
           </div>
-          <ol
-            className="grid life-steps"
-            style={{ '--min': '300px', '--g': '0px' } as React.CSSProperties}
-          >
+          <ol className="grid life-steps [--min:300px] [--g:0px]">
             {types.map(([t, d], i) => (
               <li key={t}>
                 <span className="mono acc">{String(i + 1).padStart(2, '0')}</span>
@@ -140,7 +145,7 @@ export default async function Events() {
         </div>
       </section>
 
-      <section className="sec t-d" data-t="d" style={{ background: '#131314' }}>
+      <section className="sec t-d bg-[#131314]" data-t="d">
         <div className="wrap split">
           <div className="head sticky">
             <h2 className="h2">
@@ -156,11 +161,11 @@ export default async function Events() {
               </Link>
             </p>
           </div>
-          <ol className="pillars d">
+          <ol className="flex flex-col [&_li]:[display:grid] [&_li]:grid-cols-[clamp(64px,9vw,120px)_minmax(0,1fr)] [&_li]:gap-6 [&_li]:[padding-block:28px] [&_li]:[border-top:1px_solid_var(--line2)] d">
             {day.map(([t, d], i) => (
               <li key={t}>
                 <span className="mono acc big-n">{i + 1}</span>
-                <div className="stack" style={{ '--g': '10px' } as React.CSSProperties}>
+                <div className="stack [--g:10px]">
                   <h3 className="h3">{t}</h3>
                   <p className="body">{d}</p>
                 </div>
@@ -171,8 +176,8 @@ export default async function Events() {
       </section>
 
       <section className="sec t-d" data-t="d">
-        <div className="wrap split even" style={{ alignItems: 'center' }}>
-          <div className="head" style={{ marginBottom: 0 }}>
+        <div className="wrap split even items-center">
+          <div className="head mb-0">
             <h2 className="h2">
               A code on the projector, <span className="acc">valid for ten minutes.</span>
             </h2>
@@ -181,10 +186,13 @@ export default async function Events() {
               room. Streaks of attendance earn badges; absences can be excused with a reason.
             </p>
           </div>
-          <div className="panel code-demo" aria-label="Example attendance code">
+          <div
+            className="panel flex flex-col gap-4.5 p-[clamp(24px,4vw,48px)]"
+            aria-label="Example attendance code"
+          >
             <p className="label">Class code · expires in 09:41</p>
             <p className="mono code">K7 – 4Q – X2</p>
-            <div className="meter" style={{ '--v': '96%' } as React.CSSProperties}>
+            <div className="meter [--v:96%]">
               <i />
             </div>
             <p className="body">52 of 60 checked in</p>

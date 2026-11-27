@@ -1,0 +1,44 @@
+/* Tailwind setup shared by both utility entries: the public site's ((site)/site.utilities.css) and the member area's
+   (app/app/app.layer.css). Each emits only the theme variables its own utilities use. */
+@import 'tailwindcss/theme.css' layer(theme);
+
+/* Plain :hover like the legacy CSS (Tailwind's default adds @media (hover: hover), which changes touch devices). */
+@custom-variant hover (&:hover);
+
+/* Inside a theme: `t-b:border-ink` is legacy `.t-b .x { … }` (descendants only, like the old selectors). */
+@custom-variant t-a (&:where(.t-a *));
+@custom-variant t-b (&:where(.t-b *));
+@custom-variant t-c (&:where(.t-c *));
+@custom-variant t-d (&:where(.t-d *));
+@custom-variant t-e (&:where(.t-e *));
+
+/* Theme tokens are set per theme class (t-a … t-e); `inline` makes utilities read them live. */
+@theme inline {
+  --color-*: initial;
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-ink: var(--ink);
+  --color-hi: var(--hi);
+  --color-mut: var(--mut);
+  --color-dim: var(--dim);
+  --color-line: var(--line);
+  --color-line2: var(--line2);
+  --color-acc: var(--acc);
+  --color-acc2: var(--acc2);
+  --color-acc3: var(--acc3);
+  --color-on: var(--on);
+  --color-bad: var(--bad);
+  --color-white: #fff;
+  --color-black: #000;
+
+  --font-*: initial;
+  --font-sans: var(--sans), system-ui, sans-serif;
+  --font-mono: var(--mono), ui-monospace, monospace;
+  --font-pixel: var(--pixel);
+  --font-silk: var(--silk);
+  --font-arcade: var(--arcade);
+  --font-body: var(--f-body);
+  --font-disp: var(--f-disp);
+  --font-label: var(--f-label);
+  --font-num: var(--f-num);
+}

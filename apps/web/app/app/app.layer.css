@@ -1,0 +1,13 @@
+@layer theme, base, components, utilities;
+@import '../_styles/tailwind.css';
+@import 'tailwindcss/utilities.css' layer(utilities) source(none);
+@import './app.css' layer(components);
+@import './alumni-cards.css' layer(components);
+
+/* Member-area utilities: every source except the public pages, so this one sheet holds every utility the member
+   area renders, in Tailwind's order, with the theme variables they read. */
+@source '../../app';
+@source '../../components';
+@source '../../lib';
+@source not '../(site)';
+@source not inline('sticky ring outline list-item');

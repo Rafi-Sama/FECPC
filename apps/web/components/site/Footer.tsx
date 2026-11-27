@@ -43,15 +43,12 @@ export default function Footer() {
   return (
     <FootTheme>
       <div className="wrap foot-grid">
-        <div
-          className="stack"
-          style={{ '--g': '14px', gridColumn: 'span 2', minWidth: 0 } as React.CSSProperties}
-        >
+        <div className="stack [--g:14px] col-[span_2] min-w-0">
           <div className="brand">
             <i aria-hidden />
             {site.short}
           </div>
-          <p className="body" style={{ maxWidth: '44ch' }}>
+          <p className="body max-w-[44ch]">
             {site.name}. Students of {site.university} who write, ship and break real software
             together.
           </p>
@@ -59,9 +56,7 @@ export default function Footer() {
         </div>
         {cols.map((c) => (
           <nav key={c.h} aria-label={c.h}>
-            <p className="label" style={{ marginBottom: 10 }}>
-              ./{c.h}
-            </p>
+            <p className="label mb-2.5">./{c.h}</p>
             {c.links.map(([href, l]) => (
               <Link key={href} href={href}>
                 {l}
@@ -71,9 +66,7 @@ export default function Footer() {
           </nav>
         ))}
         <nav aria-label="elsewhere">
-          <p className="label" style={{ marginBottom: 10 }}>
-            ./elsewhere
-          </p>
+          <p className="label mb-2.5">./elsewhere</p>
           {site.socials.map((s) => (
             <a key={s.label} href={s.href} rel="noreferrer">
               {s.label}

@@ -2,6 +2,16 @@
 import { useEffect, useRef } from 'react';
 import { MarkdownBody } from '@/components/app/shared/MarkdownEditor';
 import { TierAvatar, TierName } from '@/components/app/shared/SolvedTier';
+import {
+  annModalBackdrop,
+  annModal,
+  annModalHeader,
+  annCloseBtn,
+  annModalBody,
+  badgePinned,
+  badgeMustRead,
+  annBackdrop,
+} from '@/components/app/announcements/ui';
 
 export type UnifiedAnnouncement = {
   id: string;
@@ -71,15 +81,17 @@ export function AnnouncementModal({
 
   return (
     <div
-      className="cm-backdrop ann-modal-backdrop"
+      className={`${annBackdrop} ${annModalBackdrop}`}
       role="dialog"
       aria-modal="true"
       aria-label={item.title}
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <article className="ann-modal read-modal">
-        <div className="ann-modal-header">
-          <div className="card-author" style={{ marginBottom: 0 }}>
+      <article className={`ann-modal ${annModal} read-modal`}>
+        <div
+          className={`ann-modal-header flex justify-between items-center p-[1.25rem_1.5rem] ${annModalHeader}`}
+        >
+          <div className="card-author flex items-center gap-[0.75rem] mb-0">
             <TierAvatar
               name={item.by}
               solved={item.by_solved}
@@ -87,49 +99,48 @@ export function AnnouncementModal({
               size={48}
             />
             <div>
-              <div className="author-name" style={{ fontSize: '1.1rem' }}>
+              <div className="font-bold [color:var(--ann-text)] text-[1.1rem]">
                 <TierName name={item.by} solved={item.by_solved} />
               </div>
-              <div className="mono ann-modal-meta" style={{ marginTop: '0.25rem' }}>
-                {metaLine}
-              </div>
+              <div className="mono ann-modal-meta mt-[0.25rem]">{metaLine}</div>
             </div>
           </div>
-          <div className="ann-modal-actions">
+          <div className="flex items-center gap-[0.75rem] ml-auto">
             {onDelete && (
-              <button type="button" className="ann-btn-del" onClick={onDelete}>
+              <button
+                type="button"
+                className="[border:1px_solid_var(--ann-red)] t-b:border-[#dc2626] t-d:border-[#f87171] t-d:hover:border-[#dc2626] py-[0.35rem] px-[0.75rem] [background:transparent] [font-family:var(--ann-font-mono)] text-[0.75rem] font-bold cursor-pointer [color:var(--ann-red)] uppercase [transition:background_0.15s,_color_0.15s,_border-color_0.15s] [.t-b_&]:text-[#dc2626] [.t-b_&:hover]:[background:#dc2626] [.t-b_&:hover]:text-[#ffffff] [.t-d_&]:text-[#f87171] [.t-d_&:hover]:[background:#dc2626] [.t-d_&:hover]:text-[#ffffff]"
+                onClick={onDelete}
+              >
                 Delete
               </button>
             )}
-            <button type="button" className="ann-close-btn" aria-label="Close" onClick={onClose}>
+            <button
+              type="button"
+              className={`ann-close-btn [border:var(--ann-border-thick)] ${annCloseBtn}`}
+              aria-label="Close"
+              onClick={onClose}
+            >
               &times;
             </button>
           </div>
         </div>
 
-        <div className="ann-modal-body">
-          <div className="card-meta-top mono" style={{ marginBottom: '1rem' }}>
-            {item.pinned && <span className="badge-pinned">Pinned</span>}
-            {item.requires_ack && <span className="badge-must-read">Must Read</span>}
+        <div className={`ann-modal-body p-[1.5rem] max-[601px]:p-[1.25rem] ${annModalBody}`}>
+          <div className="flex items-center gap-[0.75rem] [color:var(--ann-muted)] mono mb-[1rem]">
+            {item.pinned && <span className={`${badgePinned}`}>Pinned</span>}
+            {item.requires_ack && <span className={`${badgeMustRead}`}>Must Read</span>}
           </div>
 
-          <h2 className="read-title">
+          <h2 className="mb-[1rem] text-[2rem] leading-[1.1] font-extrabold [color:var(--ann-text)]">
             {titlePrefix}
             {item.title}
           </h2>
 
-          <div className="read-content">
+          <div className="read-content [&_p]:mb-[1rem] [&_ul]:mb-[1rem] [&_ul]:pl-[1.5rem] [&_ul]:[list-style-type:disc] [&_li]:mb-[0.5rem] [&_strong]:[font-weight:700] text-[1.05rem] leading-[1.6] [color:var(--ann-text)]">
             {item.body_md.trim() ? <MarkdownBody markdown={item.body_md} /> : <p>{item.title}</p>}
             {item.edited_at && (
-              <span
-                className="mono"
-                style={{
-                  fontSize: '0.75rem',
-                  marginTop: '1rem',
-                  color: 'var(--ann-muted)',
-                  display: 'block',
-                }}
-              >
+              <span className="mono text-[0.75rem] mt-[1rem] text-[color:var(--ann-muted)] block">
                 (edited)
               </span>
             )}

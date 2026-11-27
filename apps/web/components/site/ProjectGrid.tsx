@@ -10,12 +10,7 @@ export default function ProjectGrid() {
   const list = projects.filter((p) => g === 'All' || p.tags.includes(g));
   return (
     <>
-      <div
-        className="row"
-        role="tablist"
-        aria-label="Filter by track"
-        style={{ '--g': '8px', marginBottom: 36 } as React.CSSProperties}
-      >
+      <div className="row [--g:8px] mb-9" role="tablist" aria-label="Filter by track">
         {groups.map((x) => (
           <button
             key={x}
@@ -27,11 +22,11 @@ export default function ProjectGrid() {
             {x}
           </button>
         ))}
-        <span className="label" style={{ marginLeft: 'auto' }}>
+        <span className="label ml-auto">
           {list.length} of {projects.length}
         </span>
       </div>
-      <div className="grid" style={{ '--min': '320px', '--g': '0px' } as React.CSSProperties}>
+      <div className="grid [--min:320px] [--g:0px]">
         {list.map((p, i) => (
           <article key={p.name} className="panel proj">
             <div className="row between">
@@ -40,14 +35,14 @@ export default function ProjectGrid() {
             </div>
             <h3 className="h3">{p.name}</h3>
             <p className="body">{p.blurb}</p>
-            <div className="row" style={{ '--g': '6px' } as React.CSSProperties}>
+            <div className="row [--g:6px]">
               {p.tags.map((t) => (
                 <span key={t} className="tag">
                   {t}
                 </span>
               ))}
             </div>
-            <div className="row by" style={{ '--g': '8px' } as React.CSSProperties}>
+            <div className="row by [--g:8px]">
               {p.by.map((id) => (
                 <Avatar key={id} name={byId(id).name} size={28} />
               ))}

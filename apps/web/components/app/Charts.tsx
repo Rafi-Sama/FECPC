@@ -28,7 +28,7 @@ export function Line({ pts, h = 160 }: { pts: number[]; h?: number }) {
   return (
     <svg
       viewBox={`0 0 ${W} ${h}`}
-      className="linechart"
+      className="w-full h-40 block [&_.stroke]:[fill:none] [&_.stroke]:[stroke:var(--acc)] [&_.stroke]:[stroke-width:2] [&_.area]:[fill:color-mix(in_srgb,var(--acc)_14%,transparent)]"
       role="img"
       aria-label={`Rating from ${pts[0]} to ${pts.at(-1)}, peak ${hi}`}
       preserveAspectRatio="none"
@@ -59,19 +59,19 @@ export function Radar({ data }: { data: [string, number][] }) {
   return (
     <svg
       viewBox="-40 0 340 260"
-      className="radar"
+      className="radar w-full max-w-[300px] [&_text]:[font:14px_var(--mono),monospace] [&_text]:fill-mut"
       role="img"
       aria-label={'Solved by tag: ' + data.map(([k, v]) => `${k} ${v}`).join(', ')}
     >
       {[0.33, 0.66, 1].map((f) => (
         <polygon
           key={f}
-          className="ring"
+          className="[fill:none] stroke-line2 [stroke-width:1] t-b:stroke-line"
           points={data.map((_, i) => at(i, R * f).join(',')).join(' ')}
         />
       ))}
       <polygon
-        className="shape"
+        className="[.radar_&]:[fill:color-mix(in_srgb,var(--acc)_30%,transparent)] [.radar_&]:[stroke:var(--acc)] [.radar_&]:[stroke-width:2]"
         points={data.map(([, v], i) => at(i, (v / max) * R).join(',')).join(' ')}
       />
       {data.map(([k], i) => {

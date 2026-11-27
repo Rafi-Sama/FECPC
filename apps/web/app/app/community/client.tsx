@@ -1,24 +1,16 @@
 'use client';
 import { SaveForm } from '@/components/app/SaveBar';
+import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Page, Tabs } from '@/components/app/Shell';
 import { useStore } from '@/components/app/Store';
 import { AnnouncementBoard } from '@/components/app/announcements/AnnouncementBoard';
-import {
-  AnnouncementModal,
-  type UnifiedAnnouncement,
-} from '@/components/app/announcements/AnnouncementModal';
+import type { UnifiedAnnouncement } from '@/components/app/announcements/AnnouncementModal';
 import { MilestonesCard } from '@/components/app/feed/MilestonesCard';
-import { feedCategoryChip, NewPostModal } from '@/components/app/feed/NewPostModal';
-import { PostModal } from '@/components/app/feed/PostModal';
 import { ReportsPanel } from '@/components/app/feed/ReportsPanel';
 import { VoteWidget } from '@/components/app/feed/VoteWidget';
-import { IdeaModal } from '@/components/app/ideas/IdeaModal';
-import { JoinIdeaModal, type JoinIdeaTarget } from '@/components/app/ideas/JoinIdeaModal';
-import { ManageInterestedModal } from '@/components/app/ideas/ManageInterestedModal';
-import { ideaTypeLabel, NewIdeaModal } from '@/components/app/ideas/NewIdeaModal';
-import { ProfileModal } from '@/components/app/members/ProfileModal';
+import type { JoinIdeaTarget } from '@/components/app/ideas/JoinIdeaModal';
 import {
   excerptFromMarkdown,
   MarkdownEditor,
@@ -37,6 +29,67 @@ import type {
   IdeaSummary,
   IdeaType,
 } from '@fecpc/contracts';
+import { cmMeta, feedCategoryChip } from '@/components/app/feed/ui';
+import {
+  cmChips,
+  cmIdeaMeta,
+  cmIdeaTags,
+  cmIdeaTag,
+  cmIdeaAcceptedBadge,
+  cmIdeaInterestedLabel,
+  cmIdeaStatusBadge,
+  ideaTypeLabel,
+} from '@/components/app/ideas/ui';
+import {
+  annModalBackdrop,
+  annModal,
+  annModalHeader,
+  annCloseBtn,
+  annModalBody,
+  annBackdrop,
+} from '@/components/app/announcements/ui';
+
+// Dialogs render nothing until opened: their code loads on demand instead of with the page.
+const NewPostModal = dynamic(() =>
+  import('@/components/app/feed/NewPostModal').then((m) => m.NewPostModal),
+);
+const PostModal = dynamic(() => import('@/components/app/feed/PostModal').then((m) => m.PostModal));
+const AnnouncementModal = dynamic(() =>
+  import('@/components/app/announcements/AnnouncementModal').then((m) => m.AnnouncementModal),
+);
+const NewIdeaModal = dynamic(() =>
+  import('@/components/app/ideas/NewIdeaModal').then((m) => m.NewIdeaModal),
+);
+const ManageInterestedModal = dynamic(() =>
+  import('@/components/app/ideas/ManageInterestedModal').then((m) => m.ManageInterestedModal),
+);
+const JoinIdeaModal = dynamic(() =>
+  import('@/components/app/ideas/JoinIdeaModal').then((m) => m.JoinIdeaModal),
+);
+const IdeaModal = dynamic(() =>
+  import('@/components/app/ideas/IdeaModal').then((m) => m.IdeaModal),
+);
+const ProfileModal = dynamic(() =>
+  import('@/components/app/members/ProfileModal').then((m) => m.ProfileModal),
+);
+
+const annField =
+  '[&>label]:block [&>label]:[font-family:var(--ann-font-mono)] [&>label]:[font-size:0.8rem] [&>label]:mb-[0.5rem] [&>label]:uppercase [&>label]:[color:var(--ann-muted)] mb-[1.25rem]';
+
+const annBtnPrimary =
+  '[box-shadow:4px_4px_0_rgba(0,_0,_0,_0.6)] hover:[box-shadow:6px_6px_0_rgba(0,_0,_0,_0.6)] [.t-b_&]:[box-shadow:4px_4px_0_rgba(0,_0,_0,_0.2)] [.t-b_&:hover]:[box-shadow:6px_6px_0_rgba(0,_0,_0,_0.2)] [.t-d_&]:[box-shadow:4px_4px_0_#000000] [.t-d_&:hover]:[box-shadow:6px_6px_0_#000000]'; // was .ann-btn-primary
+const annFilterBtn =
+  'py-[0.4rem] px-[0.8rem] [background:transparent] [font-family:var(--ann-font-mono)] text-[0.75rem] font-bold cursor-pointer [color:var(--ann-text)] uppercase [transition:background-color_0.1s,_color_0.1s,_border-color_0.1s] [&.active]:[background-color:var(--ann-blue)] [&.active]:text-[#ffffff] [.t-d_&.active]:bg-acc [.t-d_&.active]:text-on [&&:hover:not(.active)]:[background:color-mix(in_srgb,_var(--ann-text)_8%,_transparent)]'; // was .ann-filter-btn
+const annCheckboxGroup = 'mb-[1rem]'; // was .ann-checkbox-group
+
+const cmSearch =
+  'py-0 px-3.5 min-h-[44px] w-full font-body text-[15px] focus:[outline:2px_solid_var(--acc)] focus:[outline-offset:2px]'; // was .cm-search
+const cmSentinel =
+  'text-center font-label text-[12px] tracking-[0.08em] uppercase [color:var(--dim)]'; // was .cm-sentinel
+const cmIdeasFilter =
+  'flex-wrap [&:nth-child(1)]:justify-start [&:nth-child(2)]:justify-center [&:nth-child(3)]:justify-end [@media(max-width:768px)]:[&:nth-child(n)]:justify-start'; // was .cm-ideas-filter
+const cmIdeasPill =
+  'cm-ideas-pill [border:1px_solid_var(--line2)] hover:border-acc [&.on]:border-acc py-[3px] px-[9px] [background:transparent] font-label text-[11px] tracking-[0.05em] leading-[1.5] uppercase [color:var(--mut)] cursor-pointer [transition:background_0.15s_ease,_color_0.15s_ease,_border-color_0.15s_ease] hover:text-acc [&.on]:[background:var(--acc)] [&.on]:text-on focus-visible:[outline:2px_solid_var(--acc)] focus-visible:[outline-offset:2px]'; // was .cm-ideas-pill
 
 const tabs = ['Feed', 'Announcements', 'Ideas', 'Polls'] as const;
 type Tab = (typeof tabs)[number];
@@ -514,7 +567,11 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
       }
       aside={
         tab === 'Announcements' && canAnnounce ? (
-          <button type="button" className="ann-btn-primary" onClick={() => setComposeOpen(true)}>
+          <button
+            type="button"
+            className={`ann-btn-primary ${annBtnPrimary}`}
+            onClick={() => setComposeOpen(true)}
+          >
             + Publish
           </button>
         ) : undefined
@@ -524,17 +581,21 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
 
       {/* ────────── TAB 1: FEED ────────── */}
       {tab === 'Feed' && (
-        <div className="bento cm-feed-bento">
-          <div className="c8 stack" style={{ '--g': '16px' } as React.CSSProperties}>
+        <div className="bento cm-feed-bento [align-items:start]">
+          <div className="c8 stack [--g:16px]">
             <input
               type="search"
-              className="cm-search"
+              className={`cm-search ${cmSearch}`}
               value={feedQ}
               onChange={(e) => setFeedQ(e.target.value)}
               placeholder="Search post titles and bodies"
               aria-label="Search posts"
             />
-            <div className="cm-chips" role="group" aria-label="Filter posts by category">
+            <div
+              className={`cm-chips flex gap-2 items-center ${cmChips}`}
+              role="group"
+              aria-label="Filter posts by category"
+            >
               {FEED_FILTERS.map((f) => (
                 <button
                   key={f.key}
@@ -578,7 +639,11 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
               ) : (
                 <div className="list">
                   {visibleFeedItems.map((p) => (
-                    <div key={p.id} className="cm-row-click" onClick={() => setActivePostId(p.id)}>
+                    <div
+                      key={p.id}
+                      className="cm-row-click cursor-pointer"
+                      onClick={() => setActivePostId(p.id)}
+                    >
                       <VoteWidget
                         score={p.score}
                         myVote={p.my_vote}
@@ -588,7 +653,7 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
                       <div className="grow">
                         <button
                           type="button"
-                          className="cm-title"
+                          className="[border:0] [.cm-row-click:hover_&]:text-acc p-0 block text-[16px] font-semibold text-hi text-left [background:none] cursor-pointer hover:text-acc focus-visible:[outline:2px_solid_var(--acc)] focus-visible:[outline-offset:2px]"
                           onClick={(e) => {
                             e.stopPropagation();
                             setActivePostId(p.id);
@@ -596,13 +661,15 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
                         >
                           <HighlightMatch text={p.title} query={feedQ} />
                         </button>
-                        <p className="cm-excerpt">
+                        <p className="mt-1 mx-0 mb-1.5 text-[14px] leading-[1.45] [color:var(--mut)] whitespace-nowrap overflow-hidden text-ellipsis">
                           <HighlightMatch text={excerptFromMarkdown(p.body_md)} query={feedQ} />
                         </p>
-                        <div className="cm-meta">
+                        <div
+                          className={`cm-meta flex flex-wrap items-center gap-1.5 tracking-[0.05em] ${cmMeta}`}
+                        >
                           <TierName name={p.author_name} solved={p.author_solved} />
                           <span>· {relTime(p.created_at)}</span>
-                          <span className="pill" style={{ fontSize: 11, padding: '1px 6px' }}>
+                          <span className="pill text-[11px] py-[1px] px-1.5">
                             {feedCategoryChip(p.category)}
                           </span>
                         </div>
@@ -611,7 +678,11 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
                   ))}
                 </div>
               )}
-              <div ref={feedSentinelRef} className="cm-sentinel" aria-live="polite">
+              <div
+                ref={feedSentinelRef}
+                className={`cm-sentinel p-[16px_0] ${cmSentinel}`}
+                aria-live="polite"
+              >
                 {feedLoading && feedInitialized
                   ? 'Loading more posts…'
                   : feedCursor
@@ -621,12 +692,12 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
             </section>
           </div>
 
-          <aside className="c4 cm-feed-right">
+          <aside className="c4 flex flex-col gap-4 [@media(max-width:759px)]:order-[-1]">
             {!me.system && (
               <button
                 type="button"
-                className="btn sm"
-                style={{ width: '100%' }}
+                className="btn sm w-full"
+
                 onClick={() => setNewPostOpen(true)}
               >
                 + New Post
@@ -638,24 +709,14 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
               <ol className="list">
                 {topHelpers.map((m, i) => (
                   <li key={m.id}>
-                    <span className="mono acc" style={{ width: 20 }}>
-                      {i + 1}
-                    </span>
+                    <span className="mono acc w-[20px]">{i + 1}</span>
                     <TierAvatar
                       name={m.name}
                       solved={m.solved}
                       avatarUrl={m.avatar_url}
                       size={32}
                     />
-                    <span
-                      className="grow"
-                      style={{
-                        minWidth: 0,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
+                    <span className="grow min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
                       <TierName name={m.name} solved={m.solved} />
                     </span>
                     <span className="mono">{m.helper}</span>
@@ -675,15 +736,19 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
 
       {/* ────────── TAB 2: ANNOUNCEMENTS ────────── */}
       {tab === 'Announcements' && (
-        <div className="ann-container">
-          <div className="ann-nav-group">
-            <div className="ann-nav-tabs">
+        <div className="ann-container max-w-[960px] [font-family:var(--ann-font-main)] leading-[1.6]">
+          <div className="mb-[1.5rem]">
+            <div className="ann-nav-tabs flex gap-[0.5rem] mb-[0.75rem] flex-wrap">
               <Tabs tabs={tabs} value={tab} onChange={handleTabChange} />
             </div>
-            <div className="ann-filter-tabs" role="group" aria-label="Filter announcements">
+            <div
+              className="flex gap-[0.5rem] mb-[1rem] flex-wrap"
+              role="group"
+              aria-label="Filter announcements"
+            >
               <button
                 type="button"
-                className={`ann-filter-btn ${annFilter === 'all' ? 'active' : ''}`}
+                className={`ann-filter-btn ${annFilterBtn} ${annFilter === 'all' ? 'active' : ''}`}
                 aria-pressed={annFilter === 'all'}
                 onClick={() => setAnnFilter('all')}
               >
@@ -691,7 +756,7 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
               </button>
               <button
                 type="button"
-                className={`ann-filter-btn ${annFilter === 'unread' ? 'active' : ''}`}
+                className={`ann-filter-btn ${annFilterBtn} ${annFilter === 'unread' ? 'active' : ''}`}
                 aria-pressed={annFilter === 'unread'}
                 onClick={() => setAnnFilter('unread')}
               >
@@ -699,7 +764,7 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
               </button>
               <button
                 type="button"
-                className={`ann-filter-btn ${annFilter === 'must' ? 'active' : ''}`}
+                className={`ann-filter-btn ${annFilterBtn} ${annFilter === 'must' ? 'active' : ''}`}
                 aria-pressed={annFilter === 'must'}
                 onClick={() => setAnnFilter('must')}
               >
@@ -724,7 +789,7 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
 
           {composeOpen && (
             <div
-              className="cm-backdrop ann-modal-backdrop"
+              className={`${annBackdrop} ${annModalBackdrop}`}
               role="dialog"
               aria-modal="true"
               aria-label="Publish Announcement"
@@ -735,12 +800,16 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
                 }
               }}
             >
-              <div className="ann-modal publish-modal">
-                <div className="ann-modal-header">
-                  <div className="mono ann-modal-subtitle">Publish · Everyone sees this</div>
+              <div className={`ann-modal ${annModal} publish-modal`}>
+                <div
+                  className={`ann-modal-header flex justify-between items-center p-[1.25rem_1.5rem] ${annModalHeader}`}
+                >
+                  <div className="mono [color:var(--ann-muted)] font-bold">
+                    Publish · Everyone sees this
+                  </div>
                   <button
                     type="button"
-                    className="ann-close-btn"
+                    className={`ann-close-btn [border:var(--ann-border-thick)] ${annCloseBtn}`}
                     aria-label="Close"
                     onClick={() => {
                       resetAnnouncement();
@@ -750,7 +819,9 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
                     &times;
                   </button>
                 </div>
-                <div className="ann-modal-body">
+                <div
+                  className={`ann-modal-body p-[1.5rem] max-[601px]:p-[1.25rem] ${annModalBody}`}
+                >
                   <SaveForm
                     label="Unpublished announcement"
                     saveLabel="Publish"
@@ -763,12 +834,12 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
                       if (ok) setComposeOpen(false);
                     }}
                   >
-                    <div className="ann-form-group">
+                    <div className={annField}>
                       <label htmlFor="ann-title">Title</label>
                       <input
                         id="ann-title"
                         type="text"
-                        className="ann-form-control"
+                        className="ann-form-control p-[0.75rem] w-full [font-family:var(--ann-font-main)] text-[1rem] [border-radius:0] focus:[outline:2px_solid_var(--ann-blue)] focus:[outline-offset:-2px] [.t-d_&:focus]:[outline:2px_solid_var(--acc)] [.t-d_&:focus]:[outline-offset:-2px]"
                         value={annTitle}
                         onChange={(e) => setAnnTitle(e.target.value)}
                         required
@@ -778,7 +849,7 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
                       />
                     </div>
 
-                    <div className="ann-form-group">
+                    <div className={annField}>
                       <MarkdownEditor
                         id="ann-body-md"
                         label="Message (Markdown Supported)"
@@ -790,8 +861,8 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
                       />
                     </div>
 
-                    <div style={{ marginBottom: '2rem' }}>
-                      <div className="ann-checkbox-group">
+                    <div className="mb-[2rem]">
+                      <div className={`ann-checkbox-group ${annCheckboxGroup}`}>
                         <input
                           type="checkbox"
                           id="pin-top"
@@ -800,7 +871,7 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
                         />
                         <label htmlFor="pin-top">Pin to top of feed</label>
                       </div>
-                      <div className="ann-checkbox-group">
+                      <div className={`ann-checkbox-group ${annCheckboxGroup}`}>
                         <input
                           type="checkbox"
                           id="req-ack"
@@ -811,7 +882,7 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
                       </div>
                     </div>
 
-                    <button type="submit" className="ann-btn-primary" style={{ width: '100%' }}>
+                    <button type="submit" className={`ann-btn-primary ${annBtnPrimary} w-full`}>
                       Publish Announcement
                     </button>
                   </SaveForm>
@@ -824,11 +895,11 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
 
       {/* ────────── TAB 3: IDEAS (merged with Teammates) ────────── */}
       {tab === 'Ideas' && (
-        <div className="cm-ideas">
-          <div className="cm-ideas-head">
+        <div className="flex flex-col gap-6">
+          <div className="flex items-center gap-4 max-[769px]:items-stretch [@media(max-width:768px)]:flex-col">
             <input
               type="search"
-              className="cm-search cm-ideas-search"
+              className={`cm-search ${cmSearch} flex-[1_1_auto] min-w-0 max-w-[none]`}
               value={ideaQ}
               onChange={(e) => setIdeaQ(e.target.value)}
               placeholder="Search ideas, teammate requests, or study sessions"
@@ -837,7 +908,7 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
             {!me.system && (
               <button
                 type="button"
-                className="btn sm cm-ideas-submit"
+                className="btn sm flex-none"
                 onClick={() => setNewIdeaOpen(true)}
               >
                 + Submit Idea
@@ -845,11 +916,15 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
             )}
           </div>
 
-          <div className="cm-ideas-toolbar">
-            <div className="cm-ideas-filter" role="group" aria-label="Sort ideas">
+          <div className="[display:grid] items-center gap-6 pb-4 max-[769px]:gap-3 grid-cols-[minmax(0,_1fr)_auto_minmax(0,_1fr)] [border-bottom:2px_solid_var(--line2)] [@media(max-width:768px)]:grid-cols-[minmax(0,_1fr)]">
+            <div
+              className={`cm-ideas-filter flex items-center gap-2 ${cmIdeasFilter}`}
+              role="group"
+              aria-label="Sort ideas"
+            >
               <button
                 type="button"
-                className={`cm-ideas-pill ${ideaSort === 'top' ? 'on' : ''}`}
+                className={`${cmIdeasPill} ${ideaSort === 'top' ? 'on' : ''}`}
                 aria-pressed={ideaSort === 'top'}
                 onClick={() => setIdeaSort('top')}
               >
@@ -857,7 +932,7 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
               </button>
               <button
                 type="button"
-                className={`cm-ideas-pill ${ideaSort === 'new' ? 'on' : ''}`}
+                className={`${cmIdeasPill} ${ideaSort === 'new' ? 'on' : ''}`}
                 aria-pressed={ideaSort === 'new'}
                 onClick={() => setIdeaSort('new')}
               >
@@ -866,7 +941,7 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
               {!me.system && (
                 <button
                   type="button"
-                  className={`cm-ideas-pill ${ideaMine ? 'on' : ''}`}
+                  className={`${cmIdeasPill} ${ideaMine ? 'on' : ''}`}
                   aria-pressed={ideaMine}
                   onClick={() => setIdeaMine(!ideaMine)}
                 >
@@ -875,12 +950,16 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
               )}
             </div>
 
-            <div className="cm-ideas-filter" role="group" aria-label="Filter ideas by type">
+            <div
+              className={`cm-ideas-filter flex items-center gap-2 ${cmIdeasFilter}`}
+              role="group"
+              aria-label="Filter ideas by type"
+            >
               {IDEA_TYPE_FILTERS.map((f) => (
                 <button
                   key={f.key}
                   type="button"
-                  className={`cm-ideas-pill ${ideaType === f.key ? 'on' : ''}`}
+                  className={`${cmIdeasPill} ${ideaType === f.key ? 'on' : ''}`}
                   aria-pressed={ideaType === f.key}
                   onClick={() => setIdeaType(f.key)}
                 >
@@ -889,12 +968,16 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
               ))}
             </div>
 
-            <div className="cm-ideas-filter" role="group" aria-label="Filter ideas by status">
+            <div
+              className={`cm-ideas-filter flex items-center gap-2 ${cmIdeasFilter}`}
+              role="group"
+              aria-label="Filter ideas by status"
+            >
               {IDEA_STATUS_FILTERS.map((f) => (
                 <button
                   key={f.key}
                   type="button"
-                  className={`cm-ideas-pill ${ideaStatus === f.key ? 'on' : ''}`}
+                  className={`${cmIdeasPill} ${ideaStatus === f.key ? 'on' : ''}`}
                   aria-pressed={ideaStatus === f.key}
                   onClick={() => setIdeaStatus(f.key)}
                 >
@@ -909,20 +992,20 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
           ) : ideaItems.length === 0 ? (
             <p className="empty">No ideas match those filters yet.</p>
           ) : (
-            <div className="cm-ideas-list">
+            <div className="flex gap-4 flex-col">
               {ideaItems.map((it) => {
                 const mine = it.user_id === me.id;
                 const upOn = s.kudos.includes(`idea:${it.id}`);
                 return (
                   <article
                     key={it.id}
-                    className={`cm-idea-card${mine ? ' is-mine' : ''}`}
+                    className={`[border:2px_solid_var(--line2)] focus-within:border-acc p-5 [display:grid] grid-cols-[64px_minmax(0,_1fr)_auto] items-start gap-6 [background:var(--panel)] cursor-pointer [transition:transform_0.1s_ease,_box-shadow_0.1s_ease,_border-color_0.1s_ease] hover:[transform:translate(-2px,_-2px)] hover:[box-shadow:4px_4px_0_var(--line2)] [@media(max-width:768px)]:p-4 [@media(max-width:768px)]:grid-cols-[minmax(0,_1fr)] [@media(max-width:768px)]:gap-4 ${mine ? ' is-mine' : ''}`}
                     onClick={() => setActiveIdeaId(it.id)}
                   >
-                    <div className="cm-idea-vote">
+                    <div className="flex items-center gap-2 max-[769px]:justify-start max-[769px]:gap-3 flex-col [@media(max-width:768px)]:flex-row [@media(max-width:768px)]:w-full">
                       <button
                         type="button"
-                        className={`cm-idea-vote-btn${upOn ? ' on' : ''}`}
+                        className={`[border:2px_solid_var(--ink)] [&:hover:not(:disabled)]:border-acc [&.on]:border-acc p-0 [display:grid] [place-items:center] w-[44px] h-[44px] [background:var(--bg)] text-ink text-[18px] leading-[1] cursor-pointer [transition:background_0.1s_ease,_color_0.1s_ease,_border-color_0.1s_ease] [&:hover:not(:disabled)]:[background:var(--acc)] [&:hover:not(:disabled)]:text-on [&.on]:[background:var(--acc)] [&.on]:text-on disabled:opacity-[0.45] disabled:cursor-not-allowed focus-visible:[outline:2px_solid_var(--acc)] focus-visible:[outline-offset:2px] [@media(max-width:768px)]:w-[36px] [@media(max-width:768px)]:h-[36px] ${upOn ? ' on' : ''}`}
                         aria-pressed={upOn}
                         aria-label={upOn ? 'Upvoted' : 'Upvote idea'}
                         disabled={mine || me.system || upOn}
@@ -933,13 +1016,17 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
                       >
                         ▲
                       </button>
-                      <span className={`cm-idea-vote-count${upOn ? ' on' : ''}`}>{it.upvotes}</span>
+                      <span
+                        className={`[font-family:var(--mono),_monospace] text-[18px] font-bold leading-[1.2] text-hi [font-variant-numeric:tabular-nums] [&.on]:text-acc ${upOn ? ' on' : ''}`}
+                      >
+                        {it.upvotes}
+                      </span>
                     </div>
 
-                    <div className="cm-idea-content">
+                    <div className="flex gap-2 min-w-0 pt-0.5 max-[769px]:pt-0 flex-col">
                       <button
                         type="button"
-                        className="cm-idea-title"
+                        className="[border:0] p-0 block w-full [background:none] text-hi font-disp text-[20px] font-bold leading-[1.3] text-left cursor-pointer hover:text-acc focus-visible:[outline:2px_solid_var(--acc)] focus-visible:[outline-offset:2px] [@media(max-width:768px)]:text-[18px]"
                         onClick={(e) => {
                           e.stopPropagation();
                           setActiveIdeaId(it.id);
@@ -947,11 +1034,13 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
                       >
                         <HighlightMatch text={it.title} query={ideaQ} />
                       </button>
-                      <p className="cm-idea-excerpt">
+                      <p className="mt-0 mx-0 mb-2 [display:-webkit-box] overflow-hidden [color:var(--mut)] text-[14px] leading-[1.5] whitespace-normal [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
                         <HighlightMatch text={excerptFromMarkdown(it.body_md)} query={ideaQ} />
                       </p>
-                      <div className="cm-idea-meta">
-                        <span className="cm-idea-author">
+                      <div
+                        className={`cm-idea-meta flex items-center gap-3 max-[521px]:gap-2 ${cmIdeaMeta}`}
+                      >
+                        <span className="cm-idea-author [&_.avatar-ring]:[background:var(--panel)] inline-flex items-center gap-2 min-w-0">
                           <AvatarRing
                             name={it.author_name}
                             avatarUrl={it.author_avatar}
@@ -962,28 +1051,44 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
                           />
                           <TierName name={it.author_name} solved={it.author_solved} />
                         </span>
-                        <span className="cm-idea-time">{relTime(it.created_at)}</span>
-                        <div className="cm-idea-tags">
-                          <span className="cm-idea-tag">{ideaTypeLabel(it.type)}</span>
-                          <span className={`cm-idea-tag status-${it.status}`}>{it.status}</span>
+                        <span className="[color:var(--dim)]">{relTime(it.created_at)}</span>
+                        <div className={`cm-idea-tags flex items-center gap-1.5 ${cmIdeaTags}`}>
+                          <span
+                            className={`cm-idea-tag [border:1px_solid_var(--line2)] tracking-[0.05em] ${cmIdeaTag}`}
+                          >
+                            {ideaTypeLabel(it.type)}
+                          </span>
+                          <span
+                            className={`cm-idea-tag [border:1px_solid_var(--line2)] tracking-[0.05em] [&.status-open]:border-acc [&.status-planned]:border-acc2 [&.status-shipped]:border-mut [&&&&.status-closed]:border-bad ${cmIdeaTag} status-${it.status}`}
+                          >
+                            {it.status}
+                          </span>
                           {it.my_interest === 'accepted' && (
-                            <span className="pill ok cm-idea-accepted-badge">✓ Accepted</span>
+                            <span
+                              className={`pill ok cm-idea-accepted-badge tracking-[0.06em] ${cmIdeaAcceptedBadge}`}
+                            >
+                              ✓ Accepted
+                            </span>
                           )}
                         </div>
-                        {mine && <span className="cm-idea-you">You</span>}
+                        {mine && (
+                          <span className="[border:1px_solid_var(--acc)] tracking-[0.05em] py-px px-1.5 inline-block [background:var(--acc)] text-on text-[11px] font-bold leading-[1.5] uppercase">
+                            You
+                          </span>
+                        )}
                       </div>
                     </div>
 
-                    <div className="cm-idea-action">
+                    <div className="cm-idea-action [&_.btn.xs]:min-h-[32px] [&_.btn.xs]:p-[0_10px] [&_.btn.xs]:font-label [&_.btn.xs]:text-[12px] [&_.btn.xs]:tracking-[0.03em] flex items-end gap-2 pt-0.5 max-[769px]:items-start max-[769px]:pt-4 max-[769px]:[border-top:1px_solid_var(--line)] flex-col [@media(max-width:768px)]:mt-2 [@media(max-width:768px)]:w-full">
                       {mine ? (
                         <>
-                          <span className="cm-idea-applicant-count">
+                          <span className="cm-idea-applicant-count font-label text-[11px] font-bold uppercase text-acc">
                             {it.interested_count} New Applicant
                             {it.interested_count === 1 ? '' : 's'}
                           </span>
                           <button
                             type="button"
-                            className="btn xs cm-idea-manage"
+                            className="btn xs cm-idea-manage text-on hover:text-bg"
                             onClick={(e) => {
                               e.stopPropagation();
                               setManageIdeaId(it.id);
@@ -994,19 +1099,29 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
                         </>
                       ) : (
                         <>
-                          <span className="cm-idea-interested-label">
+                          <span
+                            className={`cm-idea-interested-label tracking-[0.05em] ${cmIdeaInterestedLabel}`}
+                          >
                             Interested ({it.interested_count})
                           </span>
                           {it.my_interest === 'declined' && (
-                            <span className="pill bad cm-idea-status-badge">✗ Declined</span>
+                            <span
+                              className={`pill bad cm-idea-status-badge tracking-[0.06em] ${cmIdeaStatusBadge}`}
+                            >
+                              ✗ Declined
+                            </span>
                           )}
                           {it.my_interest === 'pending' && (
-                            <span className="pill warn cm-idea-status-badge">Interest sent</span>
+                            <span
+                              className={`pill warn cm-idea-status-badge tracking-[0.06em] ${cmIdeaStatusBadge}`}
+                            >
+                              Interest sent
+                            </span>
                           )}
                           {!it.my_interest && !me.system && it.status !== 'closed' && (
                             <button
                               type="button"
-                              className="btn xs cm-idea-card-join"
+                              className="btn xs cm-idea-card-join text-on hover:text-bg"
                               disabled={joiningIdeaId === it.id}
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -1028,7 +1143,11 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
               })}
             </div>
           )}
-          <div ref={ideaSentinelRef} className="cm-sentinel" aria-live="polite">
+          <div
+            ref={ideaSentinelRef}
+            className={`cm-sentinel p-[16px_0] ${cmSentinel}`}
+            aria-live="polite"
+          >
             {ideaLoading && ideaInitialized
               ? 'Loading more ideas…'
               : ideaCursor
@@ -1043,8 +1162,8 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
         <div className="bento">
           {canPoll && (
             <SaveForm
-              className="panel stack"
-              style={{ '--g': '14px' } as React.CSSProperties}
+              className="panel stack [--g:14px]"
+
               label="Unpublished poll"
               saveLabel="Publish"
               onDiscard={resetPoll}
@@ -1071,9 +1190,7 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
                   required
                 />
               </label>
-              <button className="btn sm" style={{ alignSelf: 'flex-start' }}>
-                Publish poll
-              </button>
+              <button className="btn sm self-start">Publish poll</button>
             </SaveForm>
           )}
           {polls.length === 0 && <p className="empty">No polls yet.</p>}
@@ -1089,16 +1206,14 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
                   return (
                     <button
                       key={o}
-                      className="opt"
+                      className="[display:grid] grid-cols-[minmax(0,1fr)_auto] gap-[6px_12px] w-full [background:none] [border:1px_solid_var(--line2)] p-[12px_14px] cursor-pointer text-left relative overflow-hidden hover:border-acc [&[aria-pressed='true']]:border-acc [&_i]:absolute [&_i]:inset-[0_auto_0_0] [&_i]:[background:color-mix(in_srgb,var(--acc)_22%,transparent)] [&_i]:z-0 [&_span]:relative focus-visible:[outline:2px_solid_var(--acc)] focus-visible:[outline-offset:2px]"
                       aria-pressed={mine === o}
                       disabled={me.system}
                       onClick={() => act('vote', { poll: p.id, option: o })}
                     >
                       {mine && <i style={{ width: `${pct}%` }} />}
                       <span>
-                        <b className="mono acc" style={{ marginRight: 10 }}>
-                          {mine === o ? '●' : '○'}
-                        </b>
+                        <b className="mono acc mr-2.5">{mine === o ? '●' : '○'}</b>
                         {o}
                       </span>
                       <span className="mono">{mine ? `${pct}%` : ''}</span>

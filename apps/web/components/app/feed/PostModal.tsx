@@ -6,9 +6,16 @@ import { SaveForm } from '@/components/app/SaveBar';
 import { MarkdownBody, MarkdownEditor, relTime } from '@/components/app/shared/MarkdownEditor';
 import { TierAvatar, TierName } from '@/components/app/shared/SolvedTier';
 import { rankFor } from '@fecpc/contracts';
-import { feedCategoryChip } from '@/components/app/feed/NewPostModal';
+import { feedCategoryChip } from '@/components/app/feed/ui';
 import { VoteWidget } from '@/components/app/feed/VoteWidget';
 import type { FeedPostDetail } from '@fecpc/contracts';
+import { cmSideBox } from '@/components/app/ideas/ui';
+import { cmMeta } from '@/components/app/feed/ui';
+
+const kvRow =
+  'cm-kv flex justify-between items-center p-[6px_0] [border-top:1px_solid_var(--line)] [&:first-of-type]:[border-top:0] [&_strong]:text-hi [&_strong]:text-[13px]';
+
+const cmKv = 'font-label text-[12px] tracking-[0.05em] uppercase [color:var(--mut)]'; // was .cm-kv
 
 export function PostModal({
   postId,
@@ -145,9 +152,9 @@ export function PostModal({
         {loading && !detail ? (
           <p className="body">Loading post…</p>
         ) : detail ? (
-          <div className="cm-two-pane">
+          <div className="[display:grid] gap-6 min-[800px]:[align-items:start] grid-cols-[minmax(0,_1fr)] [@media(min-width:800px)]:grid-cols-[minmax(0,_1.65fr)_minmax(240px,_1fr)]">
             {/* Left pane: Markdown body / Editor */}
-            <div className="stack" style={{ '--g': '16px' } as React.CSSProperties}>
+            <div className="stack [--g:16px]">
               <div className="cm-modal-head">
                 <span className="pill">{feedCategoryChip(detail.category)}</span>
                 <span className="label">
@@ -158,8 +165,8 @@ export function PostModal({
 
               {editing ? (
                 <SaveForm
-                  className="stack"
-                  style={{ '--g': '14px' } as React.CSSProperties}
+                  className="stack [--g:14px]"
+
                   label="Unsaved changes to this post"
                   onDiscard={() => {
                     setEditTitle(detail.title);
@@ -189,7 +196,7 @@ export function PostModal({
                     maxLength={10000}
                     rows={8}
                   />
-                  <div className="row" style={{ '--g': '8px' } as React.CSSProperties}>
+                  <div className="row [--g:8px]">
                     <button
                       type="button"
                       className="btn sm line"
@@ -206,17 +213,15 @@ export function PostModal({
                 </SaveForm>
               ) : (
                 <>
-                  <h2 className="h2" style={{ fontSize: 'clamp(22px, 2.5vw, 30px)' }}>
-                    {detail.title}
-                  </h2>
+                  <h2 className="h2 text-[clamp(22px,2.5vw,30px)]">{detail.title}</h2>
                   <MarkdownBody markdown={detail.body_md} />
                 </>
               )}
             </div>
 
             {/* Right pane: Author + Tier + Contributions + Updates + Actions */}
-            <aside className="stack" style={{ '--g': '16px' } as React.CSSProperties}>
-              <div className="cm-modal-head" style={{ justifyContent: 'flex-end' }}>
+            <aside className="stack [--g:16px]">
+              <div className="cm-modal-head justify-end">
                 <button
                   type="button"
                   className="cm-modal-close"
@@ -227,65 +232,62 @@ export function PostModal({
                 </button>
               </div>
 
-              <div className="cm-side-box">
-                <div
-                  className="row"
-                  style={{ '--g': '12px', flexWrap: 'nowrap' } as React.CSSProperties}
-                >
+              <div
+                className={`cm-side-box [border:1px_solid_var(--line2)] p-4 flex gap-3 ${cmSideBox}`}
+              >
+                <div className="row [--g:12px] flex-nowrap">
                   <TierAvatar
                     name={detail.author_name}
                     solved={detail.author_solved}
                     avatarUrl={detail.author_avatar}
                     size={48}
                   />
-                  <div className="grow" style={{ minWidth: 0 }}>
+                  <div className="grow min-w-0">
                     <TierName name={detail.author_name} solved={detail.author_solved} />
-                    <div className="label" style={{ marginTop: 2 }}>
+                    <div className="label mt-0.5">
                       {rankFor(detail.author_rating).title} · {detail.author_rating}
                     </div>
                   </div>
                 </div>
                 <div>
-                  <div className="cm-kv">
+                  <div className={`${kvRow} ${cmKv}`}>
                     <span>Problems solved</span>
                     <strong>{detail.author_solved}</strong>
                   </div>
-                  <div className="cm-kv">
+                  <div className={`${kvRow} ${cmKv}`}>
                     <span>Streak</span>
                     <strong>{detail.author_streak}d</strong>
                   </div>
-                  <div className="cm-kv">
+                  <div className={`${kvRow} ${cmKv}`}>
                     <span>Feed posts</span>
                     <strong>{detail.author_posts_count}</strong>
                   </div>
                 </div>
               </div>
 
-              <div className="cm-side-box">
+              <div
+                className={`cm-side-box [border:1px_solid_var(--line2)] p-4 flex gap-3 ${cmSideBox}`}
+              >
                 <p className="label">Updates &amp; edit history</p>
-                <div className="cm-meta">
+                <div
+                  className={`cm-meta flex flex-wrap items-center gap-1.5 tracking-[0.05em] ${cmMeta}`}
+                >
                   <span>Posted {relTime(detail.created_at)}</span>
                   {wasEdited && <span>· Edited {relTime(detail.updated_at)}</span>}
                 </div>
                 {detail.author_recent.length > 0 && (
-                  <div
-                    className="stack"
-                    style={{ '--g': '8px', marginTop: 4 } as React.CSSProperties}
-                  >
+                  <div className="stack [--g:8px] mt-1">
                     <p className="label">More from {detail.author_name.split(' ')[0]}</p>
                     {detail.author_recent.map((r) => (
                       <button
                         key={r.id}
                         type="button"
-                        className="cm-title"
-                        style={{ fontSize: 14 }}
+                        className="[border:0] p-0 block font-semibold text-hi text-left [background:none] cursor-pointer hover:text-acc focus-visible:[outline:2px_solid_var(--acc)] focus-visible:[outline-offset:2px] text-[14px]"
+
                         onClick={() => onSelectPost(r.id)}
                       >
                         {r.title}
-                        <span
-                          className="label"
-                          style={{ display: 'block', fontSize: 11, marginTop: 2 }}
-                        >
+                        <span className="label block text-[11px] mt-0.5">
                           {relTime(r.created_at)}
                         </span>
                       </button>
@@ -294,9 +296,11 @@ export function PostModal({
                 )}
               </div>
 
-              <div className="cm-side-box">
+              <div
+                className={`cm-side-box [border:1px_solid_var(--line2)] p-4 flex gap-3 ${cmSideBox}`}
+              >
                 {isAuthor ? (
-                  <div className="row" style={{ '--g': '8px' } as React.CSSProperties}>
+                  <div className="row [--g:8px]">
                     <button
                       type="button"
                       className="btn sm line grow"
@@ -307,8 +311,8 @@ export function PostModal({
                     </button>
                     <button
                       type="button"
-                      className="btn sm line"
-                      style={{ color: 'var(--bad)', borderColor: 'var(--bad)' }}
+                      className="btn sm line text-bad border-bad"
+
                       onClick={handleDelete}
                       disabled={busy}
                     >
@@ -316,7 +320,7 @@ export function PostModal({
                     </button>
                   </div>
                 ) : (
-                  <div className="row between" style={{ '--g': '8px' } as React.CSSProperties}>
+                  <div className="row between [--g:8px]">
                     <VoteWidget
                       score={detail.score}
                       myVote={detail.my_vote}

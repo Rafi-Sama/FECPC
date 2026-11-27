@@ -3,6 +3,8 @@ import Board from '@/components/site/Board';
 import { Avatar, Bug, Starfield, Trophy } from '@/components/pixel/Sprites';
 import { badges, cfTitle, hallOfFame, members, squads } from '@fecpc/content/site';
 
+import { badgeGlyph, recordList } from '@/components/site/ui';
+
 export const metadata = { title: 'Leaderboard' };
 const rules = [
   ['SOLVE', '+12 XP', 'Any accepted problem on a linked judge.'],
@@ -16,21 +18,19 @@ export default function Leaderboard() {
   const order = [top[1], top[0], top[2]];
   return (
     <>
-      <section className="page-head t-c" data-t="c" style={{ textAlign: 'center' }}>
+      <section className="page-head t-c text-center" data-t="c">
         <Starfield seed={99} />
-        <div className="wrap" style={{ position: 'relative' }}>
-          <div aria-hidden className="march" style={{ marginBottom: 40 }}>
+        <div className="wrap relative">
+          <div
+            aria-hidden
+            className="flex justify-center gap-[clamp(14px,3vw,44px)] mt-[clamp(20px,4vh,40px)] [animation:march_8s_steps(24)_infinite] [&_svg]:w-[clamp(24px,4.6vw,66px)] [&_svg]:h-auto mb-10"
+          >
             {Array.from({ length: 7 }, (_, i) => (
               <Bug key={i} i={i} />
             ))}
           </div>
-          <h1 className="disp" style={{ marginBlock: 28 }}>
-            <span
-              style={{
-                color: 'var(--acc)',
-                textShadow: '.055em .055em 0 var(--acc2),.11em .11em 0 #3A1D6E',
-              }}
-            >
+          <h1 className="disp my-7">
+            <span className="text-acc [text-shadow:.055em_.055em_0_var(--acc2),.11em_.11em_0_#3A1D6E]">
               HIGH SCORES
             </span>
           </h1>
@@ -48,7 +48,7 @@ export default function Leaderboard() {
                   />
                   <strong>{p.name}</strong>
                   <span className="label">{cfTitle(p.rating)}</span>
-                  <div className="plinth arcade">
+                  <div className="w-full flex flex-col items-center justify-center gap-2.5 [border:4px_solid_#fff] [background:var(--panel)] [font-size:clamp(20px,3vw,36px)] [&_small]:text-[14px] [&_small]:text-acc [.p1_&]:h-[150px] [.p1_&]:border-acc [.p2_&]:h-[110px] [.p2_&]:border-acc3 [.p3_&]:h-[84px] [.p3_&]:border-acc2 arcade">
                     <span>{place}</span>
                     <small>{p.rating}</small>
                   </div>
@@ -68,9 +68,12 @@ export default function Leaderboard() {
             <Board />
             <aside>
               <div>
-                <ul className="stack" style={{ '--g': '16px' } as React.CSSProperties}>
+                <ul className="stack [--g:16px]">
                   {rules.map(([t, x, d]) => (
-                    <li key={t} className="rule-row">
+                    <li
+                      key={t}
+                      className="[display:grid] grid-cols-[90px_auto] gap-[6px_16px] p-4 border-4 border-line text-[14px] [&_p]:col-[1/-1] [&_.acc]:[justify-self:end]"
+                    >
                       <span className="arcade acc3">{t}</span>
                       <span className="arcade acc">{x}</span>
                       <p className="body">{d}</p>
@@ -88,9 +91,13 @@ export default function Leaderboard() {
           <div className="head">
             <h2 className="h2">SQUADS</h2>
           </div>
-          <div className="grid" style={{ '--min': '240px' } as React.CSSProperties}>
+          <div className="grid [--min:240px]">
             {squads.map((s, i) => (
-              <article key={s.name} className="panel class-card" style={{ borderColor: s.color }}>
+              <article
+                key={s.name}
+                className="panel flex flex-col gap-3.5 [transition:transform_0.12s,border-color_0.12s] hover:[transform:translate(-4px,-4px)] [&_dl]:flex [&_dl]:flex-col [&_dl]:gap-2 [&_dl_div]:[display:grid] [&_dl_div]:grid-cols-[56px_1fr] [&_dl_div]:items-center [&_dl_div]:gap-2 [&_dd]:flex [&_dd]:gap-0.75 [&_dd_i]:flex-1 [&_dd_i]:h-[10px] [&_dd_i]:[background:var(--line)] [&_dd_i.on]:[background:var(--acc3)]"
+                style={{ borderColor: s.color }}
+              >
                 <div className="row between">
                   <Bug i={i} size={55} color={s.color} />
                   <span className="arcade dim">#{i + 1}</span>
@@ -118,14 +125,11 @@ export default function Leaderboard() {
             <div className="head">
               <h2 className="h2">BADGES</h2>
             </div>
-            <ul
-              className="grid badges"
-              style={{ '--g': '12px', '--min': '340px' } as React.CSSProperties}
-            >
+            <ul className="grid badges [&_.body]:text-[14px] [&_.xp]:text-[14px] [&_.xp]:text-acc [&_li]:[display:grid] [&_li]:grid-cols-[52px_minmax(0,1fr)_auto] [&_li]:gap-3.5 [&_li]:items-center [&_li]:p-3.5 [&_li]:[border:4px_solid_var(--line)] [&_li]:[background:var(--panel)] [--g:12px] [--min:340px]">
               {badges.map((b, i) => (
                 <li key={b.id}>
                   <span
-                    className="glyph"
+                    className={badgeGlyph}
                     style={{ color: ['#FFD23F', '#3DE1FF', '#FF4D8D'][i % 3] }}
                   >
                     {b.glyph}
@@ -144,11 +148,11 @@ export default function Leaderboard() {
 
       <section className="sec t-c" data-t="c" id="hall">
         <Starfield seed={31} />
-        <div className="wrap" style={{ paddingBottom: 80 }}>
+        <div className="wrap pb-20">
           <div className="head">
             <h2 className="h2">HALL OF FAME</h2>
           </div>
-          <ol className="hof">
+          <ol className={recordList}>
             {hallOfFame.map((h) => (
               <li key={h.title + h.year}>
                 <span className="arcade acc">{h.year}</span>
@@ -162,7 +166,7 @@ export default function Leaderboard() {
               </li>
             ))}
           </ol>
-          <p style={{ marginTop: 48 }}>
+          <p className="mt-12">
             <Link href="/contact" className="btn">
               <span aria-hidden className="blink">
                 &gt;

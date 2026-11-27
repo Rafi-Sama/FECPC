@@ -27,7 +27,7 @@ export default function Arena() {
     .slice(0, 6);
   return (
     <Page title="ARENA">
-      <div className="strip">
+      <div className="[display:grid] grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-0 [border:4px_solid_var(--line2)] mb-6 [&>div]:flex [&>div]:flex-col [&>div]:gap-1.5 [&>div]:p-[14px_18px] [&>div]:[border-right:4px_solid_var(--line2)] [&>div:last-child]:[border-right:0] [&_strong]:[font-family:var(--arcade),monospace] [&_strong]:[font-weight:400] [&_strong]:text-[18px] [&_strong]:text-acc [&_small]:[font:14px_var(--mono),monospace] [&_small]:[color:var(--mut)] max-[521px]:grid-cols-[1fr_1fr] max-[521px]:[&>div:nth-child(2n)]:[border-right:0] max-[521px]:[&>div:nth-child(-n+2)]:[border-bottom:4px_solid_var(--line2)]">
         <div>
           <span className="label">Club rank</span>
           <strong>
@@ -63,8 +63,8 @@ export default function Arena() {
               {potd.map((p, i) => (
                 <div
                   key={p.id}
-                  className="panel"
-                  style={{ gap: 14, opacity: isSolved(p.id) ? 0.6 : 1 }}
+                  className="panel gap-3.5"
+                  style={{ opacity: isSolved(p.id) ? 0.6 : 1 }}
                 >
                   <Bug i={i} size={44} />
                   <span className="label acc3">

@@ -96,10 +96,10 @@ export default function EventsPage({ upcoming }: { upcoming?: ClubEvent[] }) {
         </>
       }
       aside={
-        <div className="row ev-head-actions">
+        <div className="row ev-head-actions items-center [--g:8px]">
           {/* Phones: the sections fold into one dropdown beside the title. */}
           <select
-            className="input sm ev-mob-only"
+            className="input sm hidden max-[641px]:block"
             aria-label="Section"
             value={tab}
             onChange={(e) => canLeave() && setTab(e.target.value as typeof tab)}
@@ -116,12 +116,12 @@ export default function EventsPage({ upcoming }: { upcoming?: ClubEvent[] }) {
         </div>
       }
     >
-      <div className="ev-desk-only">
+      <div className="max-[641px]:hidden">
         <Tabs tabs={tabs} value={tab} onChange={setTab} />
       </div>
 
       {listed && (
-        <div className="ev-filter">
+        <div className="ev-filter flex-wrap [@media(max-width:640px)]:flex-nowrap [@media(max-width:640px)]:[--g:8px]">
           <input
             type="search"
             className="input ev-search"
@@ -154,7 +154,11 @@ export default function EventsPage({ upcoming }: { upcoming?: ClubEvent[] }) {
               ))}
             </select>
           )}
-          <div className="ev-toggles" role="group" aria-label="Only show">
+          <div
+            className="ev-toggles [&_button+button]:[border-left:1px_solid_var(--ink)] [&_button]:p-[0_14px] [&_button]:min-h-[40px] [&_button]:[font:500_14px_var(--sans,sans-serif)] [&_button]:text-ink [&_button]:[background:var(--panel)] [&_button]:[border:0] [&_button]:cursor-pointer [&_button:hover]:[background:color-mix(in_srgb,var(--acc)_10%,var(--panel))] [&_button[aria-pressed='true']]:[background:var(--acc)] [&_button[aria-pressed='true']]:text-white flex [border:2px_solid_var(--ink)]"
+            role="group"
+            aria-label="Only show"
+          >
             {toggles.map((o) => (
               <button
                 key={o}
@@ -173,19 +177,19 @@ export default function EventsPage({ upcoming }: { upcoming?: ClubEvent[] }) {
 
       {tab === 'Calendar' && <EventsCalendar events={events} />}
       {listed && (
-        <div className="ev-grid">
+        <div className="[display:grid] gap-5 items-stretch grid-cols-[repeat(auto-fill,_minmax(min(100%,_320px),_1fr))]">
           {shown.map((e, i) => {
             const left = e.seats === null ? null : Math.max(0, e.seats - e.taken);
             const mine = e.mine.filter((x) => x.status !== 'cancelled');
             return (
               <article
                 key={e.id}
-                className="bx ev-tile"
+                className="bx [background:var(--panel,_#f5f3ec)] [.t-b_&]:[background:#f5f3ec] ev-tile flex flex-col min-h-[380px] [animation:page-rise_0.4s_ease-out_both] [animation-delay:calc(var(--i,_0)_*_50ms)] [transition:transform_0.2s_ease,_box-shadow_0.2s_ease] hover:[transform:translateY(-3px)] hover:[box-shadow:6px_6px_0_var(--line2)]"
                 style={{ '--i': i % 24 } as React.CSSProperties}
               >
                 <Link
                   href={`/app/events/${e.id}`}
-                  className="ban"
+                  className="ban flex items-end flex-none h-[120px] overflow-hidden [&[data-type='Class']]:[--hue:#2f5bff] [&[data-type='Contest']]:[--hue:#f2541b] [&[data-type='Workshop']]:[--hue:#0f9d58] [&[data-type='Seminar']]:[--hue:#7c4dff] [&[data-type='ICPC_prep']]:[--hue:#c98a00] [&[data-type='Social']]:[--hue:#d6266f] [&[data-type='Hackathon']]:[--hue:#d6266f]"
                   data-type={e.type}
                   style={bannerStyle(e.banner)}
                 >
@@ -195,7 +199,7 @@ export default function EventsPage({ upcoming }: { upcoming?: ClubEvent[] }) {
                     </span>
                   )}
                 </Link>
-                <div className="ev-body">
+                <div className="[&>.body]:[display:-webkit-box] [&>.body]:[-webkit-box-orient:vertical] [&>.body]:[-webkit-line-clamp:3] [&>.body]:overflow-hidden [&>.btn:last-child]:mt-auto [&_h2_a]:[text-decoration:none] [&_h2_a:hover]:text-acc p-4.5 flex gap-3 flex-col flex-1">
                   <div className="row">
                     <span className="tag b">{e.type}</span>
                     <span className="tag">{fmtWhen(e.startsAt)}</span>
@@ -240,15 +244,11 @@ export default function EventsPage({ upcoming }: { upcoming?: ClubEvent[] }) {
                   {mine
                     .filter((x) => x.status === 'rejected' && x.reason)
                     .map((x) => (
-                      <p key={x.id} className="bad" style={{ fontSize: 14 }}>
+                      <p key={x.id} className="bad text-[14px]">
                         Declined: {x.reason}
                       </p>
                     ))}
-                  <Link
-                    className="btn sm line"
-                    href={`/app/events/${e.id}`}
-                    style={{ alignSelf: 'flex-start' }}
-                  >
+                  <Link className="btn sm line self-start" href={`/app/events/${e.id}`}>
                     {e.status === 'completed' && mine.some((x) => x.status === 'approved')
                       ? 'Feedback and certificates'
                       : 'Details'}
@@ -270,8 +270,8 @@ export default function EventsPage({ upcoming }: { upcoming?: ClubEvent[] }) {
       {tab === 'Upcoming' && !full && events.length >= 24 && (
         <button
           type="button"
-          className="btn sm line"
-          style={{ alignSelf: 'center', marginTop: 16 }}
+          className="btn sm line self-center mt-4"
+
           onClick={() => setFull(true)}
         >
           Show all upcoming events

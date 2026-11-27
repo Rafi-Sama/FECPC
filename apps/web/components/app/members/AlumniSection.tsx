@@ -7,6 +7,9 @@ import { canFully } from '@fecpc/contracts';
 import type { AlumniJob, MemberProfile } from '@fecpc/contracts';
 import { useConfirm } from '@/components/app/shared/PromptDialog';
 
+const sectionHead =
+  'flex items-center justify-between gap-3 pb-1.5 [border-bottom:1px_solid_var(--line)]';
+
 function fmtShortDate(iso: string) {
   try {
     return new Intl.DateTimeFormat('en-GB', {
@@ -118,14 +121,14 @@ export function AlumniSection({
 
   return (
     <>
-      <section className="profile-section" aria-label="Interview tips">
-        <div className="profile-section__head">
-          <h3 className="profile-section__label">· Interview tips</h3>
+      <section className="flex flex-col gap-2" aria-label="Interview tips">
+        <div className={sectionHead}>
+          <h3 className="font-label text-[12px] tracking-[0.08em] uppercase [color:var(--dim)] m-0">
+            · Interview tips
+          </h3>
         </div>
         {tips.length === 0 ? (
-          <p className="body" style={{ fontSize: 14 }}>
-            No interview tips contributed yet.
-          </p>
+          <p className="body text-[14px]">No interview tips contributed yet.</p>
         ) : (
           <ul className="list">
             {tips.map((t) => (
@@ -133,9 +136,7 @@ export function AlumniSection({
                 <span className="grow">
                   <strong>{t.title}</strong>
                 </span>
-                <span className="label" style={{ fontSize: 12 }}>
-                  {fmtShortDate(t.created_at)}
-                </span>
+                <span className="label text-[12px]">{fmtShortDate(t.created_at)}</span>
                 <Link href="/app/prep" className="profile-modal__link">
                   View in Prep ↗
                 </Link>
@@ -145,14 +146,14 @@ export function AlumniSection({
         )}
       </section>
 
-      <section className="profile-section" aria-label="Blogs">
-        <div className="profile-section__head">
-          <h3 className="profile-section__label">· Blogs</h3>
+      <section className="flex flex-col gap-2" aria-label="Blogs">
+        <div className={sectionHead}>
+          <h3 className="font-label text-[12px] tracking-[0.08em] uppercase [color:var(--dim)] m-0">
+            · Blogs
+          </h3>
         </div>
         {blogs.length === 0 ? (
-          <p className="body" style={{ fontSize: 14 }}>
-            No blog posts published yet.
-          </p>
+          <p className="body text-[14px]">No blog posts published yet.</p>
         ) : (
           <ul className="list">
             {blogs.map((b) => (
@@ -162,13 +163,11 @@ export function AlumniSection({
                   {b.subtitle && (
                     <>
                       <br />
-                      <span className="label" style={{ fontSize: 12 }}>
-                        {b.subtitle}
-                      </span>
+                      <span className="label text-[12px]">{b.subtitle}</span>
                     </>
                   )}
                 </span>
-                <span className="label" style={{ fontSize: 12 }}>
+                <span className="label text-[12px]">
                   {fmtShortDate(b.published_at || b.created_at)}
                 </span>
                 <Link
@@ -183,11 +182,13 @@ export function AlumniSection({
         )}
       </section>
 
-      <section className="profile-section" aria-label="Jobs">
-        <div className="profile-section__head">
-          <h3 className="profile-section__label">· Jobs posted</h3>
+      <section className="flex flex-col gap-2" aria-label="Jobs">
+        <div className={sectionHead}>
+          <h3 className="font-label text-[12px] tracking-[0.08em] uppercase [color:var(--dim)] m-0">
+            · Jobs posted
+          </h3>
           {canPost && (
-            <div className="row" style={{ '--g': '6px' } as React.CSSProperties}>
+            <div className="row [--g:6px]">
               <button type="button" className="btn xs line" disabled={syncing} onClick={handleSync}>
                 {syncing ? 'Syncing…' : 'Sync boards'}
               </button>
@@ -204,7 +205,7 @@ export function AlumniSection({
         </div>
 
         {syncMsg && (
-          <p className="label" style={{ fontSize: 12 }} role="status">
+          <p className="label text-[12px]" role="status">
             {syncMsg}
           </p>
         )}
@@ -217,10 +218,8 @@ export function AlumniSection({
             onDiscard={clearJob}
             onSubmit={handleCreate}
           >
-            <label className="profile-edit-field">
-              <span className="label" style={{ fontSize: 11 }}>
-                Company
-              </span>
+            <label className="flex flex-col gap-1.5">
+              <span className="label text-[11px]">Company</span>
               <input
                 className="member-filter-ctrl"
                 required
@@ -231,10 +230,8 @@ export function AlumniSection({
                 placeholder="e.g. bKash Engineering"
               />
             </label>
-            <label className="profile-edit-field">
-              <span className="label" style={{ fontSize: 11 }}>
-                Role
-              </span>
+            <label className="flex flex-col gap-1.5">
+              <span className="label text-[11px]">Role</span>
               <input
                 className="member-filter-ctrl"
                 required
@@ -245,10 +242,8 @@ export function AlumniSection({
                 placeholder="e.g. Junior Backend Engineer"
               />
             </label>
-            <label className="profile-edit-field">
-              <span className="label" style={{ fontSize: 11 }}>
-                Location
-              </span>
+            <label className="flex flex-col gap-1.5">
+              <span className="label text-[11px]">Location</span>
               <input
                 className="member-filter-ctrl"
                 maxLength={100}
@@ -257,10 +252,8 @@ export function AlumniSection({
                 placeholder="Dhaka / Remote"
               />
             </label>
-            <label className="profile-edit-field">
-              <span className="label" style={{ fontSize: 11 }}>
-                Application URL
-              </span>
+            <label className="flex flex-col gap-1.5">
+              <span className="label text-[11px]">Application URL</span>
               <input
                 className="member-filter-ctrl"
                 type="url"
@@ -276,9 +269,7 @@ export function AlumniSection({
 
         {fetched.length > 0 && (
           <div>
-            <p className="label" style={{ fontSize: 11, marginBottom: 4 }}>
-              Fetched
-            </p>
+            <p className="label text-[11px] mb-1">Fetched</p>
             <ul className="list">
               {fetched.map((j) => (
                 <li key={j.id}>
@@ -287,18 +278,11 @@ export function AlumniSection({
                     {j.location && (
                       <>
                         <br />
-                        <span className="label" style={{ fontSize: 11 }}>
-                          {j.location}
-                        </span>
+                        <span className="label text-[11px]">{j.location}</span>
                       </>
                     )}
                   </span>
-                  <span
-                    className="tag"
-                    style={{ fontSize: 11, padding: '2px 6px', cursor: 'default' }}
-                  >
-                    fetched
-                  </span>
+                  <span className="tag text-[11px] py-0.5 px-1.5 cursor-default">fetched</span>
                   <a href={j.url} target="_blank" rel="noopener noreferrer" className="btn xs line">
                     Apply ↗
                   </a>
@@ -309,11 +293,9 @@ export function AlumniSection({
         )}
 
         <div>
-          <p className="label" style={{ fontSize: 11, marginBottom: 4 }}>
-            Manual
-          </p>
+          <p className="label text-[11px] mb-1">Manual</p>
           {manual.length === 0 ? (
-            <p className="profile-empty-dash">—</p>
+            <p className="[font-family:var(--mono),monospace] text-[14px] [color:var(--dim)]">—</p>
           ) : (
             <ul className="list">
               {manual.map((j) => (
@@ -323,18 +305,11 @@ export function AlumniSection({
                     {j.location && (
                       <>
                         <br />
-                        <span className="label" style={{ fontSize: 11 }}>
-                          {j.location}
-                        </span>
+                        <span className="label text-[11px]">{j.location}</span>
                       </>
                     )}
                   </span>
-                  <span
-                    className="tag"
-                    style={{ fontSize: 11, padding: '2px 6px', cursor: 'default' }}
-                  >
-                    manual
-                  </span>
+                  <span className="tag text-[11px] py-0.5 px-1.5 cursor-default">manual</span>
                   {canDeleteJob(j) && (
                     <button
                       type="button"

@@ -70,11 +70,18 @@ components/
 
 ## Styling
 
-- Plain CSS, no framework. `app/globals.css` is the design system: tokens and primitives (`.btn`, `.panel`,
-  `.tbl`, `.list`, `.pill`, `.bento`, `.stack`, `.row`, `.meter`, …). Five theme classes (`t-a` Phosphor
-  Terminal, `t-b` Monolith Dither, `t-c` Insert Coin, `t-d` Signal / Life, `t-e` Blueprint) set the tokens, and
-  the primitives read them. The member area uses `b` (light) and `d` (dark); Arena keeps its arcade skin.
-- `app/(site)/site.css` styles the public site, and `app/app/app.css` the member area.
+- Tailwind CSS v4 (`@tailwindcss/postcss`), being adopted step by step; see [Tailwind migration](tailwind-migration.md).
+  Each section builds its own utilities: `app/(site)/site.utilities.css` from what the public pages render, and
+  `app/app/app.layer.css` from the rest, so a public page never downloads the member area's utilities and a member
+  page gets each utility once. Both import `app/_styles/tailwind.css` (theme, custom variants and the token mapping,
+  so `text-dim`, `bg-panel`, `border-line`, `font-label`, … follow the active theme). `app/globals.css`, on every
+  page, holds only the layer order and `base.css`; no Preflight. Utilities override all legacy CSS.
+- Legacy CSS sits in `@layer components`. `app/_styles/base.css` is the design system: tokens and primitives
+  (`.btn`, `.panel`, `.tbl`, `.list`, `.pill`, `.bento`, `.stack`, `.row`, `.meter`, …). Five theme classes (`t-a`
+  Phosphor Terminal, `t-b` Monolith Dither, `t-c` Insert Coin, `t-d` Signal / Life, `t-e` Blueprint) set the
+  tokens, and the primitives read them. The member area uses `b` (light) and `d` (dark); Arena keeps its arcade skin.
+- `app/(site)/site.css` styles the public site, and `app/app/app.css` the member area. Both load through
+  `*.layer.css` wrappers that put them in `@layer components`.
 - Fonts come from `next/font/google`: Space Grotesk (text), JetBrains Mono (numbers, code), and VT323,
   Silkscreen and Press Start 2P (pixel display). Pixel fonts are for display only. Body text is never set
   in a pixel font below 14px.

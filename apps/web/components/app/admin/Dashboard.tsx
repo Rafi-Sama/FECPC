@@ -14,13 +14,11 @@ function Rows({ rows }: { rows: [string, number, string?][] }) {
     <ul className="list">
       {rows.map(([l, n, color]) => (
         <li key={l}>
-          <span style={{ minWidth: 120 }}>{l}</span>
+          <span className="min-w-[120px]">{l}</span>
           <span className="grow meter" style={css({ '--v': `${(n / max) * 100}%` })}>
             <i style={color ? { background: color } : undefined} />
           </span>
-          <b className="mono" style={{ minWidth: 32, textAlign: 'right' }}>
-            {n}
-          </b>
+          <b className="mono min-w-[32px] text-right">{n}</b>
         </li>
       ))}
     </ul>
@@ -93,7 +91,7 @@ export function Dashboard({ go, exp }: { go: (tab: string) => void; exp: boolean
   return (
     <div className="bento">
       {kpis.map(([l, v, d]) => (
-        <section key={l} className="panel c3">
+        <section key={l} className="panel min-[1100px]:[.bento_>_&]:col-[span_3]">
           <p className="label">{l}</p>
           <p className="big">{v}</p>
           <p className="body">{d}</p>
@@ -139,7 +137,7 @@ export function Dashboard({ go, exp }: { go: (tab: string) => void; exp: boolean
               .filter(([, d]) => d.fee > 0)
               .map(([l, d]) => (
                 <li key={l}>
-                  <span style={{ minWidth: 120 }}>
+                  <span className="min-w-[120px]">
                     {l} · {tk(d.fee)}
                   </span>
                   <span className="grow meter" style={css({ '--v': `${pct(d.paid, d.of)}%` })}>
@@ -217,7 +215,7 @@ function ExportTile() {
     <section className="panel c6">
       <p className="label">Member list</p>
       <p className="body">Exports are written to the audit log.</p>
-      <button className="btn sm" style={{ alignSelf: 'flex-start' }} onClick={download}>
+      <button className="btn sm self-start" onClick={download}>
         Export members (CSV)
       </button>
     </section>

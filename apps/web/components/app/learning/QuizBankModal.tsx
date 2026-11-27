@@ -138,7 +138,7 @@ export function QuizBankModal({
 
   return (
     <div
-      className="modal-overlay"
+      className="fixed inset-0 [background:rgba(0,0,0,0.55)] flex items-center justify-center z-999 p-5"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -146,8 +146,11 @@ export function QuizBankModal({
       aria-modal="true"
       aria-labelledby="quiz-bank-modal-title"
     >
-      <div className="modal-dialog" ref={modalRef}>
-        <div className="modal-header">
+      <div
+        className="[background:var(--panel)] [border:2px_solid_var(--line2)] rounded-[6px] w-full max-w-[800px] max-h-[85vh] flex flex-col [box-shadow:0_10px_30px_rgba(0,0,0,0.25)] overflow-hidden"
+        ref={modalRef}
+      >
+        <div className="flex items-center justify-between p-[16px_20px] [border-bottom:1px_solid_var(--line)]">
           <h2 id="quiz-bank-modal-title" className="h3">
             Quiz Bank ({questions.length})
           </h2>
@@ -162,13 +165,11 @@ export function QuizBankModal({
           </button>
         </div>
 
-        <div className="modal-body">
+        <div className="[.ann-modal_&]:p-[1.5rem] [.ann-modal_&]:max-h-[70vh] [.ann-modal_&]:overflow-y-auto max-[601px]:[.ann-modal_&]:p-[1.25rem] p-5 overflow-y-auto flex flex-col gap-4">
           {error && <div className="alert-box error">{error}</div>}
 
           {questions.length === 0 ? (
-            <p className="body" style={{ color: 'var(--dim)', textAlign: 'center', padding: 24 }}>
-              No questions in the quiz bank yet.
-            </p>
+            <p className="body text-dim text-center p-6">No questions in the quiz bank yet.</p>
           ) : (
             questions.map((q) => {
               const isEditing = editingId === q.id;
@@ -177,8 +178,8 @@ export function QuizBankModal({
                 return (
                   <form
                     key={q.id}
-                    className="course-form-panel"
-                    style={{ margin: 0 }}
+                    className="p-6 [background:var(--panel)] [border:1px_solid_var(--line)] rounded-[4px] m-0"
+
                     onSubmit={handleSaveEdit}
                   >
                     <div className="form-group">
@@ -193,14 +194,7 @@ export function QuizBankModal({
                       />
                     </div>
 
-                    <div
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: '1fr 1fr',
-                        gap: 10,
-                        marginTop: 10,
-                      }}
-                    >
+                    <div className="[display:grid] grid-cols-[1fr_1fr] gap-2.5 mt-2.5">
                       {[0, 1, 2, 3].map((optIdx) => (
                         <div key={optIdx} className="form-group">
                           <label htmlFor={`edit-opt-${q.id}-${optIdx}`}>
@@ -222,7 +216,7 @@ export function QuizBankModal({
                       ))}
                     </div>
 
-                    <div className="form-group" style={{ marginTop: 10 }}>
+                    <div className="form-group mt-2.5">
                       <label htmlFor={`edit-answer-${q.id}`}>Correct Option *</label>
                       <select
                         id={`edit-answer-${q.id}`}
@@ -236,8 +230,8 @@ export function QuizBankModal({
                       </select>
                     </div>
 
-                    <div className="row between" style={{ marginTop: 14 }}>
-                      <div className="row" style={{ gap: 8 }}>
+                    <div className="row between mt-3.5">
+                      <div className="row gap-2">
                         <button type="submit" className="btn sm" disabled={saving}>
                           {saving ? 'Saving...' : 'Save changes'}
                         </button>
@@ -265,18 +259,25 @@ export function QuizBankModal({
               }
 
               return (
-                <div key={q.id} className="bank-row">
-                  <div className="bank-row-content">
-                    <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+                <div
+                  key={q.id}
+                  className="flex items-center justify-between p-[14px_16px] [border:1px_solid_var(--line)] rounded-[4px] [background:var(--bg,#fff)] gap-3"
+                >
+                  <div className="flex flex-col gap-[4px] flex-1">
+                    <div className="row gap-2 items-center">
                       <strong>{q.question}</strong>
-                      {q.today && <span className="badge-today">TODAY</span>}
+                      {q.today && (
+                        <span className="inline-block p-[2px_8px] rounded-[999px] text-[14px] [font-weight:700] uppercase [background:#3b82f6] text-white tracking-[0.05em]">
+                          TODAY
+                        </span>
+                      )}
                     </div>
-                    <span className="course-meta">
+                    <span className="text-[14px] [color:var(--dim)]">
                       Ans: Option {String.fromCharCode(65 + q.answer)} ({q.options[q.answer]})
                     </span>
                   </div>
 
-                  <div className="bank-row-actions">
+                  <div className="flex items-center gap-2">
                     <button
                       type="button"
                       className="btn xs line"

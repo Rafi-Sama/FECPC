@@ -20,7 +20,7 @@ export default function Wiki() {
       }
     >
       <div className="bento">
-        <nav className="c4" aria-label="Articles" style={{ gap: 12 }}>
+        <nav className="c4 gap-3" aria-label="Articles">
           {wiki.map((x) => (
             <button
               key={x.id}
@@ -37,10 +37,8 @@ export default function Wiki() {
           ))}
         </nav>
         <article className="panel c8">
-          <h2 className="h3" style={{ fontSize: 30 }}>
-            {w.title}
-          </h2>
-          <ol className="prose">
+          <h2 className="h3 text-[30px]">{w.title}</h2>
+          <ol className="[&_li]:[counter-increment:p] [&_li]:[display:grid] [&_li]:grid-cols-[32px_minmax(0,1fr)] [&_li::before]:[content:counter(p,decimal-leading-zero)] [&_li::before]:[font-family:var(--mono),monospace] [&_li::before]:text-[14px] [&_li::before]:text-acc [&_li::before]:pt-[4px] flex flex-col gap-3 [counter-reset:p] text-[17px] leading-[1.6] max-w-[66ch]">
             {w.body.map((b) => (
               <li key={b}>{b}</li>
             ))}

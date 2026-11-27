@@ -1,11 +1,17 @@
 'use client';
+import dynamic from 'next/dynamic';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { JobCard } from './JobCard';
-import { JobDetailModal } from './JobDetailModal';
-import { PostJobModal } from './PostJobModal';
 import type { AlumniJob } from '@fecpc/contracts';
 import { useStore } from '@/components/app/Store';
 import { can } from '@fecpc/contracts';
+
+// Opened on demand: the dialog's code loads when it is first shown.
+const JobDetailModal = dynamic(() => import('./JobDetailModal').then((m) => m.JobDetailModal));
+const PostJobModal = dynamic(() => import('./PostJobModal').then((m) => m.PostJobModal));
+
+const sourceTab =
+  'py-2 px-3.5 [font-family:var(--mono)] text-[11px] font-bold uppercase tracking-[0.06em] cursor-pointer';
 
 export function JobsTab({
   searchQuery,
@@ -142,14 +148,7 @@ export function JobsTab({
   return (
     <div>
       {canPost && (
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'flex-end',
-            marginTop: -12,
-            marginBottom: 16,
-          }}
-        >
+        <div className="-mt-3 mb-4 flex justify-end">
           <button type="button" className="btn sm" onClick={() => setPostModalOpen(true)}>
             + Add job
           </button>
@@ -157,21 +156,9 @@ export function JobsTab({
       )}
 
       {/* Sub-bar / Search & filter row */}
-      <div
-        className="bar"
-        style={{
-          display: 'flex',
-          gap: 12,
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          background: 'var(--panel, #F6F4EE)',
-          border: '2px solid var(--line2, #0B0B0B)',
-          padding: 16,
-          marginBottom: 20,
-        }}
-      >
+      <div className="bar p-4 mb-5 flex gap-3 flex-wrap items-center [background:var(--panel)] [border:2px_solid_var(--line2)]">
         {/* Search input with SVG magnifying glass */}
-        <div style={{ flex: '1 1 260px', position: 'relative', minWidth: 200 }}>
+        <div className="flex-[1_1_260px] relative min-w-[200px]">
           <svg
             width="16"
             height="16"
@@ -180,14 +167,7 @@ export function JobsTab({
             stroke="currentColor"
             strokeWidth="1.6"
             aria-hidden="true"
-            style={{
-              position: 'absolute',
-              left: 14,
-              top: '50%',
-              transform: 'translateY(-50%)',
-              pointerEvents: 'none',
-              opacity: 0.6,
-            }}
+            className="top-[50%] left-3.5 absolute [transform:translateY(-50%)] pointer-events-none opacity-[0.6]"
           >
             <circle cx="7" cy="7" r="5" />
             <path d="m11 11 3.5 3.5" />
@@ -198,16 +178,7 @@ export function JobsTab({
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search company, role or location"
             aria-label="Search jobs"
-            style={{
-              width: '100%',
-              border: '2px solid var(--line2, #0B0B0B)',
-              background: 'var(--bg, #FFFFFF)',
-              color: 'var(--ink, #0B0B0B)',
-              padding: '10px 14px 10px 40px',
-              fontFamily: 'var(--sans)',
-              fontSize: 14,
-              borderRadius: 0,
-            }}
+            className="py-2.5 pr-3.5 pl-10 w-full [border:2px_solid_var(--line2)] [background:var(--bg)] text-ink [font-family:var(--sans)] text-[14px] [border-radius:0]"
           />
         </div>
 
@@ -216,17 +187,7 @@ export function JobsTab({
           value={jobType}
           onChange={(e) => setJobType(e.target.value)}
           aria-label="Job type"
-          style={{
-            border: '2px solid var(--line2, #0B0B0B)',
-            background: 'var(--bg, #FFFFFF)',
-            color: 'var(--ink, #0B0B0B)',
-            padding: '10px 14px',
-            fontFamily: 'var(--sans)',
-            fontSize: 13,
-            fontWeight: 600,
-            borderRadius: 0,
-            minWidth: 150,
-          }}
+          className="py-2.5 px-3.5 [border:2px_solid_var(--line2)] [background:var(--bg)] text-ink [font-family:var(--sans)] text-[13px] font-semibold [border-radius:0] min-w-[150px]"
         >
           <option value="all">All job types</option>
           <option value="Full-time">Full-time</option>
@@ -240,17 +201,7 @@ export function JobsTab({
           value={sort}
           onChange={(e) => setSort(e.target.value as 'soon' | 'new' | 'vac')}
           aria-label="Sort"
-          style={{
-            border: '2px solid var(--line2, #0B0B0B)',
-            background: 'var(--bg, #FFFFFF)',
-            color: 'var(--ink, #0B0B0B)',
-            padding: '10px 14px',
-            fontFamily: 'var(--sans)',
-            fontSize: 13,
-            fontWeight: 600,
-            borderRadius: 0,
-            minWidth: 170,
-          }}
+          className="py-2.5 px-3.5 [border:2px_solid_var(--line2)] [background:var(--bg)] text-ink [font-family:var(--sans)] text-[13px] font-semibold [border-radius:0] min-w-[170px]"
         >
           <option value="soon">Closing soonest</option>
           <option value="new">Newest first</option>
@@ -258,56 +209,25 @@ export function JobsTab({
         </select>
 
         {/* Segmented source toggle */}
-        <div
-          role="group"
-          aria-label="Source"
-          style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}
-        >
+        <div role="group" aria-label="Source" className="inline-flex gap-1 flex-wrap items-center">
           <button
             type="button"
-            className={`tag tab ${source === '' ? 'on' : ''}`}
+            className={`tag tab ${source === '' ? 'on' : ''} ${sourceTab}`}
             onClick={() => setSource('')}
-            style={{
-              padding: '8px 14px',
-              fontFamily: 'var(--mono)',
-              fontSize: 11,
-              fontWeight: 700,
-              textTransform: 'uppercase',
-              letterSpacing: '0.06em',
-              cursor: 'pointer',
-            }}
           >
             All
           </button>
           <button
             type="button"
-            className={`tag tab ${source === 'manual' ? 'on' : ''}`}
+            className={`tag tab ${source === 'manual' ? 'on' : ''} ${sourceTab}`}
             onClick={() => setSource('manual')}
-            style={{
-              padding: '8px 14px',
-              fontFamily: 'var(--mono)',
-              fontSize: 11,
-              fontWeight: 700,
-              textTransform: 'uppercase',
-              letterSpacing: '0.06em',
-              cursor: 'pointer',
-            }}
           >
             Manual
           </button>
           <button
             type="button"
-            className={`tag tab ${source === 'fetched' ? 'on' : ''}`}
+            className={`tag tab ${source === 'fetched' ? 'on' : ''} ${sourceTab}`}
             onClick={() => setSource('fetched')}
-            style={{
-              padding: '8px 14px',
-              fontFamily: 'var(--mono)',
-              fontSize: 11,
-              fontWeight: 700,
-              textTransform: 'uppercase',
-              letterSpacing: '0.06em',
-              cursor: 'pointer',
-            }}
           >
             Fetched
           </button>
@@ -315,61 +235,29 @@ export function JobsTab({
       </div>
 
       {/* Count label */}
-      <div
-        style={{
-          fontFamily: 'var(--mono)',
-          fontSize: 12,
-          fontWeight: 700,
-          textTransform: 'uppercase',
-          letterSpacing: '0.08em',
-          color: 'var(--dim, #6B6B6B)',
-          marginBottom: 16,
-        }}
-      >
+      <div className="mb-4 [font-family:var(--mono)] text-[12px] font-bold uppercase tracking-[0.08em] text-dim">
         {total} {total === 1 ? 'role' : 'roles'}
       </div>
 
       {/* Job Grid / Loading / Empty */}
       {loading ? (
-        <div
-          className="gr"
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(310px, 1fr))',
-            gap: 24,
-          }}
-        >
+        <div className="gr [display:grid] grid-cols-[repeat(auto-fill,_minmax(310px,_1fr))] gap-6">
           {[1, 2, 3, 4, 5, 6].map((i) => (
             <div
               key={i}
-              className="panel"
-              style={{
-                height: 280,
-                border: '2px solid var(--line2, #0B0B0B)',
-                background: 'var(--panel, #F6F4EE)',
-                opacity: 0.5,
-                animation: 'pulse 1.5s infinite ease-in-out',
-              }}
+              className="panel h-[280px] [border:2px_solid_var(--line2)] [background:var(--panel)] opacity-[0.5] [animation:pulse_1.5s_infinite_ease-in-out]"
             />
           ))}
         </div>
       ) : jobs.length > 0 ? (
-        <div
-          className="gr"
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(310px, 1fr))',
-            gap: 24,
-          }}
-        >
+        <div className="gr [display:grid] grid-cols-[repeat(auto-fill,_minmax(310px,_1fr))] gap-6">
           {jobs.map((job) => (
             <JobCard key={job.id} job={job} onOpenDetail={handleOpenDetail} highlightQuery={q} />
           ))}
           {jobs.length < total && (
             <button
               type="button"
-              className="btn sm line"
-              style={{ gridColumn: '1 / -1', justifySelf: 'center' }}
+              className="btn sm line col-span-full [justify-self:center]"
               onClick={() => fetchJobs(jobs.length)}
             >
               Show more · {total - jobs.length} left
@@ -377,40 +265,15 @@ export function JobsTab({
           )}
         </div>
       ) : (
-        <div
-          className="panel"
-          style={{
-            padding: '48px 24px',
-            textAlign: 'center',
-            border: '2px solid var(--line2, #0B0B0B)',
-            background: 'var(--panel, #F6F4EE)',
-          }}
-        >
-          <div
-            style={{
-              fontFamily: 'var(--mono)',
-              fontSize: 14,
-              fontWeight: 700,
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
-              color: 'var(--dim, #6B6B6B)',
-              marginBottom: 16,
-            }}
-          >
+        <div className="panel py-12 px-6 text-center [border:2px_solid_var(--line2)] [background:var(--panel)]">
+          <div className="mb-4 [font-family:var(--mono)] text-[14px] font-bold uppercase tracking-[0.08em] text-dim">
             {hasActiveFilters ? 'NO ROLES MATCH THESE FILTERS.' : 'NO OPEN ROLES YET.'}
           </div>
           {hasActiveFilters ? (
             <button
               type="button"
-              className="btn line sm"
+              className="btn line sm [font-family:var(--mono)] text-[12px] font-bold uppercase cursor-pointer"
               onClick={resetFilters}
-              style={{
-                fontFamily: 'var(--mono)',
-                fontSize: 12,
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                cursor: 'pointer',
-              }}
             >
               Reset filters
             </button>
@@ -418,15 +281,8 @@ export function JobsTab({
             canPost && (
               <button
                 type="button"
-                className="btn k sm"
+                className="btn k sm [font-family:var(--mono)] text-[12px] font-bold uppercase cursor-pointer"
                 onClick={() => setPostModalOpen(true)}
-                style={{
-                  fontFamily: 'var(--mono)',
-                  fontSize: 12,
-                  fontWeight: 700,
-                  textTransform: 'uppercase',
-                  cursor: 'pointer',
-                }}
               >
                 + Post the first role
               </button>

@@ -89,9 +89,13 @@ export function AuditLog() {
   }
 
   return (
-    <div className="al">
-      <div className="al-tools">
-        <div className="al-areas" role="tablist" aria-label="Sections">
+    <div className="flex flex-col gap-4">
+      <div className="flex justify-between items-start gap-3 flex-wrap">
+        <div
+          className="al-areas flex flex-wrap gap-1.5 flex-[1_1_520px]"
+          role="tablist"
+          aria-label="Sections"
+        >
           <button
             role="tab"
             aria-selected={!area}
@@ -115,7 +119,7 @@ export function AuditLog() {
           ))}
         </div>
         <input
-          className="input sm al-search"
+          className="input sm"
           type="search"
           placeholder="Search who or what"
           value={q}
@@ -123,7 +127,7 @@ export function AuditLog() {
           aria-label="Search the audit log"
         />
       </div>
-      <p className="al-note">Entries can't be edited or deleted, by anyone.</p>
+      <p className="text-dim text-[14px]">Entries can't be edited or deleted, by anyone.</p>
 
       {err && (
         <p className="body bad" role="alert">
@@ -131,21 +135,30 @@ export function AuditLog() {
         </p>
       )}
       {!busy && !err && rows.length === 0 && (
-        <p className="rc-none">
+        <p className="p-8 text-center [color:var(--dim)] [border:1px_dashed_var(--line)]">
           {query ? 'Nothing matches that search.' : 'Nothing recorded here yet.'}
         </p>
       )}
       {days.map(([k, list]) => (
-        <section key={k} className="al-day">
-          <h3 className="al-date">{dayLabel(k)}</h3>
+        <section
+          key={k}
+          className="[&_li+li]:[border-top:1px_solid_var(--line)] [&_ol]:[display:grid] [&_ol]:[border:1px_solid_var(--line)] [&_ol]:[background:var(--panel)] [&_li]:[display:grid] [&_li]:grid-cols-[52px_minmax(0,1fr)_auto] [&_li]:gap-3 [&_li]:items-baseline [&_li]:p-[10px_14px_10px_12px] [&_li]:[border-left:4px_solid_var(--h)] [&_li]:text-[15px] [&_time]:[font:14px_var(--f-label)] [&_time]:[color:var(--dim)] max-[641px]:[&_li]:grid-cols-[44px_minmax(0,1fr)]"
+        >
+          <h3 className="mb-2 [font:600_14px/1_var(--f-label)] text-mut uppercase tracking-[0.08em]">
+            {dayLabel(k)}
+          </h3>
           <ol>
             {list.map((r) => (
               <li key={r.id} style={{ '--h': HUE[r.area] ?? HUE.Other } as React.CSSProperties}>
                 <time dateTime={r.at}>{time(r.at)}</time>
-                <span className="al-what">
+                <span className="[overflow-wrap:anywhere]">
                   <b>{r.who}</b> {r.what}
                 </span>
-                {!area && <span className="al-tag">{r.area}</span>}
+                {!area && (
+                  <span className="[font:14px_var(--f-label)] [color:var(--h)] whitespace-nowrap max-[641px]:col-[2]">
+                    {r.area}
+                  </span>
+                )}
               </li>
             ))}
           </ol>
@@ -153,8 +166,8 @@ export function AuditLog() {
       ))}
       {more && (
         <button
-          className="btn sm line"
-          style={{ alignSelf: 'center' }}
+          className="btn sm line self-center"
+
           disabled={busy}
           onClick={() => load(rows.at(-1)?.id)}
         >

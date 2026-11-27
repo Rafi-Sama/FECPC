@@ -17,11 +17,9 @@ export function QuizMember() {
 
   if (quiz.length === 0) {
     return (
-      <div className="panel" style={{ padding: 48, textAlign: 'center' }}>
+      <div className="panel p-12 text-center">
         <h3 className="h3">No quiz today</h3>
-        <p className="body" style={{ color: 'var(--dim)', marginTop: 8 }}>
-          The question bank is empty.
-        </p>
+        <p className="body text-dim mt-2">The question bank is empty.</p>
       </div>
     );
   }
@@ -31,25 +29,29 @@ export function QuizMember() {
   const allAnswered = answered === quiz.length;
 
   return (
-    <div className="learning-container">
+    <div className="flex flex-col gap-6 w-full">
       {allAnswered ? (
-        <div className="quiz-summary-banner complete" role="status">
+        <div
+          className="p-[20px_24px] rounded-[4px] [border:2px_solid_var(--line2)] mb-6 flex items-center justify-between [&&]:border-[#10b981] [background:rgba(16,185,129,0.08)] complete"
+          role="status"
+        >
           <div>
             <h2 className="h3">
               Today: {correct} of {quiz.length} correct.
             </h2>
-            <p className="body" style={{ color: 'var(--dim)', marginTop: 4 }}>
-              New questions tomorrow.
-            </p>
+            <p className="body text-dim mt-1">New questions tomorrow.</p>
           </div>
-          <span className="badge-today" style={{ background: '#10b981' }}>
+          <span className="inline-block p-[2px_8px] rounded-[999px] text-[14px] [font-weight:700] uppercase text-white tracking-[0.05em] bg-[#10b981]">
             Done for today
           </span>
         </div>
       ) : (
-        <div className="quiz-summary-banner" role="status">
+        <div
+          className="p-[20px_24px] rounded-[4px] [background:var(--panel)] [border:2px_solid_var(--line2)] mb-6 flex items-center justify-between"
+          role="status"
+        >
           <h2 className="h3">Today&apos;s questions</h2>
-          <span className="label" style={{ fontWeight: 600 }}>
+          <span className="label font-semibold">
             {answered} / {quiz.length}
           </span>
         </div>
@@ -62,16 +64,18 @@ export function QuizMember() {
           return (
             <section
               key={q.id}
-              className={`quiz-card ${isAnswered ? 'answered' : ''}`}
+              className={`p-6 [border:1px_solid_var(--line)] [background:var(--panel)] rounded-[4px] mb-5 flex flex-col gap-4.5 [&.answered]:opacity-[0.95] ${isAnswered ? 'answered' : ''}`}
               aria-label={`Question ${idx + 1}`}
             >
-              <div className="quiz-question-header">
-                <span className="quiz-q-num">Q{idx + 1}.</span>
-                <p className="quiz-q-text">{q.question}</p>
+              <div className="flex items-baseline gap-2.5">
+                <span className="[font-weight:700] text-[14px] [color:var(--dim)]">
+                  Q{idx + 1}.
+                </span>
+                <p className="text-[16px] [font-weight:500] text-ink leading-[1.4]">{q.question}</p>
               </div>
 
               <div
-                className="quiz-options-list"
+                className="[display:grid] grid-cols-[1fr] gap-2.5"
                 role="group"
                 aria-label={`Options for question ${idx + 1}`}
               >

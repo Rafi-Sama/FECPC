@@ -44,12 +44,5 @@ export default function Rain({ className, cell = 16 }: { className?: string; cel
       }
     }
   }, 90);
-  return (
-    <canvas
-      ref={ref}
-      aria-hidden
-      className={`px ${className ?? ''}`}
-      style={{ width: '100%', height: '100%' }}
-    />
-  );
+  return <canvas ref={ref} aria-hidden className={`px ${className ?? ''} w-full h-full`} />;
 }

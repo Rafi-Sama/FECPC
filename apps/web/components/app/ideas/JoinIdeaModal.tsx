@@ -1,7 +1,13 @@
 'use client';
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useState } from 'react';
 import { SaveForm } from '@/components/app/SaveBar';
 import { useStore } from '@/components/app/Store';
+import {
+  cmIdeaSubmitTitle,
+  cmIdeaSubmitNote,
+  cmIdeaPublish,
+  ideaSubmitFoot,
+} from '@/components/app/ideas/ui';
 
 export type JoinIdeaTarget = {
   id: number;
@@ -64,11 +70,13 @@ export function JoinIdeaModal({
       aria-label={`Apply to join ${idea.title}`}
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="cm-modal cm-idea-join-modal">
-        <header className="cm-modal-head cm-idea-submit-head cm-idea-join-head">
-          <div className="grow" style={{ minWidth: 0 }}>
-            <p className="cm-idea-join-kicker">APPLY TO JOIN</p>
-            <h2 className="cm-idea-submit-title">{idea.title}</h2>
+      <div className="cm-modal cm-idea-join-modal [box-shadow:8px_8px_0_rgba(13,_13,_11,_0.2)] [.t-d_&]:[box-shadow:8px_8px_0_rgba(0,_0,_0,_0.8)] [.cm-modal&]:max-w-[560px]">
+        <header className="cm-modal-head [&_.cm-modal-close]:flex-none flex items-start gap-3.5 p-6 [background:var(--bg)] [border-bottom:2px_solid_var(--line2)] max-[521px]:p-4 cm-idea-join-head">
+          <div className="grow min-w-0">
+            <p className="mt-0 mx-0 mb-1.5 [color:var(--dim)] font-label text-[11px] tracking-[0.06em] uppercase">
+              APPLY TO JOIN
+            </p>
+            <h2 className={`cm-idea-submit-title ${cmIdeaSubmitTitle}`}>{idea.title}</h2>
           </div>
           <button type="button" className="cm-modal-close" aria-label="Close" onClick={onClose}>
             ×
@@ -82,11 +90,11 @@ export function JoinIdeaModal({
           onDiscard={() => setAnswers({})}
           onSubmit={submit}
         >
-          <p className="cm-idea-apply-note">
+          <p className="m-0 [color:var(--dim)] font-label text-[12px] tracking-[0.05em] uppercase">
             ANSWER BEFORE JOINING · VISIBLE ONLY TO {idea.author_name.toUpperCase()}
           </p>
 
-          <div className="cm-idea-join-questions">
+          <div className="flex flex-col gap-3.5">
             {idea.roles.map((prompt, idx) => (
               <label key={prompt} className="field">
                 <span className="label">
@@ -104,13 +112,19 @@ export function JoinIdeaModal({
             ))}
           </div>
 
-          <div className="cm-idea-submit-foot">
-            <span className="cm-idea-submit-note">Answers go only to the poster.</span>
-            <div className="row" style={{ '--g': '8px' } as CSSProperties}>
+          <div className={ideaSubmitFoot}>
+            <span className={`cm-idea-submit-note tracking-[0.05em] ${cmIdeaSubmitNote}`}>
+              Answers go only to the poster.
+            </span>
+            <div className="row [--g:8px]">
               <button type="button" className="btn sm line" data-close onClick={onClose}>
                 Cancel
               </button>
-              <button type="submit" className="btn sm cm-idea-publish" disabled={busy}>
+              <button
+                type="submit"
+                className={`btn sm cm-idea-publish ${cmIdeaPublish}`}
+                disabled={busy}
+              >
                 {busy ? 'Sending…' : 'Submit Application'}
               </button>
             </div>

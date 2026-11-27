@@ -26,8 +26,8 @@ export default function LoginForm({ invite, error }: { invite?: string; error?: 
   };
   return (
     <form
-      className="panel stack auth"
-      style={{ '--g': '16px' } as React.CSSProperties}
+      className="panel stack [&_.btn]:w-full [--g:16px]"
+
       onSubmit={submit}
     >
       {!invite && (
@@ -83,8 +83,10 @@ export default function LoginForm({ invite, error }: { invite?: string; error?: 
       </button>
       {!invite && (
         <>
-          <p className="auth-or label">or</p>
-          <div className="auth-alt">
+          <p className="flex items-center gap-3.5 text-mut before:content-[''] before:flex-1 before:border-t before:border-t-line2 after:content-[''] after:flex-1 after:border-t after:border-t-line2 label">
+            or
+          </p>
+          <div className="[display:grid] grid-cols-[1fr_1fr] gap-3 [&_a]:flex [&_a]:items-center [&_a]:justify-center [&_a]:gap-2.5 [&_a]:min-h-13 [&_a]:border-2 [&_a]:border-ink [&_a]:text-ink [&_a]:no-underline [&_a]:text-[16px] [&_a]:font-medium [&_a]:[transition:background_0.12s,color_0.12s] [&_a:hover]:bg-ink [&_a:hover]:text-bg [&_a:focus-visible]:[outline:2px_solid_var(--acc)] [&_a:focus-visible]:outline-offset-[3px] [&_svg]:w-5 [&_svg]:h-5">
             <a href="/api/auth/google">
               <svg viewBox="0 0 24 24" aria-hidden>
                 <path
@@ -116,7 +118,7 @@ export default function LoginForm({ invite, error }: { invite?: string; error?: 
               GitHub
             </a>
           </div>
-          <p className="auth-foot body">
+          <p className="pt-4.5 [border-top:1px_dashed_var(--line2)] body">
             Not a member yet? Apply through the recruitment link the committee shares each intake.
           </p>
         </>

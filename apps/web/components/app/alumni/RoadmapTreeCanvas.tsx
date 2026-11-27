@@ -70,16 +70,8 @@ export function edgePath(p: Box, c: Box, horizontal = false): string {
   return `M${px} ${y1}V${mid}H${cx}V${c.y}`;
 }
 
-const zoomBtn = {
-  font: '500 14px Inter, Arial, sans-serif',
-  minWidth: 36,
-  minHeight: 36,
-  padding: '0 8px',
-  border: '2px solid var(--line2, #0B0B0B)',
-  background: 'var(--panel, #F6F4EE)',
-  color: 'var(--ink, #0B0B0B)',
-  cursor: 'pointer',
-} as const;
+const zoomBtn =
+  '[font:500_14px_Inter,_Arial,_sans-serif] min-h-[36px] py-0 px-2 [border:2px_solid_var(--line2)] [background:var(--panel)] text-ink cursor-pointer';
 
 /** Scales its content to fit the available width (and most of the screen height); −/+ override. */
 export function TreeFrame({
@@ -107,20 +99,14 @@ export function TreeFrame({
     setZoom(Math.round(Math.min(1.5, Math.max(0.3, scale + d)) * 10) / 10);
 
   return (
-    <div
-      style={{
-        position: 'relative',
-        background: 'var(--panel, #F6F4EE)',
-        border: '2px solid var(--line2, #0B0B0B)',
-        marginBottom: 16,
-      }}
-    >
-      <div
-        role="group"
-        aria-label="Zoom"
-        style={{ position: 'absolute', top: 8, right: 8, zIndex: 6, display: 'flex', gap: 4 }}
-      >
-        <button type="button" aria-label="Zoom out" onClick={() => step(-0.1)} style={zoomBtn}>
+    <div className="mb-4 relative [background:var(--panel)] [border:2px_solid_var(--line2)]">
+      <div role="group" aria-label="Zoom" className="top-2 right-2 absolute z-[6] flex gap-1">
+        <button
+          type="button"
+          aria-label="Zoom out"
+          onClick={() => step(-0.1)}
+          className={`${zoomBtn} min-w-[36px]`}
+        >
           −
         </button>
         <button
@@ -128,33 +114,27 @@ export function TreeFrame({
           aria-label="Fit to screen"
           title="Fit to screen"
           onClick={() => setZoom(null)}
-          style={{ ...zoomBtn, minWidth: 64 }}
+          className={`${zoomBtn} min-w-[64px]`}
         >
           {zoom === null ? 'Fit' : `${Math.round(scale * 100)}%`}
         </button>
-        <button type="button" aria-label="Zoom in" onClick={() => step(0.1)} style={zoomBtn}>
+        <button
+          type="button"
+          aria-label="Zoom in"
+          onClick={() => step(0.1)}
+          className={`${zoomBtn} min-w-[36px]`}
+        >
           +
         </button>
       </div>
-      <div ref={ref} style={{ overflow: 'auto', padding: '52px 16px 16px' }}>
+      <div ref={ref} className="pt-13 px-4 pb-4 overflow-auto">
         <div
-          style={{
-            position: 'relative',
-            width: width * scale,
-            height: height * scale,
-            margin: '0 auto',
-          }}
+          className="my-0 mx-auto relative"
+          style={{ width: width * scale, height: height * scale }}
         >
           <div
-            style={{
-              position: 'absolute',
-              left: 0,
-              top: 0,
-              width,
-              height,
-              transform: `scale(${scale})`,
-              transformOrigin: '0 0',
-            }}
+            className="top-0 left-0 absolute [transform-origin:0_0]"
+            style={{ width, height, transform: `scale(${scale})` }}
           >
             {children}
           </div>
@@ -182,7 +162,7 @@ export function TreeEdges({
       aria-hidden="true"
       width={width}
       height={height}
-      style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
+      className="inset-0 absolute pointer-events-none"
     >
       {nodes.map((n) => {
         const p = n.parentKey ? pos.get(n.parentKey) : undefined;
@@ -240,55 +220,32 @@ export function RoadmapTreeCanvas({
             title={topic.description ? `${topic.name} — ${topic.description}` : topic.name}
             aria-pressed={isSelected}
             onClick={() => onSelectTopic(topic)}
+            className="py-3 px-4 absolute text-left block cursor-pointer"
             style={{
-              position: 'absolute',
               left: b.x,
               top: b.y,
               width: NODE_W,
               height: NODE_H,
-              padding: '12px 16px',
-              textAlign: 'left',
-              display: 'block',
               border: isSelected
                 ? '3px solid var(--acc, #1F3BFF)'
                 : '2px solid var(--line2, #0B0B0B)',
               background: done ? 'var(--bg, #FFFFFF)' : 'var(--panel, #F6F4EE)',
-              cursor: 'pointer',
               boxShadow: isSelected ? '4px 4px 0 var(--acc, #1F3BFF)' : 'none',
             }}
           >
             <span
-              className="m"
-              style={{
-                display: 'block',
-                font: '14px ui-monospace, Menlo, monospace',
-                color: isSelected ? 'var(--acc, #1F3BFF)' : 'var(--dim, #5F5F5F)',
-                fontWeight: 600,
-              }}
+              className="m block [font:600_14px_ui-monospace,_Menlo,_monospace]"
+              style={{ color: isSelected ? 'var(--acc, #1F3BFF)' : 'var(--dim, #5F5F5F)' }}
             >
               {total === 0 ? 'No problems yet' : `${solved}/${total} solved${done ? ' ✓' : ''}`}
             </span>
-            <b
-              style={{
-                fontSize: 16,
-                display: 'block',
-                marginTop: 2,
-                color: 'var(--ink, #0B0B0B)',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
+            <b className="mt-0.5 text-[16px] block text-ink overflow-hidden text-ellipsis whitespace-nowrap">
               <HighlightMatch text={topic.name} query={highlightQuery} />
             </b>
-            <div
-              className="pb"
-              style={{ height: 8, background: 'var(--line, #DCD8CC)', marginTop: 10 }}
-            >
+            <div className="pb mt-2.5 h-[8px] [background:var(--line)]">
               <i
+                className="block h-full"
                 style={{
-                  display: 'block',
-                  height: '100%',
                   background: isSelected ? 'var(--acc, #1F3BFF)' : 'var(--ink, #0D0D0B)',
                   width: `${pct}%`,
                 }}
