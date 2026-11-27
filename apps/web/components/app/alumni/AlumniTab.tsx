@@ -34,6 +34,8 @@ export function AlumniTab({
   const [locationOptions, setLocationOptions] = useState<string[]>([]);
 
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Only the latest request may fill the list: an older, slower answer arriving later is dropped.
+  const reqSeq = useRef(0);
   const onCountChangeRef = useRef(onCountChange);
 
   useEffect(() => {
@@ -49,6 +51,7 @@ export function AlumniTab({
 
   const fetchAlumni = useCallback(
     async (targetPage = 0, append = false) => {
+      const mine = ++reqSeq.current;
       if (append) setLoadingMore(true);
       else setLoading(true);
 
@@ -67,7 +70,7 @@ export function AlumniTab({
           }),
         });
 
-        if (res.ok) {
+        if (res.ok && mine === reqSeq.current) {
           const data = (await res.json()) as {
             alumni: AlumniSummary[];
             total: number;
@@ -91,8 +94,10 @@ export function AlumniTab({
       } catch {
         // network error
       } finally {
-        setLoading(false);
-        setLoadingMore(false);
+        if (mine === reqSeq.current) {
+          setLoading(false);
+          setLoadingMore(false);
+        }
       }
     },
     [q, batch, location, availableOnly],

@@ -49,7 +49,9 @@ and extra columns on existing tables.
 | `attendance`                           | Event check-ins and volunteer-shift sign-ups (`vol:` keys)              | users              |
 | `messages`                             | Anonymous suggestions (no sender stored) and event feedback             | users              |
 | `pings`                                | ICPC team invites (`kind = 'invite'`, `ref = team:<id>`)                | users              |
+| `icpc_invites` | History of team invitations: open, accepted, declined, withdrawn, or closed when the member joined another team | users |
 | `club`                                 | Shared switches and values (`flag:` and `kv:` keys) changed by officers | users              |
+| `xp_snapshot`, `xp_history` | A member's XP by source as last seen, and every change to it since (by source, with a `start` line for XP from before history, and `rate` lines when the Super Admin changes amounts). Written when the member's state loads | users |
 | `milestones`                           | Crossed Codeforces ranks, solved thresholds and streaks                 | users              |
 | `post_roles`                           | Which existing roles each club post grants; edited by the Super Admin   | —                  |
 | `milestone_kudos`                      | Kudos on milestones (permanent)                                         | milestones, users  |

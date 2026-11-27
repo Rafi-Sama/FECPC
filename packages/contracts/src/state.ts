@@ -1,8 +1,8 @@
 // The shape of everything the server sends a signed-in member. Built by the API's loadState (modules/member-area/state.ts), read by the web store.
 import type { Post, Role } from './roles.ts';
-import type { Due } from './dues.ts';
+import type { Due, DuesMember } from './dues.ts';
 import type { Applicant, RecruitLink } from './recruit.ts';
-import type { ProfileRequest, ProfileRequestReview } from './profile.ts';
+import type { ProfileHistoryItem, ProfileRequest, ProfileRequestReview } from './profile.ts';
 
 /** A club member as the roster shows them. */
 export type Member = {
@@ -22,6 +22,7 @@ export type Member = {
   helper: number;
 };
 
+export type InboxTone = 'urgent' | 'action' | 'good' | 'info';
 export type Payment = {
   trx: string;
   via: string;
@@ -31,6 +32,8 @@ export type Payment = {
   amount: number;
   label: string;
   at: string;
+  /** When an officer verified or rejected it. */
+  decided_at?: string | null;
   note: string | null;
 };
 export type S = {
@@ -71,6 +74,10 @@ export type S = {
   acceptedInterests: number;
   /** Kudos received anywhere (profile, ideas, milestones); each is XP. */
   kudosReceived: number;
+  /** Days checked in, ever (each is XP). */
+  checkins: number;
+  /** Every kudos this member gave, wherever: profiles, ideas, milestones. */
+  kudosGiven: number;
 };
 /** A member as everyone sees them. `roleKey` and `suspended` are present only for officers who manage accounts. */
 export type Roster = Member & {
@@ -289,6 +296,10 @@ export type Expense = {
   amount: number;
   event: string;
   status: string;
+  /** When it was filed, and who decided it when. */
+  at?: string;
+  decidedAt?: string | null;
+  decidedBy?: string | null;
 };
 
 export type FeedCategory = 'problem-solving' | 'upsolving' | 'topic';
@@ -420,6 +431,8 @@ export type Office = {
     label: string;
     amount: number;
     via: string;
+    /** The club number it was sent to (payments since methods became settings). */
+    paidTo?: string | null;
     trx: string;
     sender: string;
     status: string;
@@ -438,6 +451,7 @@ export type Office = {
     term: { of: number; paid: number; waiting: number; fee: number };
     post: { of: number; paid: number; waiting: number; fee: number };
     gifts: { amount: number; count: number };
+    members: DuesMember[];
   };
   recruit?: { links: RecruitLink[]; applicants: Applicant[] };
   /** Open profile change requests, for officers with full `member.editDetails`. */
@@ -515,6 +529,10 @@ export type AppState = {
     cat: string;
     text: string;
     href: string;
+    /** When it happened (ISO), when the record keeps a time. */
+    at?: string | null;
+    /** How much it matters: `urgent` bad news or a deadline, `action` waits on this member, `good` news, `info` the rest. */
+    tone: InboxTone;
     /** One-click answers: each is a member action (`act(type, args)`); its handler re-checks permission. */
     actions?: { label: string; type: string; args: Record<string, unknown> }[];
   }[];
@@ -536,6 +554,8 @@ export type AppState = {
   office: Office;
   /** The member's own latest profile change request: open, or decided in the last 14 days. */
   profileRequest: ProfileRequest | null;
+  /** This member's last 20 profile change requests, newest first (a new photo is `true`). */
+  profileHistory: ProfileHistoryItem[];
   /** The current weekly sheet first, then curated sheets, newest first. `club` = members Codeforces says solved it. */
   sheets: Sheet[];
   /**

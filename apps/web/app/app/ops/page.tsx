@@ -96,6 +96,9 @@ export default function Ops() {
             />
             <PersonPicker name="who" people={people} label="Assign to" />
             <DatePicker name="due" label="Due" placeholder="Due date" />
+            <button type="submit" className="btn sm">
+              Add task
+            </button>
           </SaveForm>
           <div className="kanban">
             {cols.map((c) => {

@@ -45,8 +45,18 @@ export type TeamData = {
   free: { id: string; name: string; handle: string }[];
   invites: { from: string; fromName: string; name: string | null }[];
   sent: string[];
+  sentRows?: { id: string; name: string; at: string }[];
+  inviteLog?: InviteLog[];
   teams: { id: number; name: string; size: number }[];
   stats?: TeamStats;
+};
+type InviteLog = {
+  id: number;
+  status: 'pending' | 'accepted' | 'declined' | 'withdrawn' | 'closed';
+  at: string;
+  decidedAt: string | null;
+  outgoing: boolean;
+  with: string;
 };
 type TeamStats = {
   members: {
@@ -168,7 +178,7 @@ export default function Teams({ initial }: { initial: TeamData | null }) {
   // ── Leave team confirmation ─────────────────────────────────────────────
   const [confirmLeave, setConfirmLeave] = useState(false);
   // The notebook opens first; Strength (the team's numbers) is one click away.
-  const [view, setView] = useState<'notes' | 'strength'>('notes');
+  const [view, setView] = useState<'notes' | 'strength' | 'invites'>('notes');
 
   // ── Close LFT dropdown on outside click ────────────────────────────────
   useEffect(() => {
@@ -575,29 +585,36 @@ export default function Teams({ initial }: { initial: TeamData | null }) {
   return (
     <Page title={title} aside={aside}>
       <div className="bento">
-        {onTeam && (
-          <div className="col-span-full flex-row justify-start gap-2" role="tablist">
-            {(
-              [
-                ['notes', 'Notebook'],
-                ['strength', 'Strength'],
-              ] as const
-            ).map(([k, label]) => (
-              <button
-                key={k}
-                role="tab"
-                aria-selected={view === k}
-                className={`tag tab ${view === k ? 'on' : ''} py-2.5 px-4.5`}
-
-                onClick={() => setView(k)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+        {/* Someone is waiting on an answer: ask on every view but the invitations one. */}
+        {view !== 'invites' && d.invites.length > 0 && (
+          <InviteRequests invites={d.invites} run={run} onTeam={onTeam} />
         )}
+        <div className="col-span-full flex-row justify-start gap-2" role="tablist">
+          {(
+            [
+              ['notes', 'Notebook'],
+              ...(onTeam ? ([['strength', 'Strength']] as const) : []),
+              [
+                'invites',
+                `Invitations${d.invites.length + (d.sentRows?.length ?? 0) ? ` · ${d.invites.length + (d.sentRows?.length ?? 0)}` : ''}`,
+              ],
+            ] as const
+          ).map(([k, label]) => (
+            <button
+              key={k}
+              role="tab"
+              aria-selected={view === k}
+              className={`tag tab ${view === k ? 'on' : ''} py-2.5 px-4.5`}
+
+              onClick={() => setView(k)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {view === 'invites' && <Invitations d={d} run={run} onTeam={onTeam} />}
         {/* ── Notebook panel ────────────────────────────────────────────── */}
-        {(view === 'notes' || !onTeam) && (
+        {(view === 'notes' || (!onTeam && view !== 'invites')) && (
           <section className="panel col-span-full">
             {/* Row 1: label left · member tabs + count right */}
             <div className="row between items-center mb-3.5">
@@ -857,6 +874,13 @@ export default function Teams({ initial }: { initial: TeamData | null }) {
                       maxLength={100000}
                       onChange={(e) => setDraft(e.target.value)}
                     />
+                    <button
+                      type="submit"
+                      className="btn sm mt-2"
+                      disabled={draft === (codeOf(active, tpl) ?? '')}
+                    >
+                      Save template
+                    </button>
                   </SaveForm>
                 ) : (
                   <pre className="m-0 min-h-[280px] bg-bg rounded-[4px] p-4 overflow-x-auto [font-family:var(--mono,monospace)] text-[0.82rem] leading-[1.6]">
@@ -1438,6 +1462,140 @@ function TeamOverview({
                 </span>
               </div>
             ))}
+          </div>
+        )}
+      </section>
+    </>
+  );
+}
+
+const INVITE_STATUS: Record<InviteLog['status'], [string, string]> = {
+  pending: ['Waiting', 'warn'],
+  accepted: ['Accepted', 'ok'],
+  declined: ['Declined', 'bad'],
+  withdrawn: ['Withdrawn', ''],
+  closed: ['Closed · joined another team', ''],
+};
+const day = (iso: string) =>
+  new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+/** Invitations waiting on this member, with the answer right there. */
+function InviteRequests({
+  invites,
+  run,
+  onTeam,
+}: {
+  invites: TeamData['invites'];
+  run: (type: string, args?: Record<string, unknown>) => Promise<boolean>;
+  onTeam: boolean;
+}) {
+  return (
+    <section className="panel col-span-full [border-left:4px_solid_var(--acc)]">
+      <p className="label mb-2">
+        {invites.length} invitation{invites.length > 1 ? 's' : ''} waiting for you
+      </p>
+      <div className="list">
+        {invites.map((x) => (
+          <div key={x.from} className="flex-wrap">
+            <span className="grow">
+              <strong>{x.fromName}</strong> invited you to{' '}
+              {x.name ? <strong>{x.name}</strong> : 'start a team together'}
+            </span>
+            <button
+              className="btn xs"
+              disabled={onTeam}
+              title={onTeam ? 'Leave your team first' : undefined}
+              onClick={() => run('teamJoin', { from: x.from })}
+            >
+              Join
+            </button>
+            <button className="btn xs line" onClick={() => run('teamDecline', { from: x.from })}>
+              Decline
+            </button>
+          </div>
+        ))}
+      </div>
+      {onTeam && <p className="label mt-2">You are on a team: leave it first to join another.</p>}
+    </section>
+  );
+}
+
+/** Open invitations both ways, then the history of answered ones. */
+function Invitations({
+  d,
+  run,
+  onTeam,
+}: {
+  d: TeamData;
+  run: (type: string, args?: Record<string, unknown>) => Promise<boolean>;
+  onTeam: boolean;
+}) {
+  const sent = d.sentRows ?? [];
+  const past = (d.inviteLog ?? []).filter((x) => x.status !== 'pending');
+  return (
+    <>
+      {d.invites.length > 0 ? (
+        <InviteRequests invites={d.invites} run={run} onTeam={onTeam} />
+      ) : (
+        <section className="panel col-span-full">
+          <p className="label mb-1">Received</p>
+          <p className="body">No invitations waiting for you.</p>
+        </section>
+      )}
+      <section className="panel col-span-full">
+        <p className="label mb-2">Sent · waiting for an answer</p>
+        {sent.length === 0 ? (
+          <p className="body">
+            Nothing pending. Use + on the Notebook to invite someone who is not on a team.
+          </p>
+        ) : (
+          <div className="list">
+            {sent.map((x) => (
+              <div key={x.id} className="flex-wrap">
+                <span className="grow">
+                  <strong>{x.name}</strong>
+                  <br />
+                  <span className="label">sent {day(x.at)}</span>
+                </span>
+                <span className="pill warn">Waiting</span>
+                <button className="btn xs line" onClick={() => run('teamUninvite', { user: x.id })}>
+                  Withdraw
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+      <section className="panel col-span-full">
+        <p className="label mb-2">History</p>
+        {past.length === 0 ? (
+          <p className="body">Answered invitations show up here.</p>
+        ) : (
+          <div className="list">
+            {past.map((x) => {
+              const [label, tone] = INVITE_STATUS[x.status];
+              return (
+                <div key={x.id} className="flex-wrap">
+                  <span className="grow">
+                    {x.outgoing ? (
+                      <>
+                        You invited <strong>{x.with}</strong>
+                      </>
+                    ) : (
+                      <>
+                        <strong>{x.with}</strong> invited you
+                      </>
+                    )}
+                    <br />
+                    <span className="label">
+                      sent {day(x.at)}
+                      {x.decidedAt ? ` · ${label.toLowerCase()} ${day(x.decidedAt)}` : ''}
+                    </span>
+                  </span>
+                  <span className={`pill ${tone}`}>{label}</span>
+                </div>
+              );
+            })}
           </div>
         )}
       </section>

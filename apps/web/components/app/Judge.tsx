@@ -130,7 +130,6 @@ export function HandleBox() {
   return (
     <SaveForm
       className="row [--g:10px] items-end"
-
       label="Codeforces handle not linked yet"
       saveLabel="Link handle"
       onDiscard={() => setV('')}
@@ -152,6 +151,9 @@ export function HandleBox() {
           required
         />
       </label>
+      <button type="submit" className="btn sm">
+        Link handle
+      </button>
     </SaveForm>
   );
 }
@@ -169,7 +171,6 @@ export function VjudgeBox() {
   return (
     <SaveForm
       className="row [--g:10px] items-end"
-
       label="VJudge username not linked yet"
       saveLabel="Link username"
       onDiscard={() => setV('')}
@@ -195,6 +196,9 @@ export function VjudgeBox() {
           required
         />
       </label>
+      <button type="submit" className="btn sm">
+        Link username
+      </button>
     </SaveForm>
   );
 }

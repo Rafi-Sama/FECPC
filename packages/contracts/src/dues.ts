@@ -48,6 +48,9 @@ export function periods(from: string, today: string): string[] {
   }
 }
 
+/** When a period's bill is due: the first day of its second month. */
+export const dueOf = (period: string) => `${ym(idx(period) + 1)}-01`;
+
 /** The bills for one member, oldest first. Alumni owe no term or post dues; they contribute instead. */
 export function duesFor(
   u: { joined: string; postSince: string | null; alumni: boolean },
@@ -63,7 +66,7 @@ export function duesFor(
           kind,
           label: `${what}, ${mon(idx(p))} – ${mon(idx(p) + PERIOD_MONTHS - 1)}`,
           amount,
-          due: `${ym(idx(p) + 1)}-01`,
+          due: dueOf(p),
         }));
   return [
     ...span('term', u.joined, 'Member dues', fees.term),
@@ -79,3 +82,92 @@ export function duesFor(
       })),
   ];
 }
+
+/** Mobile wallets members can pay into. Each sends a transaction ID by SMS, which the Treasurer checks. */
+export const WALLET_PROVIDERS = ['bKash', 'Nagad', 'Rocket', 'Upay'] as const;
+export type WalletProvider = (typeof WALLET_PROVIDERS)[number];
+/** One account the club takes payments on. Inactive ones stay listed for officers but are hidden from members. */
+export type PayMethod = {
+  id: string;
+  provider: WalletProvider;
+  number: string;
+  /** Who holds it, e.g. "Personal · Club Treasurer". */
+  account: string;
+  active: boolean;
+};
+/** Club setting key (`kv:<key>`) holding the payment methods as JSON. */
+export const WALLETS_KEY = 'wallets';
+export const DEFAULT_WALLETS: PayMethod[] = [
+  {
+    id: 'bkash',
+    provider: 'bKash',
+    number: '01700000000',
+    account: 'Personal · Club Treasurer',
+    active: true,
+  },
+  {
+    id: 'nagad',
+    provider: 'Nagad',
+    number: '01800000000',
+    account: 'Personal · Club Treasurer',
+    active: true,
+  },
+];
+export const WALLET_COLOR: Record<WalletProvider, string> = {
+  bKash: '#e2136e',
+  Nagad: '#f6921e',
+  Rocket: '#8c3494',
+  Upay: '#0f4c9c',
+};
+
+/** Checks a list of payment methods; returns the cleaned list or what is wrong with it. */
+export function cleanWallets(v: unknown): PayMethod[] | string {
+  if (!Array.isArray(v) || v.length > 10) return 'Add between 1 and 10 payment methods.';
+  const out: PayMethod[] = [];
+  for (const [n, w] of v.entries()) {
+    const at = `Method ${n + 1}`;
+    const x = (w ?? {}) as Record<string, unknown>;
+    const provider = WALLET_PROVIDERS.find((p) => p === x.provider);
+    if (!provider) return `${at}: pick ${WALLET_PROVIDERS.join(', ')}.`;
+    const number = String(x.number ?? '').replace(/[\s-]/g, '');
+    if (!/^01[3-9]\d{8}$/.test(number)) return `${at}: the number must be 11 digits, starting 01.`;
+    const account = String(x.account ?? '').trim();
+    if (account.length < 2 || account.length > 60)
+      return `${at}: say whose account it is (2 to 60 characters).`;
+    const id =
+      typeof x.id === 'string' && /^[a-z0-9-]{1,40}$/.test(x.id)
+        ? x.id
+        : `${provider}-${number}`.toLowerCase();
+    if (out.some((o) => o.id === id || (o.provider === provider && o.number === number)))
+      return `${at} repeats another method.`;
+    out.push({ id, provider, number, account, active: x.active !== false });
+  }
+  if (!out.some((w) => w.active)) return 'Keep at least one method active, or members cannot pay.';
+  return out;
+}
+
+/** The club's payment methods from the settings, or the defaults. */
+export function walletsOf(kv: Record<string, unknown>): PayMethod[] {
+  try {
+    const raw = kv[WALLETS_KEY];
+    const list = cleanWallets(typeof raw === 'string' ? JSON.parse(raw) : raw);
+    return typeof list === 'string' ? DEFAULT_WALLETS : list;
+  } catch {
+    return DEFAULT_WALLETS;
+  }
+}
+
+/** One member's dues standing, for finance officers. `since`: the due date of the oldest overdue bill. */
+export type DuesMember = {
+  id: string;
+  name: string;
+  no: string | null;
+  batch: string | null;
+  bills: { id: string; status: 'paid' | 'waiting' | 'unpaid'; due: string }[];
+  paid: number;
+  waiting: number;
+  unpaid: number;
+  overdue: number;
+  owed: number;
+  since: string | null;
+};

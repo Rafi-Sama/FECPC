@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import { MemberFace } from './shared/MemberFace';
 import { owes } from '@fecpc/content/member-area';
 import { can, canFully, isAdmin, isCommittee, roleName, LEVEL, level } from '@fecpc/contracts';
-import type { AppState } from '@fecpc/contracts';
+import { InboxItem, sortInbox } from './Inbox';
 import { site } from '@/lib/site';
 import { useStore } from './Store';
 
@@ -61,6 +61,7 @@ const subs: Record<string, { self: string; items: Item[] }> = {
 const mine: Item[] = [
   ['/app/notifications', 'Inbox'],
   ['/app/profile', 'Profile'],
+  ['/app/xp', 'XP history'],
 ]; // live in the top bar; on phones, in the More sheet
 const all = [
   ...groups.flatMap((g) => g.items),
@@ -89,6 +90,7 @@ const icons: Record<string, string> = {
   '/app/ops': 'M4 4h16v16H4zM8 8v8M12 8v4M16 8v6',
   '/app/admin': 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3zM9 12l2 2 4-4',
   '/app/profile': 'M12 12a4 4 0 100-8 4 4 0 000 8zM4 21a8 8 0 0116 0',
+  '/app/xp': 'M13 2L4 14h7l-1 8 9-12h-7l1-8z',
   '/app/finance': 'M3 7h16a2 2 0 012 2v9a2 2 0 01-2 2H3V7zM3 7V5h14v2M16 13.5h2',
   search: 'M11 18a7 7 0 100-14 7 7 0 000 14zM20 20l-4-4',
   rail: 'M3 4h18v16H3zM9 4v16',
@@ -311,7 +313,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         {!me.system && (
           <>
             <Link
-              href="/app/arena"
+              href="/app/xp"
               className="xphud"
               aria-label={`Level ${lv.lv}, ${LEVEL - lv.into} XP to next level, ${streak} day streak${s.checkin ? '' : ', at risk today'}`}
             >
@@ -380,24 +382,30 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                   <b className={navBadge}>{badge['/app/notifications']}</b>
                 )}
               </summary>
-              <div className="notif-menu">
+              <div className={`notif-menu t-${th}`}>
+                <div className="notif-head">
+                  <strong>Inbox</strong>
+                  <span>
+                    {badge['/app/notifications'] > 0
+                      ? `${badge['/app/notifications']} unread`
+                      : 'All read'}
+                  </span>
+                </div>
                 {inbox.length === 0 ? (
                   <p className="body">Nothing yet.</p>
                 ) : (
-                  // Unread first; otherwise in the order the server lists them.
-                  [...inbox]
-                    .sort((a, b) => +s.read.includes(a.id) - +s.read.includes(b.id))
-                    .slice(0, 6)
-                    .map((n) => (
-                      <div key={n.id} data-read={s.read.includes(n.id) || undefined}>
-                        <span className="label">{n.cat}</span>
-                        <Link href={n.href}>{n.text}</Link>
-                        <InboxActions n={n} />
-                      </div>
-                    ))
+                  <div className="notif-list">
+                    {sortInbox(inbox, s.read)
+                      .slice(0, 8)
+                      .map((n) => (
+                        <InboxItem key={n.id} n={n} />
+                      ))}
+                  </div>
                 )}
                 <div className="notif-foot">
-                  <Link href="/app/notifications">See all</Link>
+                  <Link href="/app/notifications">
+                    See all{inbox.length > 8 ? ` ${inbox.length}` : ''}
+                  </Link>
                   {badge['/app/notifications'] > 0 && (
                     <button onClick={() => act('readAll')}>Mark all read</button>
                   )}
@@ -521,30 +529,5 @@ export function Tabs<T extends string>({
         </button>
       ))}
     </div>
-  );
-}
-
-/** One-click answers on a notification; the action's handler re-checks permission. */
-export function InboxActions({ n }: { n: AppState['inbox'][number] }) {
-  const { act } = useStore();
-  const [busy, setBusy] = useState(false);
-  if (!n.actions?.length) return null;
-  return (
-    <span className="row [--g:8px]">
-      {n.actions.map((x) => (
-        <button
-          key={x.label}
-          className="btn xs line"
-          disabled={busy}
-          onClick={async () => {
-            setBusy(true);
-            await act(x.type, x.args); // once answered, the server leaves it out of the inbox
-            setBusy(false);
-          }}
-        >
-          {x.label}
-        </button>
-      ))}
-    </span>
   );
 }

@@ -9,8 +9,15 @@ import {
   canFully,
   duesFor,
   FEE_KEYS,
+  WALLETS_KEY,
+  XP_DEFAULTS,
+  XP_KEY,
+  xpRates,
+  earnCounts,
+  judgeCounts,
   feesOf,
   periods,
+  dueOf,
   PROFILE_FIELDS,
   type ProfileRequest,
   isAdmin,
@@ -20,6 +27,7 @@ import {
   type Who,
 } from '@fecpc/contracts';
 import type {
+  DuesMember,
   AppState,
   Expense,
   MilestoneType,
@@ -53,6 +61,8 @@ export type Progress = {
   checkin: string;
   /** Consecutive days checked in, ending on `checkin`. */
   run: number;
+  /** Days checked in, ever. */
+  days: number;
 };
 export function progress(raw: Partial<Progress> | null): Progress {
   const p = raw ?? {};
@@ -65,12 +75,14 @@ export function progress(raw: Partial<Progress> | null): Progress {
     kv: p.kv ?? {},
     checkin: p.checkin ?? '',
     run: p.run ?? (p.checkin ? 1 : 0),
+    days: p.days ?? (p.checkin ? 1 : 0),
   };
 }
 
 const ROSTER = `json_build_object('id', id, 'no', member_no, 'name', name, 'handle', coalesce(nullif(cf_handle, ''), handle), 'cf_handle', nullif(coalesce(nullif(cf_handle, ''), handle), ''), 'batch', batch, 'dept', dept, 'squad', squad, 'role', title, 'is_alumni', role = 'alumni', 'rating', coalesce(cf_rating, rating), 'cf_rating', coalesce(cf_rating, nullif(rating, 0)), 'peak', peak,
-  'solved', greatest(problems_solved, solved), 'problems_solved', greatest(problems_solved, solved), 'avatar_url', case when avatar_key is null then avatar_url else '/api/avatars/' || id || '?v=' || avatar_key end, 'streak', greatest(current_streak, streak), 'current_streak', greatest(current_streak, streak), 'contests_participated', contests_participated, 'helper', helper, 'skills', skills, 'xp', solved * 12 + vj_solved * 12 + streak * 30 + helper * 8, 'roleKey', role, 'post', post, 'email', email, 'suspended', suspended, 'system', system, 'pending', not ${JOINED()})`;
-const EXPENSE = `json_build_object('id', 'EXP-' || e.id, 'by', e.by, 'name', w.name, 'what', e.what, 'amount', e.amount, 'event', e.event, 'status', e.status)`;
+  'solved', greatest(problems_solved, solved), 'problems_solved', greatest(problems_solved, solved), 'avatar_url', case when avatar_key is null then avatar_url else '/api/avatars/' || id || '?v=' || avatar_key end, 'streak', greatest(current_streak, streak), 'current_streak', greatest(current_streak, streak), 'contests_participated', contests_participated, 'helper', helper, 'skills', skills, 'xp', solved * xp_rate('cfSolved', ${XP_DEFAULTS.cfSolved}) + vj_solved * xp_rate('vjSolved', ${XP_DEFAULTS.vjSolved}) + streak * xp_rate('streakDay', ${XP_DEFAULTS.streakDay}) + helper * xp_rate('helper', ${XP_DEFAULTS.helper}), 'roleKey', role, 'post', post, 'email', email, 'suspended', suspended, 'system', system, 'pending', not ${JOINED()})`;
+const EXPENSE = `json_build_object('id', 'EXP-' || e.id, 'by', e.by, 'name', w.name, 'what', e.what, 'amount', e.amount, 'event', e.event, 'status', e.status,
+  'at', e.created_at, 'decidedAt', e.decided_at, 'decidedBy', (select d.name from users d where d.id = e.decided_by))`;
 // A challenge's solvers: the first ten since it was posted, ten from before, the member, and the two totals.
 const SOLVER = `cf_solves s join users su on su.id = s.user_id where s.problem = ch.problem and not su.system and not su.suspended`;
 // counts.solved is shown for the fixed starter sheet only, so only its problems are counted.
@@ -87,12 +99,15 @@ select u.email, u.progress, to_char(u.created_at at time zone '${TZ}', 'YYYY-MM-
   (select coalesce(json_object_agg(poll_id, option), '{}') from votes where user_id = $1) as votes,
   (select coalesce(json_agg(target), '[]') from reactions where user_id = $1) as kudos,
   (select coalesce(json_object_agg(invoice_id, j), '{}') from (select distinct on (invoice_id) invoice_id,
-      json_build_object('trx', trx, 'via', via, 'status', status, 'id', id, 'amount', amount, 'label', label, 'at', created_at, 'note', note) j
+      json_build_object('trx', trx, 'via', via, 'status', status, 'id', id, 'amount', amount, 'label', label, 'at', created_at, 'decided_at', decided_at, 'note', note) j
     from payments where user_id = $1 order by invoice_id, (status <> 'rejected') desc, id desc) x) as pay,
   (select count(*)::int from announcements where user_id = $1) as posts,
   (select count(*)::int from feed_posts where user_id = $1) as feed_posts,
-  (select coalesce(sum(least(daily, 20)), 0)::int from (select date_trunc('day', v.created_at at time zone '${TZ}') d, count(*) daily from feed_votes v join feed_posts fp on fp.id = v.post_id where fp.user_id = $1 and v.user_id <> $1 and v.value = 1 group by 1) x) as feed_upvotes,
+  (select coalesce(sum(least(daily, xp_rate('feedUpvoteDailyCap', ${XP_DEFAULTS.feedUpvoteDailyCap}))), 0)::int from (select date_trunc('day', v.created_at at time zone '${TZ}') d, count(*) daily from feed_votes v join feed_posts fp on fp.id = v.post_id where fp.user_id = $1 and v.user_id <> $1 and v.value = 1 group by 1) x) as feed_upvotes,
   (select count(*)::int from ideas where user_id = $1) as ideas_count,
+  ((select count(*) from reactions where user_id = $1) + (select count(*) from milestone_kudos where user_id = $1))::int as kudos_given,
+  u.solved as j_solved, u.vj_solved as j_vj, u.streak as j_streak, u.helper as j_helper,
+  (select points from xp_snapshot where user_id = $1) as xp_snap,
   (select count(*)::int from idea_interests where user_id = $1 and status = 'accepted') as accepted_interests,
   (select count(*)::int from (
       select 1 from reactions where target = 'member:' || $1
@@ -101,22 +116,28 @@ select u.email, u.progress, to_char(u.created_at at time zone '${TZ}', 'YYYY-MM-
     ) k) as kudos_received,
   (select coalesce(json_agg(json_build_object(
       'milestoneId', mk.milestone_id, 'userId', mk.user_id, 'from', g.name,
-      'type', m.type, 'toValue', m.to_value
+      'type', m.type, 'toValue', m.to_value, 'at', mk.created_at
     ) order by mk.created_at desc), '[]'::json)
      from milestone_kudos mk
      join milestones m on m.id = mk.milestone_id
      join users g on g.id = mk.user_id
      where m.user_id = $1 and mk.user_id <> $1) as milestone_kudos_inbox,
-  (select coalesce(json_agg(json_build_object('id', x.id, 'eventId', x.event_id, 'title', e.title, 'role', r.title, 'reason', x.reason) order by x.id desc), '[]')
+  (select coalesce(json_agg(json_build_object('id', x.id, 'eventId', x.event_id, 'title', e.title, 'role', r.title, 'reason', x.reason, 'at', x.at) order by x.id desc), '[]')
      from event_entries x join club_events e on e.id = x.event_id left join event_roles r on r.id = x.role_id
      where x.user_id = $1 and x.status = 'rejected') as declined_entries,
   (select json_build_object('id', r.id::text, 'status', r.status, 'changes', r.changes, 'note', r.note, 'reason', r.reason, 'at', coalesce(r.decided_at, r.created_at))
      from profile_requests r where r.user_id = $1 and (r.status = 'pending' or (r.status in ('approved','rejected') and r.decided_at > now() - interval '14 days'))
      order by r.id desc limit 1) as profile_request,
-  (select coalesce(json_agg(json_build_object('id', p.from_user || ':' || p.kind || ':' || p.ref, 'kind', p.kind, 'from', f.name) order by p.at desc), '[]') from pings p join users f on f.id = p.from_user where p.to_user = $1 and p.kind = 'invite' and p.ref like 'team:%') as team_invites,
-  (select coalesce(json_agg(json_build_object('ideaId', ii.idea_id, 'userId', ii.user_id, 'from', w.name, 'title', i.title) order by ii.created_at desc), '[]')
+  (select coalesce(json_agg(json_build_object('id', r.id::text, 'status', r.status, 'note', r.note, 'reason', r.reason,
+      'changes', case when r.changes ? 'avatar_url' and r.changes->>'avatar_url' is not null
+        then jsonb_set(r.changes, '{avatar_url}', 'true') else r.changes end,
+      'at', r.created_at, 'decidedAt', r.decided_at, 'decidedBy', d.name) order by r.id desc), '[]')
+     from (select * from profile_requests where user_id = $1 order by id desc limit 20) r
+     left join users d on d.id = r.decided_by) as profile_history,
+  (select coalesce(json_agg(json_build_object('id', p.from_user || ':' || p.kind || ':' || p.ref, 'kind', p.kind, 'from', f.name, 'at', p.at) order by p.at desc), '[]') from pings p join users f on f.id = p.from_user where p.to_user = $1 and p.kind = 'invite' and p.ref like 'team:%') as team_invites,
+  (select coalesce(json_agg(json_build_object('ideaId', ii.idea_id, 'userId', ii.user_id, 'from', w.name, 'title', i.title, 'at', ii.created_at) order by ii.created_at desc), '[]')
      from idea_interests ii join ideas i on i.id = ii.idea_id join users w on w.id = ii.user_id where i.user_id = $1 and ii.status = 'pending') as incoming_interests,
-  (select coalesce(json_agg(json_build_object('ideaId', ii.idea_id, 'status', ii.status, 'title', i.title) order by ii.decided_at desc), '[]')
+  (select coalesce(json_agg(json_build_object('ideaId', ii.idea_id, 'status', ii.status, 'title', i.title, 'at', ii.decided_at) order by ii.decided_at desc), '[]')
      from idea_interests ii join ideas i on i.id = ii.idea_id where ii.user_id = $1 and ii.status <> 'pending') as decided_interests,
   (select coalesce(json_agg(${EXPENSE} order by e.id desc), '[]') from (select * from expenses where by = $1 order by id desc limit 200) e join users w on w.id = e.by) as my_exp,
   (select coalesce(json_agg(json_build_object('id', ch.id, 'problem', ch.problem, 'name', ch.name, 'rating', ch.rating,
@@ -198,7 +219,7 @@ where not exists (select 1 from learning_quiz_daily_picks where quiz_date = (now
 on conflict do nothing`;
 const OFFICE = `
 select
-  case when $1 then (select coalesce(json_agg(json_build_object('id', 'PAY-' || p.id, 'name', u.name, 'label', p.label, 'amount', p.amount, 'via', p.via, 'trx', p.trx,
+  case when $1 then (select coalesce(json_agg(json_build_object('id', 'PAY-' || p.id, 'name', u.name, 'label', p.label, 'amount', p.amount, 'via', p.via, 'paidTo', p.paid_to, 'trx', p.trx,
       'sender', left(p.sender, 3) || '••••' || right(p.sender, 4), 'status', p.status, 'mine', p.user_id = $6, 'at', p.created_at) order by (p.status <> 'pending'), case when p.status = 'pending' then p.id end, p.id desc), '[]')
     from (select * from payments order by (status <> 'pending'), id desc limit 500) p join users u on u.id = p.user_id) end as queue,
   case when $2 then (select coalesce(json_agg(${EXPENSE} order by e.id desc), '[]') from (select * from expenses order by id desc limit 200) e join users w on w.id = e.by) end as expenses,
@@ -380,7 +401,8 @@ export async function loadState(
     const [kind, key] = [k.slice(0, k.indexOf(':')), k.slice(k.indexOf(':') + 1)];
     const everyone =
       (kind === 'flag' && (key === 'unfrozen' || key.startsWith('mod:'))) ||
-      (kind === 'kv' && (key === 'contests' || key.startsWith('fee:')));
+      (kind === 'kv' &&
+        (key === 'contests' || key === WALLETS_KEY || key === XP_KEY || key.startsWith('fee:')));
     if (!committee && !everyone) continue; // members see only what changes their own screens
     if (kind === 'flag') flags[key] = v === true;
     else kv[key] = String(v);
@@ -420,6 +442,8 @@ export async function loadState(
     ideasCount: row.ideas_count ?? 0,
     acceptedInterests: row.accepted_interests ?? 0,
     kudosReceived: row.kudos_received ?? 0,
+    checkins: p.days,
+    kudosGiven: row.kudos_given ?? 0,
     flags,
     kv,
     queue: Object.fromEntries(
@@ -507,6 +531,8 @@ export async function loadState(
         cat: 'Finance',
         text: `${inv.label}: ৳${inv.amount} is due on ${inv.due}`,
         href: '/app/finance',
+        // Overdue (or due within three days) is urgent; otherwise it just waits on the member.
+        tone: Date.parse(inv.due) - Date.now() < 3 * 864e5 ? 'urgent' : 'action',
       });
     else if (pay.status === 'rejected')
       inbox.push({
@@ -514,6 +540,8 @@ export async function loadState(
         cat: 'Finance',
         text: `Your payment for "${inv.label}" was rejected${pay.note ? `: ${pay.note}` : ''}. Submit it again.`,
         href: '/app/finance',
+        at: pay.decided_at ?? pay.at,
+        tone: 'urgent',
       });
     else if (pay.status === 'verified')
       inbox.push({
@@ -521,6 +549,8 @@ export async function loadState(
         cat: 'Finance',
         text: `Your payment for "${inv.label}" was verified.`,
         href: '/app/finance',
+        at: pay.decided_at ?? pay.at,
+        tone: 'good',
       });
   }
   for (const n of row.news as AppState['news'])
@@ -529,38 +559,52 @@ export async function loadState(
       cat: 'Announcement',
       text: `${n.by}: ${n.title}`,
       href: `/app/community?tab=announcements&open=${encodeURIComponent(n.id)}`,
+      at: n.at,
+      tone: n.requires_ack ? 'action' : 'info',
     });
-  for (const g of row.team_invites as { id: string; from: string }[])
+  for (const g of row.team_invites as { id: string; from: string; at: string }[])
     inbox.push({
       id: `n:ping:${g.id}`,
       cat: 'Social',
       text: `${g.from} invited you to their ICPC team`,
       actions: [{ label: 'Join team', type: 'teamJoin', args: { from: g.id.split(':')[0] } }],
       href: '/app/teams',
+      at: g.at,
+      tone: 'action',
     });
   for (const ii of row.incoming_interests as {
     ideaId: number;
     userId: string;
     from: string;
     title: string;
+    at: string;
   }[])
     inbox.push({
       id: `n:int:${ii.ideaId}:${ii.userId}`,
       cat: 'Community',
       text: `${ii.from} is interested in "${ii.title}"`,
       href: '/app/community?tab=ideas',
+      at: ii.at,
+      tone: 'action',
       actions: (['accepted', 'declined'] as const).map((decision) => ({
         label: decision === 'accepted' ? 'Accept' : 'Decline',
         type: 'decideInterest',
         args: { ideaId: ii.ideaId, userId: ii.userId, decision },
       })),
     });
-  for (const di of row.decided_interests as { ideaId: number; status: string; title: string }[])
+  for (const di of row.decided_interests as {
+    ideaId: number;
+    status: string;
+    title: string;
+    at: string | null;
+  }[])
     inbox.push({
       id: `n:intd:${di.ideaId}:${di.status}`,
       cat: 'Community',
       text: `Your interest in "${di.title}" was ${di.status}`,
       href: '/app/community?tab=ideas',
+      at: di.at,
+      tone: di.status === 'accepted' ? 'good' : 'info',
     });
   for (const mk of (row.milestone_kudos_inbox ?? []) as {
     milestoneId: number;
@@ -568,6 +612,7 @@ export async function loadState(
     from: string;
     type: MilestoneType;
     toValue: string;
+    at: string;
   }[]) {
     inbox.push({
       id: `n:mk:${mk.milestoneId}:${mk.userId}`,
@@ -577,6 +622,8 @@ export async function loadState(
         milestoneTitle: formatMilestoneTitle(mk.type, mk.toValue),
       }),
       href: '/app/community?tab=feed',
+      at: mk.at,
+      tone: 'good',
     });
   }
   for (const d of row.declined_entries as {
@@ -585,12 +632,15 @@ export async function loadState(
     title: string;
     role: string | null;
     reason: string | null;
+    at: string;
   }[])
     inbox.push({
       id: `n:evdec:${d.id}`,
       cat: 'Events',
       text: `Your ${d.role ? `application for ${d.role} at` : 'registration for'} "${d.title}" was declined${d.reason ? `: ${d.reason}` : '.'}`,
       href: `/app/events/${d.eventId}`,
+      at: d.at,
+      tone: 'urgent',
     });
   const pr = row.profile_request as ProfileRequest | null;
   if (pr && pr.status !== 'pending')
@@ -602,6 +652,8 @@ export async function loadState(
           ? 'Your profile change was approved.'
           : `Your profile change was rejected: ${pr.reason}`,
       href: '/app/profile',
+      at: pr.at,
+      tone: pr.status === 'approved' ? 'good' : 'urgent',
     });
   if (office.profileRequests?.length)
     inbox.push({
@@ -609,6 +661,8 @@ export async function loadState(
       cat: 'Admin',
       text: `${office.profileRequests.length} profile change request${office.profileRequests.length > 1 ? 's' : ''} to review`,
       href: '/app/admin',
+      at: office.profileRequests.at(-1)?.at ?? null,
+      tone: 'action',
     });
   const waiting = (off.queue ?? []).filter((q: { status: string }) => q.status === 'pending');
   if (canFully(roles, 'payments.verify') && waiting.length)
@@ -617,6 +671,8 @@ export async function loadState(
       cat: 'Finance',
       text: `${waiting.length} payment${waiting.length > 1 ? 's are' : ' is'} waiting for verification`,
       href: '/app/finance',
+      at: waiting.at(-1)?.at ?? null,
+      tone: 'action',
     });
   const mineToDecide = expenses.filter(
     (e) =>
@@ -631,6 +687,7 @@ export async function loadState(
       cat: 'Finance',
       text: `${mineToDecide.length} expense request${mineToDecide.length > 1 ? 's need' : ' needs'} a decision`,
       href: '/app/finance',
+      tone: 'action',
     });
   const applied = (off.apps ?? []).filter((a: { status: string }) => a.status === 'pending');
   if (applied.length)
@@ -639,6 +696,8 @@ export async function loadState(
       cat: 'Admin',
       text: `${applied.length} application${applied.length > 1 ? 's' : ''} to review`,
       href: '/app/admin',
+      at: applied[0].at ?? null,
+      tone: 'action',
     });
 
   // New challenges from others in the last three days that this member has not solved yet.
@@ -657,7 +716,23 @@ export async function loadState(
           ? `${open.length} open challenges in the Arena`
           : `New challenge: ${open[0]!.name}`,
       href: '/app/arena',
+      at: open[0]!.at,
+      tone: 'info',
     });
+
+  if (!raw.system) {
+    const rates = xpRates(kv);
+    const counts = {
+      ...earnCounts(s, rates),
+      ...judgeCounts({
+        solved: row.j_solved,
+        vjSolved: row.j_vj,
+        streak: row.j_streak,
+        helper: row.j_helper,
+      }),
+    };
+    await recordXp(db, userId, row.xp_snap, counts, rates);
+  }
 
   const votes: AppState['counts']['votes'] = {};
   for (const [poll, opt, n] of row.c_votes as [string, string, number][])
@@ -696,6 +771,7 @@ export async function loadState(
     fundTotal: data.accounts.reduce((a, x) => a + x[1], 0) + money.net,
     office,
     profileRequest: (row.profile_request as ProfileRequest | null) ?? null,
+    profileHistory: row.profile_history ?? [],
     sheets: row.sheets,
     fantasy: row.fantasy,
     challenges: row.challenges,
@@ -760,10 +836,17 @@ async function peopleSummary(db: Db): Promise<PeopleSummary> {
 async function duesSummary(db: Db, fees: { term: number; post: number }, since: string) {
   const people = (
     await db.query(
-      `select id, to_char(created_at at time zone '${TZ}', 'YYYY-MM-DD') joined, to_char(post_since, 'YYYY-MM-DD') post_since
+      `select id, name, member_no no, batch, to_char(created_at at time zone '${TZ}', 'YYYY-MM-DD') joined, to_char(post_since, 'YYYY-MM-DD') post_since
        from users where not system and not suspended and role <> 'alumni' and ${JOINED()}`,
     )
-  ).rows as { id: string; joined: string; post_since: string | null }[];
+  ).rows as {
+    id: string;
+    name: string;
+    no: string | null;
+    batch: string | number | null;
+    joined: string;
+    post_since: string | null;
+  }[];
   const live = new Map(
     (
       await db.query(
@@ -798,9 +881,121 @@ async function duesSummary(db: Db, fees: { term: number; post: number }, since: 
       [since],
     )
   ).rows[0] as { amount: number; count: number };
+  // Each member's standing across every billed period, so officers see who owes, how much and since when.
+  const members: DuesMember[] = people.map((u) => {
+    const bills = (
+      [
+        ['TERM', fees.term, u.joined],
+        ['POST', fees.post, u.post_since],
+      ] as const
+    ).flatMap(([kind, fee, from]) =>
+      fee && from
+        ? periods(from, t).map((p) => {
+            const st = live.get(`${u.id} ${kind}-${p}`);
+            return {
+              id: `${kind}-${p}`,
+              fee,
+              due: dueOf(p),
+              status: (st === 'verified' ? 'paid' : st === 'pending' ? 'waiting' : 'unpaid') as
+                'paid' | 'waiting' | 'unpaid',
+            };
+          })
+        : [],
+    );
+    const unpaid = bills.filter((b) => b.status === 'unpaid');
+    const overdue = unpaid.filter((b) => b.due < t);
+    return {
+      id: u.id,
+      name: u.name,
+      no: u.no,
+      batch: u.batch === null ? null : String(u.batch),
+      bills: bills.map(({ id, status, due }) => ({ id, status, due })),
+      paid: bills.filter((b) => b.status === 'paid').length,
+      waiting: bills.filter((b) => b.status === 'waiting').length,
+      unpaid: unpaid.length,
+      overdue: overdue.length,
+      owed: unpaid.reduce((a, b) => a + b.fee, 0),
+      since: overdue[0]?.due ?? null,
+    };
+  });
   return {
     term: tally('TERM', fees.term, (u) => u.joined),
     post: tally('POST', fees.post, (u) => u.post_since),
     gifts,
+    members,
+  };
+}
+
+type Snap = Record<string, [count: number, points: number]>;
+/**
+ * Writes what changed in a member's XP since the last look as history rows. The snapshot is swapped only if it is
+ * still the one read, so two loads at once never write the same change twice. The first look records the XP
+ * earned before history began, so the history always adds up to the total.
+ */
+async function recordXp(
+  db: Db,
+  userId: string,
+  prev: Snap | null,
+  counts: Partial<Record<string, number>>,
+  rates: Record<string, number>,
+) {
+  const now: Snap = Object.fromEntries(
+    Object.entries(counts).map(([k, n]) => [k, [n ?? 0, (n ?? 0) * (rates[k] ?? 0)]]),
+  );
+  const rows: [string, number, number, string | null][] = [];
+  if (!prev) {
+    for (const [k, [n, pts]] of Object.entries(now)) if (pts) rows.push([k, pts, n, 'start']);
+    const made = await db.query(
+      `insert into xp_snapshot (user_id, points) values ($1, $2) on conflict do nothing`,
+      [userId, now],
+    );
+    if (!made.rowCount) return;
+  } else {
+    for (const k of new Set([...Object.keys(now), ...Object.keys(prev)])) {
+      const [n1, p1] = now[k] ?? [0, 0],
+        [n0, p0] = prev[k] ?? [0, 0];
+      if (p1 !== p0) rows.push([k, p1 - p0, n1 - n0, n1 === n0 ? 'rate' : null]);
+    }
+    if (!rows.length) return;
+    const swapped = await db.query(
+      `update xp_snapshot set points = $2, at = now() where user_id = $1 and points = $3::jsonb`,
+      [userId, now, prev],
+    );
+    if (!swapped.rowCount) return;
+  }
+  if (rows.length)
+    await db.query(
+      `insert into xp_history (user_id, kind, delta, count, note)
+       select $1, * from unnest($2::text[], $3::int[], $4::int[], $5::text[])`,
+      [
+        userId,
+        rows.map((x) => x[0]),
+        rows.map((x) => x[1]),
+        rows.map((x) => x[2]),
+        rows.map((x) => x[3]),
+      ],
+    );
+}
+
+/** A page of this member's XP history, newest first, and where the total comes from now. */
+export async function xpHistory(db: Db, userId: string, input: { before?: unknown }) {
+  const before = Number(input.before);
+  const items = (
+    await db.query(
+      `select id::int, kind, delta, count, note, at from xp_history
+       where user_id = $1 and ($2::bigint is null or id < $2) order by id desc limit 51`,
+      [userId, Number.isInteger(before) && before > 0 ? before : null],
+    )
+  ).rows;
+  const snap = (await db.query(`select points from xp_snapshot where user_id = $1`, [userId]))
+    .rows[0]?.points as Snap | undefined;
+  return {
+    items: items.slice(0, 50),
+    more: items.length > 50,
+    breakdown: Object.entries(snap ?? {}).map(([kind, [count, points]]) => ({
+      kind,
+      count,
+      points,
+    })),
   };
 }

@@ -54,3 +54,8 @@ One API test file: `cd apps/api && node --import tsx --test test/password.test.t
 - No pixel or display fonts below 14px.
 - Keep copy minimal, with no filler paragraphs.
 - Keep the app frame (`Shell`) constant across member pages.
+- Build a new screen from its section's own pieces (stat strip, section box, table, status tag, filters), listed
+  in `docs/frontend.md` → "Building a new screen or tab". No ad-hoc boxes.
+- Status is a word plus a colour, never colour alone, and uses the shared `--tone-*` colours, never theme
+  accents. Every filter shows its count and has its own empty sentence.
+- Before calling UI done, look at it rendered in light and dark and at 390px wide.

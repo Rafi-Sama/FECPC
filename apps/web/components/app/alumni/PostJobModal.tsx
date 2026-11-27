@@ -147,7 +147,7 @@ export function PostJobModal({
       setErrors(newErrors);
       // Focus first error
       if (newErrors.company) companyInputRef.current?.focus();
-      return false;
+      return Object.values(newErrors).join('\n');
     }
 
     setErrors({});
@@ -187,7 +187,7 @@ export function PostJobModal({
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
         setErrors({ form: j.error ?? 'Failed to post job.' });
-        return false;
+        return String(j.error ?? 'Failed to post job.');
       }
 
       const created = (await res.json()) as AlumniJob;
@@ -199,7 +199,7 @@ export function PostJobModal({
       return true;
     } catch {
       setErrors({ form: 'You seem to be offline. The job was not posted.' });
-      return false;
+      return 'You seem to be offline. The job was not posted.';
     }
   };
 
@@ -445,6 +445,9 @@ export function PostJobModal({
                 onChange={(e) => setRequirementsText(e.target.value)}
               />
             </div>
+            <button type="submit" className="btn">
+              Publish job
+            </button>
           </SaveForm>
 
           {/* Right Column: Sticky Live Preview */}

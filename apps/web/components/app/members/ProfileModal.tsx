@@ -1,4 +1,5 @@
 'use client';
+import { KudosButton } from '@/components/app/shared/Kudos';
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { AvatarRing } from '@/components/app/shared/RatingBadge';
@@ -412,9 +413,10 @@ export function ProfileModal({
                     </button>
                   ) : (
                     <KudosButton
-                      on={hasKudos}
-                      total={kudosTotal}
-                      onToggle={() => void act('toggle', { list: 'kudos', id: kudosId, on: true })}
+                      size="sm"
+                      given={hasKudos}
+                      label={`Give kudos to ${profile?.name ?? 'this member'}`}
+                      onGive={() => act('toggle', { list: 'kudos', id: kudosId, on: true })}
                     />
                   )}
                   {canEdit && (
@@ -624,47 +626,6 @@ function ContestChart({ rows }: { rows: MemberContestRow[] }) {
         <b className={net >= 0 ? 'up' : 'down'}>{fmt(net)}</b>
       </p>
     </div>
-  );
-}
-
-function KudosButton({
-  on,
-  total,
-  onToggle,
-}: {
-  on: boolean;
-  total: number;
-  onToggle: () => void;
-}) {
-  const [burst, setBurst] = useState(0);
-  return (
-    <button
-      type="button"
-      className={`btn sm kudos${on ? '' : ' line'}`}
-      aria-pressed={on}
-      disabled={on}
-      onClick={() => {
-        setBurst((b) => b + 1);
-        onToggle();
-      }}
-    >
-      {burst > 0 && (
-        <span key={burst} className="kudos__burst" aria-hidden>
-          {Array.from({ length: 8 }, (_, i) => (
-            <i key={i} style={{ '--a': `${i * 45}deg` } as CSSProperties} />
-          ))}
-        </span>
-      )}
-      <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden className="kudos__heart">
-        <path
-          d="M8 14S2 10.2 2 6.1A3.1 3.1 0 0 1 8 4.6a3.1 3.1 0 0 1 6 1.5C14 10.2 8 14 8 14z"
-          fill={on ? 'currentColor' : 'none'}
-          stroke="currentColor"
-          strokeWidth="1.5"
-        />
-      </svg>
-      Kudos{total > 0 && <span className="kudos__n">{total}</span>}
-    </button>
   );
 }
 

@@ -1,4 +1,5 @@
 'use client';
+import { KudosButton } from '@/components/app/shared/Kudos';
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { canFully } from '@fecpc/contracts';
@@ -46,7 +47,7 @@ export function AlumniProfileModal({
   onMutated?: () => void;
 }) {
   const sure = useConfirm();
-  const { me, s, toast: storeToast } = useStore();
+  const { me, s, act, toast: storeToast } = useStore();
   const [profile, setProfile] = useState<MemberProfile | null>(initialProfile ?? null);
   const [loading, setLoading] = useState(!initialProfile);
   const [error, setError] = useState('');
@@ -56,8 +57,6 @@ export function AlumniProfileModal({
   );
   const [togglingAvailable, setTogglingAvailable] = useState(false);
   const [jobsPosted, setJobsPosted] = useState<AlumniJob[]>(initialProfile?.jobs_posted ?? []);
-  const [kudosCount, setKudosCount] = useState(12);
-  const [hasGivenKudos, setHasGivenKudos] = useState(false);
 
   // Tabs state
   const [activeTab, setActiveTab] = useState<'about' | 'career' | 'jobs'>('about');
@@ -95,7 +94,6 @@ export function AlumniProfileModal({
   const cardRef = useRef<HTMLElement>(null);
   const heroRef = useRef<HTMLElement>(null);
   const wmRef = useRef<HTMLDivElement>(null);
-  const kcRef = useRef<HTMLSpanElement>(null);
   const inkRef = useRef<HTMLDivElement>(null);
   const tabsRef = useRef<HTMLDivElement>(null);
   const aboutTabBtnRef = useRef<HTMLButtonElement>(null);
@@ -509,52 +507,6 @@ export function AlumniProfileModal({
     setHoveredPoint(null);
   };
 
-  // Kudos burst particles
-  const handleKudosClick = (e: React.MouseEvent<HTMLButtonElement>) => {
-    const nextGiven = !hasGivenKudos;
-    setHasGivenKudos(nextGiven);
-    const nextCount = nextGiven ? kudosCount + 1 : kudosCount - 1;
-    setKudosCount(nextCount);
-
-    showToast(nextGiven ? 'Kudos sent' : 'Kudos removed');
-
-    // Pop counter
-    if (kcRef.current) {
-      kcRef.current.classList.add('pop');
-      setTimeout(() => kcRef.current?.classList.remove('pop'), 200);
-    }
-
-    // Spawn 14 burst particles
-    const reduce =
-      typeof window !== 'undefined' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-    if (nextGiven && !reduce) {
-      const r = e.currentTarget.getBoundingClientRect();
-      const pX = r.left + r.width / 2;
-      const pY = r.top + r.height / 2;
-      // The sparks are appended to <body>, outside the themed .main, so copy the
-      // modal accent onto each one or `background: var(--acc)` resolves to nothing.
-      const accent =
-        getComputedStyle(e.currentTarget).getPropertyValue('--acc').trim() || '#ff5a1f';
-
-      for (let i = 0; i < 14; i++) {
-        const s = document.createElement('i');
-        s.className = 'alumni-spark';
-        const a = (Math.PI * 2 * i) / 14;
-        const dist = 50 + Math.random() * 50;
-        s.style.left = `${pX}px`;
-        s.style.top = `${pY}px`;
-        s.style.setProperty('--acc', accent);
-        s.style.setProperty('--dx', `${Math.cos(a) * dist}px`);
-        s.style.setProperty('--dy', `${Math.sin(a) * dist}px`);
-        document.body.appendChild(s);
-        setTimeout(() => s.remove(), 750);
-      }
-    }
-  };
-
-  // Share
   const handleShareClick = async () => {
     const url = window.location.href;
     try {
@@ -1054,17 +1006,18 @@ export function AlumniProfileModal({
                       : 'Not taking questions right now.'}
                   </div>
                   <div className="[display:grid] grid-cols-[1fr_1fr] gap-2.5 mb-3.5">
-                    <button
-                      type="button"
-                      className="btn [background:var(--hi)] text-bg [box-shadow:var(--shadow-hard)] hover:[background:var(--acc)] hover:border-acc hover:text-on hover:[transform:translate(-2px,-2px)] hover:[box-shadow:var(--shadow-hover)] active:[transform:translate(2px,2px)] active:[box-shadow:none]"
-                      id="kudos"
-                      onClick={handleKudosClick}
-                    >
-                      Kudos
-                      <span ref={kcRef} className="kudos-count" id="kc">
-                        {kudosCount}
-                      </span>
-                    </button>
+                    {userId === me.id ? (
+                      <span className="pill justify-center">Your profile</span>
+                    ) : (
+                      <KudosButton
+                        size="sm"
+                        given={s.kudos.includes(`member:${userId}`)}
+                        label={`Give kudos to ${profile?.name ?? 'this alumnus'}`}
+                        onGive={() =>
+                          act('toggle', { list: 'kudos', id: `member:${userId}`, on: true })
+                        }
+                      />
+                    )}
                     <button
                       type="button"
                       className="btn line"

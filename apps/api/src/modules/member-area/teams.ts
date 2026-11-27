@@ -46,6 +46,20 @@ const log = (c: Db, teamId: number, a: Actor, what: string) =>
     a.id,
     what,
   ]);
+export type InviteLog = {
+  id: number;
+  status: 'pending' | 'accepted' | 'declined' | 'withdrawn' | 'closed';
+  at: string;
+  decidedAt: string | null;
+  outgoing: boolean;
+  with: string;
+};
+/** Closes open invitations in the history: `where` picks them, `status` is how they ended. */
+const endInvites = (c: Db, status: string, where: string, args: unknown[]) =>
+  c.query(
+    `update icpc_invites set status = $1, decided_at = now() where status = 'pending' and ${where}`,
+    [status, ...args],
+  );
 const note = (c: Db, a: Actor, what: string) =>
   c.query(`insert into notebook_log (user_id, what) values ($1, $2)`, [a.id, what]);
 /** The actor's own team, required. */
@@ -119,10 +133,32 @@ export const teamHandlers: Record<string, Handler> = {
         .rows[0].n;
       if (n >= TEAM_SIZE) throw new Fail(409, `A team has at most ${TEAM_SIZE} members.`);
     }
-    await c.query(
+    const sent = await c.query(
       `insert into pings (from_user, to_user, kind, ref) values ($1, $2, 'invite', $3) on conflict do nothing`,
       [a.id, to, 'team:' + (id ?? 'new')],
     );
+    if (sent.rowCount)
+      await c.query(`insert into icpc_invites (from_user, to_user) values ($1, $2)`, [a.id, to]);
+  },
+  /** Turns down an invitation; the inviter can ask again. */
+  async teamDecline(c, a, _p, i) {
+    const from = String(i.from ?? '');
+    const r = await c.query(
+      `delete from pings where from_user = $1 and to_user = $2 and kind = 'invite' and ref like 'team:%'`,
+      [from, a.id],
+    );
+    need(r.rowCount, 'That invitation is no longer open.');
+    await endInvites(c, 'declined', 'from_user = $2 and to_user = $3', [from, a.id]);
+  },
+  /** Takes back an invitation this member sent. */
+  async teamUninvite(c, a, _p, i) {
+    const to = String(i.user ?? '');
+    const r = await c.query(
+      `delete from pings where from_user = $1 and to_user = $2 and kind = 'invite' and ref like 'team:%'`,
+      [a.id, to],
+    );
+    need(r.rowCount, 'That invitation is no longer open.');
+    await endInvites(c, 'withdrawn', 'from_user = $2 and to_user = $3', [a.id, to]);
   },
   async teamJoin(c, a, _p, i) {
     member(a);
@@ -166,6 +202,9 @@ export const teamHandlers: Record<string, Handler> = {
       `delete from pings where to_user = $1 and kind = 'invite' and ref like 'team:%'`,
       [a.id],
     );
+    await endInvites(c, 'accepted', 'from_user = $2 and to_user = $3', [from, a.id]);
+    // Joining a team answers every other invitation this member had.
+    await endInvites(c, 'closed', 'to_user = $2', [a.id]);
     // Invites either of them sent before having a team now invite to this one.
     await c.query(
       `update pings set ref = $3 where from_user in ($1, $2) and kind = 'invite' and ref = 'team:new'`,
@@ -177,6 +216,7 @@ export const teamHandlers: Record<string, Handler> = {
     const id = await mine(c, a);
     await c.query(`delete from icpc_members where user_id = $1`, [a.id]);
     await c.query(`delete from pings where from_user = $1 and ref = $2`, [a.id, 'team:' + id]);
+    await endInvites(c, 'withdrawn', 'from_user = $2', [a.id]);
     const left = (await c.query(`select 1 from icpc_members where team_id = $1`, [id])).rowCount;
     if (!left) await c.query(`delete from icpc_teams where id = $1`, [id]);
     else await log(c, id, a, 'left');
@@ -268,12 +308,24 @@ export async function getTeam(db: Db, userId: string, input: { teamId?: unknown 
       [userId],
     )
   ).rows as { from: string; fromName: string; name: string | null }[];
-  const sent = (
+  const sentRows = (
     await db.query(
-      `select to_user from pings where from_user = $1 and kind = 'invite' and ref like 'team:%'`,
+      `select p.to_user as id, u.name, p.at from pings p join users u on u.id = p.to_user
+       where p.from_user = $1 and p.kind = 'invite' and p.ref like 'team:%' order by p.at desc`,
       [userId],
     )
-  ).rows.map((r) => r.to_user as string);
+  ).rows as { id: string; name: string; at: string }[];
+  const sent = sentRows.map((r) => r.id);
+  // The last 30 invitations to or from this member, answered ones included.
+  const inviteLog = (
+    await db.query(
+      `select l.id::int, l.status, l.at, l.decided_at as "decidedAt", l.from_user = $1 as outgoing,
+         case when l.from_user = $1 then t.name else f.name end as "with"
+       from icpc_invites l join users f on f.id = l.from_user join users t on t.id = l.to_user
+       where l.from_user = $1 or l.to_user = $1 order by l.id desc limit 30`,
+      [userId],
+    )
+  ).rows as InviteLog[];
   // Only people on no team can be invited, plus whoever invited you (inviting them back accepts).
   const free = async () =>
     (
@@ -300,6 +352,8 @@ export async function getTeam(db: Db, userId: string, input: { teamId?: unknown 
       invites,
       teams,
       sent,
+      sentRows,
+      inviteLog,
       free: a.system || own ? [] : await free(),
       ...(await notebooks(db, [userId], null)),
     };
@@ -329,6 +383,8 @@ export async function getTeam(db: Db, userId: string, input: { teamId?: unknown 
     free: pool,
     invites,
     sent,
+    sentRows,
+    inviteLog,
     teams,
   };
 }

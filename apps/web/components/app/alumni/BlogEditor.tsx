@@ -378,6 +378,13 @@ export function BlogEditor({
               Read time · {readTimeMin} min read
             </span>
             <span className="ml-auto flex gap-2">
+              <button
+                type="submit"
+                className="k py-0 px-4 [font:500_13px_Inter,_Arial,_sans-serif] [border:2px_solid_var(--line2)] [background:var(--panel)] text-ink min-h-[44px] cursor-pointer"
+                disabled={submitting}
+              >
+                {isPublished ? 'Save changes' : 'Save draft'}
+              </button>
               {!isPublished && (
                 <button
                   type="button"

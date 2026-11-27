@@ -42,6 +42,8 @@ export function JobsTab({
   const [postModalOpen, setPostModalOpen] = useState(false);
 
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Only the latest request may fill the list: an older, slower answer arriving later is dropped.
+  const reqSeq = useRef(0);
   const onCountChangeRef = useRef(onCountChange);
 
   useEffect(() => {
@@ -58,6 +60,7 @@ export function JobsTab({
   // The server sends 30 jobs at a time; `more` appends the next 30 to the list.
   const fetchJobs = useCallback(
     async (offset = 0) => {
+      const mine = ++reqSeq.current;
       if (!offset) setLoading(true);
       try {
         const res = await fetch('/api/alumni', {
@@ -73,8 +76,9 @@ export function JobsTab({
           }),
         });
 
-        if (res.ok) {
+        if (res.ok && mine === reqSeq.current) {
           const data = (await res.json()) as { jobs: AlumniJob[]; total: number };
+          if (mine !== reqSeq.current) return;
           setJobs((prev) => (offset ? [...prev, ...(data.jobs || [])] : data.jobs || []));
           if (!offset || data.jobs?.length) {
             setTotal(data.total || 0);
@@ -84,7 +88,7 @@ export function JobsTab({
       } catch (err) {
         console.error('Failed to load jobs', err);
       } finally {
-        setLoading(false);
+        if (mine === reqSeq.current) setLoading(false);
       }
     },
     [q, jobType, sort, source],

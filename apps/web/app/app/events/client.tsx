@@ -176,6 +176,7 @@ export default function EventsPage({ upcoming }: { upcoming?: ClubEvent[] }) {
       )}
 
       {tab === 'Calendar' && <EventsCalendar events={events} />}
+      {tab === 'My events' && data !== undefined && <RegistrationHistory events={events} />}
       {listed && (
         <div className="[display:grid] gap-5 items-stretch grid-cols-[repeat(auto-fill,_minmax(min(100%,_320px),_1fr))]">
           {shown.map((e, i) => {
@@ -278,5 +279,58 @@ export default function EventsPage({ upcoming }: { upcoming?: ClubEvent[] }) {
         </button>
       )}
     </Page>
+  );
+}
+
+const TONE: Record<string, string> = {
+  approved: 'ok',
+  rejected: 'bad',
+  pending: 'warn',
+  cancelled: '',
+};
+
+/** Every sign-up and application this member made, newest first, withdrawn ones included. */
+function RegistrationHistory({ events }: { events: ClubEvent[] }) {
+  const rows = events
+    .flatMap((e) => e.mine.map((x) => ({ e, x })))
+    .sort((a, b) => b.x.at.localeCompare(a.x.at));
+  const [shown, more] = useMore(rows, 10);
+  if (!rows.length) return null;
+  return (
+    <section className="panel mb-5">
+      <div className="row between">
+        <p className="label">Registration history</p>
+        <span className="label">
+          {rows.filter((r) => r.x.status === 'approved').length} approved · {rows.length} total
+        </span>
+      </div>
+      <ul className="list">
+        {shown.map(({ e, x }) => (
+          <li key={x.id} className="flex-wrap">
+            <span className="grow min-w-0">
+              <Link className="link" href={`/app/events/${e.id}`}>
+                <strong>{e.title}</strong>
+              </Link>
+              <br />
+              <span className="label">
+                {e.roles.find((r) => r.id === x.roleId)?.title ?? 'Participant'} · applied{' '}
+                {new Date(x.at).toLocaleDateString('en-GB', {
+                  day: 'numeric',
+                  month: 'short',
+                  year: 'numeric',
+                })}{' '}
+                · event {fmtWhen(e.startsAt)}
+                {x.place ? ` · placed #${x.place}` : ''}
+              </span>
+              {x.status === 'rejected' && x.reason && (
+                <span className="block bad text-[14px]">Reason: {x.reason}</span>
+              )}
+            </span>
+            <span className={`pill ${TONE[x.status] ?? ''}`}>{STATUS[x.status]}</span>
+          </li>
+        ))}
+      </ul>
+      {more}
+    </section>
   );
 }

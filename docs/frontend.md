@@ -97,6 +97,32 @@ components/
 - Accessibility: tabs use `role="tab"` and `aria-selected`; icon buttons have `aria-label`; modals trap
   focus.
 
+## Building a new screen or tab
+
+A new screen is built from the section it lives in, not from generic boxes. Before writing markup, open the
+neighbouring screen and reuse its pieces:
+
+| Section | Stat row | Section box | Table | Status | Filters / search |
+| ------- | -------- | ----------- | ----- | ------ | ---------------- |
+| Finance | `.finance-stats` (one strip, cells split by rules) | `financePanel` (`finance/officer.tsx`) | `.finance-table` | `.finance-tag` (`ok`, `pending`, `rejected`, `due`) | `.finance-tabs`, `.finance-tools` |
+| Other member pages | `.bento` with `.panel` cells | `.panel` | `.tbl` or `.list` | `.pill` (`ok`, `warn`, `bad`) | `Tabs` from `Shell` |
+
+- **One stat row, not a grid of boxes.** Stats sit in the section's strip; each cell is label, number, one short
+  line of context. Never five separate bordered boxes that wrap 3 + 2.
+- **Status is a word plus a colour, never a colour alone.** Every coloured mark carries its own text ("Paid",
+  "3 months overdue"). A legend sentence that explains unlabeled squares means the marks need labels instead.
+- **Status colours are the shared tones** (`--tone-urgent`, `--tone-action`, `--tone-good`, `--tone-info`,
+  set per theme in `base.css`). Theme accents (`--acc2`, `--acc3`) change hue between light and dark, so they
+  never carry a status. Red means late, green means done, blue means waiting on someone, grey means not yet.
+- **Answer the officer's question in the first columns.** Who, what state, how much. Rows sort worst first.
+  Dates and amounts are written out ("since 1 Dec 2026", "৳300"), numbers use tabular figures.
+- **Every filter shows its count** ("Overdue · 3") and every filter has its own empty sentence ("Nobody is
+  overdue."), not one generic "Nothing here".
+- **Phones get rows, not sideways scroll, for the key numbers.** If the amount or status would hide behind a
+  horizontal scroll under 640px, the table stacks each row (name and amount on top).
+- **Check it rendered, in both themes and at 390px wide**, before calling it done. Read the screenshot at full
+  size: wrapped labels, clipped columns and theme-dependent colours only show up there.
+
 ## Create and edit forms: the save bar
 
 Every form that creates or changes something is a `<SaveForm>` (`components/app/SaveBar.tsx`), not a

@@ -23,7 +23,7 @@ import {
 } from './actions.ts';
 import { Fail, type Db } from './db.ts';
 import { getTeam } from './teams.ts';
-import { loadState } from './state.ts';
+import { loadState, xpHistory } from './state.ts';
 import type { In } from './rules.ts';
 
 /** Writes that answer with data. They run as actions: the query endpoint only carries them. */
@@ -37,6 +37,7 @@ const WRITES = new Set([
   'toggleInterviewProblem',
   'createInterviewProblem',
   'deleteInterviewProblem',
+  'setInterviewTopicLink',
   'createInterviewTip',
   'deleteInterviewTip',
   'createBlogPost',
@@ -161,6 +162,8 @@ export async function members(db: Db, id: string, b: In): Promise<unknown> {
       pageSize: typeof b.pageSize === 'number' ? b.pageSize : undefined,
     });
   }
+
+  if (action === 'xpHistory') return xpHistory(db, id, { before: b.before });
 
   if (action === 'getMemberProfile') {
     return getMemberProfile(db, id, { userId: String(b.userId ?? '') });

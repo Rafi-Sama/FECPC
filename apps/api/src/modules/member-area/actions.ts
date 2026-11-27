@@ -6,6 +6,15 @@ import {
   can,
   canFully,
   FEE_KEYS,
+  WALLETS_KEY,
+  walletsOf,
+  cleanWallets,
+  cleanXpRates,
+  xpRates,
+  XP_KEY,
+  INVITE_MAIL,
+  MAIL_CLUB,
+  renderMail,
   postName,
   postableRoles,
   posts,
@@ -54,7 +63,7 @@ import {
 import { teamHandlers } from './teams.ts';
 import { eventHandlers } from './events.ts';
 import { decideApplication, inviteNotice, recruitHandlers } from './recruit.ts';
-import { mailHandlers } from './mail.ts';
+import { enqueue, mailHandlers, mailReady } from './mail.ts';
 import { AUDIT_AREAS, type AuditArea, type AuditEntry, type AuditPage } from '@fecpc/contracts';
 import {
   checkProfile,
@@ -257,7 +266,12 @@ async function submitPayment(
   i: Record<string, unknown>,
   inv: { id: string; label: string; amount: number },
 ) {
-  const via = pick(i.via, ['bKash', 'Nagad', 'Rocket'] as const, 'wallet'),
+  // The member picks one of the club's active wallets; the record names it, so the Treasurer knows which statement to check.
+  const kv = (await c.query(`select value from club where key = $1`, ['kv:' + WALLETS_KEY]))
+    .rows[0];
+  const wallet = walletsOf({ [WALLETS_KEY]: kv?.value }).find((w) => w.active && w.id === i.wallet);
+  if (!wallet) throw new Fail(400, 'That payment method is no longer in use. Pick another.');
+  const via = wallet.provider,
     trx = String(i.trx ?? '')
       .trim()
       .toUpperCase(),
@@ -271,8 +285,8 @@ async function submitPayment(
     throw new Fail(400, 'Enter the 11-digit number the money was sent from.');
   // The two unique indexes are the rule; checking first would let two simultaneous submissions both pass.
   const r = await c.query(
-    `insert into payments (user_id, invoice_id, label, amount, via, trx, sender) values ($1, $2, $3, $4, $5, $6, $7) on conflict do nothing returning id`,
-    [a.id, inv.id, inv.label, inv.amount, via, trx, sender],
+    `insert into payments (user_id, invoice_id, label, amount, via, trx, sender, paid_to) values ($1, $2, $3, $4, $5, $6, $7, $8) on conflict do nothing returning id`,
+    [a.id, inv.id, inv.label, inv.amount, via, trx, sender, wallet.number],
   );
   if (!r.rows[0]) {
     const mine = (
@@ -456,6 +470,7 @@ const handlers: Record<string, Handler<Progress>> = {
   async checkin(_c, _a, p) {
     if (p.checkin === today()) return;
     p.run = p.checkin === yesterday() ? p.run + 1 : 1;
+    p.days += 1;
     p.checkin = today();
   },
   async flag(c, a, p, i) {
@@ -586,6 +601,43 @@ const handlers: Record<string, Handler<Progress>> = {
       .trim()
       .toUpperCase();
     await submitPayment(c, a, i, { id: 'GIFT-' + trx, label: CONTRIBUTION, amount });
+  },
+  /** XP amounts for everything that earns XP. Totals are recomputed with them for everyone, at once. */
+  async setXpRates(c, a, _p, i) {
+    need(a.role === 'super_admin', 'Only the Super Admin sets XP amounts.');
+    const rates = cleanXpRates(i.rates);
+    if (typeof rates === 'string') throw new Fail(400, rates);
+    const before = xpRates(
+      Object.fromEntries(
+        (
+          await c.query(`select value #>> '{}' v from club where key = $1`, ['kv:' + XP_KEY])
+        ).rows.map((r) => [XP_KEY, r.v]),
+      ),
+    );
+    const changed = (Object.keys(rates) as (keyof typeof rates)[]).filter(
+      (k) => rates[k] !== before[k],
+    );
+    if (!changed.length) return 'Nothing changed.';
+    await setClub(c, a, 'kv:' + XP_KEY, JSON.stringify(rates));
+    await audit(
+      c,
+      a,
+      `changed XP amounts: ${changed.map((k) => `${k} ${before[k]} → ${rates[k]}`).join(', ')}`,
+    );
+  },
+  async setWallets(c, a, _p, i) {
+    need(
+      canFully(a.roles, 'finance.wallets'),
+      'Only the Treasurer or President sets the payment methods.',
+    );
+    const list = cleanWallets(i.wallets);
+    if (typeof list === 'string') throw new Fail(400, list);
+    await setClub(c, a, 'kv:' + WALLETS_KEY, JSON.stringify(list));
+    await audit(
+      c,
+      a,
+      `set the payment methods: ${list.map((w) => `${w.provider} ${w.number}${w.active ? '' : ' (off)'}`).join(', ')}`,
+    );
   },
   async setFee(c, a, _p, i) {
     need(canFully(a.roles, 'finance.fee'), 'Only the President or Secretary sets the dues.');
@@ -1269,6 +1321,90 @@ const handlers: Record<string, Handler<Progress>> = {
     await audit(c, a, `issued a ${t.joined ? 'password reset' : 'new invite'} link for ${t.name}`);
     return `${t.joined ? 'Password reset' : 'Invite'} link for ${t.name}. It works once and expires in 7 days: /login?invite=${token}`;
   },
+  /**
+   * The President or Super Admin adds one person by email, with their role (Super Admin) or post already set.
+   * They get a one-time link by email; setting a password signs them in. The email is the account's key.
+   */
+  async addMember(c, a, _p, i) {
+    need(canFully(a.roles, 'roles.assign'), 'Only the President or Super Admin adds members.');
+    const name = text(i.name, 2, 80, 'The name'),
+      email = text(i.email, 5, 200, 'Email').toLowerCase(),
+      dept = text(i.dept, 2, 40, 'The department'),
+      batch = Number(i.batch);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+      throw new Fail(400, 'Enter a valid email address.');
+    if (!Number.isInteger(batch) || batch < 1 || batch > 99)
+      throw new Fail(400, 'The batch is a number from 1 to 99.');
+    const role: Role = i.role ? pick(i.role, postableRoles, 'role') : 'member';
+    need(
+      role === 'member' || a.role === 'super_admin',
+      'Only the Super Admin gives a role; give a post instead.',
+    );
+    const post = i.post ? pick(i.post, posts, 'post') : null;
+    const taken = (await c.query(`select name, suspended from users where email = $1`, [email]))
+      .rows[0];
+    if (taken)
+      throw new Fail(
+        409,
+        `${email} already belongs to ${taken.name}${taken.suspended ? ' (suspended)' : ''}. Send them a new link from Members instead.`,
+      );
+    const slug = (
+        name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '_')
+          .replace(/^_+|_+$/g, '')
+          .slice(0, 30) || 'member'
+      ).padEnd(2, '_'),
+      token = newToken();
+    // The unique email decides a race between two officers adding the same person: the second insert does nothing.
+    const made = (
+      await c.query(
+        `insert into users (id, email, invite_hash, invite_expires, name, batch, dept, role, post, title, status)
+         select $1 || case when exists (select 1 from users where id = $1) then '_' || $2 else '' end,
+           $3, $4, now() + interval '7 days', $5, $6, $7, $8, $9, $10, 'invited'
+         on conflict (email) do nothing returning id`,
+        [
+          slug,
+          newToken()
+            .replace(/[^a-z0-9]/g, '')
+            .slice(0, 6) || 'x',
+          email,
+          sha(token),
+          name,
+          batch,
+          dept,
+          role,
+          post,
+          post && post !== 'member' ? postName[post] : role === 'member' ? null : roleName[role],
+        ],
+      )
+    ).rows[0];
+    if (!made) throw new Fail(409, `${email} was just added by someone else.`);
+    const what = post && post !== 'member' ? postName[post] : roleName[role];
+    const mailed = mailReady();
+    if (mailed) {
+      const site = process.env.APP_PUBLIC_URL || 'http://localhost:3000';
+      await enqueue(c, {
+        to: email,
+        kind: 'invite',
+        expires: new Date(Date.now() + 7 * 864e5),
+        ...renderMail(INVITE_MAIL, {
+          name,
+          email,
+          role: what,
+          by: a.name,
+          link: `${site}/login?invite=${token}`,
+          club: MAIL_CLUB,
+        }),
+      });
+    }
+    await audit(
+      c,
+      a,
+      `added ${name} (${email}) as ${what}; set-password ${mailed ? 'email queued' : 'link shown to the officer (email not set up)'}`,
+    );
+    return inviteNotice(c, [{ name, email, token, mailed }]);
+  },
   /** An officer edits another member's profile directly. Members ask with `profileRequest` instead. */
   async updateProfile(c, a, _p, i) {
     const t = await editTarget(c, a, i.user);
@@ -1812,6 +1948,23 @@ const handlers: Record<string, Handler<Progress>> = {
     await audit(c, a, `deleted interview roadmap #${roadmapId}: ${r.rows[0].name}`);
     return { deleted: true };
   },
+  // The topic's editorial or playlist link, set from the topic drawer without opening the whole editor.
+  async setInterviewTopicLink(c, a, _p, i) {
+    roadmapManager(a);
+    const topicId = posInt(i.topicId, 'topic');
+    const link = optionalUrl(i.link, 'Editorial link');
+    const r = await c.query(`update interview_topics set link = $2 where id = $1 returning name`, [
+      topicId,
+      link,
+    ]);
+    if (!r.rowCount) throw new Fail(404, 'That topic does not exist.');
+    await audit(
+      c,
+      a,
+      `${link ? 'set' : 'removed'} the editorial link of topic #${topicId}: ${r.rows[0].name}`,
+    );
+    return { link };
+  },
   async deleteBlogPost(c, a, _p, i) {
     const id = posInt(i.id, 'post');
     const post = (await c.query(`select id, author_id, title from blog_posts where id = $1`, [id]))
@@ -1861,6 +2014,7 @@ area(
   'postRole',
   'appointPresident',
   'invite',
+  'addMember',
   'suspend',
   'makeAlumni',
   'profile',
@@ -1871,7 +2025,16 @@ area(
   'handle',
   'vjudge',
 );
-area('Finance', 'pay', 'contribute', 'setFee', 'expense', 'saveBudget', 'deleteBudget');
+area(
+  'Finance',
+  'pay',
+  'contribute',
+  'setFee',
+  'setWallets',
+  'expense',
+  'saveBudget',
+  'deleteBudget',
+);
 area(
   'Events',
   'eventSave',
@@ -1927,6 +2090,8 @@ area(
   'teamRename',
   'teamInvite',
   'teamJoin',
+  'teamDecline',
+  'teamUninvite',
   'teamLeave',
 );
 area(
@@ -1940,10 +2105,11 @@ area(
   'deleteInterviewTip',
   'createInterviewProblem',
   'deleteInterviewProblem',
+  'setInterviewTopicLink',
   'setAvailableForQuestions',
 );
 area('Email', 'mailTest', 'mailRetry');
-area('Security & settings', 'flag', 'kv');
+area('Security & settings', 'flag', 'kv', 'setXpRates');
 /** `decide` covers three officer queues; its section follows the kind. */
 const areaOf = (type: string, i: In): AuditArea | '' =>
   type === 'decide' ? (i.kind === 'application' ? 'Recruitment' : 'Finance') : (AREA[type] ?? '');
@@ -2034,6 +2200,36 @@ export async function exportMembers(userId: string) {
 }
 
 /** Cursor-paginated Feed posts for infinite scroll. */
+/**
+ * The "best" order shared by the feed, ideas and blogs. Every 10x more engagement is worth two days of freshness
+ * (log10 of engagement plus age in two-day units), so a new post starts above old quiet ones but below a recent hit,
+ * and sinks only as newer or better ones arrive. It does not depend on `now()`, so a page's last rank is an exact
+ * keyset cursor: no repeats or gaps while scrolling.
+ */
+export const BEST_DECADE_SECONDS = 2 * 86_400;
+const bestRank = (engagement: string, at: string) =>
+  `(sign(${engagement})::float8 * log(greatest(abs(${engagement}), 1)::float8) + extract(epoch from ${at})::float8 / ${BEST_DECADE_SECONDS})`;
+/** `rank:id` keyset: rows after it in (rank desc, id desc) order. */
+const afterRank = (cursor: unknown, rank: string, id: string, idx: number) => {
+  const m = /^(-?\d+(?:\.\d+)?(?:e[+-]?\d+)?):(\d+)$/i.exec(String(cursor ?? ''));
+  return m
+    ? {
+        sql: `(${rank} < $${idx}::float8 or (${rank} = $${idx}::float8 and ${id} < $${idx + 1}))`,
+        params: [Number(m[1]), Number(m[2])],
+      }
+    : null;
+};
+/** Within one page, no author twice in a row when someone else can go between: the page reads like a feed. */
+export function spreadAuthors<T>(rows: T[], author: (x: T) => string): T[] {
+  const out = [...rows];
+  for (let k = 1; k < out.length; k++) {
+    if (author(out[k]!) !== author(out[k - 1]!)) continue;
+    const j = out.findIndex((x, n) => n > k && author(x) !== author(out[k - 1]!));
+    if (j > 0) out.splice(k, 0, out.splice(j, 1)[0]!);
+  }
+  return out;
+}
+
 export async function listFeedPosts(
   db: Db,
   userId: string,
@@ -2054,8 +2250,7 @@ export async function listFeedPosts(
   const where: string[] = input.mine ? ['fp.user_id = $1'] : [];
   const params: unknown[] = [userId];
   let idx = 2;
-  // Hot ranks move as posts age, so a keyset cursor cannot hold; page by offset instead.
-  const offset = sort === 'hot' ? Math.max(0, Math.floor(Number(input.cursor)) || 0) : 0;
+  const HOT = bestRank('fp.score', 'fp.created_at');
 
   if (q) {
     where.push(`(fp.title ilike $${idx} or fp.body_md ilike $${idx})`);
@@ -2067,13 +2262,15 @@ export async function listFeedPosts(
     params.push(category);
     idx++;
   }
-  if (
-    sort !== 'hot' &&
-    input.cursor !== undefined &&
-    input.cursor !== null &&
-    String(input.cursor).trim() !== ''
-  ) {
-    if (sort === 'top') {
+  if (input.cursor !== undefined && input.cursor !== null && String(input.cursor).trim() !== '') {
+    if (sort === 'hot') {
+      const after = afterRank(input.cursor, HOT, 'fp.id', idx);
+      if (after) {
+        where.push(after.sql);
+        params.push(...after.params);
+        idx += 2;
+      }
+    } else if (sort === 'top') {
       const m = /^(-?\d+):(\d+)$/.exec(String(input.cursor));
       if (m) {
         where.push(`(fp.score < $${idx} or (fp.score = $${idx} and fp.id < $${idx + 1}))`);
@@ -2091,39 +2288,39 @@ export async function listFeedPosts(
   }
 
   params.push(limit + 1);
-  // Hot: net votes decay with age in hours (gravity 1.5), so fresh, well-voted posts rise. In float8: extract()
-  // returns numeric, and numeric power() over every post took 0.3 s at 20k posts.
+  // Hot is the shared "best" order: votes and freshness balanced, see bestRank.
   const orderBy =
     sort === 'top'
       ? `fp.score desc, fp.id desc`
       : sort === 'hot'
-        ? `(fp.score + 1) / power(extract(epoch from now() - fp.created_at)::float8 / 3600 + 2, 1.5) desc, fp.id desc`
+        ? `${HOT} desc, fp.id desc`
         : `fp.created_at desc, fp.id desc`;
   const sql = `
     select fp.id, fp.user_id, u.name as author_name, greatest(u.problems_solved, u.solved) as author_solved,
       u.rating as author_rating, u.title as author_role, ${face('u')} as author_avatar,
       fp.title, left(fp.body_md, 400) as body_md, fp.category, fp.score,
       coalesce(v.value, 0)::int as my_vote,
-      fp.created_at, fp.updated_at
+      fp.created_at, fp.updated_at, ${HOT} as rank
     from feed_posts fp
     join users u on u.id = fp.user_id
     left join feed_votes v on v.post_id = fp.id and v.user_id = $1
     ${where.length ? 'where ' + where.join(' and ') : ''}
     order by ${orderBy}
-    limit $${idx} offset ${offset}`;
-  const rows = (await db.query(sql, params)).rows as FeedPostSummary[];
+    limit $${idx}`;
+  const rows = (await db.query(sql, params)).rows as (FeedPostSummary & { rank: number })[];
   const hasMore = rows.length > limit;
-  const items = hasMore ? rows.slice(0, limit) : rows;
-  const last = items[items.length - 1];
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  const last = page[page.length - 1];
   const nextCursor =
     hasMore && last
       ? sort === 'hot'
-        ? String(offset + limit)
+        ? `${last.rank}:${last.id}`
         : sort === 'top'
           ? `${last.score}:${last.id}`
           : String(last.id)
       : null;
-  return { items, nextCursor };
+  const items = page.map(({ rank: _rank, ...x }) => x);
+  return { items: sort === 'hot' ? spreadAuthors(items, (x) => x.user_id) : items, nextCursor };
 }
 
 /** Reported feed posts, most-reported first, for members who moderate the feed. */
@@ -2231,10 +2428,10 @@ export async function listIdeas(
   let cursorClause = '';
   if (input.cursor !== undefined && input.cursor !== null && String(input.cursor).trim() !== '') {
     if (sort === 'top') {
-      const m = /^(\d+):(\d+)$/.exec(String(input.cursor));
-      if (m) {
-        cursorClause = `where (upvotes < $${idx} or (upvotes = $${idx} and id < $${idx + 1}))`;
-        params.push(Number(m[1]), Number(m[2]));
+      const after = afterRank(input.cursor, 'rank', 'id', idx);
+      if (after) {
+        cursorClause = `where ${after.sql}`;
+        params.push(...after.params);
         idx += 2;
       }
     } else {
@@ -2261,18 +2458,22 @@ export async function listIdeas(
       from ideas i
       join users u on u.id = i.user_id
       ${where.length ? 'where ' + where.join(' and ') : ''}
+    ), ranked as (
+      -- An interested member counts twice an upvote: it is a commitment, not a click.
+      select *, ${bestRank('(upvotes + 2 * interested_count)', 'created_at')} as rank from base
     )
-    select * from base
+    select * from ranked
     ${cursorClause}
-    order by ${sort === 'top' ? 'upvotes desc, id desc' : 'created_at desc, id desc'}
+    order by ${sort === 'top' ? 'rank desc, id desc' : 'created_at desc, id desc'}
     limit $${idx}`;
-  const rows = (await db.query(sql, params)).rows as IdeaSummary[];
+  const rows = (await db.query(sql, params)).rows as (IdeaSummary & { rank: number })[];
   const hasMore = rows.length > limit;
-  const items = hasMore ? rows.slice(0, limit) : rows;
-  const last = items[items.length - 1];
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  const last = page[page.length - 1];
   const nextCursor =
-    hasMore && last ? (sort === 'top' ? `${last.upvotes}:${last.id}` : String(last.id)) : null;
-  return { items, nextCursor };
+    hasMore && last ? (sort === 'top' ? `${last.rank}:${last.id}` : String(last.id)) : null;
+  const items = page.map(({ rank: _rank, ...x }) => x);
+  return { items: sort === 'top' ? spreadAuthors(items, (x) => x.user_id) : items, nextCursor };
 }
 
 /**
@@ -3225,10 +3426,13 @@ export async function listBlogPosts(
   }
 
   const whereSql = conditions.length ? conditions.join(' and ') : '1=1';
+  // "best" (the default): reads and freshness balanced like the feed; ten reads count as one point of engagement.
   const sortSql =
     input.sort === 'oldest'
       ? `coalesce(b.published_at, b.created_at) asc, b.id asc`
-      : `coalesce(b.published_at, b.created_at) desc, b.id desc`;
+      : input.sort === 'newest' || input.sort === 'latest'
+        ? `coalesce(b.published_at, b.created_at) desc, b.id desc`
+        : `${bestRank('(1 + b.views / 10.0)', 'coalesce(b.published_at, b.created_at)')} desc, b.id desc`;
 
   const countRow = (
     await db.query(

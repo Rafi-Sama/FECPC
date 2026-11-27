@@ -1,11 +1,9 @@
 'use client';
 import type { CSSProperties } from 'react';
 import { AvatarRing } from '@/components/app/shared/RatingBadge';
+import { KudosButton } from '@/components/app/shared/Kudos';
 import { formatMilestoneSubline, formatMilestoneTarget, rankFor } from '@fecpc/contracts';
 import type { MilestoneDTO } from '@fecpc/contracts';
-
-const msKudosBtn = 'whitespace-nowrap'; // was .ms-kudos-btn
-const msKudosBtnGiven = '[&[disabled]]:opacity-[0.6] [&[disabled]]:cursor-not-allowed'; // was .ms-kudos-btn--given
 
 export function MilestoneRow({
   milestone,
@@ -19,7 +17,7 @@ export function MilestoneRow({
   isOwner: boolean;
   isSystem: boolean;
   pending?: boolean;
-  onGiveKudos: (milestoneId: number) => void;
+  onGiveKudos: (milestoneId: number) => Promise<void> | void;
   onOpenMember: (userId: string, trigger?: HTMLElement | null) => void;
 }) {
   const rank = rankFor(milestone.member_rating);
@@ -27,74 +25,26 @@ export function MilestoneRow({
   const subline = formatMilestoneSubline(milestone);
   const givers = milestone.recent_givers ?? [];
 
+  // Who cheered the owner, by name; no counts (kudos are a gesture, not a score).
   const ownerCongratsLine = (() => {
     if (!isOwner || milestone.kudos_count <= 0) return null;
-    const base = `${milestone.kudos_count} ${milestone.kudos_count === 1 ? 'person' : 'people'} congratulated you`;
-    if (givers.length === 0) return base;
-    const shown = givers.slice(0, 2).join(', ');
-    const extra = milestone.kudos_count - Math.min(2, givers.length);
-    return extra > 0 ? `${base} · ${shown} +${extra}` : `${base} · ${shown}`;
+    const shown = givers.slice(0, 2);
+    if (!shown.length) return 'Members congratulated you';
+    return `${shown.join(' and ')}${milestone.kudos_count > shown.length ? ' and others' : ''} congratulated you`;
   })();
 
-  const renderButton = () => {
-    if (isOwner) {
-      return (
-        <button
-          type="button"
-          className={`btn xs ${msKudosBtn} ${msKudosBtnGiven}`}
-          disabled
-          title={
-            milestone.kudos_count > 0
-              ? `${milestone.kudos_count} ${milestone.kudos_count === 1 ? 'person' : 'people'} congratulated you`
-              : 'Your milestone'
-          }
-          aria-label={`Kudos ${milestone.kudos_count} on your milestone`}
-        >
-          Kudos{milestone.kudos_count > 0 && ` ${milestone.kudos_count}`} ✓
-        </button>
-      );
-    }
-
-    if (milestone.has_kudos) {
-      return (
-        <button
-          type="button"
-          className={`btn xs ${msKudosBtn} ${msKudosBtnGiven}`}
-          disabled
-          title={`You congratulated ${milestone.member_name} (${milestone.kudos_count} total)`}
-          aria-label={`Congratulated ${milestone.member_name}`}
-        >
-          Kudos ✓
-        </button>
-      );
-    }
-
-    if (isSystem) {
-      return (
-        <button
-          type="button"
-          className={`btn xs line ${msKudosBtn}`}
-          disabled
-          title="Operator accounts cannot give kudos"
-          aria-label="Cannot give kudos"
-        >
-          Kudos{milestone.kudos_count > 0 && ` ${milestone.kudos_count}`}
-        </button>
-      );
-    }
-
-    return (
-      <button
-        type="button"
-        className={`btn xs line ${msKudosBtn}`}
-        disabled={pending}
-        onClick={() => onGiveKudos(milestone.id)}
-        aria-label={`Give kudos to ${milestone.member_name} for reaching ${targetText}`}
-      >
-        Kudos{milestone.kudos_count > 0 && ` ${milestone.kudos_count}`}
-      </button>
+  const renderButton = () =>
+    isOwner ? (
+      <span className="pill">Your milestone</span>
+    ) : (
+      <KudosButton
+        given={milestone.has_kudos}
+        disabled={pending || isSystem}
+        title={isSystem ? 'Operator accounts cannot give kudos' : undefined}
+        label={`Give kudos to ${milestone.member_name} for reaching ${targetText}`}
+        onGive={() => onGiveKudos(milestone.id)}
+      />
     );
-  };
 
   return (
     <div className="ms-row w-full">

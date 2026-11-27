@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import {
   XP,
+  walletsOf,
+  xpRates,
+  earnCounts,
   earned,
   InviteAcceptSchema,
   PasswordChangeSchema,
@@ -20,7 +23,9 @@ import {
   listFeedReports,
   listIdeas,
   listMembers,
+  spreadAuthors,
 } from '../src/modules/member-area/actions.ts';
+import { xpHistory } from '../src/modules/member-area/state.ts';
 import { getTeam, lineDiff } from '../src/modules/member-area/teams.ts';
 import { auditQuery } from '../src/modules/member-area/actions.ts';
 import { eventsQuery, verifyCertificate } from '../src/modules/member-area/events.ts';
@@ -610,14 +615,14 @@ test("payments: validated, one transaction ID pays once, and the Treasurer's dec
   const ok = {
     type: 'pay',
     invoice: TERM,
-    via: 'bKash',
+    wallet: 'bkash',
     trx: 'bk12345678',
     sender: '01712345678',
   };
   await refused(400, act('tasnim', { ...ok, trx: 'short' }));
   await refused(400, act('tasnim', { ...ok, trx: "BK1234'; DROP" }));
   await refused(400, act('tasnim', { ...ok, sender: '12345' }));
-  await refused(400, act('tasnim', { ...ok, via: 'PayPal' }));
+  await refused(400, act('tasnim', { ...ok, wallet: 'paypal' }));
   await refused(403, act('tasnim', { ...ok, invoice: 'INV-0000' }));
   await act('tasnim', ok);
   await refused(409, act('tasnim', { ...ok, trx: 'BK99999999' })); // one live payment per invoice
@@ -663,7 +668,7 @@ test('payments: a rejected payment can be resubmitted; nobody verifies their own
     act('anika', {
       type: 'pay',
       invoice: 'EV-hack-night',
-      via: 'Nagad',
+      wallet: 'nagad',
       trx: 'NGOWN00001',
       sender: '01812345678',
     }),
@@ -672,7 +677,7 @@ test('payments: a rejected payment can be resubmitted; nobody verifies their own
   await act('anika', {
     type: 'pay',
     invoice: 'EV-hack-night',
-    via: 'Nagad',
+    wallet: 'nagad',
     trx: 'NGOWN00001',
     sender: '01812345678',
   });
@@ -705,7 +710,7 @@ test('payments: a rejected payment can be resubmitted; nobody verifies their own
   await act('anika', {
     type: 'pay',
     invoice: 'EV-hack-night',
-    via: 'Nagad',
+    wallet: 'nagad',
     trx: 'NGOWN00001',
     sender: '01812345678',
   }); // the same ID again: a wrong rejection is recoverable
@@ -715,7 +720,7 @@ test('payments: a rejected payment can be resubmitted; nobody verifies their own
     act('priya', {
       type: 'pay',
       invoice: TERM,
-      via: 'Nagad',
+      wallet: 'nagad',
       trx: 'NGOWN00001',
       sender: '01812345678',
     }),
@@ -813,7 +818,7 @@ test('waivers: requests are gone; a waiver granted earlier still settles its inv
     act('zz_w', {
       type: 'pay',
       invoice: TERM,
-      via: 'bKash',
+      wallet: 'bkash',
       trx: 'ZZWAIVE001',
       sender: '01700000001',
     }),
@@ -1341,7 +1346,7 @@ test('the operator account is not a member: no ballot, no dues, no purchases', a
     act('admin', {
       type: 'pay',
       invoice: TERM,
-      via: 'bKash',
+      wallet: 'bkash',
       trx: 'ADMIN00001',
       sender: '01712345678',
     }),
@@ -1406,14 +1411,21 @@ test('community feed: create, list, filter, vote (+XP), edit/delete author-only'
   assert.equal(detail.score, 1);
   assert.equal(detail.my_vote, 1);
   assert.equal('comments' in detail, false);
-  // My posts; hot ranking pages by offset without repeats
+  // My posts; "best" (hot) pages by a rank:id keyset: every post exactly once, in rank order
   const mine = await listFeedPosts(db(), 'farhan', { mine: true, limit: 50 });
   assert.ok(mine.items.length >= 1 && mine.items.every((p) => p.user_id === 'farhan'));
   assert.equal((await listFeedPosts(db(), 'priya', { mine: true, q: 'Bitmask' })).items.length, 0);
-  const hot1 = await listFeedPosts(db(), 'priya', { sort: 'hot', limit: 2 });
-  assert.equal(hot1.nextCursor, '2');
-  const hot2 = await listFeedPosts(db(), 'priya', { sort: 'hot', limit: 2, cursor: '2' });
-  assert.ok(hot2.items.every((p) => !hot1.items.some((x) => x.id === p.id)));
+  const seen: number[] = [];
+  let cursor: string | null = null;
+  do {
+    const page = await listFeedPosts(db(), 'priya', { sort: 'hot', limit: 2, cursor });
+    assert.match(page.nextCursor ?? '0:0', /^-?[\d.e+-]+:\d+$/);
+    seen.push(...page.items.map((p) => p.id));
+    cursor = page.nextCursor;
+  } while (cursor);
+  const all = (await listFeedPosts(db(), 'priya', { sort: 'new', limit: 50 })).items;
+  assert.equal(new Set(seen).size, seen.length, 'no repeats');
+  assert.deepEqual([...seen].sort(), all.map((p) => p.id).sort(), 'no gaps');
   await refused(
     400,
     act('priya', { type: 'comment', targetType: 'feed', targetId: post.id, body: 'Not allowed' }),
@@ -1755,7 +1767,7 @@ test('milestones: backfill, CF sync crossover detection, freshness window, perma
     XP.kudosReceived,
     'owner earns +2 XP on first kudos',
   );
-  assert.equal(earned(giverAfter.s) - giverXpBefore, 0, 'giver earns 0 XP');
+  assert.equal(earned(giverAfter.s) - giverXpBefore, XP.kudos, 'giving kudos earns XP too');
 
   const ownerNotifs = ownerAfter.inbox.filter((n) => n.id === `n:mk:${tasnimPromo!.id}:nadia`);
   assert.equal(ownerNotifs.length, 1, 'exactly one notification per unique giver');
@@ -2865,7 +2877,7 @@ test('dues: 3-month periods; the President or Secretary sets the amounts; alumni
 
   const alum = (await st('nabila')).s;
   assert.equal(alum.dues.length, 0, 'alumni owe no member or post dues');
-  const gift = { type: 'contribute', via: 'Nagad', sender: '01812345678' };
+  const gift = { type: 'contribute', wallet: 'nagad', sender: '01812345678' };
   await refused(403, act('nabila', { ...gift, type: 'pay', invoice: TERM, trx: 'GF00000001' }));
   await refused(403, act('nadia', { ...gift, amount: 100, trx: 'GF00000002' }));
   await refused(400, act('nabila', { ...gift, amount: 0, trx: 'GF00000003' }));
@@ -2893,4 +2905,146 @@ test('platform streak: consecutive daily check-ins, reset after a missed day', a
   assert.equal((await st('imran')).s.run, 0);
   await act('imran', { type: 'checkin' });
   assert.equal((await st('imran')).s.run, 1);
+});
+
+test('ICPC invites: declined and withdrawn ones stay in both members’ history', async () => {
+  await act('farhan', { type: 'teamInvite', user: 'sabbir' });
+  await act('farhan', { type: 'teamInvite', user: 'tasnim' });
+  assert.deepEqual((await getTeam(db(), 'farhan', {})).sentRows.map((r) => r.id).sort(), [
+    'sabbir',
+    'tasnim',
+  ]);
+  await refused(403, act('sabbir', { type: 'teamDecline', from: 'tasnim' })); // no such invitation
+  await act('sabbir', { type: 'teamDecline', from: 'farhan' });
+  await refused(403, act('sabbir', { type: 'teamJoin', from: 'farhan' })); // declined is closed
+  await act('farhan', { type: 'teamUninvite', user: 'tasnim' });
+  assert.equal((await getTeam(db(), 'tasnim', {})).invites.length, 0);
+  const log = (await getTeam(db(), 'farhan', {})).inviteLog;
+  assert.deepEqual(
+    log.map((x) => [x.status, x.outgoing]),
+    [
+      ['withdrawn', true],
+      ['declined', true],
+    ],
+  );
+  const theirs = (await getTeam(db(), 'sabbir', {})).inviteLog[0]!;
+  assert.deepEqual([theirs.status, theirs.outgoing, !!theirs.decidedAt], ['declined', false, true]);
+});
+
+test('finance: officers keep the payment methods; the dues sheet says who owes and since when', async () => {
+  const methods = (await st('anika')).s.kv;
+  const keep = walletsOf(methods);
+  const rocket = { provider: 'Rocket', number: '01911111111', account: 'Treasurer', active: true };
+  await refused(403, act('tasnim', { type: 'setWallets', wallets: [rocket] }));
+  await refused(400, act('anika', { type: 'setWallets', wallets: [{ ...rocket, number: '1' }] }));
+  await act('anika', { type: 'setWallets', wallets: [...keep, { ...rocket, id: 'rocket' }] });
+  assert.ok(walletsOf((await st('tasnim')).s.kv).some((w) => w.id === 'rocket'));
+  await act('anika', {
+    type: 'setWallets',
+    wallets: [...keep, { ...rocket, id: 'rocket', active: false }],
+  });
+  await refused(
+    400,
+    act('shuvo', {
+      type: 'pay',
+      invoice: TERM,
+      wallet: 'rocket',
+      trx: 'RK12345678',
+      sender: '01712345678',
+    }),
+  );
+  await act('anika', { type: 'setWallets', wallets: keep });
+
+  const sheet = (await st('anika')).office.dues!.members;
+  assert.ok(sheet.length > 0);
+  for (const m of sheet) {
+    assert.equal(m.paid + m.waiting + m.unpaid, m.bills.length);
+    assert.ok(m.overdue <= m.unpaid);
+    assert.equal(m.since === null, m.overdue === 0);
+  }
+  assert.equal((await st('tasnim')).office.dues, undefined);
+});
+
+test('add member: President or Super Admin, one account per email, role set before the first sign-in', async () => {
+  const add = (who: string, extra: Record<string, unknown> = {}) =>
+    act(who, {
+      type: 'addMember',
+      name: 'Nabil Karim',
+      email: 'Nabil.Karim@Example.com',
+      batch: 26,
+      dept: 'CSE',
+      ...extra,
+    }) as Promise<string>;
+  await refused(403, add('tasnim'));
+  await refused(403, add('sadia')); // Secretary: approves applications, does not assign roles
+  await refused(403, add('tanvir', { role: 'cp_head' })); // a raw role is the Super Admin's
+  await refused(400, add('tanvir', { email: 'not-an-email' }));
+  await refused(400, add('tanvir', { batch: 0 }));
+  await refused(409, add('tanvir', { email: 'TASNIM@fecpc.example' })); // emails are unique, any case
+  const note = await add('admin', { role: 'treasurer', post: 'joint_treasurer' });
+  await refused(409, add('tanvir')); // the same person twice
+  const token = /invite=([\w-]+)/.exec(note)![1]!;
+  const row = (
+    await db().query(
+      `select id, role, post, status from users where email = 'nabil.karim@example.com'`,
+    )
+  ).rows[0];
+  assert.deepEqual([row.role, row.post, row.status], ['treasurer', 'joint_treasurer', 'invited']);
+  // Setting the password signs them in, already with the role.
+  const session = await acceptInvite(token, 'nabil-password-1');
+  assert.equal(await sessionUser(session.token), row.id);
+  assert.equal(session.user.role, 'treasurer');
+  assert.equal((await st(row.id)).s.role, 'treasurer');
+  await refused(410, acceptInvite(token, 'nabil-password-2'));
+});
+
+test('XP: the Super Admin sets amounts; totals follow and every change lands in the member’s history', async () => {
+  const before = await st('priya');
+  const rates = xpRates(before.s.kv);
+  await refused(403, act('tanvir', { type: 'setXpRates', rates: { checkin: 50 } }));
+  await refused(400, act('admin', { type: 'setXpRates', rates: { checkin: -1 } }));
+  await refused(400, act('admin', { type: 'setXpRates', rates: { nope: 1 } }));
+  await act('admin', { type: 'setXpRates', rates: { ...rates, read: rates.read + 7 } });
+  const after = await st('priya');
+  const reads = earnCounts(after.s).read ?? 0;
+  assert.equal(xpRates(after.s.kv).read, rates.read + 7);
+  assert.equal(earned(after.s, xpRates(after.s.kv)) - earned(before.s, rates), reads * 7);
+  const hist = await xpHistory(db(), 'priya', {});
+  if (reads) {
+    const line = hist.items.find((x) => x.kind === 'read')!;
+    assert.deepEqual([line.delta, line.note], [reads * 7, 'rate']);
+  }
+  // A check-in is a dated line of its own, and the history adds up to the breakdown.
+  await act('priya', { type: 'checkin' });
+  await st('priya');
+  const h2 = await xpHistory(db(), 'priya', {});
+  const sum = (await db().query(`select sum(delta)::int n from xp_history where user_id = 'priya'`))
+    .rows[0].n;
+  assert.equal(
+    sum,
+    h2.breakdown.reduce((a, b) => a + b.points, 0),
+  );
+  await act('admin', { type: 'setXpRates', rates }); // put the amounts back for the other tests
+});
+
+test('best order: a new post sits between a fresh hit and old quiet posts; one author never twice in a row', async () => {
+  const at = (h: number) => new Date(Date.now() - h * 3600e3).toISOString();
+  const ids = (
+    await db().query(
+      `insert into feed_posts (user_id, title, body_md, category, score, created_at) values
+         ('priya', 'Rank old quiet', 'x', 'topic', 0, $1),
+         ('zahid', 'Rank fresh hit', 'x', 'topic', 40, $2),
+         ('mim', 'Rank brand new', 'x', 'topic', 0, $3)
+       returning id`,
+      [at(24 * 10), at(6), at(0)],
+    )
+  ).rows.map((r) => r.id as number);
+  const order = (
+    await listFeedPosts(db(), 'tasnim', { sort: 'hot', q: 'Rank ', limit: 10 })
+  ).items.map((p) => p.id);
+  assert.deepEqual(order, [ids[1], ids[2], ids[0]]);
+  assert.deepEqual(
+    spreadAuthors(['a', 'a', 'b', 'a', 'c'], (x) => x),
+    ['a', 'b', 'a', 'c', 'a'],
+  );
 });

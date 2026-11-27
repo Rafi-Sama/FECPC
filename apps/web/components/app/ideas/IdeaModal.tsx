@@ -242,7 +242,6 @@ export function IdeaModal({
                 {editing ? (
                   <SaveForm
                     className="stack [--g:14px]"
-
                     label="Unsaved changes to this idea"
                     onDiscard={() => {
                       setEditTitle(detail.title);
@@ -286,6 +285,11 @@ export function IdeaModal({
                         <option value="closed">Closed</option>
                       </select>
                     </label>
+                    <div className="row [--g:8px]">
+                      <button type="submit" className="btn sm">
+                        Save changes
+                      </button>
+                    </div>
                   </SaveForm>
                 ) : (
                   <>

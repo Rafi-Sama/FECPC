@@ -62,6 +62,12 @@ export const matrix = {
     president: Y,
     super_admin: Y,
   },
+  'finance.wallets': {
+    label: 'Set the wallet numbers members pay into',
+    treasurer: Y,
+    president: Y,
+    super_admin: Y,
+  },
   'expense.approve': {
     label: 'Approve expenses',
     treasurer: 'propose',

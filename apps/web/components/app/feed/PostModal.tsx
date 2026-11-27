@@ -166,7 +166,6 @@ export function PostModal({
               {editing ? (
                 <SaveForm
                   className="stack [--g:14px]"
-
                   label="Unsaved changes to this post"
                   onDiscard={() => {
                     setEditTitle(detail.title);
@@ -197,6 +196,9 @@ export function PostModal({
                     rows={8}
                   />
                   <div className="row [--g:8px]">
+                    <button type="submit" className="btn sm">
+                      Save changes
+                    </button>
                     <button
                       type="button"
                       className="btn sm line"

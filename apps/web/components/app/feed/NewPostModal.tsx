@@ -53,7 +53,6 @@ export function NewPostModal({
     >
       <SaveForm
         className="cm-modal max-w-[640px]"
-
         label="Unpublished post"
         saveLabel="Publish"
         onDiscard={() => {
@@ -109,6 +108,11 @@ export function NewPostModal({
             ))}
           </select>
         </label>
+        <div className="row [--g:8px]">
+          <button type="submit" className="btn sm">
+            Publish
+          </button>
+        </div>
       </SaveForm>
     </div>
   );

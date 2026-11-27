@@ -241,7 +241,7 @@ function CheckIn({ e }: { e: EventDetail }) {
 }
 
 function FeedbackForm({ e, done }: { e: EventDetail; done: () => void }) {
-  const { act, toast } = useStore();
+  const { act } = useStore();
   const [rating, setRating] = useState(0); // 0 = not rated yet
   const [body, setBody] = useState('');
   if (e.feedback)
@@ -266,10 +266,7 @@ function FeedbackForm({ e, done }: { e: EventDetail; done: () => void }) {
         setBody('');
       }}
       onSubmit={async () => {
-        if (!rating) {
-          toast('Pick a rating from 1 to 5 first.', 'bad');
-          return false;
-        }
+        if (!rating) return 'Pick a rating from 1 to 5 first.';
         const ok = await act('eventFeedback', { eventId: e.id, rating, body: body.trim() });
         if (ok) done();
         return ok;
@@ -302,6 +299,11 @@ function FeedbackForm({ e, done }: { e: EventDetail; done: () => void }) {
           value={body}
           onChange={(x) => setBody(x.target.value)}
         />
+        <div>
+          <button type="submit" className="btn sm">
+            Send feedback
+          </button>
+        </div>
       </div>
     </SaveForm>
   );

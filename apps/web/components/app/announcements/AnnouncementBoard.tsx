@@ -1,4 +1,5 @@
 'use client';
+import { useMore } from '@/components/site/More';
 import { useRef } from 'react';
 import { excerptFromMarkdown, relTime } from '@/components/app/shared/MarkdownEditor';
 import { TierAvatar, TierName } from '@/components/app/shared/SolvedTier';
@@ -36,6 +37,7 @@ export function AnnouncementBoard({
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
   const pinned = items.filter((a) => a.pinned);
   const log = items.filter((a) => !a.pinned);
+  const [logShown, logMore] = useMore(log, 15, true);
 
   const onKey = (e: React.KeyboardEvent, a: UnifiedAnnouncement) => {
     const order = log.map((x) => x.id);
@@ -162,7 +164,7 @@ export function AnnouncementBoard({
 
       {log.length > 0 && (
         <section className="[border-top:var(--ann-border-thick)] mt-[1.5rem]">
-          {log.map((a) => {
+          {logShown.map((a) => {
             const read = isRead(a.id);
             const { day, mon } = fmtDay(a.at);
             const count = readCount(a);
@@ -219,6 +221,7 @@ export function AnnouncementBoard({
               </div>
             );
           })}
+          {logMore}
         </section>
       )}
     </div>

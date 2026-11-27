@@ -1113,3 +1113,44 @@ do $$ begin
     alter default privileges in schema public revoke all on functions from anon, authenticated;
   end if;
 end $$;
+
+-- ICPC team invitations, kept after they are answered. `pings` holds the open ones; this is their history.
+create table if not exists icpc_invites (
+  id bigint generated always as identity primary key,
+  from_user text not null references users on delete cascade,
+  to_user text not null references users on delete cascade,
+  status text not null default 'pending' check (status in ('pending','accepted','declined','withdrawn','closed')),
+  at timestamptz not null default now(),
+  decided_at timestamptz
+);
+create index if not exists icpc_invites_to on icpc_invites (to_user, id desc);
+create index if not exists icpc_invites_from on icpc_invites (from_user, id desc);
+
+-- Payment methods are club settings now (kv:wallets): Upay joins the wallets, and each payment records which club
+-- number it was sent to, so the Treasurer checks the right statement.
+alter table payments drop constraint if exists payments_via_check;
+alter table payments add constraint payments_via_check check (via in ('bKash','Nagad','Rocket','Upay'));
+alter table payments add column if not exists paid_to text;
+
+-- XP amounts are a club setting the Super Admin edits (kv:xp, JSON). SQL reads the judge-XP amounts through this,
+-- with the default passed in; the setting is validated before it is written.
+create or replace function xp_rate(k text, d int) returns int language sql stable as $$
+  select coalesce(((select (value #>> '{}')::jsonb from club where key = 'kv:xp') ->> k)::int, d)
+$$;
+-- Each member's XP history: every change to their total, by source, when the server noticed it. The snapshot is the
+-- last breakdown seen ({kind: [count, points]}); a change to it is written as history rows.
+create table if not exists xp_snapshot (
+  user_id text primary key references users on delete cascade,
+  points jsonb not null,
+  at timestamptz not null default now()
+);
+create table if not exists xp_history (
+  id bigint generated always as identity primary key,
+  user_id text not null references users on delete cascade,
+  kind text not null,
+  delta int not null,
+  count int not null default 0,
+  note text check (note in ('start', 'rate')),
+  at timestamptz not null default now()
+);
+create index if not exists xp_history_user on xp_history (user_id, id desc);

@@ -1,7 +1,8 @@
 'use client';
 // Shopify-style contextual save bar. A create/edit form registers with useSaveBar(formRef); while
 // it has changes, a bar at the top offers Discard and Save, and anything that would leave the form
-// (links, tabs, modal close, Escape, reload) is refused with a shake instead.
+// (links, tabs, modal close, Escape, reload) is refused with a shake instead. A save that fails (a missing
+// field, or the server refusing it) shows its reason in the bar and shakes it.
 import {
   createContext,
   useCallback,
@@ -27,11 +28,31 @@ type Entry = {
 };
 type Ctx = {
   set: (id: string, e: Entry | null) => void;
+  /** Shows why the save failed, in the bar, and shakes it. `null` clears it. */
+  fail: (msg: string | null) => void;
   /** False (and the bar shakes) while a form has unsaved changes. */
   canLeave: () => boolean;
 };
 
 const SaveBarCtx = createContext<Ctx | null>(null);
+
+/** The fields that block a save, as "Label: reason" lines. */
+export function invalidFields(form: HTMLFormElement): string[] {
+  return [...form.elements].flatMap((el) => {
+    if (!('validity' in el) || (el as HTMLInputElement).validity.valid) return [];
+    const f = el as HTMLInputElement;
+    const label =
+      f.labels?.[0]?.textContent?.trim() ||
+      f.getAttribute('aria-label') ||
+      f.placeholder ||
+      f.name ||
+      'A field';
+    return [`${label.replace(/\s*\*$/, '')}: ${f.validationMessage}`];
+  });
+}
+
+/** Store.act() broadcasts a refused action, so a save made through it reports in the bar too. */
+export const SAVE_ERROR_EVENT = 'savebar:error';
 
 /** What the user has typed, read from the DOM so controlled and uncontrolled forms both work. */
 export function snapshot(form: HTMLFormElement): string {
@@ -61,6 +82,7 @@ const BACKDROP = '[role="dialog"], [role="presentation"], [class*="backdrop"], .
 export function SaveBarProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [entries, setEntries] = useState<Record<string, Entry>>({});
   const [shake, setShake] = useState(0);
+  const [error, setError] = useState<string | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const active = Object.values(entries).at(-1) ?? null;
 
@@ -100,8 +122,27 @@ export function SaveBarProvider({ children }: Readonly<{ children: ReactNode }>)
     return false;
   }, [nudge]);
 
+  const fail = useCallback(
+    (msg: string | null) => {
+      setError(msg);
+      if (msg) nudge();
+    },
+    [nudge],
+  );
+
   // Stable, or every provider render would re-run each form's register/cleanup effects in a loop.
-  const ctx = useMemo(() => ({ set, canLeave }), [set, canLeave]);
+  const ctx = useMemo(() => ({ set, canLeave, fail }), [set, canLeave, fail]);
+
+  // No bar, no error; a refused action while the bar is up is that save's error.
+  useEffect(() => {
+    if (!active) setError(null);
+  }, [active]);
+  useEffect(() => {
+    if (!active) return;
+    const on = (e: Event) => fail((e as CustomEvent<string>).detail);
+    window.addEventListener(SAVE_ERROR_EVENT, on);
+    return () => window.removeEventListener(SAVE_ERROR_EVENT, on);
+  }, [active, fail]);
 
   useEffect(() => {
     if (!active) return;
@@ -151,14 +192,19 @@ export function SaveBarProvider({ children }: Readonly<{ children: ReactNode }>)
         <div
           ref={barRef}
           key={shake}
-          className={`savebar${shake ? ' shake' : ''}`}
+          className={`savebar${shake ? ' shake' : ''}${error ? ' has-error' : ''}`}
           role="region"
           aria-label="Unsaved changes"
         >
           <span className="savebar-label">
             <span aria-hidden="true">●</span> {active.label}
           </span>
-          <div className="row [--g:8px]">
+          {error && (
+            <div className="savebar-error" role="alert">
+              <b>Not saved.</b> {error}
+            </div>
+          )}
+          <div className="row [--g:8px] savebar-btns">
             <button
               type="button"
               className="btn sm line"
@@ -251,15 +297,19 @@ export function useSaveBar(
       if (e.isTrusted) setQuiet(false);
       check();
     };
+    // An edit answers the last error.
+    const clear = (e: Event) => e.isTrusted && ctx?.fail(null);
+    f.addEventListener('input', clear);
     f.addEventListener('input', edit);
     f.addEventListener('change', edit);
     f.addEventListener('reset', later);
     return () => {
       f.removeEventListener('input', edit);
+      f.removeEventListener('input', clear);
       f.removeEventListener('change', edit);
       f.removeEventListener('reset', later);
     };
-  }, [formRef, check]);
+  }, [formRef, check, ctx]);
   useEffect(() => {
     if (base.current !== null) check();
   });
@@ -285,7 +335,19 @@ export function useSaveBar(
       label: opts.label ?? 'Unsaved changes',
       saveLabel: opts.saveLabel ?? 'Save',
       saving: !!opts.saving,
-      save: () => formRef.current?.requestSubmit(),
+      save: () => {
+        const f = formRef.current;
+        if (!f) return;
+        ctx.fail(null);
+        // Say which fields block the save here; the browser's own bubble may be off screen.
+        const bad = f.noValidate ? [] : invalidFields(f);
+        if (bad.length) {
+          ctx.fail(bad.join('\n'));
+          f.reportValidity();
+          return;
+        }
+        f.requestSubmit();
+      },
       discard: () => {
         const o = optsRef.current;
         if (o.onDiscard) o.onDiscard();
@@ -297,11 +359,12 @@ export function useSaveBar(
   }, [ctx, id, dirty, opts.label, opts.saveLabel, opts.saving, formRef, markSaved]);
   useEffect(() => () => ctx?.set(id, null), [ctx, id]);
 
-  return { dirty, markSaved: saved };
+  const fail = useCallback((msg: string | null) => ctx?.fail(msg), [ctx]);
+  return { dirty, markSaved: saved, fail };
 }
 
 type SaveFormProps = Omit<FormHTMLAttributes<HTMLFormElement>, 'onSubmit'> & {
-  /** Return true once saved; anything else keeps the changes (and the bar) in place. */
+  /** Return true once saved; a string is the error to show in the bar; anything else keeps the changes (and the bar) in place. */
   onSubmit: (e: FormEvent<HTMLFormElement>) => unknown;
   label?: string;
   saveLabel?: string;
@@ -325,7 +388,7 @@ export function SaveForm({
 }: SaveFormProps) {
   const ref = useRef<HTMLFormElement>(null);
   const [saving, setSaving] = useState(false);
-  const { markSaved } = useSaveBar(ref, {
+  const { markSaved, fail } = useSaveBar(ref, {
     label,
     saveLabel,
     saving,
@@ -343,7 +406,11 @@ export function SaveForm({
         if (saving) return;
         setSaving(true);
         try {
-          if ((await onSubmit(e)) === true) markSaved();
+          const r = await onSubmit(e);
+          if (r === true) markSaved();
+          else if (typeof r === 'string') fail(r);
+        } catch (err) {
+          fail(err instanceof Error ? err.message : 'Something went wrong. Try again.');
         } finally {
           setSaving(false);
         }

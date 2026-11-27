@@ -264,6 +264,9 @@ export function AlumniSection({
                 placeholder="https://..."
               />
             </label>
+            <button type="submit" className="btn sm">
+              Publish job
+            </button>
           </SaveForm>
         )}
 

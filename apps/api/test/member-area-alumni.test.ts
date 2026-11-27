@@ -461,3 +461,22 @@ test('learning roadmap: one only, kept by the CP Head and President, never liste
     'Learn v2',
   );
 });
+
+test('interview topics: only roadmap managers set the editorial link', async () => {
+  const { roadmapId } = await does('nadia', {
+    type: 'saveInterviewRoadmap',
+    name: 'Editorials',
+    topics: [{ key: 'r', parentKey: null, name: 'Greedy', x: 0, y: 0 }],
+  });
+  const [topic] = (await listInterviewTopics(db(), 'tasnim', { roadmapId })).topics;
+  const set = (who: string, link: string) =>
+    does(who, { type: 'setInterviewTopicLink', topicId: topic!.id, link });
+  await refused(403, set('tasnim', 'https://youtube.com/x'));
+  await refused(400, set('nadia', 'javascript:alert(1)'));
+  assert.equal((await set('tanvir', 'https://youtube.com/x')).link, 'https://youtube.com/x');
+  const link = async () =>
+    (await db().query(`select link from interview_topics where id = $1`, [topic!.id])).rows[0].link;
+  assert.equal(await link(), 'https://youtube.com/x');
+  assert.equal((await set('nadia', '')).link, null);
+  assert.equal(await link(), null);
+});

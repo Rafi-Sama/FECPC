@@ -102,6 +102,22 @@ ${button('Open the event')}
   },
 };
 
+/** The email an officer's direct invitation sends: the role is already set, one click sets a password. */
+export const INVITE_MAIL: MailTemplate = {
+  subject: '{{by}} added you to {{club}}: set your password',
+  html: shell(`<tr><td style="padding:32px 28px 8px;font:16px/1.6 Arial,Helvetica,sans-serif;color:#0d0d0b;">
+<p style="margin:0 0 8px;font:700 14px/1 'Courier New',monospace;letter-spacing:2px;color:#1f3bff;">{{role}}</p>
+<h1 style="margin:0 0 16px;font:700 28px/1.2 Arial,Helvetica,sans-serif;">Welcome, {{name}}!</h1>
+<p style="margin:0 0 8px;"><b>{{by}}</b> added you to {{club}} as <b>{{role}}</b>. Set a password and you are signed in.</p>
+</td></tr>
+${button('Set my password')}
+<tr><td style="padding:16px 28px 28px;font:14px/1.6 Arial,Helvetica,sans-serif;color:#5e5a50;">
+The link works once and expires in 7 days. Later, sign in with <b>{{email}}</b>, or use "Sign in with Google" with the same address.<br><br>
+Button not working? Paste this into your browser:<br><a href="{{link}}" style="color:#1f3bff;word-break:break-all;">{{link}}</a>
+</td></tr>
+<tr><td style="border-top:1px solid #e2dfd6;padding:16px 28px;font:14px/1.5 Arial,Helvetica,sans-serif;color:#8a857a;">Not expecting this? Ignore it; nothing happens until the link is used.</td></tr>`),
+};
+
 /**
  * Removes what has no place in an email: scripts, embedded pages and forms, event handlers and
  * `javascript:` links. Mail apps strip these too; this is a second line for the officer-side preview.

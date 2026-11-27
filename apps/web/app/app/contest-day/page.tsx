@@ -94,7 +94,7 @@ export default function ContestDay() {
   const handleAddContest = async () => {
     if (!adminInputId.trim()) {
       setAdminMsg({ text: 'Please enter a VJudge Contest ID or URL', error: true });
-      return false;
+      return 'Please enter a VJudge Contest ID or URL';
     }
 
     // Extract ID from full URL (e.g. https://vjudge.net/contest/612840#rank)
@@ -106,7 +106,7 @@ export default function ContestDay() {
         text: 'Use a VJudge contest number (e.g. 612840) or its link.',
         error: true,
       });
-      return false;
+      return 'Use a VJudge contest number (e.g. 612840) or its link.';
     }
 
     const title = adminInputName.trim().slice(0, 120) || `Contest #${cleanId}`;
@@ -611,6 +611,11 @@ export default function ContestDay() {
                   {adminMsg.text}
                 </div>
               )}
+              <div>
+                <button type="submit" className="btn sm">
+                  Add contest to board
+                </button>
+              </div>
             </SaveForm>
           </div>
 

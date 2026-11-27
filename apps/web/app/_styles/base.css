@@ -123,6 +123,10 @@ canvas {
   --acc3: #0d0d0b;
   --on: #ece9e1;
   --bad: #c4321c;
+  --tone-urgent: #c4321c;
+  --tone-action: #1f3bff;
+  --tone-good: #1d7a3a;
+  --tone-info: #5e5a50;
   --f-body: var(--sans), 'Helvetica Neue', Arial, sans-serif;
   --f-disp: var(--sans), sans-serif;
   --f-label: var(--mono), ui-monospace, monospace;
@@ -161,6 +165,10 @@ canvas {
   --acc3: #ffc2a3;
   --on: #0c0c0d;
   --bad: #ff5a1f;
+  --tone-urgent: #ff6b5b;
+  --tone-action: #7aa7ff;
+  --tone-good: #4cd07d;
+  --tone-info: #a29e95;
   --f-body: var(--sans), 'Helvetica Neue', Arial, sans-serif;
   --f-disp: var(--sans), sans-serif;
   --f-label: var(--mono), ui-monospace, monospace;

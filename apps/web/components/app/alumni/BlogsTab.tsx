@@ -62,7 +62,7 @@ export function BlogsTab({
 
   const [q, setQ] = useState(searchQuery ?? '');
   const [selectedTopic, setSelectedTopic] = useState('All');
-  const [sortOrder, setSortOrder] = useState<'latest' | 'top'>('latest');
+  const [sortOrder, setSortOrder] = useState<'latest' | 'best'>('best');
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const [posts, setPosts] = useState<BlogPost[]>([]);
@@ -75,6 +75,8 @@ export function BlogsTab({
   const [editingPost, setEditingPost] = useState<BlogPost | null>(null);
 
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Only the latest request may fill the list: an older, slower answer arriving later is dropped.
+  const reqSeq = useRef(0);
   const onCountChangeRef = useRef(onCountChange);
   // The parent shows the count; tell it whenever the total changes, including after a delete.
   useEffect(() => {
@@ -93,6 +95,7 @@ export function BlogsTab({
   }, [searchQuery]);
 
   const fetchPosts = useCallback(async () => {
+    const mine = ++reqSeq.current;
     setLoading(true);
     try {
       const res = await fetch('/api/alumni', {
@@ -107,15 +110,16 @@ export function BlogsTab({
         }),
       });
 
-      if (res.ok) {
+      if (res.ok && mine === reqSeq.current) {
         const data = await res.json();
+        if (mine !== reqSeq.current) return;
         setPosts(data.posts || []);
         setTotal(data.total || 0);
       }
     } catch (err) {
       console.error('Failed to load blog posts', err);
     } finally {
-      setLoading(false);
+      if (mine === reqSeq.current) setLoading(false);
     }
   }, [q, selectedTopic, sortOrder]);
 
@@ -272,8 +276,20 @@ export function BlogsTab({
               )}
             </div>
 
-            {/* Latest vs Top Segmented Toggle */}
+            {/* Best (votes and freshness balanced) vs Latest */}
             <div className="ty flex gap-2">
+              <button
+                type="button"
+                className={`${sortOrder === 'best' ? 'on' : ''} ${filterChip}`}
+                onClick={() => setSortOrder('best')}
+                style={{
+                  background:
+                    sortOrder === 'best' ? 'var(--acc, #1F3BFF)' : 'var(--panel, #F6F4EE)',
+                  color: sortOrder === 'best' ? 'var(--on, #FFFFFF)' : 'var(--ink, #0B0B0B)',
+                }}
+              >
+                Best
+              </button>
               <button
                 type="button"
                 className={`${sortOrder === 'latest' ? 'on' : ''} ${filterChip}`}
@@ -285,17 +301,6 @@ export function BlogsTab({
                 }}
               >
                 Latest
-              </button>
-              <button
-                type="button"
-                className={`${sortOrder === 'top' ? 'on' : ''} ${filterChip}`}
-                onClick={() => setSortOrder('top')}
-                style={{
-                  background: sortOrder === 'top' ? 'var(--acc, #1F3BFF)' : 'var(--panel, #F6F4EE)',
-                  color: sortOrder === 'top' ? 'var(--on, #FFFFFF)' : 'var(--ink, #0B0B0B)',
-                }}
-              >
-                Top
               </button>
             </div>
 
@@ -360,7 +365,8 @@ export function BlogsTab({
         </div>
 
         {/* Right Sticky Sidebar matching mockup 41f59af4 */}
-        <aside className="top-6 flex-[0_0_300px] [position:sticky]">
+        {/* min-w-0: a long one-line title inside must not stretch the sidebar past 300px (and shrink the posts). */}
+        <aside className="top-6 flex-[0_0_300px] min-w-0 [position:sticky]">
           {/* Top Contributors Box */}
           <div className="mb-6 [border:2px_solid_var(--line2)] [background:var(--panel)]">
             <div className="py-2.5 px-4 [background:var(--ink)]">

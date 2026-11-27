@@ -1,6 +1,6 @@
 'use client';
 // Admin → Audit log: every recorded action, newest first, by section, searchable, a day at a glance.
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AUDIT_AREAS, type AuditArea, type AuditEntry, type AuditPage } from '@fecpc/contracts';
 import { site } from '@/lib/site';
 
@@ -49,8 +49,11 @@ export function AuditLog() {
   const [busy, setBusy] = useState(true);
   const [err, setErr] = useState('');
 
+  // Only the latest request may fill the list: an older, slower answer arriving later is dropped.
+  const reqSeq = useRef(0);
   const load = useCallback(
     async (before?: string) => {
+      const mine = ++reqSeq.current;
       setBusy(true);
       setErr('');
       try {
@@ -60,15 +63,16 @@ export function AuditLog() {
           body: JSON.stringify({ action: 'list', area, q: query, before }),
         });
         const j = await res.json();
+        if (mine !== reqSeq.current) return;
         if (!res.ok) throw new Error(j.error ?? 'The log could not be loaded.');
         const page = j as AuditPage;
         setRows((r) => (before ? [...r, ...page.rows] : page.rows));
         setCounts(page.counts);
         setMore(page.more);
       } catch (e) {
-        setErr((e as Error).message);
+        if (mine === reqSeq.current) setErr((e as Error).message);
       } finally {
-        setBusy(false);
+        if (mine === reqSeq.current) setBusy(false);
       }
     },
     [area, query],

@@ -1,12 +1,28 @@
 'use client';
-import Link from 'next/link';
-import { InboxActions, Page } from '@/components/app/Shell';
+import { useMore } from '@/components/site/More';
+import { useState } from 'react';
+import { Page, Tabs } from '@/components/app/Shell';
 import { useStore } from '@/components/app/Store';
+import { InboxItem, sortInbox, ToneKey } from '@/components/app/Inbox';
+
+const FILTERS = ['All', 'Unread', 'Needs you', 'Updates'] as const;
+type Filter = (typeof FILTERS)[number];
 
 // Everything here is worked out on the server from real records (dues, decisions, announcements, requests from people).
 export default function Inbox() {
   const { s, inbox, act } = useStore();
+  const [filter, setFilter] = useState<Filter>('All');
   const unread = inbox.filter((n) => !s.read.includes(n.id));
+  const shown = sortInbox(inbox, s.read).filter((n) =>
+    filter === 'Unread'
+      ? !s.read.includes(n.id)
+      : filter === 'Needs you'
+        ? n.tone === 'urgent' || n.tone === 'action'
+        : filter === 'Updates'
+          ? n.tone === 'good' || n.tone === 'info'
+          : true,
+  );
+  const [page, more] = useMore(shown, 20, true);
   return (
     <Page
       title={
@@ -29,38 +45,22 @@ export default function Inbox() {
         )
       }
     >
-      <section className="panel max-w-[820px]">
-        {inbox.length === 0 ? (
-          <p className="body">
-            Nothing yet. Dues, decisions, announcements and requests from other members show up
-            here.
+      <div className="row between flex-wrap [--g:12px] mb-4 max-w-[820px]">
+        <Tabs tabs={FILTERS} value={filter} onChange={setFilter} />
+        <ToneKey />
+      </div>
+      <section className="panel max-w-[820px] p-0!">
+        {shown.length === 0 ? (
+          <p className="body p-5">
+            {inbox.length === 0
+              ? 'Nothing yet. Dues, decisions, announcements and requests from other members show up here.'
+              : 'Nothing here.'}
           </p>
         ) : (
-          <div className="list">
-            {inbox.map((n) => {
-              const r = s.read.includes(n.id);
-              return (
-                <div key={n.id} style={{ opacity: r ? 0.5 : 1 }}>
-                  <span className="pill min-w-[118px] justify-center">{n.cat}</span>
-                  <Link className="grow link" href={n.href}>
-                    <strong>{n.text}</strong>
-                  </Link>
-                  <InboxActions n={n} />
-                  {!r && (
-                    <button
-                      className="btn xs line"
-                      aria-label={`Mark read: ${n.text}`}
-                      onClick={() => act('toggle', { list: 'read', id: n.id, on: true })}
-                    >
-                      Mark read
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+          page.map((n) => <InboxItem key={n.id} n={n} full />)
         )}
       </section>
+      <div className="max-w-[820px] flex">{more}</div>
     </Page>
   );
 }

@@ -1,4 +1,5 @@
 'use client';
+import { useMore } from '@/components/site/More';
 // Admin → Recruit: a list of recruitments (one shareable form per intake). Opening one shows its link, QR poster,
 // CSV import and the applicants, who are accepted or rejected one by one or in bulk.
 import { useEffect, useMemo, useState } from 'react';
@@ -418,9 +419,13 @@ function Applicants({ list }: { list: Applicant[] }) {
       (!needle ||
         [a.name, a.sid, a.email, a.phone, a.dept].some((v) => v.toLowerCase().includes(needle))),
   );
-  // Only pending applicants can be picked, and only those the officer can see right now.
+  const [page, more] = useMore(shown, 40);
+  // Only pending applicants matching the filter can be picked. The box picks the rows on screen; picking every
+  // match (some not loaded yet) is a second, explicit step, and the confirmation says how many are off screen.
   const sel = shown.filter((a) => picked.has(a.id));
-  const all = status === 'pending' && shown.length > 0 && sel.length === shown.length;
+  const pageAll = status === 'pending' && page.length > 0 && page.every((a) => picked.has(a.id));
+  const everyMatch = sel.length === shown.length;
+  const offScreen = sel.length - page.filter((a) => picked.has(a.id)).length;
   const toggle = (id: string) =>
     setPicked((p) => {
       const n = new Set(p);
@@ -436,13 +441,15 @@ function Applicants({ list }: { list: Applicant[] }) {
         one ? `Accept ${one.name}?` : `Accept ${who.length} applicants?`,
         one
           ? `Creates their account and emails ${one.email} a link to set their password.`
-          : 'Each gets an account and an email with a link to set their password.',
+          : `Each gets an account and an email with a link to set their password.${offScreen > 0 ? ` ${offScreen} of them are not on screen.` : ''}`,
         one ? 'Accept' : `Accept ${who.length}`,
       );
       if (!ok) return;
     } else {
       reason = await ask({
-        title: one ? `Reject ${one.name}?` : `Reject ${who.length} applicants?`,
+        title: one
+          ? `Reject ${one.name}?`
+          : `Reject ${who.length} applicants?${offScreen > 0 ? ` (${offScreen} not on screen)` : ''}`,
         label: 'Reason (optional). Saved in the audit log; applicants are not told.',
         placeholder: 'e.g. not a student here',
         confirmLabel: one ? 'Reject' : `Reject ${who.length}`,
@@ -504,14 +511,31 @@ function Applicants({ list }: { list: Applicant[] }) {
           <label className="inline-flex items-center gap-2.5 font-label text-[14px] cursor-pointer [&_input]:w-[18px] [&_input]:h-[18px] [&_input]:[accent-color:var(--acc)] [&_input]:cursor-pointer">
             <input
               type="checkbox"
-              checked={all}
+              checked={pageAll}
               ref={(el) => {
-                if (el) el.indeterminate = sel.length > 0 && !all;
+                if (el) el.indeterminate = sel.length > 0 && !pageAll;
               }}
-              onChange={() => setPicked(all ? new Set() : new Set(shown.map((a) => a.id)))}
+              onChange={() =>
+                setPicked(pageAll ? new Set() : new Set([...sel, ...page].map((a) => a.id)))
+              }
             />
-            {sel.length ? `${sel.length} selected` : `Select all ${shown.length}`}
+            {sel.length
+              ? `${sel.length} selected`
+              : page.length < shown.length
+                ? `Select the ${page.length} shown`
+                : `Select all ${shown.length}`}
           </label>
+          {pageAll && shown.length > page.length && (
+            <button
+              type="button"
+              className="link text-[14px] [background:none] [border:0] cursor-pointer underline"
+              onClick={() => setPicked(everyMatch ? new Set() : new Set(shown.map((a) => a.id)))}
+            >
+              {everyMatch
+                ? `All ${shown.length} matching selected · clear`
+                : `Select all ${shown.length} matching`}
+            </button>
+          )}
           {sel.length > 0 && (
             <div className="rc-row-actions">
               <button className="btn xs" disabled={busy} onClick={() => decide(sel, 'accepted')}>
@@ -542,7 +566,7 @@ function Applicants({ list }: { list: Applicant[] }) {
         </p>
       ) : (
         <ul className="rc-apps">
-          {shown.map((a) => (
+          {page.map((a) => (
             <li key={a.id} className={`rc-app${picked.has(a.id) ? ' picked' : ''}`}>
               {a.status === 'pending' && (
                 <input
@@ -651,6 +675,7 @@ function Applicants({ list }: { list: Applicant[] }) {
           ))}
         </ul>
       )}
+      {more}
     </div>
   );
 }

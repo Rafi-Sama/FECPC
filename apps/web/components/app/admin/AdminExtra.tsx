@@ -220,7 +220,6 @@ function Permissions({ tab }: { tab: string }) {
         {superAdmin && (
           <SaveForm
             className="row [--g:10px] items-end"
-
             label="President not appointed yet"
             saveLabel="Appoint"
             onDiscard={() => setEmail('')}
@@ -259,6 +258,9 @@ function Permissions({ tab }: { tab: string }) {
                 ? `${match.name} · ${roleName[match.roleKey ?? 'member']}`
                 : email && 'No member with that email'}
             </span>
+            <button type="submit" className="btn sm" disabled={!match}>
+              Appoint
+            </button>
           </SaveForm>
         )}
         <h2 className="h3">Posts</h2>

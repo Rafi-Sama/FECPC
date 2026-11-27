@@ -412,6 +412,7 @@ export default function Profile() {
             </ul>
           </section>
         )}
+        <ChangeHistory />
         <div className="panel c8 no-print">
           <p className="label">Judge handles</p>
           <HandleBox />
@@ -421,5 +422,65 @@ export default function Profile() {
       </div>
       {editing && p && <ProfileForm profile={p} mode="request" onClose={() => setEditing(false)} />}
     </Page>
+  );
+}
+
+const REQ_STATUS = {
+  pending: ['Waiting for review', 'warn'],
+  approved: ['Approved', 'ok'],
+  rejected: ['Not approved', 'bad'],
+  cancelled: ['Withdrawn', ''],
+} as const;
+const shortDate = (iso: string) =>
+  new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+const shownValue = (k: string, v: unknown) =>
+  k === 'avatar_url'
+    ? v
+      ? 'new photo'
+      : 'photo removed'
+    : v === null || v === ''
+      ? 'removed'
+      : Array.isArray(v)
+        ? v.join(', ')
+        : String(v);
+
+/** Every change this member asked for, what it asked, and how it was decided. */
+function ChangeHistory() {
+  const { profileHistory } = useStore();
+  if (!profileHistory?.length) return null;
+  return (
+    <section className="panel col-span-full no-print">
+      <p className="label">Profile change requests</p>
+      <ul className="list">
+        {profileHistory.map((r) => {
+          const [label, tone] = REQ_STATUS[r.status];
+          return (
+            <li key={r.id} className="flex-wrap items-start!">
+              <span className="grow min-w-0">
+                <span className="label">
+                  Asked {shortDate(r.at)}
+                  {r.decidedAt &&
+                    ` · ${label.toLowerCase()}${r.decidedBy ? ` by ${r.decidedBy}` : ''} ${shortDate(r.decidedAt)}`}
+                </span>
+                <span className="block mt-1 [overflow-wrap:anywhere]">
+                  {Object.entries(r.changes).map(([k, v], i) => (
+                    <span key={k}>
+                      {i > 0 && ' · '}
+                      <b>{PROFILE_LABEL[k as ProfileField] ?? k}</b> →{' '}
+                      {shownValue(k, v).slice(0, 80)}
+                    </span>
+                  ))}
+                </span>
+                {r.note && <span className="block label mt-1">Your note: {r.note}</span>}
+                {r.status === 'rejected' && r.reason && (
+                  <span className="block bad mt-1">Reason: {r.reason}</span>
+                )}
+              </span>
+              <span className={`pill ${tone}`}>{label}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }

@@ -3,37 +3,28 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Page } from '@/components/app/Shell';
 import QR from '@/components/app/QR';
-import { OfficerPanel, officerTabs, Receipt } from '@/components/app/finance/officer';
+import { financePanel, OfficerPanel, officerTabs, Receipt } from '@/components/app/finance/officer';
 import { useStore } from '@/components/app/Store';
-import { canFully, feesOf } from '@fecpc/contracts';
+import {
+  canFully,
+  cleanWallets,
+  feesOf,
+  WALLET_PROVIDERS,
+  walletsOf,
+  type PayMethod,
+  type WalletProvider,
+} from '@fecpc/contracts';
+import { SaveForm } from '@/components/app/SaveBar';
 import { CONTRIBUTION, owes } from '@fecpc/content/member-area';
 import { fmtDate } from '@fecpc/content/site';
 
 const payField =
   '[&>span]:block [&>span]:mb-2 [&>span]:[font:11px_var(--f-label)] [&>span]:uppercase block mb-4.5';
 
-const financePanel =
-  '[background:var(--panel)] [border:1px_solid_var(--line)] p-6 min-w-0 t-b:[border:2px_solid_var(--ink)] t-b:[background:var(--panel)] [&>header]:flex [&>header]:justify-between [&>header]:gap-3 [&>header]:items-center [&>header]:pb-3 [&>header]:[border-bottom:1px_solid_var(--line)] [&>header]:mb-2 [&>header]:[font:11px_var(--f-label)] [&>header]:tracking-[0.06em] [&>header]:uppercase [&>header]:text-hi [&>header_small]:[color:var(--dim)]';
-
 const financeInvoiceActionCls =
   'flex items-center gap-3.5 justify-end flex-wrap [&_strong]:[font:500_32px/1_var(--f-num)] [&_strong]:tracking-[-1px] max-[721px]:justify-start';
 
 const tk = (n: number) => '৳' + Math.round(Math.abs(n)).toLocaleString('en-US');
-const wallets = {
-  bkash: {
-    label: 'bKash',
-    number: '01700000000',
-    account: 'Personal · Club Treasurer',
-    color: '#e2136e',
-  },
-  nagad: {
-    label: 'Nagad',
-    number: '01800000000',
-    account: 'Personal · Club Treasurer',
-    color: '#f6921e',
-  },
-} as const;
-type Wallet = keyof typeof wallets;
 
 const dateLabel = (value: string, year = false) =>
   new Date(`${value}T00:00:00`).toLocaleDateString('en-GB', {
@@ -97,15 +88,16 @@ function PaymentModal({
   invoice: { id: string; label: string; amount: number; due: string };
   onClose: () => void;
 }) {
-  const { act } = useStore();
+  const { act, s } = useStore();
+  const wallets = walletsOf(s.kv).filter((w) => w.active);
   const [step, setStep] = useState(1);
-  const [method, setMethod] = useState<Wallet | null>(null);
+  const [method, setMethod] = useState<string | null>(null);
   const [sender, setSender] = useState('');
   const [trx, setTrx] = useState('');
   const gift = invoice.id === 'GIFT'; // an alumni contribution: any amount, no invoice, no receipt
   const [amount, setAmount] = useState(gift ? '' : String(invoice.amount));
   const [error, setError] = useState('');
-  const wallet = method ? wallets[method] : null;
+  const wallet = wallets.find((w) => w.id === method) ?? null;
   const sum = gift ? 'any amount' : tk(invoice.amount);
 
   useEffect(() => {
@@ -131,7 +123,7 @@ function PaymentModal({
       return setError('Enter the amount you sent.');
     if (!wallet) return;
     setError('');
-    const paid = { via: wallet.label, trx: cleanTrx, sender: cleanSender };
+    const paid = { wallet: wallet.id, trx: cleanTrx, sender: cleanSender };
     const ok = gift
       ? await act('contribute', { ...paid, amount: numericAmount })
       : await act('pay', { ...paid, invoice: invoice.id });
@@ -197,17 +189,21 @@ function PaymentModal({
                   role="radiogroup"
                   aria-label="Payment method"
                 >
-                  {(Object.keys(wallets) as Wallet[]).map((key) => (
-                    <label key={key} className={method === key ? 'selected' : ''}>
+                  {wallets.map((w) => (
+                    <label key={w.id} className={method === w.id ? 'selected' : ''}>
                       <input
                         type="radio"
                         name="wallet"
-                        checked={method === key}
-                        onChange={() => setMethod(key)}
+                        checked={method === w.id}
+                        onChange={() => setMethod(w.id)}
                       />
                       <span className="[.finance-wallet-options_label.selected_&]:[background:var(--acc)] [.finance-wallet-options_label.selected_&::after]:[content:'✓'] [.finance-wallet-options_label.selected_&::after]:block [.finance-wallet-options_label.selected_&::after]:text-center [.finance-wallet-options_label.selected_&::after]:[line-height:22px] [.finance-wallet-options_label.selected_&::after]:text-on [grid-row:1/3] w-[22px] h-[22px] [border:1px_solid_currentColor]" />
-                      <strong>{wallets[key].label}</strong>
-                      <small>Send money</small>
+                      <strong>{w.provider}</strong>
+                      <small>
+                        {wallets.filter((x) => x.provider === w.provider).length > 1
+                          ? `…${w.number.slice(-4)} · ${w.account}`
+                          : 'Send money'}
+                      </small>
                     </label>
                   ))}
                 </div>
@@ -219,14 +215,14 @@ function PaymentModal({
                   {wallet ? (
                     <div className="finance-qr">
                       <QR text={wallet.number} size={196} />
-                      <small>Scan in {wallet.label}</small>
+                      <small>Scan in {wallet.provider}</small>
                     </div>
                   ) : (
                     <div className="finance-qr finance-qr-lock">
                       <QR text="locked-preview" size={196} />
                       <b>Locked</b>
                       <small>
-                        Pick bKash or Nagad
+                        Pick a method
                         <br />
                         to reveal the QR
                       </small>
@@ -238,7 +234,7 @@ function PaymentModal({
                         <div className="finance-copy-row">
                           <span>
                             <small>
-                              {wallet.label} number · {wallet.account}
+                              {wallet.provider} number · {wallet.account}
                             </small>
                             <strong>{wallet.number.replace(/^(\d{5})(\d{6})$/, '$1-$2')}</strong>
                           </span>
@@ -267,7 +263,7 @@ function PaymentModal({
                         </div>
                         <ol>
                           <li>
-                            Open the <b>{wallet.label}</b> app and tap <b>Scan QR</b> or{' '}
+                            Open the <b>{wallet.provider}</b> app and tap <b>Scan QR</b> or{' '}
                             <b>Send Money</b>.
                           </li>
                           <li>
@@ -317,7 +313,7 @@ function PaymentModal({
             {step === 2 && wallet && (
               <div>
                 <label className={payField}>
-                  <span>Your {wallet.label} number (sent from)</span>
+                  <span>Your {wallet.provider} number (sent from)</span>
                   <input
                     className="input mono"
                     value={sender}
@@ -360,14 +356,15 @@ function PaymentModal({
                 <div>✓</div>
                 <h3>{gift ? 'Thank you' : 'Payment submitted'}</h3>
                 <p>
-                  The Treasurer will check it against the {wallet.label} statement within 24 hours.
+                  The Treasurer will check it against the {wallet.provider} statement within 24
+                  hours.
                   {!gift && ' Your receipt will appear in Payment history once verified.'}
                 </p>
               </div>
             )}
           </div>
           {step < 3 && (
-            <aside className="finance-modal-side flex-[0_0_290px] p-7 [background:var(--bg)] [border-left:1px_solid_var(--line)] max-[901px]:flex-[1_1_100%] max-[901px]:[border-left:0] max-[901px]:[border-top:1px_solid_var(--line)] max-[901px]:[order:-1] max-[901px]:p-[18px_20px]">
+            <aside className="finance-modal-side flex-[0_0_290px] min-w-0 p-7 [background:var(--bg)] [border-left:1px_solid_var(--line)] max-[901px]:flex-[1_1_100%] max-[901px]:[border-left:0] max-[901px]:[border-top:1px_solid_var(--line)] max-[901px]:[order:-1] max-[901px]:p-[18px_20px]">
               <small>Paying for</small>
               <dl>
                 {!gift && (
@@ -389,7 +386,7 @@ function PaymentModal({
                 {wallet && (
                   <div>
                     <dt>Method</dt>
-                    <dd>{wallet.label}</dd>
+                    <dd>{wallet.provider}</dd>
                   </div>
                 )}
               </dl>
@@ -428,6 +425,114 @@ function PaymentModal({
         </footer>
       </div>
     </div>
+  );
+}
+
+/** Treasurer and President keep the wallets members pay into. A switched-off one is hidden from members. */
+function PaymentMethods() {
+  const { s, act } = useStore();
+  const saved = walletsOf(s.kv);
+  const [list, setList] = useState(saved);
+  const savedKey = JSON.stringify(saved);
+  useEffect(() => setList(JSON.parse(savedKey) as typeof saved), [savedKey]);
+  const set = (i: number, patch: Partial<PayMethod>) =>
+    setList((l) => l.map((w, j) => (j === i ? { ...w, ...patch } : w)));
+  return (
+    <SaveForm
+      className={financePanel}
+      label="Unsaved payment methods"
+      saveLabel="Save methods"
+      baselineKey={savedKey}
+      extraDirty={JSON.stringify(list) !== savedKey}
+      onDiscard={() => setList(saved)}
+      onSubmit={async () => {
+        const clean = cleanWallets(list);
+        if (typeof clean === 'string') return clean;
+        return act('setWallets', { wallets: clean });
+      }}
+    >
+      <header>
+        <span>Payment methods</span>
+        <small>members see the active ones when they pay</small>
+      </header>
+      {list.map((w, i) => (
+        <article
+          className="finance-invoice flex-wrap"
+          key={w.id + i}
+          style={{ opacity: w.active ? 1 : 0.6 }}
+        >
+          <div className="row [--g:8px] flex-wrap grow">
+            <select
+              className="input w-auto"
+              aria-label={`Method ${i + 1} wallet`}
+              value={w.provider}
+              onChange={(e) => set(i, { provider: e.target.value as WalletProvider })}
+            >
+              {WALLET_PROVIDERS.map((p) => (
+                <option key={p}>{p}</option>
+              ))}
+            </select>
+            <input
+              className="input mono flex-[1_1_150px]"
+              aria-label={`Method ${i + 1} number`}
+              inputMode="numeric"
+              required
+              pattern="01[3-9][0-9]{8}"
+              title="11 digits, starting 01"
+              placeholder="01XXXXXXXXX"
+              value={w.number}
+              onChange={(e) => set(i, { number: e.target.value.replace(/\D/g, '').slice(0, 11) })}
+            />
+            <input
+              className="input flex-[2_1_200px]"
+              aria-label={`Method ${i + 1} account holder`}
+              required
+              minLength={2}
+              maxLength={60}
+              placeholder="Personal · Club Treasurer"
+              value={w.account}
+              onChange={(e) => set(i, { account: e.target.value })}
+            />
+          </div>
+          <div className="row [--g:8px]">
+            <label className="row [--g:6px] cursor-pointer text-[14px]">
+              <input
+                type="checkbox"
+                checked={w.active}
+                onChange={(e) => set(i, { active: e.target.checked })}
+              />
+              Active
+            </label>
+            <button
+              type="button"
+              className="btn xs line"
+              disabled={list.length === 1}
+              onClick={() => setList((l) => l.filter((_, j) => j !== i))}
+            >
+              Remove
+            </button>
+          </div>
+        </article>
+      ))}
+      <div className="row [--g:8px] pt-3">
+        <button
+          type="button"
+          className="btn sm line"
+          disabled={list.length >= 10}
+          onClick={() =>
+            setList((l) => [
+              ...l,
+              { id: `new-${Date.now()}`, provider: 'bKash', number: '', account: '', active: true },
+            ])
+          }
+        >
+          + Add method
+        </button>
+        <button type="submit" className="btn sm">
+          Save methods
+        </button>
+      </div>
+    </SaveForm>
   );
 }
 
@@ -667,6 +772,7 @@ export default function Finance() {
               </section>
             )}
             {setsFee && <Fees />}
+            {canFully(s.roles, 'finance.wallets') && <PaymentMethods />}
             <section className={financePanel}>
               <header>
                 <span>Invoices</span>

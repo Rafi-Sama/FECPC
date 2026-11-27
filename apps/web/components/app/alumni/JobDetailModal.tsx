@@ -242,7 +242,7 @@ export function JobDetailModal({
         <div className="cols flex flex-wrap">
           {/* Left Column (.lc) */}
           <div
-            className={`lc ${getSourceClass(job.source, isClosed)} flex-[0_0_320px] [border-right:1px_solid_var(--line)] flex flex-col [background:var(--panel)]`}
+            className={`lc ${getSourceClass(job.source, isClosed)} flex-[0_0_320px] min-w-0 [border-right:1px_solid_var(--line)] flex flex-col [background:var(--panel)]`}
           >
             {/* Hero Band (96px) */}
             <div

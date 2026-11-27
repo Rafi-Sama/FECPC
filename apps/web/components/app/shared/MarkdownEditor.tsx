@@ -12,6 +12,7 @@ export function relTime(iso: string): string {
   const hr = Math.floor(min / 60);
   if (hr < 24) return `${hr}h ago`;
   const days = Math.floor(hr / 24);
+  if (days === 1) return 'yesterday';
   if (days < 30) return `${days}d ago`;
   return new Date(t).toLocaleDateString('en-GB', {
     day: 'numeric',

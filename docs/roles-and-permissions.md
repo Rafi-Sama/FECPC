@@ -32,6 +32,7 @@ Generated from `packages/contracts/src/capabilities.ts`.
 | `learning.curate`           | Keep the course list and the daily quiz bank                     |        |        |    ✓    |           |           |     ✓     |      ✓      |
 | `payments.verify`           | Verify member payments                                           |        |        |         |     ✓     |           |   view    |      ✓      |
 | `finance.fee`               | Set the amount of member dues                                    |        |        |         |           |     ✓     |     ✓     |      ✓      |
+| `finance.wallets` | Set the wallet numbers members pay into | | | | ✓ | | ✓ | ✓ |
 | `expense.approve`           | Approve expenses                                                 |        |        |         |  propose  |           |     ✓     |      ✓      |
 | `event.publish`             | Run events: create, registrations, feedback, certificates        |        |        |         |           |     ✓     |     ✓     |      ✓      |
 | `contest.run`               | Choose the contests on the contest-day scoreboard                |        |        |    ✓    |           |     ✓     |     ✓     |      ✓      |

@@ -10,9 +10,10 @@ import {
   useState,
 } from 'react';
 import type { AppState, MilestoneDTO, Roster } from '@fecpc/contracts';
-import { earned, level } from '@fecpc/contracts';
+import { earned, level, xpRates } from '@fecpc/contracts';
 
 import { toastStack } from '@/components/app/shared/ui';
+import { SAVE_ERROR_EVENT } from '@/components/app/SaveBar';
 
 // The member area's state lives on the server. This store holds the last copy the server sent,
 // asks the server to make every change (`act`), and replaces its copy with the answer.
@@ -32,7 +33,7 @@ type Store = AppState & {
   who: (id: string) => Roster | { id: string; name: string; handle: string; rating: number };
 };
 const Ctx = createContext<Store>(null!);
-const total = (st: AppState) => st.me.xp + earned(st.s);
+const total = (st: AppState) => st.me.xp + earned(st.s, xpRates(st.s.kv));
 
 export function StoreProvider({
   initial,
@@ -51,6 +52,8 @@ export function StoreProvider({
   const toast = useCallback((text: string, kind?: Toast['kind']) => {
     const id = ++n.current;
     setToasts((t) => [...t, { id, text, kind }]);
+    // A failure while the save bar is up is that save's failure: the bar says it too.
+    if (kind === 'bad') window.dispatchEvent(new CustomEvent(SAVE_ERROR_EVENT, { detail: text }));
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), kind === 'bad' ? 5000 : 2600);
   }, []);
   // The roster grows with the club, so it is not in the page or in state answers. It loads after the page and is
@@ -105,7 +108,7 @@ export function StoreProvider({
           return false;
         }
         const next: AppState = j.state,
-          gain = earned(next.s) - earned(before.s); // every action that earns XP says so, immediately
+          gain = total(next) - total(before); // every action that earns XP says so, immediately
         if (gain > 0) toast(`+${gain} XP`);
         if (level(total(next)).lv > level(total(before)).lv)
           toast(`LEVEL UP · ${level(total(next)).title}`, 'big');
@@ -185,7 +188,8 @@ export function StoreProvider({
     [toast, take],
   );
 
-  // Other people change things too (a payment gets verified, seats fill). Pick that up whenever the tab is looked at again.
+  // Other people change things too (a payment gets verified, seats fill). Pick that up whenever the tab is looked at again,
+  // and every few minutes while it is.
   useEffect(() => {
     const sync = async () => {
       if (document.visibilityState !== 'visible') return;
@@ -197,7 +201,12 @@ export function StoreProvider({
       } catch {}
     };
     document.addEventListener('visibilitychange', sync);
-    return () => document.removeEventListener('visibilitychange', sync);
+    // A tab left open still sees new notifications; three minutes keeps serverless calls rare.
+    const t = setInterval(sync, 180_000);
+    return () => {
+      document.removeEventListener('visibilitychange', sync);
+      clearInterval(t);
+    };
   }, [take]);
 
   const syncJudges = useCallback(async () => {

@@ -1,7 +1,8 @@
 'use client';
+import { useMore } from '@/components/site/More';
 // The officer side of Finance: verifying payments, filing and deciding expenses, the club fund.
 // Each tab appears only for roles whose capability allows it; the API enforces every decision again.
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { usePrompt, useConfirm } from '@/components/app/shared/PromptDialog';
 import { SaveForm } from '@/components/app/SaveBar';
 import { Bars } from '@/components/app/Charts';
@@ -9,10 +10,20 @@ import QR from '@/components/app/QR';
 import { useStore } from '@/components/app/Store';
 import { APPROVAL_THRESHOLD } from '@fecpc/content/member-area';
 import { fmtDate } from '@fecpc/content/site';
-import { can, canFully, isCommittee, type Who } from '@fecpc/contracts';
+import {
+  can,
+  canFully,
+  isCommittee,
+  PERIOD_MONTHS,
+  type Expense,
+  type Who,
+} from '@fecpc/contracts';
 
 const tk = (n: number) => '৳' + Math.round(Math.abs(n)).toLocaleString('en-US');
 const css = (o: Record<string, string | number>) => o as React.CSSProperties;
+/** A Finance section: a bordered panel with a small uppercase header row. */
+export const financePanel =
+  '[background:var(--panel)] [border:1px_solid_var(--line)] p-6 min-w-0 t-b:[border:2px_solid_var(--ink)] t-b:[background:var(--panel)] [&>header]:flex [&>header]:justify-between [&>header]:gap-3 [&>header]:items-center [&>header]:pb-3 [&>header]:[border-bottom:1px_solid_var(--line)] [&>header]:mb-2 [&>header]:[font:11px_var(--f-label)] [&>header]:tracking-[0.06em] [&>header]:uppercase [&>header]:text-hi [&>header_small]:[color:var(--dim)]';
 
 /** The officer tabs this role may open, in display order. */
 export function officerTabs(role: Who): string[] {
@@ -20,6 +31,7 @@ export function officerTabs(role: Who): string[] {
     approve = can(role, 'expense.approve');
   return [
     ...(verify ? ['Payments'] : []),
+    ...(verify || approve ? ['Member dues'] : []),
     ...(isCommittee(role) ? ['My requests'] : []),
     ...(approve ? ['Expenses'] : []),
     ...(verify || approve ? ['Club fund'] : []),
@@ -43,10 +55,277 @@ function download(name: string, rows: unknown[][]) {
 
 export function OfficerPanel({ tab }: { tab: string }) {
   if (tab === 'Payments') return <Payments />;
+  if (tab === 'Member dues') return <MemberDues />;
   if (tab === 'My requests') return <MyRequests />;
   if (tab === 'Expenses') return <Expenses />;
   if (tab === 'Club fund') return <ClubFund />;
   return null;
+}
+
+type DuesRow = NonNullable<ReturnType<typeof useStore>['office']['dues']>['members'][number];
+type Standing = 'overdue' | 'due' | 'waiting' | 'paid';
+const STANDING_ORDER: Standing[] = ['overdue', 'due', 'waiting', 'paid'];
+const standingOf = (m: DuesRow): Standing =>
+  m.overdue ? 'overdue' : m.unpaid ? 'due' : m.waiting ? 'waiting' : 'paid';
+const DUE_FILTERS = [
+  ['owing', 'Owing', (m: DuesRow) => m.unpaid > 0],
+  ['overdue', 'Overdue', (m: DuesRow) => m.overdue > 0],
+  ['waiting', 'Waiting', (m: DuesRow) => m.waiting > 0],
+  ['paid', 'Paid up', (m: DuesRow) => standingOf(m) === 'paid'],
+  ['all', 'Everyone', () => true],
+] as const;
+const EMPTY: Record<(typeof DUE_FILTERS)[number][0], string> = {
+  owing: 'Nobody owes anything right now.',
+  overdue: 'Nobody is overdue.',
+  waiting: 'No payments are waiting for a check.',
+  paid: 'Nobody is fully paid up yet.',
+  all: 'No members are billed yet.',
+};
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** `TERM-2026-11` → "Nov ’26"; post dues say so. */
+const billLabel = (id: string) => {
+  const [kind, y, m] = id.split('-');
+  return `${kind === 'POST' ? 'Post · ' : ''}${MON[Number(m) - 1]} ’${y!.slice(2)}`;
+};
+const longDate = (d: string) => fmtDate(d, { day: 'numeric', month: 'short', year: 'numeric' });
+
+/** Who has paid, who has not, and for how long: every member's dues standing, worst first. */
+function MemberDues() {
+  const { office } = useStore();
+  const all = office.dues?.members ?? [];
+  const today = new Date().toISOString().slice(0, 10);
+  const [filter, setFilter] = useState<(typeof DUE_FILTERS)[number][0]>('owing');
+  const [q, setQ] = useState('');
+  const needle = q.trim().toLowerCase();
+  const test = DUE_FILTERS.find((f) => f[0] === filter)![2];
+  const rows = all
+    .filter(test)
+    .filter(
+      (m) => !needle || `${m.name} ${m.no ?? ''} ${m.batch ?? ''}`.toLowerCase().includes(needle),
+    )
+    .sort(
+      (a, b) =>
+        STANDING_ORDER.indexOf(standingOf(a)) - STANDING_ORDER.indexOf(standingOf(b)) ||
+        b.overdue - a.overdue ||
+        b.owed - a.owed ||
+        a.name.localeCompare(b.name),
+    );
+  const [shown, more] = useMore(rows, 30);
+  const overdue = all.filter((m) => m.overdue > 0);
+  const paid = all.filter((m) => standingOf(m) === 'paid').length;
+  const owed = all.reduce((a, m) => a + m.owed, 0);
+  const lateMonths = overdue.reduce((a, m) => a + m.overdue * PERIOD_MONTHS, 0);
+
+  return (
+    <div className="[display:grid] gap-6">
+      <div className="finance-stats min-[721px]:[grid-template-columns:repeat(4,1fr)]">
+        <div>
+          <small>Owed to the club</small>
+          <b>{tk(owed)}</b>
+          <small>{all.filter((m) => m.unpaid).length} members with an open bill</small>
+        </div>
+        <div>
+          <small>Overdue</small>
+          <b className={overdue.length ? 'text-bad' : '[color:var(--tone-good)]'}>
+            {overdue.length}
+          </b>
+          <small>
+            {overdue.length ? `${lateMonths} months late in total` : 'everyone is on time'}
+          </small>
+        </div>
+        <div>
+          <small>Waiting for a check</small>
+          <b>{all.filter((m) => m.waiting).length}</b>
+          <small>in the Payments tab</small>
+        </div>
+        <div>
+          <small>Paid up</small>
+          <b className="[color:var(--tone-good)]">
+            {paid}
+            <span className="text-[18px] text-dim"> / {all.length}</span>
+          </b>
+          <div
+            className="dues-meter"
+            role="img"
+            aria-label={`${paid} of ${all.length} members paid up`}
+          >
+            <i style={{ width: `${all.length ? (paid / all.length) * 100 : 0}%` }} />
+          </div>
+        </div>
+      </div>
+
+      <section className={financePanel}>
+        <header>
+          <span>Member dues</span>
+          <small>
+            {rows.length} of {all.length} members · bills every {PERIOD_MONTHS} months
+          </small>
+        </header>
+        <div className="finance-tools items-center">
+          <input
+            type="search"
+            aria-label="Search members"
+            placeholder="Search name, member no. or batch"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+          <button
+            type="button"
+            onClick={() =>
+              download(`member-dues-${today}.csv`, [
+                [
+                  'member',
+                  'no',
+                  'batch',
+                  'standing',
+                  'paid',
+                  'waiting',
+                  'unpaid',
+                  'overdue',
+                  'owed',
+                  'overdue since',
+                ],
+                ...rows.map((m) => [
+                  m.name,
+                  m.no,
+                  m.batch,
+                  standingOf(m),
+                  m.paid,
+                  m.waiting,
+                  m.unpaid,
+                  m.overdue,
+                  m.owed,
+                  m.since,
+                ]),
+              ])
+            }
+          >
+            Export CSV
+          </button>
+        </div>
+        <div className="finance-tabs mb-2! mt-2" role="tablist" aria-label="Show">
+          {DUE_FILTERS.map(([k, label, f]) => (
+            <button
+              key={k}
+              role="tab"
+              aria-selected={k === filter}
+              className={k === filter ? 'active' : ''}
+              onClick={() => setFilter(k)}
+            >
+              {label} · {all.filter(f).length}
+            </button>
+          ))}
+        </div>
+
+        {rows.length === 0 ? (
+          <p className="py-10 text-center text-mut">
+            {needle ? `No member matches “${q.trim()}”.` : EMPTY[filter]}
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="finance-table dues-table w-full border-collapse min-w-[540px]">
+              <thead>
+                <tr>
+                  <th>Member</th>
+                  <th>Standing</th>
+                  <th>Bills, oldest first</th>
+                  <th className="right">Owes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {shown.map((m) => {
+                  const st = standingOf(m);
+                  const next = m.bills.find((x) => x.status === 'unpaid');
+                  return (
+                    <tr key={m.id}>
+                      <td>
+                        <strong className="block">{m.name}</strong>
+                        <span className="text-[14px] text-dim">
+                          {[m.no && `No. ${m.no}`, m.batch && `Batch ${m.batch}`]
+                            .filter(Boolean)
+                            .join(' · ') || '—'}
+                        </span>
+                      </td>
+                      <td>
+                        {st === 'overdue' ? (
+                          <>
+                            <span className="finance-tag rejected">
+                              <i />
+                              {m.overdue * PERIOD_MONTHS} months overdue
+                            </span>
+                            <span className="block mt-1.5 text-[14px] text-dim">
+                              since {longDate(m.since!)}
+                            </span>
+                          </>
+                        ) : st === 'due' ? (
+                          <>
+                            <span className="finance-tag due">
+                              <i />
+                              Due
+                            </span>
+                            <span className="block mt-1.5 text-[14px] text-dim">
+                              by {longDate(next!.due)}
+                            </span>
+                          </>
+                        ) : st === 'waiting' ? (
+                          <span className="finance-tag pending">
+                            <i />
+                            Waiting for a check
+                          </span>
+                        ) : (
+                          <span className="finance-tag ok">
+                            <i />
+                            Paid up
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        <ul className="dues-bills" aria-label={`${m.name}: bills`}>
+                          {m.bills.slice(-6).map((x) => {
+                            const s =
+                              x.status === 'unpaid' ? (x.due < today ? 'late' : 'open') : x.status;
+                            const what = {
+                              paid: 'paid',
+                              waiting: 'waiting for a check',
+                              late: 'overdue',
+                              open: 'not due yet',
+                            }[s];
+                            return (
+                              <li
+                                key={x.id}
+                                data-s={s}
+                                title={`${billLabel(x.id)}: ${what}, due ${longDate(x.due)}`}
+                              >
+                                {billLabel(x.id)}
+                                <span className="sr-only">: {what}</span>
+                              </li>
+                            );
+                          })}
+                          {m.bills.length > 6 && (
+                            <li data-s="more">+{m.bills.length - 6} earlier</li>
+                          )}
+                        </ul>
+                      </td>
+                      <td className="right">
+                        {m.owed ? (
+                          <strong className={`num ${st === 'overdue' ? 'text-bad' : ''}`}>
+                            {tk(m.owed)}
+                          </strong>
+                        ) : (
+                          <span className="text-dim">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {more}
+      </section>
+    </div>
+  );
 }
 
 function Payments() {
@@ -54,6 +333,7 @@ function Payments() {
   const { s, act, office } = useStore();
   const ask = usePrompt();
   const queue = office.queue ?? [];
+  const [queueShown, queueMore] = useMore(queue, 30);
   const reject = async (id: string) => {
     const reason = await ask({
       title: 'Reject payment',
@@ -74,13 +354,25 @@ function Payments() {
 
           onClick={() =>
             download('payments.csv', [
-              ['id', 'member', 'for', 'amount', 'via', 'trx', 'sender', 'status', 'submitted'],
+              [
+                'id',
+                'member',
+                'for',
+                'amount',
+                'via',
+                'to',
+                'trx',
+                'sender',
+                'status',
+                'submitted',
+              ],
               ...queue.map((q) => [
                 q.id,
                 q.name,
                 q.label,
                 q.amount,
                 q.via,
+                q.paidTo,
                 q.trx,
                 q.sender,
                 q.status,
@@ -105,7 +397,7 @@ function Payments() {
             </tr>
           </thead>
           <tbody>
-            {queue.map((q) => {
+            {queueShown.map((q) => {
               const st = s.queue[q.id] === 'pending' ? '' : s.queue[q.id];
               return (
                 <tr key={q.id}>
@@ -119,7 +411,8 @@ function Payments() {
                     {new Date(q.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                   </td>
                   <td className="mono">
-                    {q.via} · {q.trx} · {q.sender}
+                    {q.via}
+                    {q.paidTo ? ` to ${q.paidTo}` : ''} · {q.trx} · {q.sender}
                   </td>
                   <td className="r mono">{tk(q.amount)}</td>
                   <td className="r">
@@ -160,12 +453,27 @@ function Payments() {
           </tbody>
         </table>
       </div>
+      {queueMore}
     </div>
+  );
+}
+
+/** Filed when, decided by whom and when: the request's history in one line. */
+function ExpenseHistory({ x }: { x: Expense }) {
+  if (!x.at) return null;
+  return (
+    <span className="label block">
+      Filed {fmtDate(x.at.slice(0, 10))}
+      {x.decidedAt && x.decidedBy
+        ? ` · ${x.status} by ${x.decidedBy} on ${fmtDate(x.decidedAt.slice(0, 10))}`
+        : ''}
+    </span>
   );
 }
 
 function MyRequests() {
   const { act, myExpenses } = useStore();
+  const [mineShown, mineMore] = useMore(myExpenses, 20);
   return (
     <div className="stack">
       <SaveForm
@@ -212,12 +520,17 @@ function MyRequests() {
           <span className="label">Event (optional)</span>
           <input name="event" className="input" maxLength={80} />
         </label>
+        <div>
+          <button type="submit" className="btn sm">
+            Request expense
+          </button>
+        </div>
       </SaveForm>
       {myExpenses.length === 0 ? (
         <p className="body">You have not filed any expense requests.</p>
       ) : (
         <div className="list">
-          {myExpenses.map((x) => (
+          {mineShown.map((x) => (
             <div key={x.id}>
               <span className="grow">
                 <strong>{x.what}</strong>
@@ -226,6 +539,7 @@ function MyRequests() {
                   {x.id}
                   {x.event ? ` · ${x.event}` : ''}
                 </span>
+                <ExpenseHistory x={x} />
               </span>
               <span className="mono text-[20px]">{tk(x.amount)}</span>
               <span
@@ -235,6 +549,7 @@ function MyRequests() {
               </span>
             </div>
           ))}
+          {mineMore}
         </div>
       )}
     </div>
@@ -245,6 +560,7 @@ function Expenses() {
   const sure = useConfirm();
   const { s, me, act, office } = useStore();
   const expenses = office.expenses ?? [];
+  const [expShown, expMore] = useMore(expenses, 20);
   const approve = can(s.roles, 'expense.approve');
   return (
     <div className="stack">
@@ -254,7 +570,7 @@ function Expenses() {
       </p>
       {expenses.length === 0 && <p className="body">No expense requests.</p>}
       <div className="list">
-        {expenses.map((x) => {
+        {expShown.map((x) => {
           const big = x.amount > APPROVAL_THRESHOLD,
             st =
               x.status === 'pending'
@@ -272,6 +588,7 @@ function Expenses() {
                   {x.id} · requested by {x.name} · {x.event}
                   {big ? ' · above threshold' : ''}
                 </span>
+                <ExpenseHistory x={x} />
               </span>
               <span className="mono text-[20px]">{tk(x.amount)}</span>
               {st ? (
@@ -316,6 +633,7 @@ function Expenses() {
             </div>
           );
         })}
+        {expMore}
       </div>
     </div>
   );
@@ -327,6 +645,7 @@ function ClubFund() {
   const ask = usePrompt();
   const edit = canFully(s.roles, 'payments.verify');
   const { accounts = [], budgets = [], ledger = [] } = office.fund ?? {};
+  const [ledgerShown, ledgerMore] = useMore(ledger, 30);
   return (
     <div className="bento">
       <p className="body col-span-full" role="note">
@@ -421,7 +740,6 @@ function ClubFund() {
             <input
               name="name"
               className="input flex-[1_1_160px]"
-
               placeholder="Event name"
               aria-label="Budget name"
               required
@@ -439,6 +757,9 @@ function ClubFund() {
               aria-label="Plan in taka"
               required
             />
+            <button type="submit" className="btn sm">
+              Add budget
+            </button>
           </SaveForm>
         )}
       </section>
@@ -447,7 +768,7 @@ function ClubFund() {
         <div className="scroll-x">
           <table className="tbl">
             <tbody>
-              {ledger.map((l) => (
+              {ledgerShown.map((l) => (
                 <tr key={l.what}>
                   <td className="label">{fmtDate(l.date)}</td>
                   <td>{l.what}</td>
@@ -462,6 +783,7 @@ function ClubFund() {
             </tbody>
           </table>
         </div>
+        {ledgerMore}
       </section>
     </div>
   );

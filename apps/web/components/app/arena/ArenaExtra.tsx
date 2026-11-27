@@ -1,4 +1,5 @@
 'use client';
+import { useMore } from '@/components/site/More';
 import { useMemo, useState } from 'react';
 import { cfUrl, owes } from '@fecpc/content/member-area';
 import { can, rankFor, type CfRound, type Roster } from '@fecpc/contracts';
@@ -55,6 +56,7 @@ export function Fantasy() {
       form: (rounds.get(m.id) ?? []).slice(0, 3).reduce((a, r) => a + r.delta + 5 * r.solved, 0),
     }))
     .sort((a, b) => b.form - a.form);
+  const [poolShown, poolMore] = useMore(pool, 20);
   const name = (id: string) => byId.get(id)?.name ?? id;
   return (
     <div className="stack">
@@ -142,7 +144,7 @@ export function Fantasy() {
                 </tr>
               </thead>
               <tbody>
-                {pool.map(({ m, form }) => {
+                {poolShown.map(({ m, form }) => {
                   const on = mine.includes(m.id),
                     r = rounds.get(m.id)?.[0];
                   return (
@@ -186,6 +188,7 @@ export function Fantasy() {
                 })}
               </tbody>
             </table>
+            {poolMore}
           </div>
         )}
       </div>
@@ -391,6 +394,7 @@ export function Challenges() {
   const byId = useMemo(() => new Map(members.map((m) => [m.id, m])), [members]);
   const name = (id: string) => byId.get(id)?.name ?? id;
   const curator = !!can(s.roles, 'sheet.curate');
+  const [shown, more] = useMore(challenges, 8, true);
   return (
     <div className="stack">
       <form
@@ -406,7 +410,6 @@ export function Challenges() {
         <div className="row" style={css({ '--g': '10px', flexWrap: 'nowrap', marginTop: 8 })}>
           <input
             className="input flex-1"
-
             aria-label="Codeforces problem link"
             placeholder="https://codeforces.com/problemset/problem/1352/C"
             value={link}
@@ -422,7 +425,7 @@ export function Challenges() {
         </p>
       </form>
       {challenges.length === 0 && <p className="body">No challenges yet. Post the first one.</p>}
-      {challenges.map((ch) => {
+      {shown.map((ch) => {
         const t0 = Date.parse(ch.at);
         const race = ch.solvers.filter((x) => x.at && Date.parse(x.at) >= t0);
         const before = ch.solvers.filter((x) => !x.at || Date.parse(x.at) < t0);
@@ -489,6 +492,7 @@ export function Challenges() {
           </div>
         );
       })}
+      {more}
     </div>
   );
 }

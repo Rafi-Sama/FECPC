@@ -291,7 +291,7 @@ export function RoadmapEditor({
     if (bad) {
       if (bad.key) select(bad.key);
       setError(bad.msg);
-      return false;
+      return bad.msg;
     }
     setBusy(true);
     setError(null);
@@ -322,7 +322,7 @@ export function RoadmapEditor({
       return true;
     } catch (e) {
       setError((e as Error).message);
-      return false;
+      return (e as Error).message;
     } finally {
       setBusy(false);
     }
@@ -356,9 +356,18 @@ export function RoadmapEditor({
           <span className="font-medium">{roadmap ? 'Edit' : 'Create'}</span>{' '}
           <i className="text-acc not-italic">roadmap.</i>
         </h1>
-        <button type="button" data-close onClick={onCancel} className={btn} disabled={busy}>
-          ← Back
-        </button>
+        <span className="row [--g:8px]">
+          <button type="button" data-close onClick={onCancel} className={btn} disabled={busy}>
+            ← Back
+          </button>
+          <button
+            type="submit"
+            className={`${btnBase} [background:var(--ink)]! text-on`}
+            disabled={busy}
+          >
+            {busy ? 'Saving…' : 'Save roadmap'}
+          </button>
+        </span>
       </div>
 
       <div className="mb-3 flex gap-4 flex-wrap">

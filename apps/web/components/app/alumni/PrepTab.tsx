@@ -219,12 +219,27 @@ export function PrepTab({
     }).catch(() => null);
     if (!res?.ok) {
       const j = await res?.json().catch(() => null);
-      onShowToast?.(j?.error ?? 'You seem to be offline. The problem was not added.');
-      return false;
+      return String(j?.error ?? 'You seem to be offline. The problem was not added.');
     }
     onShowToast?.('Problem added');
     void fetchTopicProblems(drawerTopic.id);
     refresh();
+    return true;
+  };
+
+  const handleSaveLink = async (link: string) => {
+    if (!drawerTopic) return false;
+    const res = await fetch('/api/alumni', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'setInterviewTopicLink', topicId: drawerTopic.id, link }),
+    }).catch(() => null);
+    const j = await res?.json().catch(() => null);
+    if (!res?.ok) return String(j?.error ?? 'You seem to be offline. The link was not saved.');
+    const next = { ...drawerTopic, link: j?.link ?? null };
+    setDrawerTopic(next);
+    setTopics((prev) => prev.map((t) => (t.id === next.id ? next : t)));
+    onShowToast?.(next.link ? 'Editorial link saved' : 'Editorial link removed');
     return true;
   };
 
@@ -387,6 +402,8 @@ export function PrepTab({
           topic={drawerTopic}
           problems={topicProblems}
           canManage={canManageProblems}
+          canEditLink={canManageRoadmaps}
+          onSaveLink={handleSaveLink}
           onClose={() => setDrawerTopic(null)}
           onToggleProblem={handleToggleProblem}
           onDeleteProblem={handleDeleteProblem}

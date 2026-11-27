@@ -8,6 +8,7 @@ import { Recruit } from '@/components/app/admin/Recruit';
 import { ProfileRequests } from '@/components/app/admin/ProfileRequests';
 import { AuditLog } from '@/components/app/admin/AuditLog';
 import { Dashboard } from '@/components/app/admin/Dashboard';
+import { XpRates } from '@/components/app/admin/XpRates';
 
 import { permissionMatrix } from '@/components/app/admin/ui';
 
@@ -29,6 +30,7 @@ export default function Admin() {
     ...(caps.edit ? ['Requests'] : []),
     'Permissions',
     ...(caps.audit ? ['Audit log'] : []),
+    ...(s.role === 'super_admin' ? ['XP'] : []),
   ];
   const [tab, setTab] = useState('Dashboard');
   if (!Object.values(caps).some(Boolean))
@@ -69,6 +71,7 @@ export default function Admin() {
         </section>
       )}
       {cur === 'Recruit' && <Recruit />}
+      {cur === 'XP' && <XpRates />}
       {cur === 'Requests' && <ProfileRequests />}
       {cur === 'Permissions' && (
         <div className="stack">

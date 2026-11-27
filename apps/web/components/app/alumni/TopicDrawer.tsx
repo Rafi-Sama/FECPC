@@ -1,10 +1,13 @@
 'use client';
 import { SaveForm } from '@/components/app/SaveBar';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import type { InterviewTopic, InterviewProblem } from '@fecpc/contracts';
 
 const drawerInput =
   'py-2.5 px-3 [border:2px_solid_var(--line2)] [background:var(--bg)] text-ink text-[14px] w-full';
+
+const drawerBtn =
+  'py-0 px-4 min-h-[44px] [border:2px_solid_var(--line2)] [background:var(--ink)] text-on [font:600_14px_Inter,_Arial,_sans-serif] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed';
 
 const sectionLabel = 'm mb-1.5 block [font:11px_ui-monospace,_Menlo,_monospace] uppercase text-dim';
 
@@ -13,6 +16,8 @@ export function TopicDrawer({
   topic,
   problems,
   canManage,
+  canEditLink = false,
+  onSaveLink,
   onClose,
   onToggleProblem,
   onDeleteProblem,
@@ -22,11 +27,21 @@ export function TopicDrawer({
   topic: InterviewTopic;
   problems: InterviewProblem[];
   canManage: boolean;
+  /** CP head and president: set the topic's editorial link here. */
+  canEditLink?: boolean;
+  onSaveLink?: (link: string) => Promise<true | string | false>;
   onClose: () => void;
   onToggleProblem: (problemId: number, currentlySolved: boolean) => void;
   onDeleteProblem: (problemId: number) => void;
-  onAddProblem: (data: { title: string; url: string; difficulty: string }) => Promise<boolean>;
+  /** true once added; a string is why it was not. */
+  onAddProblem: (data: {
+    title: string;
+    url: string;
+    difficulty: string;
+  }) => Promise<true | string | false>;
 }) {
+  const [link, setLink] = useState(topic.link ?? '');
+  useEffect(() => setLink(topic.link ?? ''), [topic.id, topic.link]);
   const [newTitle, setNewTitle] = useState('');
   const [newUrl, setNewUrl] = useState('');
   const [newDiff, setNewDiff] = useState('easy');
@@ -46,7 +61,7 @@ export function TopicDrawer({
       url: newUrl.trim(),
       difficulty: newDiff,
     });
-    if (ok) clearNew();
+    if (ok === true) clearNew();
     return ok;
   };
 
@@ -97,8 +112,49 @@ export function TopicDrawer({
           />
         </div>
 
-        {/* Editorial / playlist link, when the roadmap editors set one */}
-        {topic.link && (
+        {/* Editorial / playlist link: editors set it here, everyone else opens it */}
+        {canEditLink && onSaveLink ? (
+          <SaveForm
+            onSubmit={() => onSaveLink(link.trim())}
+            onDiscard={() => setLink(topic.link ?? '')}
+            baselineKey={`${topic.id}:${topic.link ?? ''}`}
+            label="Unsaved editorial link"
+            saveLabel="Save link"
+            className="mb-8"
+          >
+            <label className={sectionLabel} htmlFor="t-link">
+              Editorial link
+            </label>
+            <div className="flex gap-2">
+              <input
+                id="t-link"
+                type="url"
+                maxLength={400}
+                value={link}
+                onChange={(e) => setLink(e.target.value)}
+                placeholder="https://youtube.com/playlist?list=…"
+                className={drawerInput}
+              />
+              <button
+                type="submit"
+                disabled={link.trim() === (topic.link ?? '')}
+                className={`${drawerBtn} whitespace-nowrap`}
+              >
+                {link.trim() || !topic.link ? 'Save' : 'Remove'}
+              </button>
+            </div>
+            {topic.link && (
+              <a
+                href={topic.link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 inline-block text-[14px] text-ink underline"
+              >
+                Open editorial ↗
+              </a>
+            )}
+          </SaveForm>
+        ) : topic.link ? (
           <a
             href={topic.link}
             target="_blank"
@@ -108,7 +164,7 @@ export function TopicDrawer({
             <span>Editorial playlist</span>
             <span>↗</span>
           </a>
-        )}
+        ) : null}
 
         {/* Problems List */}
         <section className="sc mb-8">
@@ -207,7 +263,7 @@ export function TopicDrawer({
             className="in pt-5 mt-6 [border-top:2px_solid_var(--line2)]"
           >
             <div className="m mb-3 [font:700_11px_ui-monospace,_Menlo,_monospace] tracking-[.06em] uppercase text-dim">
-              Add problem · alumni and admin
+              Add a problem
             </div>
 
             <div className="f mb-3">
@@ -257,6 +313,9 @@ export function TopicDrawer({
                 <option value="hard">Hard</option>
               </select>
             </div>
+            <button type="submit" className={`${drawerBtn} w-full`}>
+              Add problem
+            </button>
           </SaveForm>
         )}
       </aside>

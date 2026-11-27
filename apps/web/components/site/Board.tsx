@@ -19,7 +19,7 @@ export default function Board({ list = members, me }: { list?: Member[]; me?: st
   const rows = list
     .filter((m) => !batch || m.batch === batch)
     .sort((a, b) => (b[k] as number) - (a[k] as number));
-  const [shown, more] = useMore(rows);
+  const [shown, more] = useMore(rows, 25, true);
   return (
     <div>
       <div className="row between mb-6">
@@ -40,7 +40,6 @@ export default function Board({ list = members, me }: { list?: Member[]; me?: st
           BATCH
           <select
             className="input w-auto min-h-[40px]"
-
             value={batch}
             onChange={(e) => setBatch(+e.target.value)}
           >

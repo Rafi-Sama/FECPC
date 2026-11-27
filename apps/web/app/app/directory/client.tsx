@@ -7,7 +7,8 @@ import { Page } from '@/components/app/Shell';
 import { useStore } from '@/components/app/Store';
 import { MemberCard } from '@/components/app/members/MemberCard';
 import { MemberFilters, type MemberFilterState } from '@/components/app/members/MemberFilters';
-import { isAdmin } from '@fecpc/contracts';
+import { canFully, isAdmin } from '@fecpc/contracts';
+import { AddMemberModal } from '@/components/app/members/AddMemberModal';
 import type { MemberSummary } from '@fecpc/contracts';
 
 // Opened on demand: the dialog's code loads when it is first shown.
@@ -49,6 +50,7 @@ function MembersInner({ initial }: { initial: MembersInitial | null }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { s, counts } = useStore();
+  const [adding, setAdding] = useState(false);
   const current = counts.peopleCount - (counts.alumniCount ?? 0); // the directory lists current members
 
   // Initial URL state
@@ -81,8 +83,15 @@ function MembersInner({ initial }: { initial: MembersInitial | null }) {
   const pushedProfileRef = useRef(false);
   const restoredScrollRef = useRef(false);
 
+  // The query string this page last wrote. When the URL changes to it, that is our own echo (it arrives after the
+  // debounce, while the person may still be typing) and must not overwrite the box; only Back/Forward or a link
+  // brings a URL we did not write.
+  const wroteQs = useRef<string | null>(null);
+  const urlQs = searchParams.toString() ? `?${searchParams.toString()}` : '';
+
   // Sync local filter controls if URL changes via browser Back/Forward
   useEffect(() => {
+    if (urlQs === wroteQs.current) return;
     setQInput(urlQ);
     setDebouncedQ(urlQ);
     setRating(urlRating);
@@ -122,6 +131,7 @@ function MembersInner({ initial }: { initial: MembersInitial | null }) {
     const nextQs = buildQuery(appliedFilters, page, urlProfile);
     const curQs = searchParams.toString() ? `?${searchParams.toString()}` : '';
     if (nextQs !== curQs) {
+      wroteQs.current = nextQs;
       router.replace(`${pathname}${nextQs}`, { scroll: false });
     }
   }, [appliedFilters, page, urlProfile, pathname, router, searchParams]);
@@ -238,6 +248,7 @@ function MembersInner({ initial }: { initial: MembersInitial | null }) {
     setSkill('');
     setBatch('');
     setPage(0);
+    wroteQs.current = '';
     router.replace(pathname, { scroll: false });
   };
 
@@ -261,6 +272,7 @@ function MembersInner({ initial }: { initial: MembersInitial | null }) {
       router.back();
     } else {
       const nextQs = buildQuery(appliedFilters, page, null);
+      wroteQs.current = nextQs;
       router.replace(`${pathname}${nextQs}`, { scroll: false });
     }
     requestAnimationFrame(() => trigger?.focus());
@@ -278,7 +290,17 @@ function MembersInner({ initial }: { initial: MembersInitial | null }) {
           <span className="acc">{total === 1 ? 'member' : 'members'}.</span>
         </span>
       }
+      aside={
+        canFully(s.roles, 'roles.assign') && (
+          <button className="btn sm" onClick={() => setAdding(true)}>
+            + Add member
+          </button>
+        )
+      }
     >
+      {adding && (
+        <AddMemberModal onClose={() => setAdding(false)} onAdded={() => void handleRefreshList()} />
+      )}
       <MemberFilters
         value={filterState}
         skills={skillOptions}

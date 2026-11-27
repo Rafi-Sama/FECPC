@@ -1,4 +1,5 @@
 'use client';
+import { useMore } from '@/components/site/More';
 import { SaveForm } from '@/components/app/SaveBar';
 import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -129,6 +130,7 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { s, me, act, counts, news, polls, who } = useStore();
+  const [pollsShown, pollsMore] = useMore(polls, 10, true);
   const [tab, setTab] = useState<Tab>(() => parseTab(searchParams.get('tab')));
   const [activeProfileId, setActiveProfileId] = useState<string | null>(() =>
     searchParams.get('profile'),
@@ -616,7 +618,7 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
                   aria-pressed={feedSort === k}
                   onClick={() => setFeedSort(k)}
                 >
-                  {k === 'hot' ? 'Hot' : 'New'}
+                  {k === 'hot' ? 'Best' : 'New'}
                 </button>
               ))}
               {!me.system && (
@@ -736,7 +738,7 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
 
       {/* ────────── TAB 2: ANNOUNCEMENTS ────────── */}
       {tab === 'Announcements' && (
-        <div className="ann-container max-w-[960px] [font-family:var(--ann-font-main)] leading-[1.6]">
+        <div className="ann-container [font-family:var(--ann-font-main)] leading-[1.6]">
           <div className="mb-[1.5rem]">
             <div className="ann-nav-tabs flex gap-[0.5rem] mb-[0.75rem] flex-wrap">
               <Tabs tabs={tabs} value={tab} onChange={handleTabChange} />
@@ -928,7 +930,7 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
                 aria-pressed={ideaSort === 'top'}
                 onClick={() => setIdeaSort('top')}
               >
-                Top
+                Best
               </button>
               <button
                 type="button"
@@ -1194,7 +1196,7 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
             </SaveForm>
           )}
           {polls.length === 0 && <p className="empty">No polls yet.</p>}
-          {polls.map((p) => {
+          {pollsShown.map((p) => {
             const mine = s.votes[p.id];
             const live = counts.votes[p.id] ?? {};
             const total = p.opts.reduce((a, o) => a + (live[o] ?? 0), 0);
@@ -1241,6 +1243,7 @@ function CommunityContent({ initialFeed }: { initialFeed: FeedFirst | null }) {
               </section>
             );
           })}
+          {pollsMore}
         </div>
       )}
 

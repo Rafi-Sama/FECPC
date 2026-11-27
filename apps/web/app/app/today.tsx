@@ -8,7 +8,7 @@ import { SolveCheck, useDaily } from '@/components/app/home/Daily';
 import { cfUrl, owes } from '@fecpc/content/member-area';
 import { fmtDate } from '@fecpc/content/site';
 import { usePublicEvents } from '@/lib/events';
-import { LEVEL, level, quests, rankFor, XP } from '@fecpc/contracts';
+import { LEVEL, level, quests, rankFor, xpRates } from '@fecpc/contracts';
 
 // Whole days from the member's local today to a YYYY-MM-DD date.
 const daysTo = (iso: string) =>
@@ -32,6 +32,7 @@ export default function Today({
   up: { id: number; name: string; when: string; start: number; durationH: number }[];
 }) {
   const { s, xp, act, sheets, news } = useStore();
+  const XP = xpRates(s.kv);
   const { isSolved } = useSolved();
   const { data: cf } = useJudge();
   const daily = useDaily();

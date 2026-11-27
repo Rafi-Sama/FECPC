@@ -1,11 +1,12 @@
 'use client';
-import { useState, type CSSProperties } from 'react';
+import { type CSSProperties } from 'react';
 import { AvatarRing, TierBadge } from '@/components/app/shared/RatingBadge';
 import { useStore } from '@/components/app/Store';
 import { rankFor } from '@fecpc/contracts';
 import type { MemberSummary } from '@fecpc/contracts';
 import { AdminMenu } from './AdminMenu';
 import { HighlightMatch } from '@/components/app/alumni/HighlightMatch';
+import { KudosButton } from '@/components/app/shared/Kudos';
 
 export function MemberCard({
   member,
@@ -19,20 +20,12 @@ export function MemberCard({
   highlightQuery?: string;
 }) {
   const { s, me, act } = useStore();
-  const [popKey, setPopKey] = useState(0);
 
   const isSelf = member.id === me.id;
   const kudosId = `member:${member.id}`;
   const hasKudos = s.kudos.includes(kudosId);
   const rank = rankFor(member.cf_rating || member.rating);
   const roleLabel = member.role || (member.is_alumni ? 'Alumni' : 'Member');
-
-  const handleKudos = (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.stopPropagation();
-    if (hasKudos) return; // kudos are permanent
-    setPopKey((k) => k + 1);
-    void act('toggle', { list: 'kudos', id: kudosId, on: true });
-  };
 
   return (
     <li
@@ -94,21 +87,16 @@ export function MemberCard({
               YOU
             </span>
           ) : (
-            <span className="relative inline-flex [&_.btn:focus-visible]:[outline:2px_solid_var(--acc)] [&_.btn:focus-visible]:outline-offset-[2px]">
-              <button
-                type="button"
-                className={`btn xs ${hasKudos ? '' : 'line'}`}
-                aria-pressed={hasKudos}
-                disabled={hasKudos}
-                onClick={handleKudos}
-              >
-                {hasKudos ? 'Kudos ✓' : 'Kudos'}
-              </button>
-              {popKey > 0 && (
-                <span key={popKey} className="member-card__plus1" aria-hidden>
-                  +1
-                </span>
-              )}
+            <span
+              className="inline-flex [&_.btn:focus-visible]:[outline:2px_solid_var(--acc)] [&_.btn:focus-visible]:outline-offset-[2px]"
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
+            >
+              <KudosButton
+                given={hasKudos}
+                label={`Give kudos to ${member.name}`}
+                onGive={() => act('toggle', { list: 'kudos', id: kudosId, on: true })}
+              />
             </span>
           )}
           <AdminMenu

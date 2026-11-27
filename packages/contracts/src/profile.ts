@@ -32,6 +32,17 @@ export type ProfileRequest = {
   reason: string | null;
   at: string;
 };
+/** One past or open change request, as its owner sees it in their history. */
+export type ProfileHistoryItem = {
+  id: string;
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  changes: ProfileChanges;
+  note: string | null;
+  reason: string | null;
+  at: string;
+  decidedAt: string | null;
+  decidedBy: string | null;
+};
 /** A pending request as officers review it. A photo is `true` here; it is fetched separately. */
 export type ProfileRequestReview = {
   id: string;
